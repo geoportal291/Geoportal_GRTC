@@ -1,0 +1,163 @@
+/* header.css */
+:root {
+  --primary-blue: #1a365d;
+  --secondary-blue: #2a4365;
+  --accent-blue: #3182ce;
+  --light-gray: #edf2f7;
+  --medium-gray: #e2e8f0;
+  --dark-gray: #4a5568;
+  --white: #ffffff;
+  --dark-bg: #2d3748; /* Fondo oscuro para el modal */
+  --button-red: #e53e3e; /* Color de botón rojo */
+}
+
+.main-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background-color: var(--white);
+  border-bottom: 1px solid var(--medium-gray);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 1020;
+  display: flex;
+  align-items: center;
+}
+
+.header-content {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.header-left-section {
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+}
+
+.title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.page-title {
+  font-family: 'Roboto', sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--primary-blue);
+  margin: 0;
+  line-height: 1;
+}
+
+.header-right-section {
+  display: flex;
+  align-items: center;
+}
+
+.welcome-button {
+  background-color: var(--light-gray);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--primary-blue);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.welcome-button:hover {
+  background-color: var(--medium-gray);
+}
+
+.user-modal {
+  position: fixed;
+  top: 72px;
+  right: 24px;
+  width: 280px;
+  background-color: var(--dark-bg); /* Fondo oscuro para el modal */
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 16px;
+  z-index: 1050;
+  display: none; /* Modal oculto por defecto */
+  border: 1px solid var(--medium-gray);
+}
+
+.user-modal.show {
+  display: flex; /* Asegura que el modal se muestre cuando se activa */
+  flex-direction: column;
+}
+
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  color: var(--white); /* Asegura que el texto dentro del modal sea visible */
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.username {
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  color: var(--white); /* Blanco para el contraste */
+  margin: 0;
+}
+
+.modal-text {
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  color: var(--white);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.welcome-container {
+  position: relative;
+}
+
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-button {
+  border: none;
+  border-radius: 4px;
+  padding: 10px 16px;
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.config-button {
+  background-color: var(--light-gray);
+  color: var(--dark-gray);
+}
+
+.logout-button {
+  background-color: var(--button-red); /* Rojo para el botón de cerrar sesión */
+  color: var(--white);
+}
+
+.action-button:hover {
+  opacity: 0.9;
+}

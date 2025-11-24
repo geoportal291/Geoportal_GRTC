@@ -1,0 +1,204 @@
+/* PerfilEstratigrafico.css - Estilos para el modal de GESTIÓN */
+
+/* ===== MODAL GENERAL ===== */
+.overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+    z-index: 999;
+}
+
+.perfil-estratigrafico-modal.gestion-modal {
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+    width: 90%;
+    max-width: 900px; /* Ancho para el formulario */
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* ===== HEADER ===== */
+.perfil-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #f7f9fc;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.perfil-header-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.perfil-header h3 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.perfil-header h4 {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    font-weight: normal;
+}
+
+.perfil-close-btn {
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    line-height: 1;
+    color: #888;
+    cursor: pointer;
+    transition: color 0.2s, transform 0.2s;
+}
+
+.perfil-close-btn:hover {
+    color: #e74c3c;
+    transform: scale(1.1);
+}
+
+/* ===== CONTENIDO DE GESTIÓN ===== */
+.perfil-content-gestion {
+    padding: 20px;
+    flex-grow: 1;
+    overflow-y: auto; /* Permitir scroll si la lista es larga */
+    display: flex;
+    flex-direction: column;
+}
+
+.estrato-list-header {
+    display: grid;
+    grid-template-columns: 2fr 3fr 1.5fr 1.5fr 1fr;
+    gap: 10px;
+    padding: 0 15px 10px 15px;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+.estrato-list-body {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.estrato-form-row {
+    display: grid;
+    grid-template-columns: 2fr 3fr 1.5fr 1.5fr 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 15px;
+    border-radius: 6px;
+    background-color: #fff;
+    transition: background-color 0.2s;
+}
+
+.estrato-form-row:nth-child(odd) {
+    background-color: #f9f9f9;
+}
+
+.estrato-form-row input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.estrato-form-row input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+}
+
+.estrato-form-row input.readonly-depth {
+    background-color: #e9ecef;
+    color: #495057;
+    border-color: #ced4da;
+    cursor: not-allowed;
+}
+
+.estrato-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.estrato-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 5px;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.btn-save-estrato {
+    color: #28a745; /* Verde */
+}
+.btn-save-estrato:hover {
+    background-color: rgba(40, 167, 69, 0.1);
+}
+
+.btn-delete-estrato {
+    color: #dc3545; /* Rojo */
+}
+.btn-delete-estrato:hover {
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+/* ===== FOOTER ===== */
+.perfil-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #e0e0e0;
+    background-color: #f7f9fc;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-add-new-estrato {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-add-new-estrato:hover {
+    background-color: #0b3b84; /* Un poco más oscuro */
+}
+
+.btn-add-new-estrato i {
+    margin-right: 8px;
+}

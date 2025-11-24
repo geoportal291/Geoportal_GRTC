@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorteo Amigo Secreto</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    
+    <style>
+        /* 1. CONFIGURACIÓN DE LA PÁGINA */
+        body {
+            background-color: #1e293b; /* Fondo oscuro elegante */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            overflow: hidden;
+        }
+
+        /* 2. EL ESCENARIO 3D */
+        .scene {
+            width: 320px;  /* Ancho de la tarjeta */
+            height: 450px; /* Alto de la tarjeta */
+            perspective: 1000px; /* Profundidad 3D */
+            cursor: pointer;
+        }
+
+        /* 3. LA TARJETA (CONTENEDOR) */
+        .card {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Clase que activa el giro */
+        .card.is-flipped {
+            transform: rotateY(180deg);
+        }
+
+        /* 4. ANIMACIÓN DE TEMBLOR (SUSPENSO) */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+
+        .card.suspense {
+            animation: shake 0.5s infinite; /* Tiembla mientras espera */
+        }
+
+        /* 5. LAS CARAS DE LA TARJETA */
+        .card__face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden; /* Oculta la parte trasera */
+            border-radius: 15px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        /* --- CARA FRONTAL (INCÓGNITA) --- */
+        .card__face--front {
+            background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            border: 4px solid #fbbf24; /* Borde dorado */
+        }
+
+        .icon-front {
+            font-size: 80px;
+            margin-bottom: 10px;
+            filter: drop-shadow(0 5px 5px rgba(0,0,0,0.3));
+        }
+
+        .text-front {
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* --- CARA TRASERA (RESULTADO) --- */
+        .card__face--back {
+            background-color: white;
+            transform: rotateY(180deg);
+            
+            /* AQUÍ ESTÁ TU IMAGEN CORREGIDA */
+            background-image: url('tarjeta_fondo.jpg'); 
+            
+            background-size: cover; 
+            background-position: center;
+        }
+
+        /* EL TEXTO DEL NOMBRE */
+        .nombre-resultado {
+            position: absolute;
+            /* Ajuste de posición vertical para caer debajo del "Para:" de tu imagen */
+            top: 58%; 
+            left: 50%;
+            transform: translate(-50%, -50%);
+            
+            /* Estilo de letra */
+            font-family: 'Pacifico', cursive; 
+            font-size: 2.8rem;
+            color: #c0392b; /* Rojo oscuro */
+            text-shadow: 2px 2px 0px rgba(255,255,255,0.8);
+            width: 80%;
+            text-align: center;
+            
+            opacity: 0;
+            transition: opacity 0.5s ease 0.5s; /* Aparece medio segundo después */
+        }
+
+        .card.is-flipped .nombre-resultado {
+            opacity: 1;
+        }
+
+        /* Mensaje inferior */
+        .instrucciones {
+            margin-top: 30px;
+            color: #cbd5e1;
+            font-size: 1rem;
+            opacity: 0.7;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="scene">
+        <div class="card" id="tarjetaSorteo">
+            
+            <div class="card__face card__face--front">
+                <div class="icon-front">🎁</div>
+                <div class="text-front">Toca para abrir</div>
+            </div>
+
+            <div class="card__face card__face--back">
+                <div class="nombre-resultado" id="nombreAmigo">...</div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="instrucciones" id="textoEstado">Tu amigo secreto te espera...</div>
+
+    <script>
+        const tarjeta = document.getElementById('tarjetaSorteo');
+        const textoNombre = document.getElementById('nombreAmigo');
+        const textoEstado = document.getElementById('textoEstado');
+        let sorteoRealizado = false;
+
+        // AQUÍ CAMBIAS EL NOMBRE QUE QUIERAS QUE APAREZCA
+        const elElegido = "Roberto"; 
+
+        textoNombre.textContent = elElegido;
+
+        tarjeta.addEventListener('click', function() {
+            if (sorteoRealizado) return;
+
+            // 1. SUSPENSO (Temblor)
+            textoEstado.textContent = "Revolviendo los papeles...";
+            tarjeta.classList.add('suspense'); 
+
+            // 2. ESPERA (2.5 segundos)
+            setTimeout(() => {
+                tarjeta.classList.remove('suspense');
+                
+                // 3. REVELACIÓN (Giro)
+                tarjeta.classList.add('is-flipped');
+                textoEstado.textContent = "¡Ya tienes a tu amigo secreto!";
+                sorteoRealizado = true;
+            }, 2500); 
+        });
+    </script>
+
+</body>
+</html>

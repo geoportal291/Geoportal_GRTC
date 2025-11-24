@@ -1,0 +1,142 @@
+/* Importar las mismas fuentes para consistencia */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Mountains+of+Christmas:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+
+/* Hereda el fondo principal del dashboard para la página completa */
+.gestionar-participantes-container {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at center, #3182cf 0%, #081b33 100%);
+    color: #fff;
+    font-family: 'Roboto', sans-serif;
+    padding: 2rem;
+    box-sizing: border-box;
+    overflow-y: auto;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: left 0.3s ease;
+}
+
+/* Reglas para ajustar 'left' según el estado del sidebar */
+.sidebar-open .gestionar-participantes-container {
+    left: 150px; /* Ancho del menú abierto */
+}
+.sidebar-collapsed .gestionar-participantes-container {
+    left: 50px; /* Ancho del menú cerrado */
+}
+@media (max-width: 768px) {
+    .gestionar-participantes-container {
+        left: 0 !important;
+    }
+}
+
+/* Estilos para títulos */
+.gestionar-participantes-container h2 {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.8rem;
+    color: #e1f1ff;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    padding-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.gestionar-participantes-container h2 i { color: #80d4ff; }
+
+/* Estilos de botones reutilizados */
+.gestionar-participantes-container .btn-ver-lista {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.3s;
+}
+.gestionar-participantes-container .btn-ver-lista:hover { background: rgba(255,255,255,0.3); }
+
+.gestionar-participantes-container .btn-add-deseo {
+    background: linear-gradient(90deg, #3182cf, #2660a4);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    /* Remover margin-top para subir el botón */
+}
+.gestionar-participantes-container .btn-add-deseo:hover { 
+    background: linear-gradient(90deg, #4096ee, #3182cf); 
+    box-shadow: 0 0 15px rgba(49,130,207,0.5); 
+}
+
+/* Estilos de grupos de proyecto */
+.gestionar-participantes-container .project-group {
+    /* Remover margin-bottom para reducir el espacio */
+    margin-bottom: 0.75rem; /* Ajustar ligeramente el margen inferior del grupo de proyectos */
+}
+
+.gestionar-participantes-container .project-group h3 {
+    font-family: 'Cinzel Decorative', serif;
+    color: #e1f1ff;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 5px;
+    font-size: 1.3rem;
+}
+
+/* Estilos de lista de usuarios */
+.gestionar-participantes-container ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.gestionar-participantes-container ul li {
+    background: rgba(255,255,255,0.05);
+    padding: 10px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.gestionar-participantes-container ul li label {
+    margin-left: 10px;
+    color: #e1f1ff;
+    font-weight: 400;
+}
+
+/* Estilos para el footer del botón de guardar */
+.gestion-participantes-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5en rem; /* Ajuste para subir un poco el botón */
+    border-top: 1px solid rgba(255,255,255,0.2);
+    padding-top: 1rem; /* Padding interno para el botón */
+}
+
+/* Scrollbar personalizada */
+.user-list-scroller::-webkit-scrollbar { 
+    width: 0px; 
+    height: 0px; /* Asegura que la horizontal también sea invisible */
+}
+.user-list-scroller {
+    scrollbar-width: none; /* Para Firefox */
+    -ms-overflow-style: none;  /* Para Internet Explorer y Edge */
+    padding: 1rem; /* Asegura que el contenido tenga padding después de quitar scroll */
+}
+.user-list-scroller::-webkit-scrollbar-track { 
+    background: transparent; /* Fondo transparente */
+}
+.user-list-scroller::-webkit-scrollbar-thumb { 
+    background: transparent; /* Pulgar transparente */
+}

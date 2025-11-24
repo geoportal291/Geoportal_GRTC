@@ -1,0 +1,107 @@
+.changelog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7); /* Fondo semitransparente */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999; /* Asegura que esté por encima de todo */
+}
+
+.changelog-modal {
+  background-color: #fff;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 90%;
+  text-align: center;
+  position: relative;
+  max-height: 80vh; /* Limitar altura para scroll si es necesario */
+  overflow-y: auto; /* Habilitar scroll si el contenido es largo */
+}
+
+.changelog-modal h2 {
+  color: #1a365d;
+  margin-bottom: 15px;
+  font-size: 28px;
+}
+
+.changelog-modal h3 {
+  color: #3182ce;
+  margin-bottom: 20px;
+  font-size: 22px;
+}
+
+.changelog-content {
+  text-align: left;
+  margin-bottom: 30px;
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+.changelog-content p {
+  margin-bottom: 10px;
+}
+
+.changelog-modal button {
+  background-color: #3182ce;
+  color: #fff;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background-color 0.3s ease;
+}
+
+.changelog-modal button:hover {
+  background-color: #2a5c8d;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .changelog-modal {
+    padding: 20px;
+    width: 95%;
+  }
+
+  .changelog-modal h2 {
+    font-size: 24px;
+  }
+
+  .changelog-modal h3 {
+    font-size: 18px;
+  }
+
+  .changelog-modal button {
+    padding: 10px 20px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .changelog-modal {
+    padding: 15px;
+  }
+
+  .changelog-modal h2 {
+    font-size: 20px;
+  }
+
+  .changelog-modal h3 {
+    font-size: 16px;
+  }
+
+  .changelog-content {
+    font-size: 14px;
+  }
+
+  .changelog-modal button {
+    padding: 8px 15px;
+    font-size: 14px;
+  }
+}

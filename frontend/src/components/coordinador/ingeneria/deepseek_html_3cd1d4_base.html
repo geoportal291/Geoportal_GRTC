@@ -1,0 +1,4223 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema de Gestión de Proyectos</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      body {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+        color: #1e293b;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      header {
+        background: linear-gradient(to right, #1e3a8a, #3b82f6);
+        border-radius: 16px;
+        padding: 25px 40px;
+        margin-bottom: 25px;
+        box-shadow: 0 8px 25px rgba(30, 58, 138, 0.3);
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        color: white;
+      }
+
+      header::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(90deg, #f59e0b, #10b981, #8b5cf6);
+      }
+
+      h1 {
+        font-size: 2.5rem;
+        margin-bottom: 12px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+      }
+
+      .subtitle {
+        font-size: 1.2rem;
+        font-weight: 400;
+        max-width: 700px;
+        margin: 0 auto;
+        line-height: 1.6;
+        opacity: 0.9;
+      }
+
+      .content-wrapper {
+        display: flex;
+        gap: 30px;
+        margin-bottom: 30px;
+      }
+
+      .capas-container {
+        flex: 1;
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 30px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07);
+        border: 1px solid #e2e8f0;
+      }
+
+      .capas-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e2e8f0;
+        margin-bottom: 30px;
+      }
+
+      .capas-header h2 {
+        color: #1e40af;
+        font-size: 1.8rem;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-weight: 600;
+      }
+
+      .search-box {
+        position: relative;
+        width: 300px;
+      }
+
+      .search-box input {
+        width: 100%;
+        padding: 12px 18px 12px 45px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        font-size: 1rem;
+        transition: all 0.3s;
+        background: #f8fafc;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
+      }
+
+      .search-box input:focus {
+        outline: none;
+        border-color: #93c5fd;
+        box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.2);
+      }
+
+      .search-box i {
+        position: absolute;
+        left: 18px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 1.1rem;
+      }
+
+      .capas-section {
+        margin-bottom: 10px;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        padding: 16px 20px;
+        background: #f1f5f9;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        transition: all 0.2s;
+        border-left: 5px solid #3b82f6;
+      }
+
+      .section-title:hover {
+        background: #e2e8f0;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+      }
+
+      .section-title h3 {
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin-left: 14px;
+        color: #1e293b;
+        flex: 1;
+      }
+
+      .section-title i {
+        font-size: 1.3rem;
+        color: #3b82f6;
+        transition: transform 0.3s ease;
+      }
+
+      .section-title.collapsed i.fa-chevron-down {
+        transform: rotate(-90deg);
+      }
+
+      .capas-list {
+        list-style-type: none;
+
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+      }
+
+      .capas-list.collapsed {
+        max-height: 0;
+      }
+
+      .capa-container {
+        display: flex;
+        align-items: center;
+        padding: 5px 20px;
+        border-bottom: 1px solid #f1f5f9;
+        transition: all 0.2s;
+        gap: 10px;
+      }
+
+      .capa-container:hover {
+        background: #f8fafc;
+        transform: translateX(5px);
+      }
+
+      .capa-edt {
+        flex: 0 0 90px;
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #1e40af;
+        background: #dbeafe;
+        padding: 10px 15px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(30, 64, 175, 0.15);
+        border: 1px solid #bfdbfe;
+      }
+
+      .capa-name {
+        flex: 3;
+        font-size: 1.1rem;
+        color: #334155;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .capa-name label {
+        cursor: pointer;
+      }
+
+      .capa-date {
+        padding: 10px 15px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+        background: #f1f5f9;
+        color: #334155;
+        width: 50px;
+        justify-content: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+
+      .capa-date:hover {
+        background: #e2e8f0;
+        color: #3b82f6;
+      }
+
+      .capa-info-icon {
+        color: #94a3b8;
+        cursor: pointer;
+        transition: all 0.2s;
+        padding: 8px;
+        border-radius: 50%;
+      }
+
+      .capa-info-icon:hover {
+        background: #e2e8f0;
+        color: #3b82f6;
+      }
+
+      .capa-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        flex: 2;
+        min-width: 380px;
+      }
+
+      .btn-action {
+        padding: 10px 15px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+        background: #f1f5f9;
+        color: #334155;
+        width: 50px;
+        justify-content: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+
+      .btn-action i {
+        font-size: 1.1rem;
+      }
+
+      .btn-ver:hover {
+        background: #dbeafe;
+        color: #1d4ed8;
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(59, 130, 246, 0.15);
+      }
+
+      .btn-editar:hover {
+        background: #dcfce7;
+        color: #15803d;
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(16, 185, 129, 0.15);
+      }
+
+      .btn-estado {
+        min-width: 120px;
+        background: #f1f5f9;
+        color: #334155;
+        justify-content: center;
+      }
+
+      /* Estados uniformes */
+      .estado-entregado {
+        background: #fef3c7;
+        color: #b45309;
+      }
+
+      .estado-evaluado {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+
+      .estado-aprobado {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .estado-observado {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+
+      .estado-fuera-tiempo {
+        background: #ede9fe;
+        color: #6d28d9;
+      }
+
+      .legend-container {
+        flex: 0 0 320px;
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 30px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07);
+        border: 1px solid #e2e8f0;
+        height: fit-content;
+      }
+
+      .legend-header {
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e2e8f0;
+        margin-bottom: 25px;
+      }
+
+      .legend-header h2 {
+        color: #1e40af;
+        font-size: 1.7rem;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 600;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 18px;
+        padding: 14px;
+        border-radius: 10px;
+        background: #f8fafc;
+        transition: all 0.2s;
+      }
+
+      .legend-item:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+      }
+
+      .color-box {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        margin-right: 16px;
+      }
+
+      .legend-item p {
+        font-size: 1.05rem;
+        color: #334155;
+        font-weight: 500;
+      }
+
+      .status-bar {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 20px 30px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.07);
+        border: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .active-counter {
+        font-size: 1.2rem;
+        color: #334155;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-weight: 500;
+      }
+
+      .active-counter i {
+        font-size: 1.6rem;
+        color: #3b82f6;
+      }
+
+      .active-counter span {
+        font-weight: 700;
+        color: #1e40af;
+        font-size: 1.6rem;
+      }
+
+      .controls {
+        display: flex;
+        gap: 14px;
+      }
+
+      .controls button {
+        padding: 12px 25px;
+        border: none;
+        border-radius: 10px;
+        background: #3b82f6;
+        color: white;
+        font-size: 1.05rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 500;
+        box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
+      }
+
+      .controls button:hover {
+        background: #2563eb;
+        transform: translateY(-3px);
+        box-shadow: 0 6px 12px rgba(59, 130, 246, 0.25);
+      }
+
+      .controls button:disabled {
+        background: #94a3b8;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .estado-counter {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .contador-estado {
+        display: flex;
+        width: 200px;
+        min-width:  150px;
+        max-width: 250px;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9rem;
+        padding: 8px 15px;
+        border-radius: 20px;
+        color: white;
+        font-weight: 500;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      .contador-entregado {
+        background: #f59e0b;
+      }
+
+     .contador-en-progreso {
+        background: #64748b;
+      }
+      .contador-evaluado {
+        background: #3b82f6;
+      }
+      .contador-aprobado {
+        background: #10b981;
+      }
+      .contador-observado {
+        background: #ef4444;
+      }
+      .contador-fuera-tiempo {
+        background: #8b5cf6;
+      }
+
+      /* Colores para leyenda */
+      .color-1 {
+        background: #f59e0b;
+      }
+      .color-2 {
+        background: #3b82f6;
+      }
+      .color-3 {
+        background: #10b981;
+      }
+      .color-4 {
+        background: #ef4444;
+      }
+      .color-5 {
+        background: #8b5cf6;
+      }
+      .color-6 {
+        background: #64748b;
+      }
+
+      /* Subsecciones */
+      .sub-section {
+        margin-left: 25px;
+        border-left: 2px solid #e2e8f0;
+        padding-left: 15px;
+        margin-bottom: 15px;
+      }
+
+      .sub-section-title {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        padding: 12px 15px;
+        background: #f8fafc;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        transition: all 0.2s;
+        border-left: 4px solid #10b981;
+      }
+
+      .sub-section-title:hover {
+        background: #e2e8f0;
+      }
+
+      .sub-section-title h4 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-left: 10px;
+        color: #334155;
+        flex: 1;
+      }
+
+      .sub-section-title i {
+        font-size: 1.1rem;
+        color: #10b981;
+        transition: transform 0.3s ease;
+      }
+
+      .sub-section-title.collapsed i.fa-chevron-down {
+        transform: rotate(-90deg);
+      }
+
+      .sub-items-list {
+        list-style-type: none;
+        padding-left: 15px;
+        max-height: 1000px;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+      }
+
+      .sub-items-list.collapsed {
+        max-height: 0;
+      }
+
+      /* Sub-items */
+      .sub-item-container {
+        display: flex;
+        align-items: center;
+        padding: 10px 10px;
+        margin-bottom: 8px;
+        background: #f8fafc;
+        border-radius: 8px;
+        transition: all 0.2s;
+      }
+
+      .sub-item-container:hover {
+        background: #e2e8f0;
+      }
+
+      .sub-item-edt {
+        flex: 0 0 70px;
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: #1e40af;
+        background: #dbeafe;
+        padding: 7px 12px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+        border: 1px solid #bfdbfe;
+      }
+
+      .sub-item-name {
+        flex: 1;
+        font-size: 1rem;
+        color: #475569;
+        font-weight: 300;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .sub-item-date {
+        font-size: 0.85rem;
+        color: #64748b;
+        background: #e2e8f0;
+        padding: 4px 8px;
+        border-radius: 15px;
+        margin-right: 10px;
+      }
+
+      .sub-item-status {
+        font-size: 0.85rem;
+        padding: 4px 10px;
+        border-radius: 15px;
+        font-weight: 500;
+        margin-left: 10px;
+      }
+
+      .sub-item-status.aprobado {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .sub-item-status.entregado {
+        background: #fef3c7;
+        color: #b45309;
+      }
+
+      .sub-item-status.evaluado {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+
+      /* Resultados de búsqueda */
+      .search-results-info {
+        background: #e0f2fe;
+        border-radius: 8px;
+        padding: 12px 20px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .no-results {
+        text-align: center;
+        padding: 30px;
+        color: #64748b;
+      }
+
+      .no-results i {
+        font-size: 3rem;
+        margin-bottom: 15px;
+        color: #cbd5e1;
+      }
+
+      /* Modales */
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .modal-content {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        width: 90%;
+        max-width: 700px;
+        overflow: hidden;
+        animation: modalOpen 0.4s ease-out;
+      }
+
+      @keyframes modalOpen {
+        from {
+          transform: translateY(-50px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      .modal-header {
+        background: #1e40af;
+        color: white;
+        padding: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .modal-header h3 {
+        font-size: 1.4rem;
+        font-weight: 600;
+      }
+
+      .close-modal {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .close-modal:hover {
+        transform: rotate(90deg);
+      }
+
+      .modal-body {
+        padding: 25px;
+      }
+
+      .fecha-info {
+        margin-bottom: 25px;
+      }
+
+      .fecha-info h4 {
+        color: #1e40af;
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .fecha-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .fecha-label {
+        color: #64748b;
+        font-weight: 500;
+      }
+
+      .fecha-value {
+        color: #334155;
+        font-weight: 600;
+      }
+
+      .estado-info {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 20px;
+      }
+
+      .estado-info h4 {
+        color: #1e40af;
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .estado-actual {
+        display: inline-block;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-weight: 600;
+        margin-top: 10px;
+      }
+
+      /* Nuevos estilos para el modal de ver */
+      .document-section {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+
+      .document-section h4 {
+        color: #1e40af;
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .document-list {
+        list-style-type: none;
+      }
+
+      .document-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .document-name {
+        font-weight: 500;
+        color: #334155;
+      }
+
+      .version-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .version-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .document-version {
+        background: #dbeafe;
+        color: #1e40af;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 500;
+      }
+
+      .version-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .version-action {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f1f5f9;
+        color: #3b82f6;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .version-action:hover {
+        background: #dbeafe;
+        transform: translateY(-2px);
+      }
+
+      .view-action {
+        color: #10b981;
+      }
+
+      .view-action:hover {
+        color: #ff0000;
+      }
+
+      .download-action {
+        color: #3b82f6;
+      }
+
+      .download-action:hover {
+        color: #ff0000;
+      }
+
+      .document-version {
+        background: #dbeafe;
+        color: #1e40af;
+        padding: 4px 10px;
+        border-radius: 15px;
+        font-size: 0.85rem;
+      }
+
+      .responsable-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+        margin-top: 15px;
+      }
+
+      .responsable-card {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e2e8f0;
+        text-align: center;
+      }
+
+      .responsable-title {
+        font-weight: 600;
+        color: #1e40af;
+        margin-bottom: 8px;
+      }
+
+      .responsable-name {
+        font-weight: 500;
+        color: #334155;
+      }
+
+      .responsable-date {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-top: 5px;
+      }
+
+      .file-list {
+        list-style-type: none;
+        margin-top: 10px;
+      }
+
+      .file-item {
+        display: flex;
+        align-items: center;
+        padding: 8px 0;
+      }
+
+      .file-item i {
+        color: #3b82f6;
+        margin-right: 10px;
+        font-size: 1.2rem;
+      }
+
+      .file-name {
+        color: #334155;
+        flex: 1;
+      }
+
+      .file-download {
+        color: #3b82f6;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-left: 10px;
+      }
+
+      .file-download:hover {
+        color: #1d4ed8;
+        transform: translateY(-2px);
+      }
+
+      /* Nuevo estilo para el icono de PDF */
+      .pdf-icon {
+        color: #e74c3c;
+        margin-left: 10px;
+      }
+
+      /* Responsividad */
+      @media (max-width: 1200px) {
+        .content-wrapper {
+          flex-direction: column;
+        }
+
+        .legend-container {
+          flex: 0 0 auto;
+          width: 100%;
+        }
+
+        .capa-container {
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .capa-edt,
+        .capa-name,
+        .capa-date,
+        .capa-actions {
+          flex: 100%;
+        }
+
+        .capa-actions {
+          justify-content: flex-start;
+          margin-top: 10px;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .search-box {
+          width: 100%;
+          margin-top: 15px;
+        }
+
+        .capas-header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .status-bar {
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .controls {
+          width: 100%;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
+
+        .controls button {
+          flex: 1;
+          min-width: 200px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .btn-action {
+          width: 100px;
+          padding: 8px 10px;
+        }
+
+        .capa-date {
+          min-width: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1><i class="fas fa-layer-group"></i> Sistema de Gestión de Proyectos de Inversion</h1>
+        <p class="subtitle">
+          Plataforma para administracion de EE.TT. con estructura EDT
+        </p>
+      </header>
+
+      <div class="content-wrapper">
+        <div class="capas-container">
+          <div class="capas-header">
+            <h2><i class="fas fa-map"></i> INDICE DE EXPEDIENTE ACUMULADO SPP</h2>
+            <div class="search-box">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                id="searchInput"
+                placeholder="Buscar capa, subcapa..."
+              />
+            </div>
+          </div>
+
+          <div
+            id="searchResultsInfo"
+            class="search-results-info"
+            style="display: none"
+          >
+            <i class="fas fa-search"></i>
+            <div id="resultsCount">Mostrando 0 resultados</div>
+          </div>
+
+          <div id="noResults" class="no-results" style="display: none">
+            <i class="fas fa-search"></i>
+            <h3>No se encontraron resultados</h3>
+            <p>Intente con diferentes términos de búsqueda</p>
+          </div>
+
+          <!-- Sección 0.00: Información General -->
+          <div class="capas-section">
+            <div class="section-title" data-section="cartografia">
+              <div class="capa-edt">0.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>INFORMACION GENERAL</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="cartografia-list">
+              <!-- Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">1.01</div>
+                <div class="capa-name">
+                  <label>Caratula e índice</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('riesgos')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">1.02</div>
+                <div class="capa-name">
+                  <label>Ficha técnica de la inversión INVIERTE.PE</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('riesgos')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Sección 1.00: Resumen Ejecutivo -->
+          <div class="capas-section">
+            <div class="section-title" data-section="resumen_ejecutivo">
+              <div class="capa-edt">1.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>RESUMEN EJECUTIVO</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="resumen_ejecutivo-list">
+              <!-- Contenido del resumen ejecutivo -->
+            </ul>
+          </div>
+
+          <!-- Sección 2.00: Memoria Descriptiva General -->
+          <div class="capas-section">
+            <div class="section-title" data-section="memoria_general">
+              <div class="capa-edt">2.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>MEMORIA DESCRIPTIVA GENERAL</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="memoria_general-list">
+              <!-- Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">2.01</div>
+                <div class="capa-name">
+                  <label>Memoria Descriptiva General</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('riesgos')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">2.02</div>
+                <div class="capa-name">
+                  <label>Memeria Descriptiva por Componentes</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('riesgos')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Sección 3.00: Estudios de Ingeniería Básica -->
+          <div class="capas-section">
+            <div class="section-title" data-section="estudios_ingenieria">
+              <div class="capa-edt">3.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>ESTUDIOS DE INGENIERÍA BÁSICA</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="estudios_ingenieria-list">
+              <!-- Subsección para Valentismo -->
+              <li class="sub-section">
+                <div
+                  class="sub-section-title"
+                  data-subsection="georeferenciacion"
+                >
+                  <div class="capa-edt">3.1</div>
+                  <i class="fas fa-folder"></i>
+                  <h4>Estudio de Ingenieria Georeferenciacion y Topografia</h4>
+                  <i class="fas fa-chevron-down"></i>
+                </div>
+                <ul class="sub-items-list" id="georeferenciacion-list">
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.1.1</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de georeferenciacion </span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.1.2</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de topografia</span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.1.3</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de topografia complementaria</span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+              </li>
+
+              <!-- Subsección para Geología y Geotecnica -->
+              <li class="sub-section">
+                <div class="sub-section-title" data-subsection="geologia">
+                  <div class="capa-edt">3.2</div>
+                  <i class="fas fa-folder"></i>
+                  <h4>Geología y Geotecnica</h4>
+                  <i class="fas fa-chevron-down"></i>
+                </div>
+                <ul class="sub-items-list" id="geologia-list">
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.2.1</div>
+                    <div class="sub-item-name">
+                      <span>Geología </span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.2.2</div>
+                    <div class="sub-item-name">
+                      <span>Geotecnia</span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+              </li>
+
+              <!-- 3.3 Hidrologia Hidraulica-->
+              <li class="sub-section">
+                <div class="sub-section-title" data-subsection="hidrologia">
+                  <div class="capa-edt">3.3</div>
+                  <i class="fas fa-folder"></i>
+                  <h4>Hidrologia e Hidráulica</h4>
+                  <i class="fas fa-chevron-down"></i>
+                </div>
+                <!-- 3.3.1 Hidrologia Hidraulica-->
+                <ul class="sub-items-list" id="hidrologia-list">
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.3.1</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de Hidrologia </span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                  <!-- 3.3.2 Hidrologia Hidraulica-->
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.3.2</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de Hidraulica</span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+              </li>
+
+              <!-- 3.4 Hidrologia Hidraulica-->
+              <li class="sub-section">
+                <div class="sub-section-title" data-subsection="trafico">
+                  <div class="capa-edt">3.4</div>
+                  <i class="fas fa-folder"></i>
+                  <h4>Estudio de tráfico e Inventario Vial</h4>
+                  <i class="fas fa-chevron-down"></i>
+                </div>
+                <!-- 3.3.1 Hidrologia Hidraulica-->
+                <ul class="sub-items-list" id="trafico-list">
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.4.1</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de tráfico </span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                  <!-- 3.3.2 Hidrologia Hidraulica-->
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.4.2</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de inventario vial</span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+              </li>
+
+              <!-- 3.5 Seguridad vial y señalizacion-->
+              <li class="sub-section">
+                <div class="sub-section-title" data-subsection="seguridad_vial">
+                  <div class="capa-edt">3.5</div>
+                  <i class="fas fa-folder"></i>
+                  <h4>Estudio de Seguridad vial y señalizacion</h4>
+                  <i class="fas fa-chevron-down"></i>
+                </div>
+              </li>
+
+              <!-- 3.6 Mecánica de suelos, canteras y fuentes de agua-->
+              <li class="sub-section">
+                <div
+                  class="sub-section-title"
+                  data-subsection="mecanica_suelos"
+                >
+                  <div class="capa-edt">3.6</div>
+                  <i class="fas fa-folder"></i>
+                  <h4>
+                    Estudio de mecánica de suelos, estudios de canteras y
+                    fuentes de agua
+                  </h4>
+                  <i class="fas fa-chevron-down"></i>
+                </div>
+                <!-- 3.3.1 Hidrologia Hidraulica-->
+                <ul class="sub-items-list" id="mecanica_suelos-list">
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.6.1</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de mecanica de suelos </span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                  <!-- 3.3.2 Hidrologia Hidraulica-->
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.6.2</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de canteras</span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+
+                  <!-- 3.3.2 Hidrologia Hidraulica-->
+                  <li class="sub-item-container">
+                    <div class="sub-item-edt">3.6.3</div>
+                    <div class="sub-item-name">
+                      <span>Estudio de fuentes de agua</span>
+                    </div>
+                    <div class="capa-actions">
+                      <i
+                        class="fas fa-info-circle capa-info-icon"
+                        onclick="openDescModal('peligros')"
+                      ></i>
+                      <div
+                        class="capa-date"
+                        onclick="openFechaModal('peligros')"
+                      >
+                        <i class="fas fa-calendar"></i>
+                      </div>
+                      <button
+                        class="btn-action btn-ver"
+                        onclick="openVerModal('peligros')"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-editar"
+                        onclick="openEditarModal('peligros')"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn-action btn-estado estado-observado"
+                        onclick="openEstadoModal('peligros')"
+                      >
+                        <i class="fas fa-exclamation-circle"></i> Observado
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Sección 4.00: METRADOS -->
+          <div class="capas-section">
+            <div class="section-title" data-section="metrados">
+              <div class="capa-edt">4.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>METRADOS</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="metrados-list">
+              <!-- Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">4.01</div>
+                <div class="capa-name">
+                  <label>Resumen de metrados</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">4.02</div>
+                <div class="capa-name">
+                  <label>Metrados a detalle de todos los componentes</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Sección 5.00: PRESUPUESTO -->
+          <div class="capas-section">
+            <div class="section-title" data-section="presupuesto">
+              <div class="capa-edt">5.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>PRESUPUESTO</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="presupuesto-list">
+              <!-- 5.01 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">5.01</div>
+                <div class="capa-name">
+                  <label>Memoria de costos y bases para calculo</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.02 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">5.02</div>
+                <div class="capa-name">
+                  <label>Presupuesto analitico</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.03 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.03</div>
+                <div class="capa-name">
+                  <label>Prespuesto</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.04 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.04</div>
+                <div class="capa-name">
+                  <label>Analisis de precios unitarios</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.05 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.05</div>
+                <div class="capa-name">
+                  <label>Analisis de precios unitarios de subpartidas</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.06 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">5.06</div>
+                <div class="capa-name">
+                  <label>Relacion de insumos</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.07 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">5.07</div>
+                <div class="capa-name">
+                  <label>Formula polinomica</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.08 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.08</div>
+                <div class="capa-name">
+                  <label
+                    >Programacion de ejecucion de inversion (Diagrama
+                    Gant)</label
+                  >
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.09 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.09</div>
+                <div class="capa-name">
+                  <label>Programacion Pert CPM</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.10 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.10</div>
+                <div class="capa-name">
+                  <label>Calendario de avance de inversion valorizado</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.11 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">5.11</div>
+                <div class="capa-name">
+                  <label>Calendario de adquisición de materiales</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.12 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">5.12</div>
+                <div class="capa-name">
+                  <label
+                    >Calendario de utilizacion de equipos y maquinarias</label
+                  >
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.13 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.13</div>
+                <div class="capa-name">
+                  <label
+                    >Calendario de utilización de mano de obra calificada y no
+                    calificada</label
+                  >
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.14 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.14</div>
+                <div class="capa-name">
+                  <label>Cronograma de desembolso economico</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.15 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.15</div>
+                <div class="capa-name">
+                  <label>Calculo de flete</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.16 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">5.16</div>
+                <div class="capa-name">
+                  <label>Calculo de movilización y desmovilización</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.17 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">5.17</div>
+                <div class="capa-name">
+                  <label>Estudio de mercado (cotizaciones)</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.018 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.18</div>
+                <div class="capa-name">
+                  <label>Analisis de costos hora hombre</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.19 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.19</div>
+                <div class="capa-name">
+                  <label
+                    >Analisis de costo de materiales (cuadro comparativo de
+                    precios)</label
+                  >
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.20 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.20</div>
+                <div class="capa-name">
+                  <label>Analisis costo hora maquina</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.05 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.21</div>
+                <div class="capa-name">
+                  <label>Calculo de distancias</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.05 Cartografía Peligros -->
+              <li class="capa-container">
+                <div class="capa-edt">5.22</div>
+                <div class="capa-name">
+                  <label>Rendimiento de transporte</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('peligros')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('peligros')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('peligros')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-observado"
+                    onclick="openEstadoModal('peligros')"
+                  >
+                    <i class="fas fa-exclamation-circle"></i> Observado
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Resto de secciones (6.00 en adelante) -->
+          <!-- 6.0 Memoria Descriptiva General-->
+          <div class="capas-section">
+            <div class="section-title" data-section="MemoriaDesc">
+              <div class="capa-edt">6.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>ESPECIFICACIONES TECNICAS</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <!-- 5.01 Cartografía Riesgos -->
+            <ul class="capas-list" id="MemoriaDesc-list">
+              <li class="capa-container">
+                <div class="capa-edt">6.01</div>
+                <div class="capa-name">
+                  <label>Especificaciones Tecnicas</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- 7.0 DISEÑO DE INGNIERIA-->
+          <div class="capas-section">
+            <div class="section-title" data-section="DiseñoIng">
+              <div class="capa-edt">7.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>ESPECIFICACIONES TECNICAS</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="DiseñoIng-list">
+              <!-- 5.01 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">7.01</div>
+                <div class="capa-name">
+                  <label>Drenaje Hidraulica</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.01 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">7.02</div>
+                <div class="capa-name">
+                  <label>Estructuras</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.01 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">7.03</div>
+                <div class="capa-name">
+                  <label>Diseño geométricos</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.01 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">7.04</div>
+                <div class="capa-name">
+                  <label>Pavimentos</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.01 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">7.05</div>
+                <div class="capa-name">
+                  <label>Seguridad vial y señalización</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- 8.0 EIA-->
+          <div class="capas-section">
+            <div class="section-title" data-section="EIA">
+              <div class="capa-edt">8.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>ESTUDIO DE IMPACTO AMBIENTAL</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="EIA-list">
+              <!-- 5.01 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">8.01</div>
+                <div class="capa-name">
+                  <label>Componente I</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.01 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">8.02</div>
+                <div class="capa-name">
+                  <label>Componente II</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+
+              <!-- 5.01 Cartografía Riesgos -->
+              <li class="capa-container">
+                <div class="capa-edt">8.03</div>
+                <div class="capa-name">
+                  <label>Componente III</label>
+                </div>
+
+                <div class="capa-actions">
+                  <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                  ></i>
+                  <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                  </div>
+                  <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                  >
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                  >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- 9.0 PMV-->
+          <div class="capas-section">
+            <div class="section-title" data-section="PMV">
+              <div class="capa-edt">9.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>PLAN DE MANTENIMIENTO VIAL</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="PMV-list">
+                <!-- 5.01 Cartografía Riesgos -->
+                <li class="capa-container">
+                <div class="capa-edt">6.01</div>
+                <div class="capa-name">
+                    <label>Plan de Mantenimiento Vial</label>
+                </div>
+
+                <div class="capa-actions">
+                    <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                    ></i>
+                    <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                    </div>
+                    <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                    >
+                    <i class="fas fa-eye"></i>
+                    </button>
+                    <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                    >
+                    <i class="fas fa-edit"></i>
+                    </button>
+                    <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                    >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                    </button>
+                </div>
+                </li>
+            </ul>
+          </div>
+
+          <!-- 10.0 DISEÑO DE INGNIERIA-->
+          <div class="capas-section">
+            <div class="section-title" data-section="PAC">
+              <div class="capa-edt">10.00</div>
+              <i class="fas fa-folder-open"></i>
+              <h3>PLAN DE AFECTACIONES PREDIALES</h3>
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <ul class="capas-list" id="PAC-list">
+                <!-- 5.01 Cartografía Riesgos -->
+                <li class="capa-container">
+                <div class="capa-edt">10.01</div>
+                <div class="capa-name">
+                    <label
+                    >Plan de Afectaciones Y Compensaciones y Delimitacion de
+                    derecho de via</label
+                    >
+                </div>
+
+                <div class="capa-actions">
+                    <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                    ></i>
+                    <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                    </div>
+                    <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                    >
+                    <i class="fas fa-eye"></i>
+                    </button>
+                    <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                    >
+                    <i class="fas fa-edit"></i>
+                    </button>
+                    <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                    >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                    </button>
+                </div>
+                </li>
+
+                <!-- 5.01 Cartografía Riesgos -->
+                <li class="capa-container">
+                <div class="capa-edt">10.02</div>
+                <div class="capa-name">
+                    <label>Infraestructura existente e interferencias</label>
+                </div>
+
+                <div class="capa-actions">
+                    <i
+                    class="fas fa-info-circle capa-info-icon"
+                    onclick="openDescModal('peligros')"
+                    ></i>
+                    <div class="capa-date" onclick="openFechaModal('riesgos')">
+                    <i class="fas fa-calendar"></i>
+                    </div>
+                    <button
+                    class="btn-action btn-ver"
+                    onclick="openVerModal('riesgos')"
+                    >
+                    <i class="fas fa-eye"></i>
+                    </button>
+                    <button
+                    class="btn-action btn-editar"
+                    onclick="openEditarModal('riesgos')"
+                    >
+                    <i class="fas fa-edit"></i>
+                    </button>
+                    <button
+                    class="btn-action btn-estado estado-aprobado"
+                    onclick="openEstadoModal('riesgos')"
+                    >
+                    <i class="fas fa-check-circle"></i> Aprobado
+                    </button>
+                </div>
+                </li>
+            </ul>
+          </div>
+
+          <!-- ... (resto del contenido) ... -->
+        </div>
+
+        <div class="legend-container">
+          <div class="legend-header">
+            <h2><i class="fas fa-flag"></i> Estados de Capas</h2>
+          </div>
+          <div class="legend-item">
+            <div class="color-box color-6"></div>
+            <p>En Progreso</p>
+          </div>
+          <div class="legend-item">
+            <div class="color-box color-1"></div>
+            <p>Entregado</p>
+          </div>
+
+          <div class="legend-item">
+            <div class="color-box color-2"></div>
+            <p>Evaluado</p>
+          </div>
+          <div class="legend-item">
+            <div class="color-box color-3"></div>
+            <p>Aprobado</p>
+          </div>
+          <div class="legend-item">
+            <div class="color-box color-4"></div>
+            <p>Observado</p>
+          </div>
+          <div class="legend-item">
+            <div class="color-box color-5"></div>
+            <p>Fuera de Tiempo</p>
+          </div>
+
+
+          <div
+            style="
+              margin-top: 35px;
+              padding-top: 25px;
+              border-top: 1px solid #e2e8f0;
+            "
+          >
+            <h3
+              style="
+                color: #1e40af;
+                margin-bottom: 20px;
+                font-size: 1.3rem;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+              "
+            >
+              <i class="fas fa-chart-bar"></i> Resumen de Progreso
+            </h3>
+
+            <div class="estado-counter">
+              <div class="contador-estado contador-en-progreso">
+                <i class="fas fa-check-circle"></i>
+                <span>1</span> En Progreso
+              </div>
+              <div class="contador-estado contador-entregado">
+                <i class="fas fa-check-circle"></i>
+                <span>1</span> Entregado
+              </div>
+
+              <div class="contador-estado contador-evaluado">
+                <i class="fas fa-check-double"></i>
+                <span>1</span> Evaluado
+              </div>
+              <div class="contador-estado contador-aprobado">
+                <i class="fas fa-check-circle"></i>
+                <span>2</span> Aprobado
+              </div>
+              <div class="contador-estado contador-observado">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>1</span> Observado
+              </div>
+              <div class="contador-estado contador-fuera-tiempo">
+                <i class="fas fa-clock"></i>
+                <span>1</span> Fuera de Tiempo
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <div class="active-counter">
+          <i class="fas fa-layer-group"></i>
+          Capas activas: <span id="activeCount">0</span>
+        </div>
+        <div class="controls">
+          <button onclick="selectAll()" id="selectAllBtn">
+            <i class="fas fa-check-circle"></i> Activar todas
+          </button>
+          <button onclick="deselectAll()" id="deselectAllBtn" disabled>
+            <i class="fas fa-times-circle"></i> Desactivar todas
+          </button>
+          <button onclick="applyChanges()">
+            <i class="fas fa-sync-alt"></i> Aplicar cambios
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal para fechas -->
+      <!-- Modal para ver detalles (nuevo) -->
+      <div id="verModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="verModalTitle">Detalles de la Capa</h3>
+            <button class="close-modal" onclick="closeModal('verModal')">
+              &times;
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="document-section">
+              <h4><i class="fas fa-file-alt"></i> Archivos Aprobados</h4>
+              <ul class="document-list" id="archivosAprobados">
+                <!-- Se llena dinámicamente -->
+              </ul>
+            </div>
+
+            <div class="document-section">
+              <h4><i class="fas fa-tasks"></i> Asignación de Funciones</h4>
+              <ul class="file-list" id="asignacionFunciones">
+                <!-- Se llena dinámicamente -->
+              </ul>
+            </div>
+
+            <div class="document-section">
+              <h4><i class="fas fa-file-contract"></i> Informes Emitidos</h4>
+              <ul class="file-list" id="informesEmitidos">
+                <!-- Se llena dinámicamente -->
+              </ul>
+            </div>
+
+            <div class="document-section">
+              <h4><i class="fas fa-stamp"></i> Documento de Aprobación</h4>
+              <ul class="file-list" id="documentoAprobacion">
+                <!-- Se llena dinámicamente -->
+              </ul>
+            </div>
+
+            <div class="document-section">
+              <h4><i class="fas fa-users"></i> Responsables</h4>
+              <div class="responsable-grid">
+                <div class="responsable-card">
+                  <div class="responsable-title">Elaborado por</div>
+                  <div class="responsable-name" id="elaboradoPor">-</div>
+                  <div class="responsable-date" id="fechaElaboracion">-</div>
+                </div>
+                <div class="responsable-card">
+                  <div class="responsable-title">Evaluado por</div>
+                  <div class="responsable-name" id="evaluadoPor">-</div>
+                  <div class="responsable-date" id="fechaEvaluacion">-</div>
+                </div>
+                <div class="responsable-card">
+                  <div class="responsable-title">Aprobado por</div>
+                  <div class="responsable-name" id="aprobadoPor">-</div>
+                  <div class="responsable-date" id="fechaAprobacion">-</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="fechaModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="fechaModalTitle">Detalles de Fechas</h3>
+            <button class="close-modal" onclick="closeModal('fechaModal')">
+              &times;
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="fecha-info">
+              <h4><i class="fas fa-calendar-alt"></i> Cronograma de la Capa</h4>
+              <div class="fecha-row">
+                <div class="fecha-label">Fecha de Inicio:</div>
+                <div class="fecha-value" id="fechaInicio">01/06/2023</div>
+              </div>
+              <div class="fecha-row">
+                <div class="fecha-label">Fecha de Entrega Planificada:</div>
+                <div class="fecha-value" id="fechaPlanificada">30/06/2023</div>
+              </div>
+              <div class="fecha-row">
+                <div class="fecha-label">Fecha de Entrega Real:</div>
+                <div class="fecha-value" id="fechaReal">28/06/2023</div>
+              </div>
+              <div class="fecha-row">
+                <div class="fecha-label">Última Actualización:</div>
+                <div class="fecha-value" id="fechaActualizacion">
+                  25/06/2023
+                </div>
+              </div>
+            </div>
+
+            <div class="estado-info">
+              <h4><i class="fas fa-info-circle"></i> Estado Actual</h4>
+              <div id="estadoActual" class="estado-actual estado-aprobado">
+                Aprobado
+              </div>
+              <p style="margin-top: 15px; line-height: 1.6; color: #64748b">
+                La capa fue entregada antes de la fecha planificada y aprobada
+                en la primera revisión.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal para descripción -->
+      <div id="descModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="descModalTitle">Descripción de la Capa</h3>
+            <button class="close-modal" onclick="closeModal('descModal')">
+              &times;
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="fecha-info">
+              <h4><i class="fas fa-info-circle"></i> Información General</h4>
+              <p
+                id="descripcionCapa"
+                style="line-height: 1.6; color: #64748b; margin-top: 10px"
+              >
+                Cartografía detallada de riesgos geológicos en la región norte.
+                Incluye capas de fallas, zonas de deslizamiento y áreas de
+                inundación potencial. Datos recopilados mediante levantamiento
+                topográfico y análisis satelital.
+              </p>
+            </div>
+
+            <div class="fecha-info">
+              <h4><i class="fas fa-tasks"></i> Hitos Importantes</h4>
+              <ul
+                style="
+                  padding-left: 20px;
+                  margin-top: 10px;
+                  color: #64748b;
+                  line-height: 1.8;
+                "
+              >
+                <li>Recopilación de datos de campo</li>
+                <li>Procesamiento de imágenes satelitales</li>
+                <li>Análisis de riesgos</li>
+                <li>Validación técnica</li>
+                <li>Control de calidad</li>
+              </ul>
+            </div>
+
+            <div class="estado-info">
+              <h4><i class="fas fa-history"></i> Historial de Versiones</h4>
+              <div style="margin-top: 15px">
+                <div class="fecha-row">
+                  <div class="fecha-label">v2.1.4 (15/06/2023):</div>
+                  <div class="fecha-value">Aprobación final</div>
+                </div>
+                <div class="fecha-row">
+                  <div class="fecha-label">v2.1.3 (10/06/2023):</div>
+                  <div class="fecha-value">Corrección de observaciones</div>
+                </div>
+                <div class="fecha-row">
+                  <div class="fecha-label">v2.1.0 (05/06/2023):</div>
+                  <div class="fecha-value">Entrega para revisión</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal para estado -->
+      <div id="estadoModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="estadoModalTitle">Estado de la Capa</h3>
+            <button class="close-modal" onclick="closeModal('estadoModal')">
+              &times;
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="fecha-info">
+              <h4><i class="fas fa-calendar-alt"></i> Fechas Clave</h4>
+              <div class="fecha-row">
+                <div class="fecha-label">Fecha de Entrega:</div>
+                <div class="fecha-value" id="fechaEntregaEstado">
+                  15/06/2023
+                </div>
+              </div>
+              <div class="fecha-row">
+                <div class="fecha-label">Fecha de Evaluación:</div>
+                <div class="fecha-value" id="fechaEvaluacionEstado">
+                  18/06/2023
+                </div>
+              </div>
+              <div class="fecha-row">
+                <div class="fecha-label">Fecha de Aprobación:</div>
+                <div class="fecha-value" id="fechaAprobacionEstado">
+                  20/06/2023
+                </div>
+              </div>
+              <div class="fecha-row">
+                <div class="fecha-label">Próxima Revisión:</div>
+                <div class="fecha-value" id="fechaProximaEstado">
+                  15/12/2023
+                </div>
+              </div>
+            </div>
+
+            <div class="estado-info">
+              <h4><i class="fas fa-clipboard-check"></i> Estado Actual</h4>
+              <div
+                id="estadoActualDetalle"
+                class="estado-actual estado-aprobado"
+                style="margin-top: 10px"
+              >
+                Aprobado
+              </div>
+              <p style="margin-top: 15px; line-height: 1.6; color: #64748b">
+                La capa fue aprobada después de dos revisiones. Se realizaron
+                ajustes menores en la capa de zonas de inundación según las
+                observaciones del equipo evaluador.
+              </p>
+            </div>
+
+            <div class="fecha-info">
+              <h4><i class="fas fa-user-check"></i> Responsables</h4>
+              <div class="fecha-row">
+                <div class="fecha-label">Elaborado por:</div>
+                <div class="fecha-value">Carlos Mendoza</div>
+              </div>
+              <div class="fecha-row">
+                <div class="fecha-label">Evaluado por:</div>
+                <div class="fecha-value">María Fernández</div>
+              </div>
+              <div class="fecha-row">
+                <div class="fecha-label">Aprobado por:</div>
+                <div class="fecha-value">Jorge Rodríguez</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const disciplinasData = {
+        geoportal: {
+            title: "Geoportal",
+            edt: "1.00",
+            capas: [
+                { edt: "1.01", nombre: "Caratula e índice", capaId: "riesgos" },
+                { edt: "1.02", nombre: "Ficha técnica de la inversión INVIERTE.PE", capaId: "peligros" }
+            ]
+        },
+        topografia: {
+            title: "Topografía",
+            edt: "2.00",
+            capas: [
+                { edt: "2.01", nombre: "Memoria Descriptiva General", capaId: "riesgos" },
+                { edt: "2.02", nombre: "Memoria Descriptiva por Componentes", capaId: "peligros" }
+            ]
+        },
+        geologia: {
+            title: "Geología",
+            edt: "3.00",
+            capas: [
+                { edt: "3.01", nombre: "Memoria Descriptiva", capaId: "riesgos" },
+                { edt: "3.02", nombre: "Planos", capaId: "peligros" }
+            ]
+        },
+        hidrologia: {
+            title: "Hidrología",
+            edt: "4.00",
+            capas: [
+                { edt: "4.01", nombre: "Estudios Hidrológicos", capaId: "riesgos" },
+                { edt: "4.02", nombre: "Diseño de Drenaje", capaId: "peligros" }
+            ]
+        },
+        trafico: {
+            title: "Tráfico",
+            edt: "5.00",
+            capas: [
+                { edt: "5.01", nombre: "Estudio de Tráfico", capaId: "riesgos" },
+                { edt: "5.02", nombre: "Señalización", capaId: "peligros" }
+            ]
+        },
+        seguridadVial: {
+            title: "Seguridad Vial",
+            edt: "6.00",
+            capas: [
+                { edt: "6.01", nombre: "Informe de Seguridad Vial", capaId: "riesgos" },
+                { edt: "6.02", nombre: "Plan de desvíos", capaId: "peligros" }
+            ]
+        },
+        inventarioVial: {
+            title: "Inventario Vial",
+            edt: "7.00",
+            capas: [
+                { edt: "7.01", nombre: "Inventario de Pavimentos", capaId: "riesgos" },
+                { edt: "7.02", nombre: "Inventario de Puentes", capaId: "peligros" }
+            ]
+        },
+        mecanicaSuelos: {
+            title: "Mecánica de Suelos",
+            edt: "8.00",
+            capas: [
+                { edt: "8.01", nombre: "Ensayos de Laboratorio", capaId: "riesgos" },
+                { edt: "8.02", nombre: "Informe Geotécnico", capaId: "peligros" }
+            ]
+        }
+      };
+
+      // Datos de ejemplo para las capas
+      const capasData = {
+        riesgos: {
+          nombre: "Cartografía Riesgos",
+          fecha: "30/05/2023",
+          estado: "aprobado",
+          fechas: {
+            inicio: "01/04/2023",
+            planificada: "30/05/2023",
+            real: "28/05/2023",
+            actualizacion: "25/05/2023",
+          },
+          estadoInfo: {
+            entrega: "28/05/2023",
+            evaluacion: "29/05/2023",
+            aprobacion: "30/05/2023",
+            proxima: "30/11/2023",
+          },
+          descripcion:
+            "Cartografía detallada de riesgos geológicos en la región norte.",
+          responsables: {
+            elaboradoPor: "Ing. Carlos Mendoza",
+            fechaElaboracion: "25/05/2023",
+            evaluadoPor: "Dra. María Fernández",
+            fechaEvaluacion: "29/05/2023",
+            aprobadoPor: "Mg. Jorge Rodríguez",
+            fechaAprobacion: "30/05/2023",
+          },
+          archivos: [
+            {
+              nombre: "Mapa de Riesgos v1.0",
+              version: "1.0",
+            },
+            {
+              nombre: "Reporte Técnico Final",
+              version: "2.1",
+            },
+            {
+              nombre: "Anexo Fotográfico",
+              version: "1.5",
+            },
+          ],
+          asignacionFunciones: [
+            "Memorando Asignación Funciones.pdf",
+            "Plan de Trabajo.docx",
+          ],
+          informesEmitidos: [
+            "Informe Preliminar.pdf",
+            "Informe Final Aprobado.docx",
+          ],
+          documentoAprobacion: ["Resolución de Aprobación N° 2023-045.pdf"],
+        },
+        peligros: {
+          nombre: "Cartografía Peligros",
+          fecha: "12/06/2023",
+          estado: "observado",
+          fechas: {
+            inicio: "15/05/2023",
+            planificada: "12/06/2023",
+            real: "15/06/2023",
+            actualizacion: "10/06/2023",
+          },
+          estadoInfo: {
+            entrega: "15/06/2023",
+            evaluacion: "18/06/2023",
+            aprobacion: "-",
+            proxima: "15/12/2023",
+          },
+          descripcion:
+            "Mapa actualizado de peligros naturales en la zona costera. Incluye evaluación de riesgos de inundación, erosión costera y vulnerabilidad sísmica.",
+        },
+        movimientos: {
+          nombre: "Movimientos en masa",
+          fecha: "18/07/2023",
+          estado: "evaluado",
+          fechas: {
+            inicio: "01/06/2023",
+            planificada: "18/07/2023",
+            real: "15/07/2023",
+            actualizacion: "12/07/2023",
+          },
+          estadoInfo: {
+            entrega: "15/07/2023",
+            evaluacion: "17/07/2023",
+            aprobacion: "-",
+            proxima: "15/01/2024",
+          },
+          descripcion:
+            "Análisis de movimientos en masa en áreas montañosas. Identificación de zonas críticas y evaluación de estabilidad de laderas.",
+        },
+        sismo: {
+          nombre: "Sismo y tsunami",
+          fecha: "05/08/2023",
+          estado: "entregado",
+          fechas: {
+            inicio: "10/06/2023",
+            planificada: "05/08/2023",
+            real: "03/08/2023",
+            actualizacion: "01/08/2023",
+          },
+          estadoInfo: {
+            entrega: "03/08/2023",
+            evaluacion: "-",
+            aprobacion: "-",
+            proxima: "03/02/2024",
+          },
+          descripcion:
+            "Modelado de escenarios sísmicos y de tsunami para la costa central. Incluye mapas de intensidad sísmica, zonas de inundación y tiempos de evacuación.",
+        },
+        nedocestrica: {
+          nombre: "Nedocéstrica",
+          fecha: "25/06/2023",
+          estado: "fuera-tiempo",
+          fechas: {
+            inicio: "01/05/2023",
+            planificada: "25/06/2023",
+            real: "05/07/2023",
+            actualizacion: "30/06/2023",
+          },
+          estadoInfo: {
+            entrega: "05/07/2023",
+            evaluacion: "10/07/2023",
+            aprobacion: "15/07/2023",
+            proxima: "05/01/2024",
+          },
+          descripcion:
+            "Estudio de fenómenos nedocéstricos en la región sur. Análisis de patrones climáticos extremos y su relación con eventos geológicos.",
+        },
+        valentismo: {
+          nombre: "Valentismo",
+          fecha: "10/07/2023",
+          estado: "aprobado",
+          fechas: {
+            inicio: "15/05/2023",
+            planificada: "10/07/2023",
+            real: "08/07/2023",
+            actualizacion: "05/07/2023",
+          },
+          estadoInfo: {
+            entrega: "08/07/2023",
+            evaluacion: "09/07/2023",
+            aprobacion: "10/07/2023",
+            proxima: "08/01/2024",
+          },
+          descripcion:
+            "Análisis de riesgo valentista para infraestructura crítica. Evaluación de vulnerabilidad en puentes, carreteras y edificios esenciales.",
+        },
+        presupuesto: {
+          nombre: "Memoria de costos y bases para calculo",
+          fecha: "15/06/2023",
+          estado: "aprobado",
+          fechas: {
+            inicio: "01/05/2023",
+            planificada: "15/06/2023",
+            real: "12/06/2023",
+            actualizacion: "10/06/2023",
+          },
+          estadoInfo: {
+            entrega: "12/06/2023",
+            evaluacion: "13/06/2023",
+            aprobacion: "15/06/2023",
+            proxima: "15/12/2023",
+          },
+          descripcion:
+            "Documento técnico que detalla los costos y bases de cálculo del proyecto.",
+          responsables: {
+            elaboradoPor: "Lic. Ana Torres",
+            fechaElaboracion: "05/06/2023",
+            evaluadoPor: "Econ. Luis Vargas",
+            fechaEvaluacion: "10/06/2023",
+            aprobadoPor: "Dr. Roberto Jiménez",
+            fechaAprobacion: "15/06/2023",
+          },
+          archivos: [
+            {
+              nombre: "Memoria de Costos v3.2",
+              version: "3.2",
+            },
+            {
+              nombre: "Bases de Cálculo",
+              version: "1.8",
+            },
+            {
+              nombre: "Anexo Presupuestal",
+              version: "2.0",
+            },
+          ],
+          asignacionFunciones: [
+            "Asignación Equipo Presupuesto.pdf",
+            "Roles y Responsabilidades.docx",
+          ],
+          informesEmitidos: [
+            "Informe de Costos Preliminar.pdf",
+            "Informe Final de Presupuesto.docx",
+          ],
+          documentoAprobacion: [
+            "Resolución de Aprobación Presupuestal N° 2023-128.pdf",
+          ],
+        },
+      };
+
+      // Abrir modal de fechas
+      function openFechaModal(capaId) {
+        const capa = capasData[capaId];
+        document.getElementById(
+          "fechaModalTitle"
+        ).textContent = `Fechas: ${capa.nombre}`;
+        document.getElementById("fechaInicio").textContent = capa.fechas.inicio;
+        document.getElementById("fechaPlanificada").textContent =
+          capa.fechas.planificada;
+        document.getElementById("fechaReal").textContent = capa.fechas.real;
+        document.getElementById("fechaActualizacion").textContent =
+          capa.fechas.actualizacion;
+
+        // Actualizar estado
+        const estadoElement = document.getElementById("estadoActual");
+        estadoElement.textContent =
+          capa.estado.charAt(0).toUpperCase() + capa.estado.slice(1);
+        estadoElement.className = "estado-actual estado-" + capa.estado;
+
+        document.getElementById("fechaModal").style.display = "flex";
+      }
+
+      // Abrir modal de descripción
+      function openDescModal(capaId) {
+        const capa = capasData[capaId];
+        document.getElementById(
+          "descModalTitle"
+        ).textContent = `Descripción: ${capa.nombre}`;
+        document.getElementById("descripcionCapa").textContent =
+          capa.descripcion;
+        document.getElementById("descModal").style.display = "flex";
+      }
+
+      // Abrir modal de ver
+      function openVerModal(capaId) {
+        const capa = capasData[capaId];
+        if (!capa) return;
+
+        document.getElementById(
+          "verModalTitle"
+        ).textContent = `Detalles: ${capa.nombre}`;
+
+        // Archivos aprobados
+        const archivosList = document.getElementById("archivosAprobados");
+        archivosList.innerHTML = "";
+        capa.archivos.forEach((archivo) => {
+          const li = document.createElement("li");
+          li.className = "document-item";
+          li.innerHTML = `
+                    <div class="document-name">${archivo.nombre}</div>
+                    <div class="version-container">
+                        <div class="document-version">v${archivo.version}</div>
+                        <div class="version-actions">
+                            <div class="version-action view-action" title="Vista previa">
+                                <i class="fas fa-eye"></i>
+                            </div>
+                            <div class="version-action view-action" title="Descargar Word">
+                                <i class="fas fa-file-word"></i>
+                            </div>                    
+                            <div class="version-action view-action" title="Descargar PDF">
+                                <i class="fas fa-file-pdf"></i>
+                            </div>
+                            <div class="version-action download-action" title="Descargar">
+                                <i class="fas fa-download"></i>
+                            </div>
+                        </div>
+                    </div>
+                `;
+          archivosList.appendChild(li);
+        });
+
+        // Asignación de funciones
+        const asignacionList = document.getElementById("asignacionFunciones");
+        asignacionList.innerHTML = "";
+        capa.asignacionFunciones.forEach((archivo) => {
+          const li = document.createElement("li");
+          li.className = "file-item";
+          li.innerHTML = `
+                    <i class="fas fa-file-contract"></i>
+                    <div class="file-name">${archivo}</div>
+                    <div class="file-download pdf-icon" title="Descargar Word">
+                        <i class="fas fa-file-word"></i>
+                    </div>                    
+                    <div class="file-download pdf-icon" title="Descargar PDF">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <div class="file-download" title="Descargar archivo">
+                        <i class="fas fa-download"></i>
+                    </div>
+                `;
+          asignacionList.appendChild(li);
+        });
+
+        // Informes emitidos
+        const informesList = document.getElementById("informesEmitidos");
+        informesList.innerHTML = "";
+        capa.informesEmitidos.forEach((archivo) => {
+          const li = document.createElement("li");
+          li.className = "file-item";
+          li.innerHTML = `
+                    <i class="fas fa-file-contract"></i>
+                    <div class="file-name">${archivo}</div>
+                    <div class="file-download pdf-icon" title="Descargar Word">
+                        <i class="fas fa-file-word"></i>
+                    </div>    
+                    <div class="file-download pdf-icon" title="Descargar PDF">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <div class="file-download" title="Descargar archivo">
+                        <i class="fas fa-download"></i>
+                    </div>
+                `;
+          informesList.appendChild(li);
+        });
+
+        // Documento de aprobación
+        const aprobacionList = document.getElementById("documentoAprobacion");
+        aprobacionList.innerHTML = "";
+        capa.documentoAprobacion.forEach((archivo) => {
+          const li = document.createElement("li");
+          li.className = "file-item";
+          li.innerHTML = `
+                    <i class="fas fa-file-contract"></i>
+                    <div class="file-name">${archivo}</div>
+                    <div class="file-download pdf-icon" title="Descargar Word">
+                        <i class="fas fa-file-word"></i>
+                    </div>  
+                    <div class="file-download pdf-icon" title="Descargar PDF">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <div class="file-download" title="Descargar archivo">
+                        <i class="fas fa-download"></i>
+                    </div>
+                `;
+          aprobacionList.appendChild(li);
+        });
+
+        // Responsables
+        document.getElementById("elaboradoPor").textContent =
+          capa.responsables.elaboradoPor;
+        document.getElementById("fechaElaboracion").textContent =
+          capa.responsables.fechaElaboracion;
+        document.getElementById("evaluadoPor").textContent =
+          capa.responsables.evaluadoPor;
+        document.getElementById("fechaEvaluacion").textContent =
+          capa.responsables.fechaEvaluacion;
+        document.getElementById("aprobadoPor").textContent =
+          capa.responsables.aprobadoPor;
+        document.getElementById("fechaAprobacion").textContent =
+          capa.responsables.fechaAprobacion;
+
+        document.getElementById("verModal").style.display = "flex";
+      }
+
+      // Abrir modal de estado
+      function openEstadoModal(capaId) {
+        const capa = capasData[capaId];
+        document.getElementById(
+          "estadoModalTitle"
+        ).textContent = `Estado: ${capa.nombre}`;
+        document.getElementById("fechaEntregaEstado").textContent =
+          capa.estadoInfo.entrega;
+        document.getElementById("fechaEvaluacionEstado").textContent =
+          capa.estadoInfo.evaluacion;
+        document.getElementById("fechaAprobacionEstado").textContent =
+          capa.estadoInfo.aprobacion;
+        document.getElementById("fechaProximaEstado").textContent =
+          capa.estadoInfo.proxima;
+
+        // Actualizar estado
+        const estadoElement = document.getElementById("estadoActualDetalle");
+        estadoElement.textContent =
+          capa.estado.charAt(0).toUpperCase() + capa.estado.slice(1);
+        estadoElement.className = "estado-actual estado-" + capa.estado;
+
+        document.getElementById("estadoModal").style.display = "flex";
+      }
+
+      // Cerrar modal
+      function closeModal(modalId) {
+        document.getElementById(modalId).style.display = "none";
+      }
+
+      // Cerrar modal al hacer clic fuera del contenido
+      window.onclick = function (event) {
+        const modals = document.querySelectorAll(".modal");
+        modals.forEach((modal) => {
+          if (event.target === modal) {
+            modal.style.display = "none";
+          }
+        });
+      };
+
+      // Función para alternar secciones
+      function toggleSection(element) {
+        const sectionId = element.getAttribute("data-section");
+        const list = document.getElementById(`${sectionId}-list`);
+
+        element.classList.toggle("collapsed");
+        list.classList.toggle("collapsed");
+      }
+
+      // Función para alternar subsecciones
+      function toggleSubSection(element) {
+        const subsectionId = element.getAttribute("data-subsection");
+        const list = document.getElementById(`${subsectionId}-list`);
+
+        element.classList.toggle("collapsed");
+        list.classList.toggle("collapsed");
+      }
+
+      // Inicializar la aplicación
+      document.addEventListener("DOMContentLoaded", function () {
+        // Configurar eventos para secciones
+        const sectionTitles = document.querySelectorAll(".section-title");
+        sectionTitles.forEach((title) => {
+          title.addEventListener("click", () => toggleSection(title));
+        });
+
+        // Configurar eventos para subsecciones
+        const subsectionTitles =
+          document.querySelectorAll(".sub-section-title");
+        subsectionTitles.forEach((title) => {
+          title.addEventListener("click", () => toggleSubSection(title));
+        });
+
+        // Configurar evento de búsqueda
+        document
+          .getElementById("searchInput")
+          .addEventListener("input", function () {
+            searchCapas(this.value.toLowerCase());
+          });
+
+        // Configurar eventos para los checkboxes
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach((checkbox) => {
+          checkbox.addEventListener("change", function () {
+            updateActiveCount();
+            updateButtonsState();
+          });
+        });
+      });
+
+      // Buscar capas
+      function searchCapas(term) {
+        const searchResultsInfo = document.getElementById("searchResultsInfo");
+        const noResults = document.getElementById("noResults");
+        const resultsCount = document.getElementById("resultsCount");
+
+        // Ocultar elementos de resultados si no hay término
+        if (term.trim() === "") {
+          searchResultsInfo.style.display = "none";
+          noResults.style.display = "none";
+
+          // Mostrar todas las capas
+          const capas = document.querySelectorAll(
+            ".capa-container, .sub-section, .sub-item-container"
+          );
+          capas.forEach((capa) => (capa.style.display = "flex"));
+          return;
+        }
+
+        let matchCount = 0;
+
+        // Buscar en capas principales
+        const capasPrincipales = document.querySelectorAll(".capa-container");
+        capasPrincipales.forEach((capa) => {
+          const label = capa.querySelector("label").textContent.toLowerCase();
+          if (label.includes(term)) {
+            capa.style.display = "flex";
+            matchCount++;
+          } else {
+            capa.style.display = "none";
+          }
+        });
+
+        // Buscar en subsecciones
+        const subsecciones = document.querySelectorAll(".sub-section");
+        subsecciones.forEach((subsec) => {
+          const title = subsec.querySelector("h4").textContent.toLowerCase();
+          if (title.includes(term)) {
+            subsec.style.display = "block";
+            matchCount++;
+          } else {
+            subsec.style.display = "none";
+          }
+        });
+
+        // Buscar en sub-capas
+        const subCapas = document.querySelectorAll(".sub-item-container");
+        subCapas.forEach((subcapa) => {
+          const label = subcapa.querySelector("span").textContent.toLowerCase();
+          if (label.includes(term)) {
+            subcapa.style.display = "flex";
+            matchCount++;
+          } else {
+            subcapa.style.display = "none";
+          }
+        });
+
+        // Mostrar información de resultados
+        if (matchCount > 0) {
+          searchResultsInfo.style.display = "flex";
+          noResults.style.display = "none";
+          resultsCount.textContent = `Mostrando ${matchCount} resultado(s) para "${term}"`;
+        } else {
+          searchResultsInfo.style.display = "none";
+          noResults.style.display = "block";
+        }
+      }
+
+      // Actualizar contador de capas activas
+      function updateActiveCount() {
+        const activeCheckboxes = document.querySelectorAll(
+          'input[type="checkbox"]:checked'
+        );
+        document.getElementById("activeCount").textContent =
+          activeCheckboxes.length;
+      }
+
+      // Actualizar estado de los botones
+      function updateButtonsState() {
+        const totalCheckboxes = document.querySelectorAll(
+          'input[type="checkbox"]'
+        ).length;
+        const activeCheckboxes = document.querySelectorAll(
+          'input[type="checkbox"]:checked'
+        ).length;
+
+        document.getElementById("deselectAllBtn").disabled =
+          activeCheckboxes === 0;
+        document.getElementById("selectAllBtn").disabled =
+          activeCheckboxes === totalCheckboxes;
+      }
+
+      // Seleccionar todas las capas
+      function selectAll() {
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach((checkbox) => {
+          checkbox.checked = true;
+        });
+        updateActiveCount();
+        updateButtonsState();
+      }
+
+      // Deseleccionar todas las capas
+      function deselectAll() {
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach((checkbox) => {
+          checkbox.checked = false;
+        });
+        updateActiveCount();
+        updateButtonsState();
+      }
+
+      // Simular aplicación de cambios
+      function applyChanges() {
+        const activeCount = document.querySelectorAll(
+          'input[type="checkbox"]:checked'
+        ).length;
+        alert(
+          `Configuración aplicada correctamente. ${activeCount} capas activadas.`
+        );
+      }
+
+      // Abrir modal de editar (simulado)
+      function openEditarModal(capaId) {
+        const capa = capasData[capaId];
+        alert(`Editando: ${capa.nombre}`);
+      }
+
+      function renderCapa(capa) {
+        const capaData = capasData[capa.capaId];
+        if (!capaData) {
+            console.error(`Data not found for capaId: ${capa.capaId}`);
+            return '';
+        }
+        const estadoClass = `estado-${capaData.estado}`;
+        const estadoText = capaData.estado.charAt(0).toUpperCase() + capaData.estado.slice(1);
+
+        return `
+            <li class="capa-container">
+                <div class="capa-edt">${capa.edt}</div>
+                <div class="capa-name">
+                    <label>${capa.nombre}</label>
+                </div>
+                <div class="capa-actions">
+                    <i class="fas fa-info-circle capa-info-icon" onclick="openDescModal('${capa.capaId}')"></i>
+                    <div class="capa-date" onclick="openFechaModal('${capa.capaId}')">
+                        <i class="fas fa-calendar"></i>
+                    </div>
+                    <button class="btn-action btn-ver" onclick="openVerModal('${capa.capaId}')">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn-action btn-editar" onclick="openEditarModal('${capa.capaId}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn-action btn-estado ${estadoClass}" onclick="openEstadoModal('${capa.capaId}')">
+                        <i class="fas ${capaData.estado === 'aprobado' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${estadoText}
+                    </button>
+                </div>
+            </li>
+        `;
+      }
+
+      function renderDisciplina(disciplina, key) {
+        return `
+            <div class="capas-section">
+                <div class="section-title" data-section="${key}">
+                    <div class="capa-edt">${disciplina.edt}</div>
+                    <i class="fas fa-folder-open"></i>
+                    <h3>${disciplina.title}</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <ul class="capas-list" id="${key}-list">
+                    ${disciplina.capas.map(renderCapa).join('')}
+                </ul>
+            </div>
+        `;
+      }
+
+      function renderAll() {
+          const container = document.getElementById('disciplinas-container');
+          container.innerHTML = Object.keys(disciplinasData).map(key => renderDisciplina(disciplinasData[key], key)).join('');
+
+          // Re-attach event listeners for the new dynamic content
+          const sectionTitles = document.querySelectorAll(".section-title");
+          sectionTitles.forEach((title) => {
+              title.addEventListener("click", () => {
+                const sectionId = title.getAttribute("data-section");
+                const list = document.getElementById(`${sectionId}-list`);
+
+                title.classList.toggle("collapsed");
+                list.classList.toggle("collapsed");
+              });
+          });
+      }
+    </script>
+  </body>
+</html>

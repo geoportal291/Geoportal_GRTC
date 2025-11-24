@@ -1,0 +1,1362 @@
+/* Progresivas.css */
+
+.progresivas-container {
+  padding: 20px;
+  background-color: #f0f2f5;
+  padding-top: 80px;
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+.progresivas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.new-progresiva-btn {
+  background-color: #1a237e;
+  color: white;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: bold;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.new-progresiva-btn:hover {
+  background-color: #283593;
+  transform: translateY(-2px);
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 50px;
+  z-index: 2000;
+  overflow-y: auto; /* Allow vertical scroll for tall forms */
+}
+
+.progresivas-form-container {
+  background: #fff;
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  width: 95%;
+  max-width: 850px; /* Default max-width for standard forms */
+  max-height: 90vh;
+  overflow-y: auto; /* Allow standard forms to scroll */
+}
+
+/* Specific layout for the Excel-style modal */
+.progresivas-form-container.excel-modal {
+  max-width: 90vw;
+  overflow: visible; /* DIAGNOSTIC: Changed from hidden */
+  display: flex;
+  flex-direction: column;
+}
+
+.excel-modal .progresivas-form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  /* REMOVED: overflow: hidden; */
+  overflow: visible; /* DIAGNOSTIC: Changed from hidden */
+}
+
+.progresivas-form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 25px;
+}
+
+/* === SeleccionarEstratosModal Styles (Excel Table Layout) === */
+
+.excel-modal {
+  max-width: 85vw;
+  max-height: 80vh;
+}
+
+.modal-toolbar {
+  flex-shrink: 0; /* Prevent shrinking */
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-toolbar .btn-secondary {
+  background-color: #6c757d;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.modal-toolbar .btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+.excel-table-container {
+  flex-grow: 1; /* Allow this to take up available space */
+  width: 100%;
+  overflow: auto; /* Allow both horizontal and vertical scrolling */
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  max-height: 300px; /* ADDED: Explicit max-height for scrolling */
+}
+
+.excel-style-table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap; /* Prevent wrapping */
+}
+
+.excel-style-table th, .excel-style-table td {
+  border: 1px solid #ddd;
+  padding: 8px 10px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.excel-style-table th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.excel-style-table td:first-child,
+.excel-style-table th:first-child {
+  position: sticky;
+  left: 0;
+  background-color: #f8f9fa;
+  font-weight: bold;
+  z-index: 2;
+  min-width: 200px; /* Increased width */
+}
+
+.estrato-cell {
+  cursor: pointer;
+  min-width: 140px; /* Reduced width */
+  transition: background-color 0.2s ease;
+}
+
+.estrato-cell:hover {
+  background-color: #f0f5ff;
+}
+
+.estrato-cell.selected {
+  background-color: #e8eaf6;
+  border: 2px solid #3f51b5;
+}
+
+.estrato-cell.selected .estrato-cell-info span {
+  font-weight: bold;
+}
+
+.estrato-cell .estrato-checkbox {
+  margin-right: 10px;
+}
+
+.estrato-cell-info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  gap: 2px;
+}
+
+.estrato-cell-info span {
+  font-size: 0.85em;
+}
+
+.estrato-cell-info small {
+  font-size: 0.75em;
+  color: #666;
+}
+
+.empty-cell {
+  background-color: #fafafa;
+  min-width: 140px; /* Reduced width */
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: #333;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: #1a237e;
+  box-shadow: 0 0 5px rgba(26, 35, 126, 0.5);
+}
+
+.form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between; /* Changed for wizard */
+  align-items: center;
+  gap: 15px;
+  margin-top: 25px;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.wizard-nav-buttons {
+  display: flex;
+  gap: 15px;
+}
+
+.close-btn, .submit-btn, .btn-secondary {
+  padding: 12px 25px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.close-btn {
+  background-color: #f44336;
+  color: white;
+}
+
+.close-btn:hover {
+  background-color: #d32f2f;
+  transform: translateY(-2px);
+}
+
+.submit-btn {
+  background-color: #4caf50;
+  color: white;
+}
+
+.submit-btn:hover {
+  background-color: #388e3c;
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+}
+
+.progresivas-table-container {
+  margin-top: 20px;
+}
+
+.progresivas-table {
+  width: 100%;
+  border-collapse: collapse; /* Changed from collapse */
+  border-spacing: 0;
+  margin-top: 20px;
+  border-radius: 12px;
+  overflow: hidden; /* Ensures border-radius is respected */
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.1);
+}
+
+.progresivas-table th, .progresivas-table td {
+  padding: 16px 20px;
+  text-align: left;
+  border-bottom: 1px solid #eaedf1;
+}
+
+.progresivas-table th {
+  background-color: #e8eaf6; /* Light blue header */
+  font-weight: 600;
+  color: #1a237e; /* Dark blue text for contrast */
+  text-transform: uppercase;
+  font-size: 0.85em;
+  letter-spacing: 0.5px;
+}
+
+.progresivas-table tbody tr {
+  transition: background-color 0.2s ease-in-out;
+}
+
+.progresivas-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.progresivas-table tbody tr.selected {
+  background-color: #e8eaf6; /* A light blue/purple to indicate selection */
+}
+
+.caja-sombreada {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.status-badge {
+  padding: 5px 12px;
+  border-radius: 15px;
+  color: white;
+  font-weight: 600;
+  text-align: center;
+  font-size: 0.8em;
+  display: inline-block;
+}
+
+.status-activo {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-inactivo {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.status-completado {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+
+.status-pendiente {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-en-revicion {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.edit-btn, .delete-btn, .view-btn {
+  background-color: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #6c757d;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.edit-btn:hover {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.delete-btn:hover {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.view-btn {
+  color: #6c757d; /* Same as others */
+}
+
+.view-btn:hover {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.progresivas-actions-bottom {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap; /* Allow groups to wrap on smaller screens */
+  justify-content: space-between; /* Pushes groups apart */
+  align-items: center;
+  gap: 20px; /* Gap between groups */
+}
+
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.progresivas-actions-bottom .button-group > button,
+.progresivas-actions-bottom .button-group > label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: 2px solid #1a237e;
+  background-color: transparent;
+  color: #1a237e;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 0.9em;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.progresivas-actions-bottom .button-group > button:hover,
+.progresivas-actions-bottom .button-group > label:hover {
+  background-color: #1a237e;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 35, 126, 0.2);
+}
+
+.delete-bulk-btn {
+  border-color: #c82333 !important;
+  color: #c82333 !important;
+}
+
+.delete-bulk-btn:hover {
+  background-color: #c82333 !important;
+  color: white !important;
+}
+
+.progresivas-actions-bottom .btn-navegar {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 0.95em;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  background-color: #607d8b;
+  color: white;
+}
+
+.progresivas-actions-bottom .btn-navegar:hover {
+  background-color: #455a64;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.batch-details-modal {
+  background: linear-gradient(145deg, #ffffff, #f0f0f0);
+  padding: 35px;
+  border-radius: 15px;
+  width: 90%;
+  max-width: 1300px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  animation: fadeInScale 0.3s ease-out;
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.batch-details-modal h3 {
+  color: #1a237e;
+  margin-bottom: 25px;
+  text-align: center;
+  font-size: 1.8em;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 15px;
+}
+
+.batch-details-modal p {
+  margin-bottom: 12px;
+  font-size: 1.05em;
+  color: #444;
+}
+
+.batch-details-modal p strong {
+  color: #222;
+}
+
+.batch-details-modal .progresivas-table {
+  margin-top: 25px;
+  border: none;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  table-layout: fixed; /* Add this line */
+  width: 100%; /* Ensure it takes full width */
+}
+
+.batch-details-modal .progresivas-table th,
+.batch-details-modal .progresivas-table td {
+  padding: 14px 18px;
+  border-bottom: 1px solid #f0f0f0;
+  white-space: nowrap; /* Prevent text wrapping */
+  overflow: hidden; /* Hide overflow text */
+  text-overflow: ellipsis; /* Add ellipsis for overflow text */
+}
+
+.batch-details-modal .progresivas-table th {
+  background-color: #e8eaf6;
+  color: #1a237e;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.95em;
+}
+
+.batch-details-modal .progresivas-table tbody tr:nth-child(even) {
+  background-color: #fcfcfc;
+}
+
+.batch-details-modal .progresivas-table tbody tr:hover {
+  background-color: #e0e0e0;
+  cursor: pointer;
+}
+
+.batch-details-modal .close-btn {
+  margin-top: 30px;
+  align-self: center;
+  background-color: #607d8b;
+  color: white;
+  padding: 12px 25px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1.1em;
+  transition: background-color 0.3s ease;
+}
+
+.batch-details-modal .close-btn:hover {
+  background-color: #455a64;
+}
+
+.estrato-slider {
+  margin-top: 15px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.estrato-slider-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+}
+
+.estrato-slider-nav button {
+  background-color: #1a237e;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.estrato-slider-nav button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.estrato-slider-nav button:hover:not(:disabled) {
+  background-color: #283593;
+}
+
+
+
+.intervalo-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.intervalo-input, .intervalo-select {
+  flex-grow: 1;
+}
+
+.btn-toggle-intervalo {
+  padding: 10px 15px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  background-color: #607d8b;
+  color: white;
+  font-weight: bold;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.btn-toggle-intervalo:hover {
+  background-color: #455a64;
+  transform: translateY(-2px);
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 1.5em;
+  z-index: 9999;
+}
+
+.loading-spinner {
+  border: 8px solid #f3f3f3;
+  border-top: 8px solid #3498db;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+  margin-top: 10px;
+}
+/* === Estratos Editor Redesign === */
+
+.estratos-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 10px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.estrato-editor-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 15px;
+  padding: 15px;
+  background-color: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: box-shadow 0.3s ease;
+}
+
+.estrato-editor-row:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+}
+
+.estrato-input-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1; /* Makes input groups share space equally */
+}
+
+.estrato-input-group label {
+  font-size: 0.85em;
+  color: #495057;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+.estrato-input-group input,
+.estrato-input-group textarea {
+  width: 100%; /* Ensures they fill the group container */
+  padding: 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background-color: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.estrato-input-group input:focus,
+.estrato-input-group textarea:focus {
+  border-color: #80bdff;
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.estrato-input-group input[readOnly] {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+
+.estrato-descripcion-group {
+  flex: 2; /* Makes description wider */
+}
+
+.estrato-input-group textarea {
+    resize: vertical;
+    min-height: 40px;
+}
+
+.estrato-actions {
+  margin-bottom: 10px; /* Aligns button with inputs */
+}
+
+.remove-estrato-btn {
+  background-color: transparent;
+  color: #dc3545;
+  border: 1px solid #dc3545;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.remove-estrato-btn:hover:not(:disabled) {
+  background-color: #dc3545;
+  color: white;
+  transform: scale(1.1);
+}
+
+.remove-estrato-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: #6c757d;
+    color: #6c757d;
+}
+
+.add-estrato-btn-modern {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 15px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.add-estrato-btn-modern:hover {
+  background-color: #0056b3;
+  transform: translateY(-1px);
+}
+
+.add-estrato-btn-modern svg {
+    width: 16px;
+    height: 16px;
+}
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 20px;
+  max-height: 400px; /* Altura fija para parecer Excel */
+  overflow-y: auto; /* Scroll vertical */
+  border: 1px solid #e0e0e0; /* Borde para el "Excel" */
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.progresivas-table.horizontal-estratos {
+  white-space: nowrap;
+  table-layout: fixed; /* Ensure fixed layout */
+  width: 100%; /* Ensure it takes full width */
+}
+
+.progresivas-table.horizontal-estratos th,
+.progresivas-table.horizontal-estratos td {
+  padding: 4px 5px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.progresivas-table.horizontal-estratos th:first-child,
+.progresivas-table.horizontal-estratos td:first-child {
+  width: 50px;
+  min-width: 50px;
+  text-align: center;
+}
+
+.progresivas-table.horizontal-estratos td,
+.progresivas-table.horizontal-estratos th {
+  min-width: 140px;
+}
+
+/* Ajustes específicos para columnas que podrían necesitar más espacio */
+.progresivas-table.horizontal-estratos .descripcion-cell {
+  white-space: normal;
+  min-width: 250px;
+  max-width: 400px;
+}
+
+.progresivas-table.horizontal-estratos .actions-cell {
+  min-width: 180px;
+}
+
+.view-strata-btn {
+  background-color: #673ab7; /* Deep Purple */
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.view-strata-btn:hover {
+  background-color: #5e35b1; /* Darker Deep Purple */
+  transform: translateY(-2px);
+}
+
+/* Estilos para el modal de Resumen de Estratos */
+.batch-details-modal {
+  background: #fcfdff;
+  padding: 40px;
+  border-radius: 15px;
+  width: 90%;
+  max-width: 1300px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  animation: fadeInScale 0.4s ease-out;
+  border: 1px solid #eef;
+}
+
+.batch-details-modal h3 {
+  color: #1a237e;
+  margin-bottom: 30px;
+  text-align: center;
+  font-size: 2em;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-bottom: 3px solid #e0e0e0;
+  padding-bottom: 20px;
+}
+
+.estratos-summary-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+  margin-top: 20px;
+}
+
+.estratos-summary-table th,
+.estratos-summary-table td {
+  padding: 18px 20px;
+  text-align: left;
+  border-bottom: none;
+}
+
+.estratos-summary-table th {
+  background-color: #4a55a2;
+  color: white;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.9em;
+  letter-spacing: 1px;
+}
+
+.estratos-summary-table td {
+    background-color: #fff;
+    color: #555;
+    font-weight: 500;
+}
+
+.estratos-summary-table th:first-child {
+    border-top-left-radius: 10px;
+}
+
+.estratos-summary-table th:last-child {
+    border-top-right-radius: 10px;
+}
+
+.estratos-summary-table tr {
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    border-radius: 10px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.estratos-summary-table tr:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.estratos-summary-table td:first-child {
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+}
+
+.estratos-summary-table td:last-child {
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+}
+
+.estratos-summary-table .descripcion-cell {
+    white-space: normal;
+    max-width: 400px;
+    line-height: 1.5;
+}
+
+/* Estilos para el contenedor de ensayos dentro del modal */
+.ensayos-container {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 15px;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+}
+
+.ensayos-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.ensayos-header h4 {
+  color: #1a237e;
+  font-size: 1.2em;
+  margin: 0;
+}
+
+
+.ensayo-card {
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.ensayo-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+}
+
+.ensayo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-weight: bold;
+  color: #333;
+}
+
+.ensayo-title {
+  font-size: 1.1em;
+  color: #1a237e;
+}
+
+.ensayo-date {
+  font-size: 0.85em;
+  color: #777;
+}
+
+.ensayo-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 15px;
+  margin-bottom: 15px;
+  font-size: 0.9em;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #555;
+}
+
+.detail-value {
+  color: #333;
+}
+
+.ensayo-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto; /* Pushes actions to the bottom */
+}
+
+.ensayo-actions .action-btn {
+  padding: 6px 10px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: background-color 0.2s ease;
+}
+
+.ensayo-actions .action-btn.edit {
+  background-color: #ffc107;
+  color: #333;
+}
+
+.ensayo-actions .action-btn.edit:hover {
+  background-color: #e0a800;
+}
+
+.ensayo-actions .action-btn.delete {
+  background-color: #dc3545;
+  color: white;
+}
+
+.ensayo-actions .action-btn.delete:hover {
+  background-color: #c82333;
+}
+
+.ensayo-actions .action-btn.view {
+  background-color: #007bff;
+  color: white;
+}
+
+.ensayo-actions .action-btn.view:hover {
+  background-color: #0056b3;
+}
+
+.profundidad-final-display {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #e8f5e9; /* Light green background */
+  border-left: 5px solid #4caf50; /* Green border */
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+}
+
+.profundidad-final-display label {
+  margin: 0;
+  color: #1a237e;
+}
+
+.profundidad-final-display span {
+  color: #4caf50;
+  font-size: 1.2em;
+}
+
+/* Estilos para el botón "Ver Ensayos" en la tabla de estratos */
+.view-strata-btn {
+  background-color: #673ab7; /* Deep Purple */
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.view-strata-btn:hover {
+  background-color: #5e35b1; /* Darker Deep Purple */
+  transform: translateY(-2px);
+}
+
+/* Estilos para el botón "Añadir Estrato" en el modal de gestión */
+.add-estrato-btn-modern {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 15px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.add-estrato-btn-modern:hover {
+  background-color: #0056b3;
+  transform: translateY(-1px);
+}
+
+.add-estrato-btn-modern svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Estilos para el botón "Nuevo Ensayo" */
+.addEnsayosBtn {
+  background-color: #28a745; /* Green */
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.addEnsayosBtn:hover {
+  background-color: #218838;
+}
+
+/* Estilos para el texto de descripción del estrato */
+.estrato-description {
+  font-size: 0.85em;
+  color: #555;
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+/* === Scrollable box for generated progresivas === */
+@keyframes slideInFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sub-progresivas-container {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 16px; /* More rounded */
+  background-color: #f9f9f9;
+  animation: slideInFade 0.5s ease-out;
+}
+
+.btn-generar-progresivas {
+  width: 100%;
+  padding: 15px;
+  font-size: 1.1em;
+  font-weight: bold;
+  color: white;
+  background: linear-gradient(45deg, #1a237e, #3f51b5);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.btn-generar-progresivas:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.sub-progresivas-container h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #1a237e;
+}
+
+.sub-progresivas-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 200px; /* Key property: fixed height */
+  overflow-y: auto; /* Key property: scrollbar */
+  padding: 10px;
+  background-color: #fff;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.sub-progresivas-list li {
+  background-color: #e8eaf6;
+  color: #1a237e;
+  padding: 5px 10px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+/* === Wizard Form Styles === */
+.stepper-container {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.stepper-container::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #e0e0e0;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  z-index: 2;
+  background-color: #fff; /* To cover the line */
+  padding: 0 10px;
+}
+
+.step-counter {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #e0e0e0;
+  color: #757575;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.2em;
+  transition: all 0.4s ease;
+  border: 2px solid #e0e0e0;
+}
+
+.step-name {
+  margin-top: 8px;
+  font-weight: 500;
+  color: #757575;
+  font-size: 0.9em;
+  transition: all 0.4s ease;
+}
+
+.step-item.active .step-counter {
+  background-color: #1a237e;
+  color: white;
+  border-color: #1a237e;
+}
+
+.step-item.active .step-name {
+  font-weight: bold;
+  color: #1a237e;
+}
+
+.form-step-content {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* === Styles for CanteraFormModal specifics === */
+
+.select-with-loader {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select-with-loader select {
+  flex-grow: 1;
+}
+
+.loading-spinner-inline {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+  margin-left: 10px;
+}
+
+/* Alertify Z-index fix */
+.ajs-message {
+  z-index: 100001 !important;
+}
+.ajs-modal {
+  z-index: 99999 !important;
+}
+.ajs-dimmer {
+  z-index: 99998 !important;
+}

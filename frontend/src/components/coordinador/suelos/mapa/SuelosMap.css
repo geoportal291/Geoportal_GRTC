@@ -1,0 +1,215 @@
+/* Import base styles from the original component to ensure modals and other elements work */
+@import "../../pruebas/geoite.css";
+
+/* SuelosMap.css - Specific Overrides */
+
+/* Sobrescribe los estilos de .leaflet-bar para un layout horizontal */
+.leaflet-bar.horizontal-controls {
+    display: flex;
+    flex-direction: row;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+    border-radius: 4px;
+}
+
+/* Resetea los bordes y radios para los botones en modo horizontal */
+.leaflet-bar.horizontal-controls a.leaflet-control-custom-button,
+.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:hover {
+    border-bottom: none; /* Elimina el borde inferior que los apila verticalmente */
+    border-right: 1px solid #ccc; /* Añade un borde derecho para separarlos */
+    border-radius: 0;
+    margin: 0;
+}
+
+/* Estilo para el primer botón en la barra horizontal */
+.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:first-child,
+.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:first-child:hover {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+
+/* Estilo para el último botón en la barra horizontal */
+.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:last-child,
+.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:last-child:hover {
+    border-right: none; /* El último botón no necesita borde derecho */
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 44px;
+}
+
+/* Styles for dynamically created modals (measure and draw) */
+.measure-modal {
+    position: absolute;
+    top: 50px; /* Default position */
+    left: 50px; /* Default position */
+    width: auto;
+    min-width: 250px;
+    max-width: 350px;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    z-index: 9999; /* Ensure it's above other map elements */
+    display: none; /* Hidden by default, shown by JS */
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    overflow: hidden; /* Ensures content stays within rounded corners */
+}
+
+.measure-modal-header {
+    padding: 8px 12px;
+    background-color: #f0f0f0;
+    cursor: grab; /* Indicates draggability */
+    border-bottom: 1px solid #ddd;
+    font-weight: bold;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #333;
+}
+
+.measure-modal-title {
+    flex-grow: 1;
+    text-align: center;
+    font-size: 1.1em;
+    color: #333;
+    margin: 0; /* Remove default margin */
+}
+
+.measure-modal-close-btn {
+    background-color: #e74c3c; /* Red color for close */
+    color: white;
+    border: none;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-size: 1em;
+    cursor: pointer;
+    margin-left: 10px; /* Space from title */
+    line-height: 1;
+    font-weight: bold;
+    transition: background-color 0.2s ease;
+}
+
+.measure-modal-close-btn:hover {
+    background-color: #c0392b;
+}
+
+.measure-modal-content {
+    padding: 15px;
+    font-size: 0.9em;
+    color: #555;
+}
+
+/* Styles for form elements within modals */
+.measure-modal label {
+    display: inline-block; /* Changed */
+    width: 70px; /* Changed */
+    text-align: right;
+    margin-right: 5px;
+    font-weight: normal; /* Changed */
+}
+
+.measure-modal input[type="text"],
+.measure-modal input[type="number"],
+.measure-modal select {
+    width: calc(100% - 80px); /* Changed */
+    padding: 6px; /* Changed */
+    margin-bottom: 5px; /* Changed */
+    border: 1px solid #ddd;
+    border-radius: 3px; /* Changed */
+    box-sizing: border-box;
+}
+
+.measure-modal button {
+    background-color: #007bff; /* Changed */
+    color: white;
+    border: none;
+    padding: 10px 20px; /* Changed */
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em; /* Changed */
+    transition: background-color 0.2s; /* Changed */
+}
+
+.measure-modal button:hover {
+    background-color: #0056b3; /* Changed */
+}
+
+.measure-modal h3, .measure-modal h4 {
+    color: #333;
+    margin-top: 0;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.measure-modal div {
+    margin-bottom: 8px;
+}
+
+.measure-modal .input-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.measure-modal .input-group label {
+    flex-shrink: 0;
+    width: 70px;
+    text-align: right;
+    margin-right: 5px;
+}
+
+.measure-modal .input-group input,
+.measure-modal .input-group select {
+    flex-grow: 1;
+    margin-left: 0; /* Override inline style */
+}
+
+.measure-modal-ok-btn {
+    background-color: #007bff; /* Blue color for OK */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 15px;
+    font-size: 0.9em;
+    cursor: pointer;
+    margin-top: 15px; /* Space from content */
+    width: 100%; /* Full width */
+    transition: background-color 0.2s ease;
+}
+
+.measure-modal-ok-btn:hover {
+    background-color: #0056b3;
+}
+
+/* Estilos para el tooltip de imagen en el mapa */
+.map-tooltip-image-container {
+    max-width: 200px; /* Ancho máximo para el contenedor del tooltip */
+    max-height: 150px; /* Alto máximo para el contenedor del tooltip */
+    overflow: hidden; /* Asegura que la imagen no se desborde */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 5px;
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.map-tooltip-image {
+    max-width: 100%; /* La imagen se ajusta al ancho del contenedor */
+    max-height: 100%; /* La imagen se ajusta al alto del contenedor */
+    height: auto; /* Mantiene la relación de aspecto */
+    display: block; /* Elimina espacio extra debajo de la imagen */
+    border-radius: 3px;
+}
+
+/* Ajustes para el tooltip de Leaflet para que se adapte al contenido de la imagen */
+.leaflet-tooltip {
+    padding: 0 !important; /* Eliminar padding por defecto de Leaflet */
+    background-color: transparent !important; /* Fondo transparente */
+    border: none !important; /* Sin borde */
+    box-shadow: none !important; /* Sin sombra */
+}
+
+.leaflet-tooltip.leaflet-tooltip-top:before {
+    border-top-color: white !important; /* Color de la flecha del tooltip */
+}

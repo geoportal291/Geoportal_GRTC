@@ -1,0 +1,381 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh; /* Cambiado de height a min-height */
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow-y: auto; /* Permite el scroll vertical cuando el contenido excede la altura */
+  overflow-x: hidden; /* Evita el scroll horizontal */
+}
+
+.login-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 0;
+}
+
+.contenido {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  max-width: 1200px;
+  width: 100%;
+  padding: 30px;
+  gap: 50px;
+  z-index: 1;
+}
+
+/* BLOQUE IZQUIERDO */
+
+.bloque-izquierdo {
+  display: flex;
+  flex-direction: column;
+  width: 650px;
+  color: #fff;
+  justify-content: center;
+  margin-top: -40px;
+}
+
+.titulo-horizontal {
+  font-size: 42px;
+  font-weight: bold;
+  margin-bottom: 40px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.6);
+  color: #fff;
+  align-self: flex-start;
+}
+
+.logos {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  margin-top: -10px;
+}
+
+.logos img {
+  width: 320px;
+  max-width: 100%;
+  height: auto;
+}
+
+.logos h2 {
+  font-size: 30px;
+  line-height: 1.4;
+  font-weight: 500;
+  margin: 0;
+  white-space: pre-line;
+  word-wrap: break-word;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+
+/* FORMULARIO LOGIN */
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  max-width: 400px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;              /* <<< Esto quita la raya blanca del borde */
+  border-radius: 0;
+  backdrop-filter: none;
+  box-shadow: none;
+  color: #fff;
+  align-self: center;
+}
+
+.login-form h1 {
+  margin: 0 0 15px;
+  font-size: 32px;
+  font-weight: bold;
+  text-align: center;
+  color: #fff;
+}
+
+.login-form > div {
+  text-align: center;
+  font-size: 18px;
+  margin-bottom: 25px;
+  color: #fff;
+}
+
+.login-form b {
+  text-align: left;
+  margin-top: 10px;
+  margin-bottom: 5px;
+  font-size: 16px;
+  color: #fff;
+}
+
+.login-form input {
+  padding: 12px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 10px;
+  font-size: 16px;
+  width: 100%;
+  margin-bottom: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  transition: background 0.3s ease, border 0.3s ease;
+}
+
+.login-form input[type="text"],
+.login-form input[type="password"] {
+  text-align: left !important;
+}
+
+.login-form input:focus {
+  background: rgba(255, 255, 255, 0.25);
+  outline: none;
+  border: 1px solid #fff;
+  box-shadow: 0 0 0 2px #0077ff55;
+}
+
+.login-form input::placeholder {
+  color: #fff;
+  opacity: 0.85;
+  text-align: left;
+}
+
+.login-form button {
+  padding: 14px;
+  font-size: 16px;
+  background: linear-gradient(90deg, #0077ff, #0055cc);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.3s;
+  font-weight: 600;
+}
+
+.login-form button:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
+
+.login-form button:hover:not(:disabled) {
+  background: linear-gradient(90deg, #0055cc, #003399);
+}
+
+/* Fuerza todos los hijos del formulario a ser blancos */
+.login-form * {
+  color: #fff !important;
+}
+
+/* Responsive adjustments */
+
+@media (max-width: 1000px) {
+  .contenido {
+    flex-direction: column;
+    gap: 30px;
+    padding: 20px;
+  }
+
+  .bloque-izquierdo {
+    width: 100%;
+    text-align: center;
+    margin-top: 0;
+  }
+
+  .bloque-izquierdo .titulo-horizontal {
+    font-size: 36px;
+    margin-bottom: 20px;
+    text-align: center;
+    align-self: center;
+  }
+
+  .logos {
+    justify-content: center;
+    margin-top: 0;
+    flex-wrap: wrap;
+  }
+
+  .logos img {
+    width: 250px;
+  }
+
+  .logos h2 {
+    font-size: 24px;
+  }
+
+  .login-form {
+    max-width: 400px;
+    width: 90%;
+    padding: 20px;
+  }
+
+  .login-form h1 {
+    font-size: 28px;
+  }
+
+  .login-form > div {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .login-container {
+    padding: 15px;
+    align-items: flex-start;
+    padding-top: 20px;
+  }
+
+  .contenido {
+    gap: 20px;
+    padding: 15px;
+    width: 100%;
+  }
+
+  .bloque-izquierdo {
+    margin-bottom: 20px;
+  }
+
+  .bloque-izquierdo .titulo-horizontal {
+    font-size: 30px;
+    margin-bottom: 15px;
+  }
+
+  .logos img {
+    width: 200px;
+  }
+
+  .logos h2 {
+    font-size: 20px;
+  }
+
+  .login-form {
+    max-width: 100%;
+    padding: 0 10px;
+  }
+
+  .login-form h1 {
+    font-size: 24px;
+  }
+
+  .login-form > div {
+    font-size: 14px;
+  }
+
+  .login-form input {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .login-form button {
+    padding: 12px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    padding: 10px;
+  }
+
+  .contenido {
+    gap: 15px;
+    padding: 10px;
+  }
+
+  .bloque-izquierdo .titulo-horizontal {
+    font-size: 24px;
+    margin-bottom: 10px;
+  }
+
+  .logos {
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+  }
+
+  .logos img {
+    width: 150px;
+  }
+
+  .logos h2 {
+    font-size: 18px;
+  }
+
+  .login-form {
+    padding: 0 5px;
+  }
+
+  .login-form h1 {
+    font-size: 22px;
+  }
+
+  .login-form > div {
+    font-size: 12px;
+  }
+
+  .login-form input {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .login-form button {
+    padding: 10px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 375px) {
+  .login-container {
+    padding: 5px;
+  }
+
+  .contenido {
+    gap: 10px;
+    padding: 5px;
+  }
+
+  .bloque-izquierdo .titulo-horizontal {
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+
+  .logos img {
+    width: 120px;
+  }
+
+  .logos h2 {
+    font-size: 16px;
+  }
+
+  .login-form h1 {
+    font-size: 18px;
+  }
+
+  .login-form > div {
+    font-size: 11px;
+  }
+
+  .login-form input {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .login-form button {
+    padding: 8px;
+    font-size: 11px;
+  }
+}

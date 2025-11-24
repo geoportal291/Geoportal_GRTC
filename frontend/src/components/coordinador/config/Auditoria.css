@@ -1,0 +1,95 @@
+.auditoria-container {
+  padding: 2rem;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  margin: 1rem;
+}
+
+.auditoria-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1.5rem;
+  table-layout: fixed; /* Clave para anchos de columna fijos */
+}
+
+.auditoria-table th,
+.auditoria-table td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #eaeaea;
+  word-wrap: break-word; /* Asegura que el texto largo se ajuste */
+}
+
+/* Definir anchos de columna */
+.auditoria-table th:nth-child(1) { width: 15%; } /* Usuario */
+.auditoria-table th:nth-child(2) { width: 15%; } /* Acción */
+.auditoria-table th:nth-child(3) { width: 50%; } /* Detalles */
+.auditoria-table th:nth-child(4) { width: 20%; } /* Fecha */
+
+.auditoria-table th {
+  background-color: #f7f7f7;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85em;
+}
+
+.auditoria-table tbody tr:hover {
+  background-color: #f9f9f9;
+}
+
+.auditoria-table code {
+  display: block; /* Make it a block element to contain it */
+  white-space: nowrap; /* Keep it on a single line */
+  overflow-x: auto; /* Add horizontal scroll for long lines */
+  background-color: #f3f3f3;
+  padding: 8px 10px; /* Adjusted padding */
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.8em; /* Made text smaller */
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eaeaea;
+}
+
+.pagination-button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.pagination-button:hover {
+  background-color: #0056b3;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-button:disabled {
+  background-color: #e9ecef;
+  color: #6c757d;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.page-info {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #495057;
+}
+
+.loading-text {
+    text-align: center;
+    padding: 2rem;
+    font-size: 1.2rem;
+    color: #6c757d;
+}

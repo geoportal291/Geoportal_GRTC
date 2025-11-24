@@ -1,0 +1,1 @@
+ALTER TABLE canteras ADD COLUMN imagen_url TEXT;

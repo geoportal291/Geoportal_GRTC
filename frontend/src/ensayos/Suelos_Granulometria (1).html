@@ -1,0 +1,3954 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema de Análisis Granulométrico</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+      :root {
+        --primary: #2c3e50;
+        --secondary: #3498db;
+        --accent: #e74c3c;
+        --light: #ecf0f1;
+        --dark: #2c3e50;
+        --success: #27ae60;
+      }
+
+      body {
+        background-color: #f8f9fa;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        padding-bottom: 50px;
+        font-size: 0.9rem;
+      }
+
+      .navbar {
+        background-color: var(--primary);
+        padding: 0.5rem 1rem;
+      }
+
+      .header {
+        background: linear-gradient(
+          135deg,
+          var(--primary) 0%,
+          var(--secondary) 100%
+        );
+        color: white;
+        padding: 1rem 0;
+        margin-bottom: 1rem;
+      }
+
+      .card {
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        margin-bottom: 15px;
+        border: none;
+      }
+
+     .card_IG {
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        margin-bottom: 15px;
+        height: 165px;
+        border: none;
+      }
+
+
+      .card-header {
+        background-color: var(--primary);
+        color: white;
+        border-radius: 8px 8px 0 0 !important;
+        padding: 10px 15px;
+        font-size: 0.95rem;
+      }
+
+      .btn-primary {
+        background-color: var(--secondary);
+        border: none;
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+      }
+
+      .btn-sm {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+      }
+
+      .section-title {
+        border-bottom: 1px solid var(--secondary);
+        padding-bottom: 8px;
+        margin-bottom: 15px;
+        color: var(--dark);
+        font-size: 1rem;
+      }
+
+      .required::after {
+        content: " *";
+        color: var(--accent);
+      }
+
+      .result-box {
+        background-color: #f8f9fa;
+        border-left: 3px solid var(--secondary);
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 3px;
+        font-size: 0.85rem;
+      }
+
+      .result-title {
+        font-weight: bold;
+        color: var(--primary);
+        margin-bottom: 3px;
+        font-size: 0.8rem;
+      }
+
+      .result-value {
+        font-size: 0.9rem;
+        color: var(--dark);
+      }
+
+      .sieve-table th,
+      .sieve-table td {
+        text-align: center;
+        vertical-align: middle;
+        padding: 0.3rem;
+        font-size: 0.8rem;
+      }
+
+      .tab-content {
+        padding: 15px;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 5px 5px;
+      }
+
+      .nav-tabs .nav-link {
+        padding: 0.5rem 0.7rem;
+        font-size: 0.85rem;
+      }
+
+      .input-group-text {
+        background-color: var(--light);
+        font-size: 0.8rem;
+        padding: 0.4rem 0.5rem;
+      }
+
+      .form-control,
+      .form-select {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.5rem;
+      }
+
+      .calculation-box {
+        background-color: #e8f4fc;
+        border-radius: 4px;
+        padding: 10px;
+        margin-bottom: 10px;
+        font-size: 0.85rem;
+      }
+
+      .compact-table th,
+      .compact-table td {
+        padding: 0.3rem;
+        font-size: 0.8rem;
+      }
+
+      .chart-container {
+        height: 250px;
+        margin-bottom: 15px;
+      }
+
+      .action-buttons {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: white;
+        padding: 15px;
+        margin-bottom: 5px;
+      }
+
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+      }
+
+      .progress-bar {
+        transition: width 0.3s ease;
+      }
+
+      .input-error {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 0.2rem rgba(231, 76, 60, 0.25) !important;
+      }
+
+      .input-search {
+        position: relative;
+      }
+
+      .input-search input {
+        padding-right: 2.2rem;
+        font-family: monospace;
+        text-align: center;
+        font-weight: bold;
+      }
+
+      .search-toggle {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #6c757d;
+        cursor: pointer;
+        z-index: 5;
+        padding: 0.25rem;
+      }
+
+      .dropdown-menu {
+        max-height: 200px;
+        overflow-y: auto;
+        width: 100%;
+        font-size: 0.85rem;
+      }
+
+      .navigation {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.6rem;
+        margin-top: 0.8rem;
+      }
+
+      .nav-info {
+        background-color: white;
+        padding: 0.5rem 0.8rem;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        min-width: 100px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 0.85rem;
+      }
+
+      .error-message {
+        color: var(--accent);
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+      }
+
+      .auto-calculation {
+        background-color: rgba(52, 152, 219, 0.1);
+        border-left: 3px solid var(--secondary);
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+        font-size: 0.85rem;
+      }
+
+      .calculation-status {
+        font-size: 0.8rem;
+        color: var(--secondary);
+        font-style: italic;
+        margin-top: 5px;
+      }
+
+      .dropdown-menu {
+        max-height: 250px;
+        overflow-y: auto;
+        width: 100%;
+      }
+
+      .dropdown-item {
+        font-family: monospace;
+      }
+
+      .combo-search {
+        position: relative;
+      }
+
+      .combo-search input {
+        padding-right: 30px;
+      }
+
+      .combo-search .search-toggle {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #6c757d;
+        cursor: pointer;
+      }
+
+      .single-row-search {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .single-row-s {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-bottom: 5px;
+      }
+
+      .single-row-search .form-label {
+        min-width: 80px;
+        margin-bottom: 0;
+      }
+
+      .search-wrapper {
+        flex: 1;
+        position: relative;
+      }
+
+      .keyboard-hint {
+        font-size: 0.7rem;
+        color: #6c757d;
+        text-align: center;
+        margin-top: 5px;
+      }
+
+      .format-hint {
+        font-size: 0.7rem;
+        color: #6c757d;
+        text-align: center;
+        margin-top: 3px;
+      }
+
+      .progresiva-navigation {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+      }
+
+      .progresiva-info {
+        background-color: white;
+        padding: 8px 12px;
+        border-radius: 5px;
+        border: 1px solid #dee2e6;
+        min-width: 120px;
+        text-align: center;
+        font-weight: bold;
+      }
+
+      .estrato-navigation {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .estrato-info {
+        background-color: white;
+        padding: 8px 12px;
+        border-radius: 5px;
+        border: 1px solid #dee2e6;
+        min-width: 120px;
+        text-align: center;
+        font-weight: bold;
+      }
+
+      .station-input {
+        font-family: monospace;
+        text-align: center;
+        font-weight: bold;
+      }
+
+      .search-container {
+        position: relative;
+      }
+
+      .search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ced4da;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+      }
+
+      .search-results .list-group-item {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+        cursor: pointer;
+      }
+
+      .search-results .list-group-item:hover {
+        background-color: #f8f9fa;
+      }
+
+      .search-icon {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        pointer-events: none;
+      }
+
+      .input-group-search {
+        position: relative;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+      <div class="container">
+        <a class="navbar-brand" href="#">
+          <i class="fas fa-road me-1"></i>Granulometría Vial
+        </a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link active" href="#"
+                ><i class="fas fa-home me-1"></i
+              ></a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#"
+                ><i class="fas fa-database me-1"></i
+              ></a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#"
+                ><i class="fas fa-chart-bar me-1"></i
+              ></a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#"><i class="fas fa-cog me-1"></i></a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Header -->
+    <div class="header">
+      <div class="container text-center">
+        <h4 class="fw-bold">Sistema de Análisis Granulométrico</h4>
+        <p class="mb-0">Análisis completo de suelos para proyectos viales</p>
+      </div>
+    </div>
+
+    <!-- Toast Container for Notifications -->
+    <div class="toast-container"></div>
+
+    <!-- Location Selector -->
+    <div class="container">
+      <!-- Datos Tab -->
+      <div class="tab-pane fade show active">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="card mb-3">
+              <div class="card-header">
+                <h6 class="card-title mb-0">
+                  <i class="fas fa-info-circle me-1"></i>Información General
+                </h6>
+              </div>
+              <div class="card-body">
+                <div class="row mb-2">
+                  <div class="col-md-6 mb-2">
+                    <label for="proyecto" class="form-label required"
+                      >Proyecto</label
+                    >
+                    <input
+                      type="text"
+                      value="CU 104"
+                      class="form-control form-control-sm"
+                      id="proyecto"
+                      disabled
+                    />
+                  </div>
+                  <div class="col-md-6 mb-2">
+                    <label for="Tramo" class="form-label required">Tramo</label>
+                    <input
+                      type="text"
+                      value="Tramo I"
+                      class="form-control form-control-sm"
+                      id="tramo"
+                      disabled
+                    />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card mb-3">
+              <div class="card-header">
+                <h6 class="card-title mb-0">
+                  <i class="fas fa-map-marker-alt me-1"></i>Ubicación
+                </h6>
+              </div>
+              <div class="card-body">
+                <div class="row mb-2">
+                  <div class="col-md-6 mb-2">
+                    <!-- Búsqueda de Progresiva en una sola fila -->
+                    <div class="single-row-search">
+                      <div class="search-wrapper">
+                        <div class="combo-search">
+                          <div class="input-group input-group-sm">
+                            <span class="input-group-text">KM</span>
+                            <input
+                              type="text"
+                              class="form-control form-control-sm station-input"
+                              id="progresivaInput"
+                              value="0+120"
+                              title="Buscar por número (ej: 120) o formato estación (0+120)"
+                              placeholder="Buscar progresiva..."
+                            />
+                            <button
+                              class="btn btn-sm btn-outline-secondary search-toggle"
+                              type="button"
+                              id="toggleSearchProgresiva"
+                            >
+                              <i class="fas fa-search"></i>
+                            </button>
+                          </div>
+                          <div
+                            class="dropdown-menu"
+                            id="progresivaDropdown"
+                            aria-labelledby="progresivaInput"
+                          >
+                            <!-- Las opciones se cargarán dinámicamente -->
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="progresiva-navigation">
+                      <button
+                        class="btn btn-sm btn-outline-primary"
+                        id="prevProgresiva"
+                      >
+                        <i class="fas fa-chevron-left me-1"></i>
+                      </button>
+                      <div class="progresiva-info">
+                        <span id="currentProgresiva">KM 0+120</span>
+                      </div>
+                      <button
+                        class="btn btn-sm btn-outline-primary"
+                        id="nextProgresiva"
+                      >
+                        <i class="fas fa-chevron-right ms-1"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-md-6 mb-2">
+                    <!-- Búsqueda de Estrato en una sola fila -->
+                    <div class="single-row-search">
+                      <span class="input-group-text">Est</span>
+                      <div class="search-wrapper">
+                        <div class="combo-search">
+                          <div class="input-group input-group-sm">
+                            <input
+                              type="text"
+                              class="form-control form-control-sm station-input"
+                              id="estratoInput"
+                              value="1 - Subrasante"
+                              placeholder="Buscar estrato..."
+                            />
+                            <button
+                              class="btn btn-sm btn-outline-secondary search-toggle"
+                              type="button"
+                              id="toggleSearchEstrato"
+                            >
+                              <i class="fas fa-search"></i>
+                            </button>
+                          </div>
+                          <div
+                            class="dropdown-menu"
+                            id="estratoDropdown"
+                            aria-labelledby="estratoInput"
+                          >
+                            <!-- Las opciones se cargarán dinámicamente -->
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="estrato-navigation">
+                      <button
+                        class="btn btn-sm btn-outline-secondary"
+                        id="prevEstrato"
+                      >
+                        <i class="fas fa-chevron-up me-1"></i>
+                      </button>
+                      <div class="estrato-info">
+                        <span id="currentEstrato">1 - Subrasante</span>
+                      </div>
+                      <button
+                        class="btn btn-sm btn-outline-secondary"
+                        id="nextEstrato"
+                      >
+                        <i class="fas fa-chevron-down ms-1"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden file input for Excel import -->
+    <input
+      type="file"
+      id="excelFileInput"
+      accept=".xlsx, .xls"
+      style="display: none"
+    />
+
+    <!-- Main Content -->
+    <div class="container">
+      <form id="ensayoForm">
+        <!-- Tabs for different sections -->
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link active"
+              id="datos-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#listado"
+              type="button"
+              role="tab"
+            >
+              Listado Granulometria
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="datos-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#ll"
+              type="button"
+              role="tab"
+            >
+              L. Liquido
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="datos-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#lp"
+              type="button"
+              role="tab"
+            >
+              L. Plastico
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="granulometria-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#granulometria"
+              type="button"
+              role="tab"
+            >
+              Granulometría
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="limites-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#limites"
+              type="button"
+              role="tab"
+            >
+              Límites
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="graficos-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#graficos"
+              type="button"
+              role="tab"
+            >
+              Gráficos
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="resultados-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#resultados"
+              type="button"
+              role="tab"
+            >
+              Resultados
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="myTabContent">
+          <!-- Listado Tab -->
+          <div class="tab-pane fade show active" id="listado" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0">Listado de Ensayos Granulométricos</h5>
+               <div class="mb-0">
+                                        <!-- Action Buttons -->
+                        <div class="container">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <button class="btn btn-sm btn-outline-primary me-1" id="importExcel">
+                                        <i class="fas fa-file-import me-1"></i>Importar
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success me-1" id="exportExcel">
+                                        <i class="fas fa-file-export me-1"></i>Exportar
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" id="generatePDF">
+                                        <i class="fas fa-file-pdf me-1"></i>PDF
+                                    </button>
+                                </div>
+                                
+                            </div>
+                        </div>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table
+                class="table table-striped table-bordered table-sm listado-table"
+                id="tablaListado"
+              >
+                <thead class="table-dark">
+                  <tr>
+                    <th>Código</th>
+                    <th>P. Total (g)</th>
+                    <th>P. M. L. (g)</th>
+                    <th>3"</th>
+                    <th>2"</th>
+                    <th>1 1/2"</th>
+                    <th>1"</th>
+                    <th>3/4"</th>
+                    <th>3/8"</th>
+                    <th>N°4</th>
+                    <th>N°10</th>
+                    <th>N°20</th>
+                    <th>N°40</th>
+                    <th>N°60</th>
+                    <th>N°140</th>
+                    <th>N°200</th>
+                    <th>&lt;200</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>CU10410001201101</td>
+                    <td>1250.5</td>
+                    <td>1250.5</td>
+                    <td>5.2</td>
+                    <td>15.2</td>
+                    <td>22.3</td>
+                    <td>18.7</td>
+                    <td>15.4</td>
+                    <td>25.8</td>
+                    <td>35.6</td>
+                    <td>42.3</td>
+                    <td>52.1</td>
+                    <td>68.5</td>
+                    <td>75.2</td>
+                    <td>80.4</td>
+                    <td>85.2</td>
+                    <td>14.8</td>
+                    <td>
+                      <button
+                        class="btn btn-sm me-1 btn-editar"
+                        data-bs-toggle="tooltip"
+                        title="Editar"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-ver"
+                        data-bs-toggle="tooltip"
+                        title="Ver"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>CU10410001202101</td>
+                    <td>1100.0</td>
+                    <td>1100.0</td>
+                    <td>4.8</td>
+                    <td>12.7</td>
+                    <td>18.9</td>
+                    <td>16.2</td>
+                    <td>13.5</td>
+                    <td>22.1</td>
+                    <td>32.4</td>
+                    <td>38.9</td>
+                    <td>48.7</td>
+                    <td>62.4</td>
+                    <td>70.1</td>
+                    <td>75.3</td>
+                    <td>79.8</td>
+                    <td>20.2</td>
+                    <td>
+                      <button
+                        class="btn btn-sm me-1 btn-editar"
+                        data-bs-toggle="tooltip"
+                        title="Editar"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-ver"
+                        data-bs-toggle="tooltip"
+                        title="Ver"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>CU10410001203101</td>
+                    <td>1350.8</td>
+                    <td>1350.8</td>
+                    <td>6.1</td>
+                    <td>18.3</td>
+                    <td>25.4</td>
+                    <td>21.8</td>
+                    <td>17.9</td>
+                    <td>29.5</td>
+                    <td>38.7</td>
+                    <td>47.2</td>
+                    <td>56.8</td>
+                    <td>72.6</td>
+                    <td>79.3</td>
+                    <td>84.1</td>
+                    <td>88.4</td>
+                    <td>11.6</td>
+                    <td>
+                      <button
+                        class="btn btn-sm me-1 btn-editar"
+                        data-bs-toggle="tooltip"
+                        title="Editar"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-ver"
+                        data-bs-toggle="tooltip"
+                        title="Ver"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <input
+              type="file"
+              id="fileInputListado"
+              accept=".xlsx, .xls"
+              style="display: none"
+            />
+          </div>
+
+          <!-- Limites Tab -->
+          <div class="tab-pane fade show" id="ll" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0">Listado de Limites Liquidos</h5>
+               <div class="mb-0">
+                                        <!-- Action Buttons -->
+                        <div class="container">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <button class="btn btn-sm btn-outline-primary me-1" id="importExcel">
+                                        <i class="fas fa-file-import me-1"></i>Importar
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success me-1" id="exportExcel">
+                                        <i class="fas fa-file-export me-1"></i>Exportar
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" id="generatePDF">
+                                        <i class="fas fa-file-pdf me-1"></i>PDF
+                                    </button>
+                                </div>
+                                
+                            </div>
+                        </div>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table
+                class="table table-striped table-bordered table-sm listado-table"
+                id="tablaListado"
+              >
+                <thead class="table-dark">
+                  <tr>
+                    <th>Código</th>
+                    <th>N° G 1</th>
+                    <th>C. R 1</th>
+                    <th>P. R 1</th>
+                    <th>PSH 1</th>
+                    <th>PSS 1</th>
+                    <th>N° G 2</th>
+                    <th>C. R 2</th>
+                    <th>P. R 2</th>
+                    <th>PSH 2</th>
+                    <th>PSS 2</th>
+                    <th>N° G 3</th>
+                    <th>C. R 3</th>
+                    <th>P. R 3</th>
+                    <th>PSH 3</th>
+                    <th>PSS 3</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>CU10410001201101</td>
+                    <td>1250.5</td>
+                    <td>1250.5</td>
+                    <td>5.2</td>
+                    <td>15.2</td>
+                    <td>22.3</td>
+                    <td>18.7</td>
+                    <td>15.4</td>
+                    <td>25.8</td>
+                    <td>35.6</td>
+                    <td>42.3</td>
+                    <td>52.1</td>
+                    <td>68.5</td>
+                    <td>75.2</td>
+                    <td>80.4</td>
+                    <td>85.2</td>
+                    <td>
+                      <button
+                        class="btn btn-sm me-1 btn-editar"
+                        data-bs-toggle="tooltip"
+                        title="Editar"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-ver"
+                        data-bs-toggle="tooltip"
+                        title="Ver"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>CU10410001202101</td>
+                    <td>1100.0</td>
+                    <td>1100.0</td>
+                    <td>4.8</td>
+                    <td>12.7</td>
+                    <td>18.9</td>
+                    <td>16.2</td>
+                    <td>13.5</td>
+                    <td>22.1</td>
+                    <td>32.4</td>
+                    <td>38.9</td>
+                    <td>48.7</td>
+                    <td>62.4</td>
+                    <td>70.1</td>
+                    <td>75.3</td>
+                    <td>79.8</td>
+                    <td>
+                      <button
+                        class="btn btn-sm me-1 btn-editar"
+                        data-bs-toggle="tooltip"
+                        title="Editar"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-ver"
+                        data-bs-toggle="tooltip"
+                        title="Ver"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>CU10410001203101</td>
+                    <td>1350.8</td>
+                    <td>1350.8</td>
+                    <td>6.1</td>
+                    <td>18.3</td>
+                    <td>25.4</td>
+                    <td>21.8</td>
+                    <td>17.9</td>
+                    <td>29.5</td>
+                    <td>38.7</td>
+                    <td>47.2</td>
+                    <td>56.8</td>
+                    <td>72.6</td>
+                    <td>79.3</td>
+                    <td>84.1</td>
+                    <td>88.4</td>
+                    <td>
+                      <button
+                        class="btn btn-sm me-1 btn-editar"
+                        data-bs-toggle="tooltip"
+                        title="Editar"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-ver"
+                        data-bs-toggle="tooltip"
+                        title="Ver"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <input
+              type="file"
+              id="fileInputListado"
+              accept=".xlsx, .xls"
+              style="display: none"
+            />
+          </div>
+
+          <!-- Limites Tab -->
+          <div class="tab-pane fade show" id="lp" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="mb-0">Listado de Limites Plastico</h5>
+               <div class="mb-0">
+                                        <!-- Action Buttons -->
+                        <div class="container">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <button class="btn btn-sm btn-outline-primary me-1" id="importExcel">
+                                        <i class="fas fa-file-import me-1"></i>Importar
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success me-1" id="exportExcel">
+                                        <i class="fas fa-file-export me-1"></i>Exportar
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" id="generatePDF">
+                                        <i class="fas fa-file-pdf me-1"></i>PDF
+                                    </button>
+                                </div>
+                                
+                            </div>
+                        </div>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table
+                class="table table-striped table-bordered table-sm listado-table"
+                id="tablaListado"
+              >
+                <thead class="table-dark">
+                  <tr>
+                    <th>Código</th>
+                    <th>C. R 4</th>
+                    <th>P. R 4</th>
+                    <th>PSH 4</th>
+                    <th>PSS 4</th>
+                    <th>C. R 5</th>
+                    <th>P. R 5</th>
+                    <th>PSH 5</th>
+                    <th>PSS 5</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>CU10410001201101</td>
+                    <td>1250.5</td>
+                    <td>5.2</td>
+                    <td>15.2</td>
+                    <td>22.3</td>
+                    <td>15.4</td>
+                    <td>25.8</td>
+                    <td>35.6</td>
+                    <td>42.3</td>
+                    <td>
+                      <button
+                        class="btn btn-sm me-1 btn-editar"
+                        data-bs-toggle="tooltip"
+                        title="Editar"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-ver"
+                        data-bs-toggle="tooltip"
+                        title="Ver"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>CU10410001202101</td>
+                    <td>1100.0</td>
+                    <td>18.9</td>
+                    <td>16.2</td>
+                    <td>13.5</td>
+                    <td>22.1</td>
+                    <td>70.1</td>
+                    <td>75.3</td>
+                    <td>79.8</td>
+                    <td>
+                      <button
+                        class="btn btn-sm me-1 btn-editar"
+                        data-bs-toggle="tooltip"
+                        title="Editar"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-ver"
+                        data-bs-toggle="tooltip"
+                        title="Ver"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>CU10410001203101</td>
+                    <td>1350.8</td>
+                    <td>1350.8</td>
+                    <td>6.1</td>
+                    <td>17.9</td>
+                    <td>29.5</td>
+                    <td>38.7</td>
+                    <td>47.2</td>
+                    <td>88.4</td>
+                    <td>
+                      <button
+                        class="btn btn-sm me-1 btn-editar"
+                        data-bs-toggle="tooltip"
+                        title="Editar"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-ver"
+                        data-bs-toggle="tooltip"
+                        title="Ver"
+                      >
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <input
+              type="file"
+              id="fileInputListado"
+              accept=".xlsx, .xls"
+              style="display: none"
+            />
+          </div>
+
+          <!-- Granulometría Tab -->
+          <div class="tab-pane fade" id="granulometria" role="tabpanel">
+            <div class="row mb-3">
+              <div class="col-md-4 mb-2">
+                <div class="calculation-box">
+                  <label for="pesoTotal" class="form-label required"
+                    >Peso ATotal (g)</label
+                  >
+                  <input
+                    type="number"
+                    step="0.1"
+                    class="form-control form-control-sm"
+                    id="pesoTotal"
+                    required
+                  />
+                  <div class="error-message" id="pesoTotalError"></div>
+                </div>
+              </div>
+              <div class="col-md-4 mb-2">
+                <div class="calculation-box">
+                  <label for="antesLavado" class="form-label required"
+                    >Peso antes del lavado (g)</label
+                  >
+                  <input
+                    type="number"
+                    step="0.1"
+                    class="form-control form-control-sm"
+                    id="antesLavado"
+                    required
+                  />
+                  <div class="error-message" id="antesLavadoError"></div>
+                </div>
+              </div>
+              <div class="col-md-4 mb-2">
+                <div class="calculation-box">
+                  <label for="despuesLavado" class="form-label required"
+                    >Peso después del lavado (g)</label
+                  >
+                  <input
+                    type="number"
+                    step="0.1"
+                    class="form-control form-control-sm"
+                    id="despuesLavado"
+                    required
+                  />
+                  <div class="error-message" id="despuesLavadoError"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-bordered table-sm sieve-table">
+                <thead class="table-dark">
+                  <tr>
+                    <th>Tamiz</th>
+                    <th>mm</th>
+                    <th>Peso (g)</th>
+                    <th>% Ret</th>
+                    <th>% Acum</th>
+                    <th>% Pasa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>3"</td>
+                    <td>76.2</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenido3in"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRet3in">0.0</output></td>
+                    <td><output id="acum3in">0.0</output></td>
+                    <td><output id="pasa3in">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>2"</td>
+                    <td>50.8</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenido2in"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRet2in">0.0</output></td>
+                    <td><output id="acum2in">0.0</output></td>
+                    <td><output id="pasa2in">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>1½"</td>
+                    <td>38.1</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenido1_5in"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRet1_5in">0.0</output></td>
+                    <td><output id="acum1_5in">0.0</output></td>
+                    <td><output id="pasa1_5in">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>1"</td>
+                    <td>25.4</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenido1in"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRet1in">0.0</output></td>
+                    <td><output id="acum1in">0.0</output></td>
+                    <td><output id="pasa1in">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>3/4"</td>
+                    <td>19.1</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenido3_4in"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRet3_4in">0.0</output></td>
+                    <td><output id="acum3_4in">0.0</output></td>
+                    <td><output id="pasa3_4in">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>3/8"</td>
+                    <td>9.52</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenido3_8in"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRet3_8in">0.0</output></td>
+                    <td><output id="acum3_8in">0.0</output></td>
+                    <td><output id="pasa3_8in">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>N°4</td>
+                    <td>4.76</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenidoN4"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRetN4">0.0</output></td>
+                    <td><output id="acumN4">0.0</output></td>
+                    <td><output id="pasaN4">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>N°10</td>
+                    <td>2.00</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenidoN10"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRetN10">0.0</output></td>
+                    <td><output id="acumN10">0.0</output></td>
+                    <td><output id="pasaN10">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>N°20</td>
+                    <td>0.84</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenidoN20"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRetN20">0.0</output></td>
+                    <td><output id="acumN20">0.0</output></td>
+                    <td><output id="pasaN20">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>N°40</td>
+                    <td>0.42</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenidoN40"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRetN40">0.0</output></td>
+                    <td><output id="acumN40">0.0</output></td>
+                    <td><output id="pasaN40">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>N°60</td>
+                    <td>0.25</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenidoN60"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRetN60">0.0</output></td>
+                    <td><output id="acumN60">0.0</output></td>
+                    <td><output id="pasaN60">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>N°140</td>
+                    <td>0.106</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenidoN140"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRetN140">0.0</output></td>
+                    <td><output id="acumN140">0.0</output></td>
+                    <td><output id="pasaN140">100.0</output></td>
+                  </tr>
+                  <tr>
+                    <td>N°200</td>
+                    <td>0.074</td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.1"
+                        class="form-control form-control-sm sieve-input"
+                        id="retenidoN200"
+                        value="0"
+                      />
+                    </td>
+                    <td><output id="porcRetN200">0.0</output></td>
+                    <td><output id="acumN200">0.0</output></td>
+                    <td><output id="pasaN200">100.0</output></td>
+                  </tr>
+                  <tr class="table-info">
+                    <td>&lt;200</td>
+                    <td>-</td>
+                    <td><output id="retenidoMenor200">0.0</output></td>
+                    <td><output id="porcRetMenor200">0.0</output></td>
+                    <td><output id="acumMenor200">0.0</output></td>
+                    <td><output id="pasaMenor200">0.0</output></td>
+                  </tr>
+                  <tr class="table-success fw-bold">
+                    <td>Total</td>
+                    <td>-</td>
+                    <td><output id="totalRetenido">0.0</output></td>
+                    <td><output id="totalPorcRetenido">0.0</output></td>
+                    <td>-</td>
+                    <td>-</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="d-grid">
+              <button
+                type="button"
+                class="btn btn-sm btn-primary"
+                id="calcularGranulometria"
+              >
+                <i class="fas fa-calculator me-1"></i> Calcular Granulometría
+              </button>
+            </div>
+            <div class="auto-calculation">
+              <div class="calculation-status" id="calculationStatus">
+                Esperando datos...
+              </div>
+            </div>
+          </div>
+
+          <!-- Límites Tab -->
+          <div class="tab-pane fade" id="limites" role="tabpanel">
+            <div class="auto-calculation">
+              <i class="fas fa-info-circle me-1"></i> Los cálculos de humedad se
+              realizan automáticamente al ingresar los pesos.
+            </div>
+
+            <div class="row">
+              <div class="col-md-6">
+                <div class="card mb-3">
+                  <div class="card-header">
+                    <h6 class="card-title mb-0">
+                      <i class="fas fa-tint me-1"></i>Límite Líquido
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-responsive">
+                      <table
+                        class="table table-bordered table-sm compact-table"
+                      >
+                        <thead class="table-dark">
+                          <tr>
+                            <th>Ensayo</th>
+                            <th>1</th>
+                            <th>2</th>
+                            <th>3</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Nº Golpes</td>
+                            <td>
+                              <input
+                                type="number"
+                                class="form-control form-control-sm limite-input"
+                                id="golpes1"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                class="form-control form-control-sm limite-input"
+                                id="golpes2"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                class="form-control form-control-sm limite-input"
+                                id="golpes3"
+                              />
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Código</td>
+                            <td>
+                              <input
+                                type="text"
+                                class="form-control form-control-sm"
+                                id="codRecipiente1"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                class="form-control form-control-sm"
+                                id="codRecipiente2"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                class="form-control form-control-sm"
+                                id="codRecipiente3"
+                              />
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Peso recip. (g)</td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoRecipiente1"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoRecipiente2"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoRecipiente3"
+                              />
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Recip. + húmedo (g)</td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoHumedo1"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoHumedo2"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoHumedo3"
+                              />
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Recip. + seco (g)</td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoSeco1"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoSeco2"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoSeco3"
+                              />
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Humedad (%)</td>
+                            <td><output id="humedad1">-</output></td>
+                            <td><output id="humedad2">-</output></td>
+                            <td><output id="humedad3">-</output></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div class="d-grid">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-primary"
+                        id="calcularLiquido"
+                      >
+                        <i class="fas fa-calculator me-1"></i> Calcular Límite
+                        Líquido
+                      </button>
+                    </div>
+
+                    <div class="result-box mt-2">
+                      <div class="result-title">Límite Líquido (LL)</div>
+                      <div class="result-value" id="limiteLiquidoResult">-</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header">
+                    <h6 class="card-title mb-0">
+                      <i class="fas fa-clay-brick me-1"></i>Límite Plástico
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-responsive">
+                      <table
+                        class="table table-bordered table-sm compact-table"
+                      >
+                        <thead class="table-dark">
+                          <tr>
+                            <th>Ensayo</th>
+                            <th>1</th>
+                            <th>2</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Código</td>
+                            <td>
+                              <input
+                                type="text"
+                                class="form-control form-control-sm"
+                                id="codRecipientePlast1"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                class="form-control form-control-sm"
+                                id="codRecipientePlast2"
+                              />
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Peso recip. (g)</td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoRecipientePlast1"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoRecipientePlast2"
+                              />
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Recip. + húmedo (g)</td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoHumedoPlast1"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoHumedoPlast2"
+                              />
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Recip. + seco (g)</td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoSecoPlast1"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.01"
+                                class="form-control form-control-sm limite-input"
+                                id="pesoSecoPlast2"
+                              />
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Humedad (%)</td>
+                            <td><output id="humedadPlast1">-</output></td>
+                            <td><output id="humedadPlast2">-</output></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div class="d-grid">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-primary"
+                        id="calcularPlastico"
+                      >
+                        <i class="fas fa-calculator me-1"></i> Calcular Límite
+                        Plástico
+                      </button>
+                    </div>
+
+                    <div class="result-box mt-2">
+                      <div class="result-title">Límite Plástico (LP)</div>
+                      <div class="result-value" id="limitePlasticoResult">
+                        -
+                      </div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">Índice de Plasticidad (IP)</div>
+                      <div class="result-value" id="indicePlasticidadResult">
+                        -
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gráficos Tab -->
+          <div class="tab-pane fade" id="graficos" role="tabpanel">
+            <div class="auto-calculation">
+              <i class="fas fa-info-circle me-1"></i> Los gráficos se actualizan
+              automáticamente con los resultados calculados.
+            </div>
+
+            <div class="row">
+              <div class="col-md-6">
+                <div class="card mb-3">
+                  <div class="card-header">
+                    <h6 class="card-title mb-0">
+                      <i class="fas fa-chart-line me-1"></i>Curza Granulométrica
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="chart-container">
+                      <canvas id="granulometricChart"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card mb-3">
+                  <div class="card-header">
+                    <h6 class="card-title mb-0">
+                      <i class="fas fa-chart-bar me-1"></i>Distribución de
+                      Tamaños
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="chart-container">
+                      <canvas id="distributionChart"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-12">
+                <div class="card">
+                  <div class="card-header">
+                    <h6 class="card-title mb-0">
+                      <i class="fas fa-chart-area me-1"></i>Límites de
+                      Consistencia
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="chart-container">
+                      <canvas id="consistencyChart"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Resultados Tab -->
+          <div class="tab-pane fade" id="resultados" role="tabpanel">
+            <div class="auto-calculation">
+              <i class="fas fa-info-circle me-1"></i> Los resultados se
+              actualizan automáticamente con los cálculos realizados.
+            </div>
+
+            <div class="row">
+              <div class="col-md-6">
+                <div class="card mb-3">
+                  <div class="card-header">
+                    <h6 class="card-title mb-0">
+                      <i class="fas fa-calculator me-1"></i>Resultados
+                      Granulométricos
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="result-box">
+                      <div class="result-title">Grava (>4.76 mm)</div>
+                      <div class="result-value" id="porcGravaResult">-</div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">Arena (4.76 mm - 0.074 mm)</div>
+                      <div class="result-value" id="porcArenaResult">-</div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">Finos (<0.074 mm)</div>
+                      <div class="result-value" id="porcFinosResult">-</div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">
+                        Coeficiente de Uniformidad (Cu)
+                      </div>
+                      <div class="result-value" id="coefUniformidadResult">
+                        -
+                      </div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">
+                        Coeficiente de Curvatura (Cc)
+                      </div>
+                      <div class="result-value" id="coefCurvaturaResult">-</div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">D10 (mm)</div>
+                      <div class="result-value" id="d10Result">-</div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">D30 (mm)</div>
+                      <div class="result-value" id="d30Result">-</div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">D60 (mm)</div>
+                      <div class="result-value" id="d60Result">-</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="card mb-3">
+                  <div class="card-header">
+                    <h6 class="card-title mb-0">
+                      <i class="fas fa-award me-1"></i>Clasificación del Suelo
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="result-box">
+                      <div class="result-title">Clasificación SUCS</div>
+                      <div class="result-value" id="clasificacionSUCS">-</div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">Clasificación AASHTO</div>
+                      <div class="result-value" id="clasificacionAASHTO">-</div>
+                    </div>
+
+                    <div class="result-box">
+                      <div class="result-title">Índice de Grupo (IG)</div>
+                      <div class="result-value" id="indiceGrupoResult">-</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-grid">
+              <button type="submit" class="btn btn-sm btn-success">
+                <i class="fas fa-save me-1"></i> Guardar Ensayo Completo
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center mt-4">
+      <div class="container">
+        <p class="mb-0">
+          Sistema de Análisis Granulométrico para Vías &copy; 2023
+        </p>
+      </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Variables globales para almacenar resultados
+        let limiteLiquido = 0;
+        let limitePlastico = 0;
+        let indicePlasticidad = 0;
+        let porcentajeFinos = 0;
+        let pasaValues = [];
+        let d10 = 0,
+          d30 = 0,
+          d60 = 0;
+
+        // Inicializar gráficos
+        const granulometricCtx = document
+          .getElementById("granulometricChart")
+          .getContext("2d");
+        const distributionCtx = document
+          .getElementById("distributionChart")
+          .getContext("2d");
+        const consistencyCtx = document
+          .getElementById("consistencyChart")
+          .getContext("2d");
+
+        const granulometricChart = new Chart(granulometricCtx, {
+          type: "line",
+          data: {
+            labels: [
+              '3"',
+              '2"',
+              '1½"',
+              '1"',
+              '3/4"',
+              '3/8"',
+              "N°4",
+              "N°10",
+              "N°20",
+              "N°40",
+              "N°60",
+              "N°140",
+              "N°200",
+            ],
+            datasets: [
+              {
+                label: "% Que Pasa",
+                data: [],
+                borderColor: "#3498db",
+                backgroundColor: "rgba(52, 152, 219, 0.1)",
+                tension: 0.3,
+                fill: true,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "Tamiz",
+                },
+                type: "category",
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: "% Que Pasa",
+                },
+                min: 0,
+                max: 100,
+              },
+            },
+          },
+        });
+
+        const distributionChart = new Chart(distributionCtx, {
+          type: "bar",
+          data: {
+            labels: ["Grava", "Arena", "Finos"],
+            datasets: [
+              {
+                label: "Distribución (%)",
+                data: [],
+                backgroundColor: ["#2c3e50", "#3498db", "#e74c3c"],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                title: {
+                  display: true,
+                  text: "Porcentaje (%)",
+                },
+              },
+            },
+          },
+        });
+
+        const consistencyChart = new Chart(consistencyCtx, {
+          type: "bar",
+          data: {
+            labels: ["Límite Líquido", "Límite Plástico", "Índice Plasticidad"],
+            datasets: [
+              {
+                label: "Valores (%)",
+                data: [],
+                backgroundColor: ["#3498db", "#2c3e50", "#e74c3c"],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: "Porcentaje (%)",
+                },
+              },
+            },
+          },
+        });
+
+        // Configurar eventos para cálculos automáticos
+        configurarEventosCalculoAutomatico();
+
+        // Calcular granulometría
+        document
+          .getElementById("calcularGranulometria")
+          .addEventListener("click", function () {
+            calcularGranulometria();
+          });
+
+        // Calcular límite líquido
+        document
+          .getElementById("calcularLiquido")
+          .addEventListener("click", function () {
+            calcularLimiteLiquido();
+          });
+
+        // Calcular límite plástico
+        document
+          .getElementById("calcularPlastico")
+          .addEventListener("click", function () {
+            calcularLimitePlastico();
+          });
+
+        // Calcular todos los resultados
+        document
+          .getElementById("calculateAll")
+          .addEventListener("click", function () {
+            calcularGranulometria();
+            calcularLimiteLiquido();
+            calcularLimitePlastico();
+            calcularClasificaciones();
+            updateCharts();
+            showToast(
+              "Todos los cálculos se han completado correctamente",
+              "success"
+            );
+          });
+
+        // Reiniciar formulario
+        document
+          .getElementById("resetForm")
+          .addEventListener("click", function () {
+            if (
+              confirm(
+                "¿Está seguro de que desea reiniciar el formulario? Se perderán todos los datos."
+              )
+            ) {
+              document.getElementById("ensayoForm").reset();
+              // Limpiar resultados
+              document.querySelectorAll("output").forEach((output) => {
+                output.textContent = "0.0";
+              });
+              document.querySelectorAll(".result-value").forEach((result) => {
+                result.textContent = "-";
+              });
+              // Reiniciar gráficos
+              granulometricChart.data.datasets[0].data = [];
+              distributionChart.data.datasets[0].data = [];
+              consistencyChart.data.datasets[0].data = [];
+              granulometricChart.update();
+              distributionChart.update();
+              consistencyChart.update();
+
+              showToast("Formulario reiniciado correctamente", "info");
+            }
+          });
+
+        // Manejar el envío del formulario
+        document
+          .getElementById("ensayoForm")
+          .addEventListener("submit", function (e) {
+            e.preventDefault();
+            showToast("Ensayo guardado correctamente", "success");
+          });
+
+        // Importar desde Excel
+        document
+          .getElementById("importExcel")
+          .addEventListener("click", function () {
+            document.getElementById("excelFileInput").click();
+          });
+
+        document
+          .getElementById("excelFileInput")
+          .addEventListener("change", function (e) {
+            importarDesdeExcel(e);
+          });
+
+        // Exportar a Excel
+        document
+          .getElementById("exportExcel")
+          .addEventListener("click", function () {
+            exportarAExcel();
+          });
+
+        // Generar PDF
+        document
+          .getElementById("generatePDF")
+          .addEventListener("click", function () {
+            generarPDF();
+          });
+
+        // Función para configurar eventos de cálculo automático
+        function configurarEventosCalculoAutomatico() {
+          // Eventos para campos de granulometría
+          document
+            .getElementById("pesoTotal")
+            .addEventListener("input", calcularGranulometria);
+          document
+            .getElementById("antesLavado")
+            .addEventListener("input", calcularGranulometria);
+          document
+            .getElementById("despuesLavado")
+            .addEventListener("input", calcularGranulometria);
+
+          // Eventos para tamices
+          document.querySelectorAll(".sieve-input").forEach((input) => {
+            input.addEventListener("input", calcularGranulometria);
+          });
+
+          // Eventos para límites de consistencia
+          document.querySelectorAll(".limite-input").forEach((input) => {
+            input.addEventListener("input", function () {
+              // Calcular humedad automáticamente cuando se ingresen los pesos
+              const id = this.id;
+              if (
+                id.includes("pesoRecipiente") ||
+                id.includes("pesoHumedo") ||
+                id.includes("pesoSeco")
+              ) {
+                if (id.includes("Plast")) {
+                  calcularHumedadPlastico();
+                } else {
+                  calcularHumedadLiquido();
+                }
+              }
+            });
+          });
+        }
+
+        // Función para mostrar notificaciones
+        function showToast(message, type = "info") {
+          const toastContainer = document.querySelector(".toast-container");
+          const toastId = "toast-" + Date.now();
+
+          const toastHTML = `
+                    <div id="${toastId}" class="toast align-items-center text-white bg-${type}" role="alert">
+                        <div class="d-flex">
+                            <div class="toast-body">
+                                ${message}
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                        </div>
+                    </div>
+                `;
+
+          toastContainer.insertAdjacentHTML("beforeend", toastHTML);
+
+          const toastElement = document.getElementById(toastId);
+          const toast = new bootstrap.Toast(toastElement);
+          toast.show();
+
+          // Eliminar el toast del DOM después de que se oculte
+          toastElement.addEventListener("hidden.bs.toast", function () {
+            toastElement.remove();
+          });
+        }
+
+        // Función para calcular granulometría
+        function calcularGranulometria() {
+          // Actualizar estado de cálculo
+          document.getElementById("calculationStatus").textContent =
+            "Calculando...";
+          document.getElementById("calculationStatus").style.color = "#3498db";
+
+          // Limpiar errores previos
+          document.getElementById("pesoTotalError").textContent = "";
+          document.getElementById("antesLavadoError").textContent = "";
+          document.getElementById("despuesLavadoError").textContent = "";
+
+          document.getElementById("pesoTotal").classList.remove("input-error");
+          document
+            .getElementById("antesLavado")
+            .classList.remove("input-error");
+          document
+            .getElementById("despuesLavado")
+            .classList.remove("input-error");
+
+          const pesoTotal =
+            parseFloat(document.getElementById("pesoTotal").value) || 0;
+          const antesLavado =
+            parseFloat(document.getElementById("antesLavado").value) || 0;
+          const despuesLavado =
+            parseFloat(document.getElementById("despuesLavado").value) || 0;
+
+          // Validaciones básicas
+          let hasErrors = false;
+
+          if (pesoTotal <= 0) {
+            document.getElementById("pesoTotalError").textContent =
+              "El peso total debe ser mayor a cero";
+            document.getElementById("pesoTotal").classList.add("input-error");
+            hasErrors = true;
+          }
+
+          if (antesLavado <= 0) {
+            document.getElementById("antesLavadoError").textContent =
+              "El peso antes del lavado debe ser mayor a cero";
+            document.getElementById("antesLavado").classList.add("input-error");
+            hasErrors = true;
+          }
+
+          if (despuesLavado <= 0) {
+            document.getElementById("despuesLavadoError").textContent =
+              "El peso después del lavado debe ser mayor a cero";
+            document
+              .getElementById("despuesLavado")
+              .classList.add("input-error");
+            hasErrors = true;
+          }
+
+          if (hasErrors) {
+            document.getElementById("calculationStatus").textContent =
+              "Error en los datos";
+            document.getElementById("calculationStatus").style.color =
+              "#e74c3c";
+            return;
+          }
+
+          // Obtener todos los retenidos
+          const retenidos = [
+            parseFloat(document.getElementById("retenido3in").value) || 0,
+            parseFloat(document.getElementById("retenido2in").value) || 0,
+            parseFloat(document.getElementById("retenido1_5in").value) || 0,
+            parseFloat(document.getElementById("retenido1in").value) || 0,
+            parseFloat(document.getElementById("retenido3_4in").value) || 0,
+            parseFloat(document.getElementById("retenido3_8in").value) || 0,
+            parseFloat(document.getElementById("retenidoN4").value) || 0,
+            parseFloat(document.getElementById("retenidoN10").value) || 0,
+            parseFloat(document.getElementById("retenidoN20").value) || 0,
+            parseFloat(document.getElementById("retenidoN40").value) || 0,
+            parseFloat(document.getElementById("retenidoN60").value) || 0,
+            parseFloat(document.getElementById("retenidoN140").value) || 0,
+            parseFloat(document.getElementById("retenidoN200").value) || 0,
+          ];
+
+          // Calcular el total retenido
+          const totalRetenido = retenidos.reduce((acc, val) => acc + val, 0);
+          document.getElementById("totalRetenido").textContent =
+            totalRetenido.toFixed(1);
+
+          // Calcular el material que pasa el tamiz #200
+          const menor200 = despuesLavado - totalRetenido;
+          document.getElementById("retenidoMenor200").textContent =
+            menor200 > 0 ? menor200.toFixed(1) : "0.0";
+
+          // Calcular porcentajes
+          const porcentajesRetenidos = retenidos.map(
+            (ret) => (ret / pesoTotal) * 100
+          );
+          const porcentajeMenor200 = (menor200 / pesoTotal) * 100;
+
+          // Mostrar porcentajes retenidos
+          document.getElementById("porcRet3in").textContent =
+            porcentajesRetenidos[0].toFixed(1);
+          document.getElementById("porcRet2in").textContent =
+            porcentajesRetenidos[1].toFixed(1);
+          document.getElementById("porcRet1_5in").textContent =
+            porcentajesRetenidos[2].toFixed(1);
+          document.getElementById("porcRet1in").textContent =
+            porcentajesRetenidos[3].toFixed(1);
+          document.getElementById("porcRet3_4in").textContent =
+            porcentajesRetenidos[4].toFixed(1);
+          document.getElementById("porcRet3_8in").textContent =
+            porcentajesRetenidos[5].toFixed(1);
+          document.getElementById("porcRetN4").textContent =
+            porcentajesRetenidos[6].toFixed(1);
+          document.getElementById("porcRetN10").textContent =
+            porcentajesRetenidos[7].toFixed(1);
+          document.getElementById("porcRetN20").textContent =
+            porcentajesRetenidos[8].toFixed(1);
+          document.getElementById("porcRetN40").textContent =
+            porcentajesRetenidos[9].toFixed(1);
+          document.getElementById("porcRetN60").textContent =
+            porcentajesRetenidos[10].toFixed(1);
+          document.getElementById("porcRetN140").textContent =
+            porcentajesRetenidos[11].toFixed(1);
+          document.getElementById("porcRetN200").textContent =
+            porcentajesRetenidos[12].toFixed(1);
+          document.getElementById("porcRetMenor200").textContent =
+            porcentajeMenor200 > 0 ? porcentajeMenor200.toFixed(1) : "0.0";
+
+          // Calcular porcentaje total retenido
+          const totalPorcRetenido =
+            porcentajesRetenidos.reduce((acc, val) => acc + val, 0) +
+            (porcentajeMenor200 > 0 ? porcentajeMenor200 : 0);
+          document.getElementById("totalPorcRetenido").textContent =
+            totalPorcRetenido.toFixed(1);
+
+          // Calcular acumulados y % que pasa
+          let acumulado = 0;
+          pasaValues = [];
+          const ids = [
+            "3in",
+            "2in",
+            "1_5in",
+            "1in",
+            "3_4in",
+            "3_8in",
+            "N4",
+            "N10",
+            "N20",
+            "N40",
+            "N60",
+            "N140",
+            "N200",
+          ];
+
+          for (let i = 0; i < retenidos.length; i++) {
+            acumulado += porcentajesRetenidos[i];
+            const pasa = 100 - acumulado;
+            document.getElementById(`acum${ids[i]}`).textContent =
+              acumulado.toFixed(1);
+            document.getElementById(`pasa${ids[i]}`).textContent =
+              pasa.toFixed(1);
+            pasaValues.push(pasa);
+          }
+
+          // Para el material <200
+          document.getElementById("acumMenor200").textContent =
+            totalPorcRetenido.toFixed(1);
+          document.getElementById("pasaMenor200").textContent = (
+            100 - totalPorcRetenido
+          ).toFixed(1);
+
+          // Calcular y mostrar resultados de granulometría
+          const pasaN4 = 100 - acumulado; // % que pasa el tamiz N°4
+          const pasaN200 = 100 - totalPorcRetenido; // % que pasa el tamiz N°200
+
+          porcentajeFinos = pasaN200;
+
+          const porcGrava = 100 - pasaN4; // % de grava
+          const porcArena = pasaN4 - pasaN200; // % de arena
+
+          document.getElementById("porcGravaResult").textContent =
+            porcGrava.toFixed(1) + "%";
+          document.getElementById("porcArenaResult").textContent =
+            porcArena.toFixed(1) + "%";
+          document.getElementById("porcFinosResult").textContent =
+            porcentajeFinos.toFixed(1) + "%";
+
+          // Calcular D10, D30, D60 mediante interpolación
+          const tamices = [
+            76.2, 50.8, 38.1, 25.4, 19.1, 9.52, 4.76, 2.0, 0.84, 0.42, 0.25,
+            0.106, 0.074,
+          ];
+
+          d10 = calcularDx(pasaValues, tamices, 10);
+          d30 = calcularDx(pasaValues, tamices, 30);
+          d60 = calcularDx(pasaValues, tamices, 60);
+
+          const cu = d60 / d10;
+          const cc = (d30 * d30) / (d10 * d60);
+
+          document.getElementById("coefUniformidadResult").textContent =
+            isFinite(cu) ? cu.toFixed(2) : "-";
+          document.getElementById("coefCurvaturaResult").textContent = isFinite(
+            cc
+          )
+            ? cc.toFixed(2)
+            : "-";
+          document.getElementById("d10Result").textContent =
+            d10 > 0 ? d10.toFixed(3) + " mm" : "-";
+          document.getElementById("d30Result").textContent =
+            d30 > 0 ? d30.toFixed(3) + " mm" : "-";
+          document.getElementById("d60Result").textContent =
+            d60 > 0 ? d60.toFixed(3) + " mm" : "-";
+
+          // Actualizar gráficos
+          updateCharts();
+
+          // Calcular clasificaciones
+          calcularClasificaciones();
+
+          // Actualizar estado de cálculo
+          document.getElementById("calculationStatus").textContent =
+            "Cálculo completado";
+          document.getElementById("calculationStatus").style.color = "#27ae60";
+        }
+
+        // Función para calcular Dx (D10, D30, D60) mediante interpolación
+        function calcularDx(pasaValues, tamices, porcentaje) {
+          // Si no hay datos suficientes, retornar 0
+          if (
+            pasaValues.length === 0 ||
+            tamices.length === 0 ||
+            pasaValues.length !== tamices.length
+          ) {
+            return 0;
+          }
+
+          // Encontrar los índices donde el % que pasa está por encima y por debajo del porcentaje objetivo
+          let indiceSuperior = -1;
+          let indiceInferior = -1;
+
+          for (let i = 0; i < pasaValues.length; i++) {
+            if (pasaValues[i] <= porcentaje) {
+              indiceSuperior = i;
+              if (i > 0) indiceInferior = i - 1;
+              break;
+            }
+          }
+
+          // Si no se encontraron valores adecuados, devolver un valor por defecto
+          if (indiceSuperior === -1 || indiceInferior === -1) {
+            // Si todos los valores son mayores que el porcentaje, usar el último valor
+            if (pasaValues[pasaValues.length - 1] > porcentaje) {
+              return tamices[tamices.length - 1];
+            }
+            return 0.001; // Valor mínimo por defecto
+          }
+
+          // Obtener los valores para la interpolación
+          const pasaSuperior = pasaValues[indiceSuperior];
+          const pasaInferior = pasaValues[indiceInferior];
+          const tamizSuperior = tamices[indiceSuperior];
+          const tamizInferior = tamices[indiceInferior];
+
+          // Si los valores son iguales, evitar división por cero
+          if (pasaSuperior === pasaInferior) {
+            return tamizInferior;
+          }
+
+          // Realizar interpolación logarítmica (escala semilog en granulometría)
+          const logTamizSuperior = Math.log10(tamizSuperior);
+          const logTamizInferior = Math.log10(tamizInferior);
+
+          // Fórmula de interpolación
+          const logDx =
+            logTamizInferior +
+            ((porcentaje - pasaInferior) / (pasaSuperior - pasaInferior)) *
+              (logTamizSuperior - logTamizInferior);
+
+          // Convertir de vuelta a escala lineal
+          return Math.pow(10, logDx);
+        }
+
+        // Función para calcular humedades en límite líquido
+        function calcularHumedadLiquido() {
+          // Calcular humedades para cada ensayo
+          const humedad1 = calcularHumedad(
+            "pesoRecipiente1",
+            "pesoHumedo1",
+            "pesoSeco1"
+          );
+          const humedad2 = calcularHumedad(
+            "pesoRecipiente2",
+            "pesoHumedo2",
+            "pesoSeco2"
+          );
+          const humedad3 = calcularHumedad(
+            "pesoRecipiente3",
+            "pesoHumedo3",
+            "pesoSeco3"
+          );
+
+          // Mostrar humedades
+          document.getElementById("humedad1").textContent =
+            humedad1 > 0 ? humedad1.toFixed(1) + "%" : "-";
+          document.getElementById("humedad2").textContent =
+            humedad2 > 0 ? humedad2.toFixed(1) + "%" : "-";
+          document.getElementById("humedad3").textContent =
+            humedad3 > 0 ? humedad3.toFixed(1) + "%" : "-";
+        }
+
+        // Función para calcular humedades en límite plástico
+        function calcularHumedadPlastico() {
+          // Calcular humedades para cada ensayo
+          const humedad1 = calcularHumedad(
+            "pesoRecipientePlast1",
+            "pesoHumedoPlast1",
+            "pesoSecoPlast1"
+          );
+          const humedad2 = calcularHumedad(
+            "pesoRecipientePlast2",
+            "pesoHumedoPlast2",
+            "pesoSecoPlast2"
+          );
+
+          // Mostrar humedades
+          document.getElementById("humedadPlast1").textContent =
+            humedad1 > 0 ? humedad1.toFixed(1) + "%" : "-";
+          document.getElementById("humedadPlast2").textContent =
+            humedad2 > 0 ? humedad2.toFixed(1) + "%" : "-";
+        }
+
+        // Función para calcular límite líquido
+        function calcularLimiteLiquido() {
+          // Obtener datos de los tres ensayos
+          const golpes1 =
+            parseFloat(document.getElementById("golpes1").value) || 0;
+          const golpes2 =
+            parseFloat(document.getElementById("golpes2").value) || 0;
+          const golpes3 =
+            parseFloat(document.getElementById("golpes3").value) || 0;
+
+          // Calcular humedades para cada ensayo
+          const humedad1 = calcularHumedad(
+            "pesoRecipiente1",
+            "pesoHumedo1",
+            "pesoSeco1"
+          );
+          const humedad2 = calcularHumedad(
+            "pesoRecipiente2",
+            "pesoHumedo2",
+            "pesoSeco2"
+          );
+          const humedad3 = calcularHumedad(
+            "pesoRecipiente3",
+            "pesoHumedo3",
+            "pesoSeco3"
+          );
+
+          // Mostrar humedades
+          document.getElementById("humedad1").textContent =
+            humedad1 > 0 ? humedad1.toFixed(1) + "%" : "-";
+          document.getElementById("humedad2").textContent =
+            humedad2 > 0 ? humedad2.toFixed(1) + "%" : "-";
+          document.getElementById("humedad3").textContent =
+            humedad3 > 0 ? humedad3.toFixed(1) + "%" : "-";
+
+          // Si no hay suficientes datos, no calcular
+          if (
+            (golpes1 === 0 && golpes2 === 0 && golpes3 === 0) ||
+            (humedad1 === 0 && humedad2 === 0 && humedad3 === 0)
+          ) {
+            document.getElementById("limiteLiquidoResult").textContent = "-";
+            return;
+          }
+
+          // Calcular límite líquido mediante interpolación con 25 golpes
+          // Para simplificar, usamos una regresión lineal simple con los dos puntos más cercanos a 25 golpes
+          const puntos = [
+            { golpes: golpes1, humedad: humedad1 },
+            { golpes: golpes2, humedad: humedad2 },
+            { golpes: golpes3, humedad: humedad3 },
+          ].filter((p) => p.golpes > 0 && p.humedad > 0);
+
+          // Si no hay puntos válidos, no calcular
+          if (puntos.length === 0) {
+            document.getElementById("limiteLiquidoResult").textContent = "-";
+            return;
+          }
+
+          // Ordenar por número de golpes
+          puntos.sort((a, b) => a.golpes - b.golpes);
+
+          if (puntos.length < 2) {
+            // Si solo hay un punto, usar ese valor
+            limiteLiquido = puntos[0].humedad;
+          } else {
+            // Encontrar los puntos que rodean a 25 golpes
+            let punto1, punto2;
+            for (let i = 0; i < puntos.length - 1; i++) {
+              if (puntos[i].golpes <= 25 && puntos[i + 1].golpes >= 25) {
+                punto1 = puntos[i];
+                punto2 = puntos[i + 1];
+                break;
+              }
+            }
+
+            // Si no encontramos puntos que rodeen 25 golpes, usar los dos puntos más cercanos
+            if (!punto1 || !punto2) {
+              punto1 = puntos[0];
+              punto2 = puntos[1];
+            }
+
+            // Interpolación lineal en escala semilog (log de golpes, lineal de humedad)
+            const logGolpes1 = Math.log10(punto1.golpes);
+            const logGolpes2 = Math.log10(punto2.golpes);
+            const log25 = Math.log10(25);
+
+            // Fórmula de interpolación
+            limiteLiquido =
+              punto1.humedad +
+              ((log25 - logGolpes1) / (logGolpes2 - logGolpes1)) *
+                (punto2.humedad - punto1.humedad);
+          }
+
+          document.getElementById("limiteLiquidoResult").textContent =
+            limiteLiquido.toFixed(1) + "%";
+
+          // Si ya se tiene límite plástico, calcular IP
+          if (limitePlastico > 0) {
+            indicePlasticidad = limiteLiquido - limitePlastico;
+            document.getElementById("indicePlasticidadResult").textContent =
+              indicePlasticidad.toFixed(1);
+          }
+
+          // Actualizar gráficos
+          updateCharts();
+
+          showToast("Límite líquido calculado correctamente", "success");
+        }
+
+        // Función para calcular límite plástico
+        function calcularLimitePlastico() {
+          // Calcular humedades para cada ensayo
+          const humedad1 = calcularHumedad(
+            "pesoRecipientePlast1",
+            "pesoHumedoPlast1",
+            "pesoSecoPlast1"
+          );
+          const humedad2 = calcularHumedad(
+            "pesoRecipientePlast2",
+            "pesoHumedoPlast2",
+            "pesoSecoPlast2"
+          );
+
+          // Mostrar humedades
+          document.getElementById("humedadPlast1").textContent =
+            humedad1 > 0 ? humedad1.toFixed(1) + "%" : "-";
+          document.getElementById("humedadPlast2").textContent =
+            humedad2 > 0 ? humedad2.toFixed(1) + "%" : "-";
+
+          // Si no hay datos válidos, no calcular
+          if (humedad1 === 0 && humedad2 === 0) {
+            document.getElementById("limitePlasticoResult").textContent = "-";
+            document.getElementById("indicePlasticidadResult").textContent =
+              "-";
+            return;
+          }
+
+          // Calcular límite plástico
+          limitePlastico = (humedad1 + humedad2) / 2;
+
+          // Calcular índice de plasticidad si se tiene límite líquido
+          if (limiteLiquido > 0) {
+            indicePlasticidad = limiteLiquido - limitePlastico;
+            document.getElementById("indicePlasticidadResult").textContent =
+              indicePlasticidad.toFixed(1);
+          }
+
+          document.getElementById("limitePlasticoResult").textContent =
+            limitePlastico.toFixed(1) + "%";
+
+          // Actualizar gráficos
+          updateCharts();
+
+          showToast("Límite plástico calculado correctamente", "success");
+        }
+
+        // Función auxiliar para calcular humedad
+        function calcularHumedad(idPesoRecipiente, idPesoHumedo, idPesoSeco) {
+          const pesoRecipiente =
+            parseFloat(document.getElementById(idPesoRecipiente).value) || 0;
+          const pesoHumedo =
+            parseFloat(document.getElementById(idPesoHumedo).value) || 0;
+          const pesoSeco =
+            parseFloat(document.getElementById(idPesoSeco).value) || 0;
+
+          const pesoAgua = pesoHumedo - pesoSeco;
+          const pesoSueloSeco = pesoSeco - pesoRecipiente;
+
+          if (pesoSueloSeco <= 0) return 0;
+
+          return (pesoAgua / pesoSueloSeco) * 100;
+        }
+
+        // Función para calcular clasificaciones
+        function calcularClasificaciones() {
+          // Si no hay suficientes datos, no calcular
+          if (porcentajeFinos === 0 && d10 === 0 && d30 === 0 && d60 === 0) {
+            document.getElementById("clasificacionSUCS").textContent = "-";
+            document.getElementById("clasificacionAASHTO").textContent = "-";
+            document.getElementById("indiceGrupoResult").textContent = "-";
+            return;
+          }
+
+          // Clasificación SUCS (simplificada)
+          let sucs = "";
+          if (porcentajeFinos < 5) {
+            if (d60 > 0 && d10 > 0) {
+              const cu = d60 / d10;
+              const cc = (d30 * d30) / (d10 * d60);
+              if (cu >= 4 && cc >= 1 && cc <= 3) {
+                sucs = "GW - Grava bien graduada";
+              } else {
+                sucs = "GP - Grava pobremente graduada";
+              }
+            } else {
+              sucs = "GP - Grava pobremente graduada";
+            }
+          } else if (porcentajeFinos > 12) {
+            if (
+              indicePlasticidad < 4 ||
+              (indicePlasticidad < 7 &&
+                indicePlasticidad < 0.73 * (limiteLiquido - 20))
+            ) {
+              sucs = "GM - Grava limosa";
+            } else {
+              sucs = "GC - Grava arcillosa";
+            }
+          } else {
+            // Suelos con entre 5% y 12% de finos (suelos de frontera)
+            sucs = "GP-GM - Grava pobremente graduada con limo";
+          }
+
+          // Clasificación AASHTO (simplificada)
+          let aashto = "";
+          let indiceGrupo = 0;
+
+          if (porcentajeFinos <= 35) {
+            if (porcentajeFinos <= 10) {
+              aashto = "A-1-a";
+              indiceGrupo = 0;
+            } else {
+              aashto = "A-1-b";
+              indiceGrupo = 0;
+            }
+          } else if (porcentajeFinos <= 50) {
+            aashto = "A-2-6";
+            indiceGrupo = Math.max(
+              0,
+              Math.floor(
+                0.01 * (porcentajeFinos - 35) * (indicePlasticidad - 10)
+              ) + 4
+            );
+          } else {
+            if (limiteLiquido <= 40) {
+              aashto = "A-4";
+              indiceGrupo = Math.floor(
+                (porcentajeFinos - 35) * 0.2 +
+                  0.005 * (porcentajeFinos - 15) * (indicePlasticidad - 10)
+              );
+            } else if (limiteLiquido <= 60) {
+              aashto = "A-6";
+              indiceGrupo = Math.floor(
+                (porcentajeFinos - 35) * 0.2 +
+                  0.005 * (porcentajeFinos - 15) * (indicePlasticidad - 10)
+              );
+            } else {
+              aashto = "A-7-5";
+              indiceGrupo = Math.floor(
+                (porcentajeFinos - 35) * 0.2 +
+                  0.005 * (porcentajeFinos - 15) * (indicePlasticidad - 10)
+              );
+            }
+          }
+
+          // Mostrar resultados
+          document.getElementById("clasificacionSUCS").textContent = sucs;
+          document.getElementById("clasificacionAASHTO").textContent = aashto;
+          document.getElementById("indiceGrupoResult").textContent =
+            indiceGrupo;
+        }
+
+        // Función para actualizar gráficos
+        function updateCharts() {
+          // Actualizar curva granulométrica
+          granulometricChart.data.datasets[0].data = pasaValues;
+          granulometricChart.update();
+
+          // Actualizar distribución de tamaños
+          const porcGrava =
+            parseFloat(
+              document.getElementById("porcGravaResult").textContent
+            ) || 0;
+          const porcArena =
+            parseFloat(
+              document.getElementById("porcArenaResult").textContent
+            ) || 0;
+          const porcFinos =
+            parseFloat(
+              document.getElementById("porcFinosResult").textContent
+            ) || 0;
+
+          distributionChart.data.datasets[0].data = [
+            porcGrava,
+            porcArena,
+            porcFinos,
+          ];
+          distributionChart.update();
+
+          // Actualizar límites de consistencia
+          consistencyChart.data.datasets[0].data = [
+            limiteLiquido,
+            limitePlastico,
+            indicePlasticidad,
+          ];
+          consistencyChart.update();
+        }
+
+        // Función para importar desde Excel
+        function importarDesdeExcel(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            try {
+              const data = new Uint8Array(e.target.result);
+              const workbook = XLSX.read(data, { type: "array" });
+
+              // Obtener la primera hoja
+              const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+              const jsonData = XLSX.utils.sheet_to_json(firstSheet, {
+                header: 1,
+              });
+
+              // Mapear datos a los campos del formulario
+              mapearDatosDesdeExcel(jsonData);
+
+              // Calcular todos los resultados
+              calcularGranulometria();
+              calcularLimiteLiquido();
+              calcularLimitePlastico();
+
+              showToast(
+                "Datos importados correctamente desde Excel",
+                "success"
+              );
+            } catch (error) {
+              console.error("Error al importar desde Excel:", error);
+              showToast("Error al importar el archivo Excel", "danger");
+            }
+          };
+          reader.readAsArrayBuffer(file);
+
+          // Limpiar el input para permitir cargar el mismo archivo de nuevo
+          event.target.value = "";
+        }
+
+        // Función para mapear datos de Excel a los campos del formulario
+        function mapearDatosDesdeExcel(data) {
+          // Este es un mapeo básico, se puede personalizar según la estructura del Excel
+          const fieldMap = {
+            Proyecto: "proyecto",
+            Fecha: "fecha",
+            Muestra: "muestra",
+            Progresiva: "progresiva",
+            Estrato: "estrato",
+            Profundidad: "profundidad",
+            "Peso Total": "pesoTotal",
+            "Peso Antes Lavado": "antesLavado",
+            "Peso Después Lavado": "despuesLavado",
+          };
+
+          // Buscar encabezados y sus índices
+          const headers = data[0];
+          const headerMap = {};
+
+          headers.forEach((header, index) => {
+            if (header && fieldMap[header]) {
+              headerMap[fieldMap[header]] = index;
+            }
+          });
+
+          // Si hay datos en la segunda fila, llenar los campos
+          if (data.length > 1) {
+            const row = data[1];
+
+            Object.keys(headerMap).forEach((field) => {
+              const index = headerMap[field];
+              if (index !== undefined && row[index] !== undefined) {
+                const element = document.getElementById(field);
+                if (element) {
+                  element.value = row[index];
+                }
+              }
+            });
+
+            // Procesar datos de tamices si existen
+            procesarDatosTamicesExcel(data);
+          }
+        }
+
+        // Función para procesar datos de tamices desde Excel
+        function procesarDatosTamicesExcel(data) {
+          const tamicesMap = {
+            '3"': "retenido3in",
+            '2"': "retenido2in",
+            '1½"': "retenido1_5in",
+            '1"': "retenido1in",
+            '3/4"': "retenido3_4in",
+            '3/8"': "retenido3_8in",
+            "N°4": "retenidoN4",
+            "N°10": "retenidoN10",
+            "N°20": "retenidoN20",
+            "N°40": "retenidoN40",
+            "N°60": "retenidoN60",
+            "N°140": "retenidoN140",
+            "N°200": "retenidoN200",
+          };
+
+          // Buscar fila de tamices
+          for (let i = 0; i < data.length; i++) {
+            const row = data[i];
+            if (row && row.length > 0 && tamicesMap[row[0]]) {
+              // Esta fila contiene datos de tamices
+              for (let j = 1; j < row.length; j++) {
+                const header = data[0][j];
+                if (header === "Peso Retenido" && row[j] !== undefined) {
+                  const tamiz = row[0];
+                  const elementId = tamicesMap[tamiz];
+                  if (elementId) {
+                    document.getElementById(elementId).value = row[j];
+                  }
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        // Función para exportar a Excel
+        function exportarAExcel() {
+          // Crear un nuevo libro de trabajo
+          const wb = XLSX.utils.book_new();
+
+          // Hoja 1: Datos generales
+          const datosGenerales = [
+            ["INFORMACIÓN GENERAL"],
+            ["Proyecto", document.getElementById("proyecto").value],
+            ["Fecha", document.getElementById("fecha").value],
+            ["Muestra", document.getElementById("muestra").value],
+            ["Progresiva", document.getElementById("progresiva").value],
+            ["Estrato", document.getElementById("estrato").value],
+            ["Profundidad (m)", document.getElementById("profundidad").value],
+            ["Peso Total (g)", document.getElementById("pesoTotal").value],
+            [
+              "Peso Antes Lavado (g)",
+              document.getElementById("antesLavado").value,
+            ],
+            [
+              "Peso Después Lavado (g)",
+              document.getElementById("despuesLavado").value,
+            ],
+            [],
+            ["RESULTADOS GRANulométricos"],
+            [
+              "Grava (>4.76 mm)",
+              document.getElementById("porcGravaResult").textContent,
+            ],
+            [
+              "Arena (4.76 mm - 0.074 mm)",
+              document.getElementById("porcArenaResult").textContent,
+            ],
+            [
+              "Finos (<0.074 mm)",
+              document.getElementById("porcFinosResult").textContent,
+            ],
+            [
+              "Coeficiente de Uniformidad (Cu)",
+              document.getElementById("coefUniformidadResult").textContent,
+            ],
+            [
+              "Coeficiente de Curvatura (Cc)",
+              document.getElementById("coefCurvaturaResult").textContent,
+            ],
+            ["D10 (mm)", document.getElementById("d10Result").textContent],
+            ["D30 (mm)", document.getElementById("d30Result").textContent],
+            ["D60 (mm)", document.getElementById("d60Result").textContent],
+            [],
+            ["LÍMITES DE CONSISTENCIA"],
+            [
+              "Límite Líquido (LL)",
+              document.getElementById("limiteLiquidoResult").textContent,
+            ],
+            [
+              "Límite Plástico (LP)",
+              document.getElementById("limitePlasticoResult").textContent,
+            ],
+            [
+              "Índice de Plasticidad (IP)",
+              document.getElementById("indicePlasticidadResult").textContent,
+            ],
+            [],
+            ["CLASIFICACIÓN"],
+            [
+              "Clasificación SUCS",
+              document.getElementById("clasificacionSUCS").textContent,
+            ],
+            [
+              "Clasificación AASHTO",
+              document.getElementById("clasificacionAASHTO").textContent,
+            ],
+            [
+              "Índice de Grupo (IG)",
+              document.getElementById("indiceGrupoResult").textContent,
+            ],
+          ];
+
+          const wsDatos = XLSX.utils.aoa_to_sheet(datosGenerales);
+          XLSX.utils.book_append_sheet(wb, wsDatos, "Datos Generales");
+
+          // Hoja 2: Granulometría
+          const granulometriaData = [
+            [
+              "Tamiz",
+              "Abertura (mm)",
+              "Peso Retenido (g)",
+              "% Retenido",
+              "% Acumulado",
+              "% Pasa",
+            ],
+            [
+              '3"',
+              76.2,
+              document.getElementById("retenido3in").value,
+              document.getElementById("porcRet3in").textContent,
+              document.getElementById("acum3in").textContent,
+              document.getElementById("pasa3in").textContent,
+            ],
+            [
+              '2"',
+              50.8,
+              document.getElementById("retenido2in").value,
+              document.getElementById("porcRet2in").textContent,
+              document.getElementById("acum2in").textContent,
+              document.getElementById("pasa2in").textContent,
+            ],
+            [
+              '1½"',
+              38.1,
+              document.getElementById("retenido1_5in").value,
+              document.getElementById("porcRet1_5in").textContent,
+              document.getElementById("acum1_5in").textContent,
+              document.getElementById("pasa1_5in").textContent,
+            ],
+            [
+              '1"',
+              25.4,
+              document.getElementById("retenido1in").value,
+              document.getElementById("porcRet1in").textContent,
+              document.getElementById("acum1in").textContent,
+              document.getElementById("pasa1in").textContent,
+            ],
+            [
+              '3/4"',
+              19.1,
+              document.getElementById("retenido3_4in").value,
+              document.getElementById("porcRet3_4in").textContent,
+              document.getElementById("acum3_4in").textContent,
+              document.getElementById("pasa3_4in").textContent,
+            ],
+            [
+              '3/8"',
+              9.52,
+              document.getElementById("retenido3_8in").value,
+              document.getElementById("porcRet3_8in").textContent,
+              document.getElementById("acum3_8in").textContent,
+              document.getElementById("pasa3_8in").textContent,
+            ],
+            [
+              "N°4",
+              4.76,
+              document.getElementById("retenidoN4").value,
+              document.getElementById("porcRetN4").textContent,
+              document.getElementById("acumN4").textContent,
+              document.getElementById("pasaN4").textContent,
+            ],
+            [
+              "N°10",
+              2.0,
+              document.getElementById("retenidoN10").value,
+              document.getElementById("porcRetN10").textContent,
+              document.getElementById("acumN10").textContent,
+              document.getElementById("pasaN10").textContent,
+            ],
+            [
+              "N°20",
+              0.84,
+              document.getElementById("retenidoN20").value,
+              document.getElementById("porcRetN20").textContent,
+              document.getElementById("acumN20").textContent,
+              document.getElementById("pasaN20").textContent,
+            ],
+            [
+              "N°40",
+              0.42,
+              document.getElementById("retenidoN40").value,
+              document.getElementById("porcRetN40").textContent,
+              document.getElementById("acumN40").textContent,
+              document.getElementById("pasaN40").textContent,
+            ],
+            [
+              "N°60",
+              0.25,
+              document.getElementById("retenidoN60").value,
+              document.getElementById("porcRetN60").textContent,
+              document.getElementById("acumN60").textContent,
+              document.getElementById("pasaN60").textContent,
+            ],
+            [
+              "N°140",
+              0.106,
+              document.getElementById("retenidoN140").value,
+              document.getElementById("porcRetN140").textContent,
+              document.getElementById("acumN140").textContent,
+              document.getElementById("pasaN140").textContent,
+            ],
+            [
+              "N°200",
+              0.074,
+              document.getElementById("retenidoN200").value,
+              document.getElementById("porcRetN200").textContent,
+              document.getElementById("acumN200").textContent,
+              document.getElementById("pasaN200").textContent,
+            ],
+            [
+              "<200",
+              "-",
+              document.getElementById("retenidoMenor200").textContent,
+              document.getElementById("porcRetMenor200").textContent,
+              document.getElementById("acumMenor200").textContent,
+              document.getElementById("pasaMenor200").textContent,
+            ],
+            [
+              "Total",
+              "-",
+              document.getElementById("totalRetenido").textContent,
+              document.getElementById("totalPorcRetenido").textContent,
+              "-",
+              "-",
+            ],
+          ];
+
+          const wsGranulometria = XLSX.utils.aoa_to_sheet(granulometriaData);
+          XLSX.utils.book_append_sheet(wb, wsGranulometria, "Granulometría");
+
+          // Hoja 3: Límites de Consistencia
+          const limitesData = [
+            ["LÍMITE LÍQUIDO"],
+            ["Ensayo", "1", "2", "3"],
+            [
+              "Nº Golpes",
+              document.getElementById("golpes1").value,
+              document.getElementById("golpes2").value,
+              document.getElementById("golpes3").value,
+            ],
+            [
+              "Código",
+              document.getElementById("codRecipiente1").value,
+              document.getElementById("codRecipiente2").value,
+              document.getElementById("codRecipiente3").value,
+            ],
+            [
+              "Peso recip. (g)",
+              document.getElementById("pesoRecipiente1").value,
+              document.getElementById("pesoRecipiente2").value,
+              document.getElementById("pesoRecipiente3").value,
+            ],
+            [
+              "Recip. + húmedo (g)",
+              document.getElementById("pesoHumedo1").value,
+              document.getElementById("pesoHumedo2").value,
+              document.getElementById("pesoHumedo3").value,
+            ],
+            [
+              "Recip. + seco (g)",
+              document.getElementById("pesoSeco1").value,
+              document.getElementById("pesoSeco2").value,
+              document.getElementById("pesoSeco3").value,
+            ],
+            [
+              "Humedad (%)",
+              document.getElementById("humedad1").textContent,
+              document.getElementById("humedad2").textContent,
+              document.getElementById("humedad3").textContent,
+            ],
+            [],
+            ["LÍMITE PLÁSTICO"],
+            ["Ensayo", "1", "2"],
+            [
+              "Código",
+              document.getElementById("codRecipientePlast1").value,
+              document.getElementById("codRecipientePlast2").value,
+            ],
+            [
+              "Peso recip. (g)",
+              document.getElementById("pesoRecipientePlast1").value,
+              document.getElementById("pesoRecipientePlast2").value,
+            ],
+            [
+              "Recip. + húmedo (g)",
+              document.getElementById("pesoHumedoPlast1").value,
+              document.getElementById("pesoHumedoPlast2").value,
+            ],
+            [
+              "Recip. + seco (g)",
+              document.getElementById("pesoSecoPlast1").value,
+              document.getElementById("pesoSecoPlast2").value,
+            ],
+            [
+              "Humedad (%)",
+              document.getElementById("humedadPlast1").textContent,
+              document.getElementById("humedadPlast2").textContent,
+            ],
+          ];
+
+          const wsLimites = XLSX.utils.aoa_to_sheet(limitesData);
+          XLSX.utils.book_append_sheet(wb, wsLimites, "Límites Consistencia");
+
+          // Guardar el archivo
+          const proyecto =
+            document.getElementById("proyecto").value || "ensayo";
+          const fecha =
+            document.getElementById("fecha").value ||
+            new Date().toISOString().split("T")[0];
+          const fileName = `Granulometria_${proyecto}_${fecha}.xlsx`;
+
+          XLSX.writeFile(wb, fileName);
+          showToast("Datos exportados correctamente a Excel", "success");
+        }
+
+        // Función para generar PDF
+        function generarPDF() {
+          // Usar html2canvas para capturar el formulario
+          html2canvas(document.getElementById("ensayoForm")).then((canvas) => {
+            const imgData = canvas.toDataURL("image/png");
+
+            // Usar jsPDF para crear el PDF
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF("p", "mm", "a4");
+
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+            pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+
+            // Guardar el PDF
+            const proyecto =
+              document.getElementById("proyecto").value || "ensayo";
+            const fecha =
+              document.getElementById("fecha").value ||
+              new Date().toISOString().split("T")[0];
+            pdf.save(`Reporte_Granulometria_${proyecto}_${fecha}.pdf`);
+
+            showToast("PDF generado correctamente", "success");
+          });
+        }
+      });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        // Datos de ejemplo para progresivas (con prefijo KM)
+        const progresivas = [
+          "KM 0+000",
+          "KM 0+020",
+          "KM 0+040",
+          "KM 0+060",
+          "KM 0+080",
+          "KM 0+100",
+          "KM 0+120",
+          "KM 0+140",
+          "KM 0+160",
+          "KM 0+180",
+          "KM 0+200",
+          "KM 0+220",
+          "KM 0+240",
+          "KM 0+260",
+          "KM 0+280",
+          "KM 1+000",
+          "KM 1+020",
+          "KM 1+040",
+          "KM 1+060",
+          "KM 1+080",
+          "KM 1+100",
+          "KM 1+120",
+          "KM 1+140",
+          "KM 1+160",
+          "KM 1+180",
+          "KM 2+000",
+          "KM 2+050",
+          "KM 2+100",
+          "KM 2+150",
+          "KM 2+200",
+          "KM 3+000",
+          "KM 3+050",
+          "KM 3+100",
+          "KM 3+150",
+          "KM 3+200",
+        ];
+
+        const estratos = [
+          { id: "1", nombre: "1 - Subrasante" },
+          { id: "2", nombre: "2 - Base" },
+          { id: "3", nombre: "3 - Subbase" },
+          { id: "4", nombre: "4 - Terraplén" },
+        ];
+
+        // Elementos del DOM
+        const progresivaInput = document.getElementById("progresivaInput");
+        const progresivaDropdown =
+          document.getElementById("progresivaDropdown");
+        const currentProgresiva = document.getElementById("currentProgresiva");
+        const prevProgresivaBtn = document.getElementById("prevProgresiva");
+        const nextProgresivaBtn = document.getElementById("nextProgresiva");
+        const toggleSearchProgresivaBtn = document.getElementById(
+          "toggleSearchProgresiva"
+        );
+
+        const estratoInput = document.getElementById("estratoInput");
+        const estratoDropdown = document.getElementById("estratoDropdown");
+        const currentEstrato = document.getElementById("currentEstrato");
+        const prevEstratoBtn = document.getElementById("prevEstrato");
+        const nextEstratoBtn = document.getElementById("nextEstrato");
+        const toggleSearchEstratoBtn = document.getElementById(
+          "toggleSearchEstrato"
+        );
+
+        // Estado actual
+        let currentProgresivaIndex = progresivas.indexOf("KM 0+120");
+        let currentEstratoIndex = 0;
+        let progresivaDropdownVisible = false;
+        let estratoDropdownVisible = false;
+
+        // Inicializar la interfaz
+        updateProgresivaDisplay();
+        updateEstratoDisplay();
+        populateProgresivaDropdown(progresivas);
+        populateEstratoDropdown(estratos);
+
+        // Funciones para actualizar la visualización
+        function updateProgresivaDisplay() {
+          const progresiva = progresivas[currentProgresivaIndex];
+          // Mostrar solo el número de progresiva en el input (sin "KM")
+          progresivaInput.value = progresiva.replace("KM ", "");
+          currentProgresiva.textContent = progresiva;
+
+          // Habilitar/deshabilitar botones según la posición
+          prevProgresivaBtn.disabled = currentProgresivaIndex === 0;
+          nextProgresivaBtn.disabled =
+            currentProgresivaIndex === progresivas.length - 1;
+        }
+
+        function updateEstratoDisplay() {
+          const estrato = estratos[currentEstratoIndex];
+          estratoInput.value = estrato.nombre;
+          currentEstrato.textContent = estrato.nombre;
+
+          // Habilitar/deshabilitar botones según la posición
+          prevEstratoBtn.disabled = currentEstratoIndex === 0;
+          nextEstratoBtn.disabled = currentEstratoIndex === estratos.length - 1;
+        }
+
+        // Llenar dropdown con opciones de progresivas
+        function populateProgresivaDropdown(items) {
+          progresivaDropdown.innerHTML = "";
+
+          if (items.length === 0) {
+            const emptyItem = document.createElement("a");
+            emptyItem.className = "dropdown-item disabled";
+            emptyItem.textContent = "No se encontraron resultados";
+            emptyItem.href = "#";
+            progresivaDropdown.appendChild(emptyItem);
+            return;
+          }
+
+          items.forEach((prog) => {
+            const item = document.createElement("a");
+            item.className = "dropdown-item";
+            item.href = "#";
+            item.textContent = prog;
+            item.dataset.value = prog;
+
+            item.addEventListener("click", function (e) {
+              e.preventDefault();
+              const index = progresivas.indexOf(this.dataset.value);
+              if (index !== -1) {
+                currentProgresivaIndex = index;
+                updateProgresivaDisplay();
+                hideProgresivaDropdown();
+              }
+            });
+
+            progresivaDropdown.appendChild(item);
+          });
+        }
+
+        // Llenar dropdown con opciones de estratos
+        function populateEstratoDropdown(items) {
+          estratoDropdown.innerHTML = "";
+
+          if (items.length === 0) {
+            const emptyItem = document.createElement("a");
+            emptyItem.className = "dropdown-item disabled";
+            emptyItem.textContent = "No se encontraron resultados";
+            emptyItem.href = "#";
+            estratoDropdown.appendChild(emptyItem);
+            return;
+          }
+
+          items.forEach((estrato) => {
+            const item = document.createElement("a");
+            item.className = "dropdown-item";
+            item.href = "#";
+            item.textContent = estrato.nombre;
+            item.dataset.value = estrato.id;
+
+            item.addEventListener("click", function (e) {
+              e.preventDefault();
+              const index = estratos.findIndex(
+                (e) => e.id === this.dataset.value
+              );
+              if (index !== -1) {
+                currentEstratoIndex = index;
+                updateEstratoDisplay();
+                hideEstratoDropdown();
+              }
+            });
+
+            estratoDropdown.appendChild(item);
+          });
+        }
+
+        // Mostrar/ocultar dropdowns
+        function showProgresivaDropdown() {
+          progresivaDropdown.style.display = "block";
+          progresivaDropdownVisible = true;
+        }
+
+        function hideProgresivaDropdown() {
+          progresivaDropdown.style.display = "none";
+          progresivaDropdownVisible = false;
+        }
+
+        function showEstratoDropdown() {
+          estratoDropdown.style.display = "block";
+          estratoDropdownVisible = true;
+        }
+
+        function hideEstratoDropdown() {
+          estratoDropdown.style.display = "none";
+          estratoDropdownVisible = false;
+        }
+
+        // Filtrar progresivas según texto de búsqueda (ahora busca en el valor numérico)
+        function filterProgresivas(searchTerm) {
+          if (!searchTerm) {
+            return progresivas;
+          }
+
+          // Permitir búsqueda por número (120) o formato estación (0+120)
+          return progresivas.filter((prog) => {
+            // Extraer solo la parte numérica para búsqueda (sin "KM")
+            const numericValue = prog.replace("KM ", "");
+
+            // Buscar coincidencias en el valor numérico
+            return numericValue.includes(searchTerm);
+          });
+        }
+
+        // Filtrar estratos según texto de búsqueda
+        function filterEstratos(searchTerm) {
+          if (!searchTerm) {
+            return estratos;
+          }
+
+          return estratos.filter(
+            (estrato) =>
+              estrato.nombre.toLowerCase().includes(searchTerm) ||
+              estrato.id.includes(searchTerm)
+          );
+        }
+
+        // Event listeners para navegación de progresivas
+        prevProgresivaBtn.addEventListener("click", function () {
+          navigateToPreviousProgresiva();
+        });
+
+        nextProgresivaBtn.addEventListener("click", function () {
+          navigateToNextProgresiva();
+        });
+
+        // Event listeners para navegación de estratos
+        prevEstratoBtn.addEventListener("click", function () {
+          navigateToPreviousEstrato();
+        });
+
+        nextEstratoBtn.addEventListener("click", function () {
+          navigateToNextEstrato();
+        });
+
+        // Funciones de navegación
+        function navigateToPreviousProgresiva() {
+          if (currentProgresivaIndex > 0) {
+            currentProgresivaIndex--;
+            updateProgresivaDisplay();
+          }
+        }
+
+        function navigateToNextProgresiva() {
+          if (currentProgresivaIndex < progresivas.length - 1) {
+            currentProgresivaIndex++;
+            updateProgresivaDisplay();
+          }
+        }
+
+        function navigateToPreviousEstrato() {
+          if (currentEstratoIndex > 0) {
+            currentEstratoIndex--;
+            updateEstratoDisplay();
+          }
+        }
+
+        function navigateToNextEstrato() {
+          if (currentEstratoIndex < estratos.length - 1) {
+            currentEstratoIndex++;
+            updateEstratoDisplay();
+          }
+        }
+
+        // Validación y actualización desde el input de progresiva
+        progresivaInput.addEventListener("change", function () {
+          let value = this.value.trim();
+
+          // Permitir formato numérico (120) o formato estación (0+120)
+          if (!/^(\d+\+\d{3}|\d+)$/.test(value)) {
+            alert(
+              "Formato incorrecto. Use número (120) o formato estación (0+120)"
+            );
+            this.value = progresivas[currentProgresivaIndex].replace("KM ", "");
+            return;
+          }
+
+          // Si es solo un número (sin +), convertirlo a formato estación
+          if (!value.includes("+")) {
+            // Asumir que es un valor en metros y convertirlo a formato estación
+            const meters = parseInt(value);
+            const km = Math.floor(meters / 1000);
+            const m = meters % 1000;
+            value = `${km}+${m.toString().padStart(3, "0")}`;
+          }
+
+          // Añadir prefijo KM para almacenar
+          const valueWithKM = "KM " + value;
+
+          // Buscar si la progresiva existe en nuestros datos
+          const index = progresivas.indexOf(valueWithKM);
+
+          if (index !== -1) {
+            currentProgresivaIndex = index;
+            updateProgresivaDisplay();
+          } else {
+            // Si no existe, agregarla a la lista (opcional)
+            if (confirm("Esta progresiva no existe. ¿Desea agregarla?")) {
+              progresivas.push(valueWithKM);
+              // Ordenar progresivas
+              progresivas.sort((a, b) => {
+                const aNum = a.replace("KM ", "");
+                const bNum = b.replace("KM ", "");
+                const aParts = aNum.split("+");
+                const bParts = bNum.split("+");
+                const aKm = parseInt(aParts[0]);
+                const aM = parseInt(aParts[1]);
+                const bKm = parseInt(bParts[0]);
+                const bM = parseInt(bParts[1]);
+
+                if (aKm !== bKm) return aKm - bKm;
+                return aM - bM;
+              });
+
+              // Encontrar el nuevo índice después de ordenar
+              currentProgresivaIndex = progresivas.indexOf(valueWithKM);
+              updateProgresivaDisplay();
+            } else {
+              // Restaurar el valor anterior
+              this.value = progresivas[currentProgresivaIndex].replace(
+                "KM ",
+                ""
+              );
+            }
+          }
+        });
+
+        // Validación y actualización desde el input de estrato
+        estratoInput.addEventListener("change", function () {
+          const value = this.value.trim();
+
+          // Buscar si el estrato existe en nuestros datos
+          const estrato = estratos.find(
+            (e) =>
+              e.nombre.toLowerCase() === value.toLowerCase() || e.id === value
+          );
+
+          if (estrato) {
+            const index = estratos.findIndex((e) => e.id === estrato.id);
+            currentEstratoIndex = index;
+            updateEstratoDisplay();
+          } else {
+            alert("Estrato no encontrado. Seleccione uno de la lista.");
+            this.value = estratos[currentEstratoIndex].nombre;
+          }
+        });
+
+        // Búsqueda en tiempo real para progresivas
+        progresivaInput.addEventListener("input", function () {
+          const searchTerm = this.value.toLowerCase().trim();
+          const filtered = filterProgresivas(searchTerm);
+          populateProgresivaDropdown(filtered);
+
+          if (searchTerm && !progresivaDropdownVisible) {
+            showProgresivaDropdown();
+          } else if (!searchTerm) {
+            hideProgresivaDropdown();
+          }
+        });
+
+        // Búsqueda en tiempo real para estratos
+        estratoInput.addEventListener("input", function () {
+          const searchTerm = this.value.toLowerCase().trim();
+          const filtered = filterEstratos(searchTerm);
+          populateEstratoDropdown(filtered);
+
+          if (searchTerm && !estratoDropdownVisible) {
+            showEstratoDropdown();
+          } else if (!searchTerm) {
+            hideEstratoDropdown();
+          }
+        });
+
+        // Mostrar/ocultar dropdown al hacer clic en el botón de búsqueda de progresiva
+        toggleSearchProgresivaBtn.addEventListener("click", function () {
+          if (progresivaDropdownVisible) {
+            hideProgresivaDropdown();
+          } else {
+            populateProgresivaDropdown(progresivas);
+            showProgresivaDropdown();
+          }
+        });
+
+        // Mostrar/ocultar dropdown al hacer clic en el botón de búsqueda de estrato
+        toggleSearchEstratoBtn.addEventListener("click", function () {
+          if (estratoDropdownVisible) {
+            hideEstratoDropdown();
+          } else {
+            populateEstratoDropdown(estratos);
+            showEstratoDropdown();
+          }
+        });
+
+        // Ocultar dropdowns al hacer clic fuera
+        document.addEventListener("click", function (e) {
+          if (
+            !progresivaInput.contains(e.target) &&
+            !progresivaDropdown.contains(e.target) &&
+            !toggleSearchProgresivaBtn.contains(e.target)
+          ) {
+            hideProgresivaDropdown();
+          }
+
+          if (
+            !estratoInput.contains(e.target) &&
+            !estratoDropdown.contains(e.target) &&
+            !toggleSearchEstratoBtn.contains(e.target)
+          ) {
+            hideEstratoDropdown();
+          }
+        });
+
+        // Manejar teclas en los inputs de búsqueda
+        progresivaInput.addEventListener("keydown", function (e) {
+          if (e.key === "ArrowDown" && progresivaDropdownVisible) {
+            e.preventDefault();
+            const firstItem =
+              progresivaDropdown.querySelector(".dropdown-item");
+            if (firstItem) firstItem.focus();
+          } else if (e.key === "Escape") {
+            hideProgresivaDropdown();
+          }
+        });
+
+        estratoInput.addEventListener("keydown", function (e) {
+          if (e.key === "ArrowDown" && estratoDropdownVisible) {
+            e.preventDefault();
+            const firstItem = estratoDropdown.querySelector(".dropdown-item");
+            if (firstItem) firstItem.focus();
+          } else if (e.key === "Escape") {
+            hideEstratoDropdown();
+          }
+        });
+
+        // Navegación por teclado
+        document.addEventListener("keydown", function (e) {
+          // Solo activar si no estamos en un campo de entrada
+          if (
+            e.target.tagName !== "INPUT" ||
+            e.target === progresivaInput ||
+            e.target === estratoInput
+          ) {
+            // Navegación de progresivas con flechas izquierda/derecha
+            if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              navigateToPreviousProgresiva();
+            } else if (e.key === "ArrowRight") {
+              e.preventDefault();
+              navigateToNextProgresiva();
+            }
+
+            // Navegación de estratos con flechas arriba/abajo
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              navigateToPreviousEstrato();
+            } else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              navigateToNextEstrato();
+            }
+          }
+        });
+      });
+
+      // Dentro del evento DOMContentLoaded, agregar este código:
+
+      // Botón para importar listado
+      document
+        .getElementById("importListadoExcel")
+        .addEventListener("click", function () {
+          document.getElementById("fileInputListado").click();
+        });
+
+      // Event listener para el input file del listado
+      document
+        .getElementById("fileInputListado")
+        .addEventListener("change", function (e) {
+          importarListadoDesdeExcel(e);
+        });
+
+      function importarListadoDesdeExcel(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: "array" });
+
+            // Obtener la primera hoja
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, {
+              header: 1,
+            });
+
+            // Suponemos que la primera fila son los encabezados, así que la saltamos
+            const tbody = document.querySelector("#tablaListado tbody");
+            tbody.innerHTML = ""; // Limpiar tabla antes de agregar nuevos datos
+
+            for (let i = 1; i < jsonData.length; i++) {
+              const row = jsonData[i];
+              // Crear una nueva fila en la tabla
+              const tr = document.createElement("tr");
+
+              // Columnas: Código, Peso Total, 2", 3/8", N10, N40, N200, LP, LL, IP
+              tr.innerHTML = `
+          <td>${row[0] || ""}</td>
+          <td>${row[1] || ""}</td>
+          <td>${row[2] || ""}</td>
+          <td>${row[3] || ""}</td>
+          <td>${row[4] || ""}</td>
+          <td>${row[5] || ""}</td>
+          <td>${row[6] || ""}</td>
+          <td>${row[7] || ""}</td>
+          <td>${row[8] || ""}</td>
+          <td>${row[9] || ""}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary me-1 btn-editar" data-bs-toggle="tooltip" title="Editar">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-info btn-ver" data-bs-toggle="tooltip" title="Ver">
+              <i class="fas fa-eye"></i>
+            </button>
+          </td>
+        `;
+
+              tbody.appendChild(tr);
+            }
+
+            // Inicializar tooltips de Bootstrap
+            const tooltipTriggerList = [].slice.call(
+              document.querySelectorAll('[data-bs-toggle="tooltip"]')
+            );
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+              return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            showToast("Listado importado correctamente", "success");
+          } catch (error) {
+            console.error("Error al importar el listado desde Excel:", error);
+            showToast("Error al importar el listado", "danger");
+          }
+        };
+        reader.readAsArrayBuffer(file);
+
+        // Limpiar el input para permitir cargar el mismo archivo de nuevo
+        event.target.value = "";
+      }
+
+      // Delegación de eventos para los botones de la tabla listado
+      document
+        .getElementById("tablaListado")
+        .addEventListener("click", function (e) {
+          if (e.target.closest(".btn-editar")) {
+            const fila = e.target.closest("tr");
+            const codigo = fila.cells[0].textContent;
+            // Aquí podríamos cargar los datos del ensayo en el formulario para editarlo
+            alert("Editar: " + codigo);
+          } else if (e.target.closest(".btn-ver")) {
+            const fila = e.target.closest("tr");
+            const codigo = fila.cells[0].textContent;
+            alert("Ver: " + codigo);
+          }
+        });
+    </script>
+  </body>
+</html>

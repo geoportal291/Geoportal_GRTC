@@ -1,0 +1,95 @@
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom'; // Importar useLocation
+import Header from './header';
+import Navbar from './navbar';
+import ChangelogModal from '../ChangelogModal';
+import Traficods from './ingeneria/trafico/trafico.jsx';
+import Vialds from './ingeneria/invvial/vial.jsx';
+import { TrafficOptionProvider } from '../../data/contexts/TrafficOptionContext';
+import { VialOptionProvider } from '../../data/contexts/VialOptionContext';
+import { useAuth } from '../../data/contexts/AuthContext'; // Import useAuth
+import axios from 'axios'; // Import axios
+import '../ChangelogModal.css';
+
+export default function Layout({ children, setPageTitle }) {
+  const { user, selectedProjectName } = useAuth(); // Get user and selectedProjectName from context
+  const [collapsed, setCollapsed] = useState(false);
+  const [trafficOption, setTrafficOption] = useState('resumen');
+  const [vialOption, setVialOption] = useState(() => {
+    const savedVialOption = localStorage.getItem('vialOption');
+    return savedVialOption ? savedVialOption : 'resumen general';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('vialOption', vialOption);
+  }, [vialOption]);
+
+  const location = useLocation(); // Obtener la ubicación actual
+  const isAmigoSecretoRoute = location.pathname.startsWith('/eventos/amigo-secreto');
+
+  const handleTrafficOptionChange = (option) => {
+    setTrafficOption(option);
+  };
+
+
+
+  const handleVialOptionChange = (option) => {
+    setVialOption(option);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {!isAmigoSecretoRoute && (
+            <Header
+              sidebarCollapsed={collapsed}
+              setPageTitle={setPageTitle}
+              onTrafficOptionChange={handleTrafficOptionChange}
+              onVialOptionChange={handleVialOptionChange}
+              onToggleSidebar={setCollapsed}
+              userProjectEntityName={selectedProjectName} // Pass the name from context
+            />
+      )}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <div
+          style={{
+            width: collapsed ? '80px' : '150px',
+            transition: 'width 0.3s ease',
+            flexShrink: 0
+          }}
+        >
+          <Navbar onToggle={setCollapsed} isCollapsed={collapsed} />
+        </div>
+        <div
+          className={`content-wrapper ${collapsed ? 'sidebar-collapsed' : 'sidebar-open'}`}
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            paddingLeft: collapsed ? '0px' : '60px',
+            paddingTop : isAmigoSecretoRoute ? '0' : '60px',
+            paddingRight: '0',
+            paddingBottom: '0',
+            backgroundColor: '#f5f7fa',
+            width: '100%',
+            maxWidth: 'none',
+            minHeight: 'auto',
+            position: 'relative',
+            zIndex: 0
+          }}
+        > 
+          {location.pathname === '/coordinador/ingenieria/trafico/trafico' ? (
+            <TrafficOptionProvider value={trafficOption}>
+              <Traficods isNavbarExpanded={!collapsed} />
+            </TrafficOptionProvider>
+          ) : location.pathname === '/ingenieria/inventario-vial' ? (
+            <VialOptionProvider value={{ vialHeaderOption: vialOption, setVialHeaderOption: setVialOption }}>
+              <Vialds isNavbarExpanded={!collapsed} />
+            </VialOptionProvider>
+          ) : (
+            children
+          )}
+        </div>
+      </div>
+      <ChangelogModal />
+    </div>
+  );
+}

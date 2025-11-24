@@ -1,0 +1,78 @@
+/* Estilos para la sección de miniaturas */
+.thumbnail-section-container {
+    padding: 10px 15px;
+    margin-top: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    cursor: pointer;
+    transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.thumbnail-section-container:hover {
+    background-color: #f0f0f0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.thumbnail-section-header {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 10px;
+    padding-left: 5px;
+}
+
+/* Contenedor de la grilla de imágenes */
+.thumbnail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+.thumbnail-card {
+    display: flex;
+    flex-direction: column;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    overflow: hidden;
+    background-color: #fff;
+}
+
+.thumbnail-image-container {
+    width: 100%;
+    padding-top: 75%; /* Aspect ratio 4:3 */
+    position: relative;
+}
+
+.thumbnail-image-container img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.thumbnail-card-footer {
+    padding: 5px 8px;
+    background-color: #fff;
+    border-top: 1px solid #eee;
+}
+
+.thumbnail-card-footer p {
+    margin: 0;
+    font-size: 0.7rem; /* Letra más pequeña para las miniaturas */
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.no-images-message {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    color: #666;
+    font-style: italic;
+}

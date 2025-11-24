@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Lucky Lineal — Centrado (con rebase)</title>
+<style>
+  html,body{
+    height:100%;
+    margin:0;
+    background:#1e1e1e;
+    font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .stage{
+    width:900px;
+    height:220px;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .viewport{
+    width:700px; /* Ajustado para ser múltiplo de slotWidth (140px * 5) */
+    height:140px;
+    overflow:hidden;
+    position:relative;
+    border-radius:14px;
+    background:#333;
+  }
+
+  .strip {
+    display:flex;
+    align-items:center;
+    height:140px;
+    will-change:transform;
+    transform:translateX(0);
+  }
+
+  .slot {
+    width:120px; /* Cambiado a 120px para que sea cuadrado */
+    height:120px;
+    margin:0 10px;
+    border-radius:10px;
+    background:#444;
+    border:2px solid #666;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:700;
+    font-size:18px;
+    color:white;
+    text-align:center;
+    box-shadow:0 4px 12px rgba(0,0,0,0.4);
+    box-sizing: border-box; /* Asegura que padding y border se incluyan en el tamaño */
+  }
+
+  .indicator {
+    position:absolute;
+    top:0;
+    bottom:0;
+    left:50%;
+    width:4px;
+    transform:translateX(-2px);
+    background:#fff;
+    box-shadow:0 0 10px rgba(255,255,255,0.6);
+    z-index:10;
+  }
+
+  .result {
+    position:absolute;
+    bottom:-40px;
+    width:100%;
+    text-align:center;
+    color:#fff;
+    font-weight:700;
+    text-shadow:0 2px 6px rgba(0,0,0,0.6);
+  }
+
+  .controls {
+    position:absolute;
+    top:-60px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    gap:8px;
+    justify-content:center;
+  }
+
+  button {
+    all:unset;
+    cursor:pointer;
+    padding:8px 12px;
+    border-radius:8px;
+    background:#555;
+    color:white;
+    border:1px solid #777;
+    font-weight:700;
+    font-size:13px;
+  }
+
+  .slot.highlight {
+    border-color:#ffd65c;
+    box-shadow:0 0 15px rgba(255,214,92,0.8);
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="viewport" id="viewport">
+      <div class="strip" id="strip"></div>
+      <div class="indicator"></div>
+    </div>
+
+    <div class="controls">
+      <button id="spinBtn">Girar</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+
+    <div class="result" id="result">Listo</div>
+  </div>
+
+<script>
+/* ---------- Config ---------- */
+const prizes = ["50 coins","100 coins","No prize","200 coins","Emoji","1h Sub","500 coins","Jackpot!"];
+const slotCoreWidth = 120;      // coincide con .slot width (antes 160)
+const slotMargin = 20;          // 10px a cada lado (margin: 0 10px)
+const slotWidth = slotCoreWidth + slotMargin; // ancho efectivo/unidad
+const repeats = 20;             // más repeticiones = más “pista”
+const extraSpinsDefault = 8;    // “vueltas” de distancia (aumentado para forzar giro a la derecha)
+const durationMin = 3200, durationMax = 4700;
+
+const stripEl = document.getElementById('strip');
+const resultEl = document.getElementById('result');
+const viewport = document.getElementById('viewport');
+const spinBtn = document.getElementById('spinBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+let currentX = 0;
+let animating = false;
+
+const cycleSlots = prizes.length;
+const cycleWidth = cycleSlots * slotWidth;
+
+/* ---------- Construcción del strip ---------- */
+function populateStrip(repeatCount = repeats) {
+  stripEl.innerHTML = "";
+  for (let r = 0; r < repeatCount; r++) {
+    for (let i = 0; i < prizes.length; i++) {
+      const s = document.createElement('div');
+      s.className = 'slot';
+      s.textContent = prizes[i];
+      s.dataset.prizeIndex = i;
+      stripEl.appendChild(s);
+    }
+  }
+}
+populateStrip();
+
+/* ---------- Utilidades ---------- */
+function clamp(val, min, max){ return Math.max(min, Math.min(max, val)); }
+
+function getCenteredChildIndex(x){
+  const viewportCenter = viewport.clientWidth / 2;
+  const relativeCenter = viewportCenter - x;
+  const idx = Math.round((relativeCenter - (slotWidth/2)) / slotWidth);
+  return clamp(idx, 0, stripEl.children.length - 1);
+}
+
+function highlightAtX(x){
+  Array.from(stripEl.children).forEach(ch => ch.classList.remove('highlight'));
+  const idx = getCenteredChildIndex(x);
+  if (stripEl.children[idx]) stripEl.children[idx].classList.add('highlight');
+}
+
+/* Rebasa “silenciosamente” si nos alejamos mucho del centro del contenido */
+function rebaseIfNeeded() {
+  const totalWidth = stripEl.children.length * slotWidth;
+  // Mantenernos en un bloque medio para no llegar nunca al borde derecho:
+  const safeLeft = cycleWidth * 2;
+  const safeRight = totalWidth - cycleWidth * 2;
+
+  // Posición actual del centro relativo
+  const centerX = currentX + (viewport.clientWidth / 2);
+
+  if (centerX > safeRight) {
+    // Restamos múltiplos del ciclo para volver al bloque medio
+    const overshoot = centerX - safeRight;
+    const cyclesToPull = Math.ceil((overshoot + cycleWidth * 2) / cycleWidth);
+    currentX -= cyclesToPull * cycleWidth;
+    // Aplicar de inmediato sin animación visible
+    stripEl.style.transform = `translateX(${-currentX}px)`;
+  } else if (centerX < safeLeft) {
+    const deficit = safeLeft - centerX;
+    const cyclesToPush = Math.ceil((deficit + cycleWidth * 2) / cycleWidth);
+    currentX += cyclesToPush * cycleWidth;
+    stripEl.style.transform = `translateX(${-currentX}px)`;
+  }
+}
+
+/* Busca la próxima casilla con el prizeIndex deseado a partir de minIndex */
+function findNextTargetIndex(prizeIndex, minIndex){
+  const total = stripEl.children.length;
+  for (let i = Math.max(0, Math.floor(minIndex)); i < total; i++) {
+    if (Number(stripEl.children[i].dataset.prizeIndex) === prizeIndex) return i;
+  }
+  // Fallback: última coincidencia disponible (no debería pasar si hay repeticiones suficientes)
+  for (let i = total - 1; i >= 0; i--) {
+    if (Number(stripEl.children[i].dataset.prizeIndex) === prizeIndex) return i;
+  }
+  return clamp(Math.floor(minIndex), 0, total - 1);
+}
+
+/* ---------- Animación ---------- */
+function spinToIndex(targetIndex, extraSpins = extraSpinsDefault, duration = 3600){
+  if (animating) return;
+  animating = true;
+
+  const start = performance.now();
+  const initialX = currentX;
+
+  const viewportCenter = viewport.clientWidth / 2;
+  const desiredCenterPos = (targetIndex * slotWidth) + (slotWidth/2);
+  // Llevarlo varias vueltas por delante para sensación de “giro”
+  const finalX = desiredCenterPos - viewportCenter;
+  const totalDelta = finalX - initialX;
+
+  const easeOutCubic = t => (--t)*t*t + 1;
+
+  function frame(now){
+    const t = Math.min(1, (now - start) / duration);
+    const eased = easeOutCubic(t);
+    currentX = initialX + totalDelta * eased;
+    stripEl.style.transform = `translateX(${-currentX}px)`;
+    highlightAtX(currentX);
+
+    if (t < 1){
+      requestAnimationFrame(frame);
+    } else {
+      animating = false;
+      const idx = getCenteredChildIndex(currentX);
+      const prizeIdx = Number(stripEl.children[idx].dataset.prizeIndex);
+      resultEl.textContent = "Resultado: " + prizes[prizeIdx];
+
+      if (stripEl.children[idx]) stripEl.children[idx].classList.add('highlight');
+
+      // Recentrar “silenciosamente” para evitar quedarnos sin contenido
+      rebaseIfNeeded();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function spinRandom() {
+  rebaseIfNeeded();
+
+  // Añadir esta línea para limpiar resaltados anteriores
+  Array.from(stripEl.children).forEach(ch => ch.classList.remove('highlight'));
+
+  const chosenPrizeIndex = Math.floor(Math.random() * prizes.length);
+  const currentIndex = getCenteredChildIndex(currentX);
+
+  // Pedimos que el objetivo esté varias “vueltas” adelante
+  const minIndex = currentIndex + extraSpinsDefault * prizes.length + Math.floor(Math.random() * prizes.length);
+  const targetIndex = findNextTargetIndex(chosenPrizeIndex, minIndex);
+
+  const duration = Math.floor(Math.random() * (durationMax - durationMin + 1)) + durationMin;
+  spinToIndex(targetIndex, extraSpinsDefault, duration);
+}
+
+/* ---------- Controles ---------- */
+spinBtn.addEventListener('click', spinRandom);
+
+resetBtn.addEventListener('click', () => {
+  currentX = 0;
+  stripEl.style.transform = `translateX(0px)`;
+  resultEl.textContent = "Listo";
+  Array.from(stripEl.children).forEach(ch => ch.classList.remove('highlight'));
+});
+</script>
+</body>
+</html>

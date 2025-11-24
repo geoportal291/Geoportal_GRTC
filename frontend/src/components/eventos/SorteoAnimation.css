@@ -1,0 +1,181 @@
+/* Importar las fuentes exactas del HTML */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Mountains+of+Christmas:wght@700&display=swap');
+
+/* --- CONTENEDOR PRINCIPAL (Fondo) --- */
+.sorteo-animation-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    overflow: hidden;
+    /* El fondo radial exacto del HTML */
+    background: radial-gradient(circle at center, #3182cf 0%, #081b33 100%);
+    font-family: 'Cinzel Decorative', serif;
+    color: #fff;
+}
+
+/* --- NIEVE --- */
+.snowflake {
+    position: absolute;
+    top: -10px;
+    background: white;
+    border-radius: 50%;
+    opacity: 0.9;
+    pointer-events: none;
+    animation: fall linear infinite;
+    box-shadow: 0 0 5px rgba(255,255,255,0.8);
+    z-index: 1;
+}
+
+@keyframes fall {
+    to { transform: translateY(110vh); }
+}
+
+/* --- EL BOTÓN DE CRISTAL --- */
+.sa-magic-btn {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #ffffff, #d0e8ff);
+    box-shadow: 0 0 40px rgba(49, 130, 207, 0.6), inset 0 0 20px rgba(255, 255, 255, 1);
+    border: 4px solid #fff;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 10;
+}
+
+.sa-magic-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 60px rgba(255, 255, 255, 0.8);
+}
+
+.sa-magic-btn span {
+    font-size: 1.5rem;
+    color: #3182cf;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.sa-magic-btn.pulsing {
+    animation: pulse-fade-ice 0.6s forwards;
+    pointer-events: none;
+}
+
+@keyframes pulse-fade-ice {
+    0% { transform: scale(1); opacity: 1; box-shadow: 0 0 40px rgba(255,255,255,0.8); }
+    100% { transform: scale(2.5); opacity: 0; display: none; }
+}
+
+/* --- MENSAJES DE NARRATIVA --- */
+.sa-message-container {
+    position: absolute;
+    width: 90%;
+    text-align: center;
+    pointer-events: none;
+    height: 100px; /* Altura fija para centrar */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 5;
+    padding-left: 150px; /* Aumenta este número para mover más a la derecha */
+    box-sizing: border-box; /* Importante para que el padding no rompa el ancho */
+}
+
+.sa-story-text {
+    font-family: 'Mountains of Christmas', cursive;
+    font-size: 2.5rem;
+    color: #fff;
+    text-shadow: 0 0 15px rgba(173, 216, 255, 0.8);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.8s ease;
+    position: absolute;
+    width: 100%;
+}
+
+.sa-story-text.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.sa-story-text.exit {
+    opacity: 0;
+    transform: translateY(-20px);
+}
+
+/* --- CONTENEDOR FINAL --- */
+.sa-reveal-box {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 1s ease;
+    margin-left: 150px;
+    z-index: 20;
+}
+
+.sa-reveal-box.show {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.sa-intro-label {
+    font-size: 1.2rem;
+    color: #e1f1ff;
+    letter-spacing: 4px;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px #3182cf;
+}
+
+/* NOMBRE FINAL CON EFECTO HIELO */
+.sa-final-name {
+    font-size: 5rem; 
+    font-family: 'Courier New', monospace; 
+    font-weight: bold;
+    /* Gradiente de texto exacto del HTML */
+    background: linear-gradient(to right, #ffffff, #c7e5ff, #ffffff, #a9d5ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent; 
+    text-shadow: 0 0 40px rgba(255, 255, 255, 0.9);
+    min-width: 300px; 
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* --- BOTÓN CONTINUAR (Estilo extra para React) --- */
+.sa-btn-continuar {
+    margin-top: 30px;
+    padding: 15px 30px;
+    background: linear-gradient(135deg, #80d4ff, #3182cf);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 0 30px rgba(128, 212, 255, 0.6);
+    transition: all 0.3s ease;
+    animation: fadeInBtn 1s ease forwards;
+    opacity: 0;
+}
+
+@keyframes fadeInBtn {
+    to { opacity: 1; }
+}
+
+.sa-btn-continuar:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 40px rgba(128, 212, 255, 0.8);
+}

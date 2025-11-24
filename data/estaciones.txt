@@ -1,0 +1,46 @@
+ESTACIONES
+Nombre: Estación 01 (E-1):
+Ubicación: 0+000 km – Inicio de vía (desvío Lorohuachana)
+Coordenadas:
+Descripción:
+La estación E-1 se localiza en el kilómetro 0+000 del proyecto, y ha sido definida como el punto de inicio del tramo en estudio. Esta ubicación corresponde a la intersección con la carretera departamental CU-105, la cual constituye una vía de conexión principal y de alta influencia en la generación y distribución del flujo vehicular en el ámbito del proyecto. Su condición de nodo vial relevante justifica su selección como estación de referencia para el análisis de tránsito.
+
+Nombre: Estación 02 (E-2):
+Ubicación: 22+700  km – Puente Lampachaca
+Coordenadas:
+Descripción:
+La estación E-2 se localiza en el kilómetro 22+700 del proyecto, en el puente denominado Lampachaca, donde se encuentra una intersección vial hacia el centro poblado de Chirumbia; esta estación ha sido seleccionada por su relevancia funcional, al constituir un nodo de conexión con sectores poblacionales de importancia dentro del área de influencia directa del proyecto, permitiendo evaluar el flujo vehicular derivado y su impacto sobre el eje principal de la vía CU-104.
+
+Nombre: Estación 03 (E-3):
+Ubicación: 71+800  km – Desvío C.P. La Estrella y Penetración
+Coordenadas:
+Descripción:
+La estación E-3 se encuentra ubicada en el kilómetro 71+800 del proyecto, en el punto donde se localiza la intersección vial hacia el centro poblado de Túpac Amaru, a la comunidad de Penetración y a la comunidad de La Estrella. Esta estación ha sido seleccionada por su relevancia funcional, al constituir un nodo de conexión con sectores poblacionales de importancia dentro del área de influencia directa del proyecto, permitiendo evaluar el flujo vehicular derivado de estos asentamientos y su impacto sobre el eje principal de la vía CU-104.
+
+Nombre: Estación 04 (E-4):
+Ubicación: 86+364 km – C.P. San Martín
+Coordenadas:
+Descripción:
+La estación E-4 se ubica en el kilómetro 86+364 del eje vial en estudio, correspondiente al centro poblado de San Martín. Esta estación ha sido definida como el punto de culminación del proyecto, al representar el extremo final del tramo de intervención de la carretera departamental CU-104. Su ubicación permite registrar el comportamiento del tránsito de salida y evaluar la continuidad del flujo vehicular hacia sectores colindantes, constituyéndose en un nodo clave para el cierre del análisis de demanda y caracterización del tráfico.
+
+
+Nombre: Tramo T-1
+Ubicación: E-1 A E-2 
+0+000 km Inicio de vía (desvío Lorohuachana) - 22+700 km Puente Lampachaca
+Coordenadas:
+Descripción:
+El tramo en evaluación se extiende desde el kilómetro 0+000 hasta el kilómetro 22+700 del eje vial. A lo largo de este recorrido se localizan puntos de interés como el Abra Reyna del Carmen, en las cuales se encuentran algunas ramificaciones y desvíos que conducen a haciendas, y áreas de actividad agrícola. El análisis de campo evidencia que, en este segmento, las condiciones orográficas y el volumen vehicular mantienen una configuración relativamente constante, sin variaciones significativas en términos de flujo ni tipología de tránsito. En base a estos criterios, se da definido el tramo 01 como un tramo homogéneo, apto para su análisis unificado dentro del estudio de tráfico.
+
+Nombre: Tramo T-2
+Ubicación: E-2 A E-3 
+22+700 km Puente Lampachaca - 71+800  km Desvío C.P. La Estrella y Penetración
+Coordenadas:
+Descripción:
+El tramo en evaluación se extiende desde el kilómetro 22+700 hasta el kilómetro 71+800 del eje vial. A lo largo de este recorrido se localizan puntos de interés como las comunidades de Tinkuri y Yavero Chico, así como múltiples ramificaciones y desvíos que conducen a haciendas y áreas de actividad agrícola. El análisis de campo evidencia que, en este segmento, las condiciones orográficas y el volumen vehicular mantienen una configuración relativamente constante, sin variaciones significativas en términos de flujo ni tipología de tránsito. En base a estos criterios técnicos, se ha definido el tramo 02 como un tramo homogéneo, apto para su análisis unificado dentro del estudio de tráfico.
+
+Nombre: Tramo T-3
+Ubicación: E-3 A E-4 
+71+800  km Desvío C.P. La Estrella y Penetración - 86+364 km C.P. San Martín
+Coordenadas:
+Descripción:
+El tramo en evaluación se desarrolla desde el kilómetro 71+800 hasta el kilómetro 86+364, correspondiente al segmento final del corredor vial en estudio. A lo largo de este sector, las condiciones orográficas, geométricas y de volumen vehicular presentan características estables y uniformes, sin evidenciarse variaciones significativas que alteren la funcionalidad del tránsito. En función de estos parámetros de análisis, y conforme a los lineamientos técnicos de segmentación vial, se define este sector como un tramo homogéneo, adecuado para ser considerado como una sola unidad de estudio en la modelación y proyección del flujo vehicular.

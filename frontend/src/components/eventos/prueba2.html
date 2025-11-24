@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorteo Invernal - Efecto Lento</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Mountains+of+Christmas:wght@700&display=swap" rel="stylesheet">
+    <style>
+        /* --- ESTILOS GENERALES (Tema Azul Hielo) --- */
+        body {
+            margin: 0;
+            height: 100vh;
+            background: radial-gradient(circle at center, #3182cf 0%, #081b33 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            font-family: 'Cinzel Decorative', serif;
+            overflow: hidden;
+            color: #fff;
+        }
+
+        /* Nieve de fondo */
+        .snowflake {
+            position: absolute;
+            top: -10px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.9;
+            pointer-events: none;
+            animation: fall linear infinite;
+            box-shadow: 0 0 5px rgba(255,255,255,0.8);
+        }
+
+        @keyframes fall {
+            to { transform: translateY(110vh); }
+        }
+
+        /* --- EL BOTÓN DE CRISTAL --- */
+        .magic-btn {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #ffffff, #d0e8ff);
+            box-shadow: 0 0 40px rgba(49, 130, 207, 0.6), inset 0 0 20px rgba(255, 255, 255, 1);
+            border: 4px solid #fff;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+        }
+
+        .magic-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 60px rgba(255, 255, 255, 0.8);
+        }
+
+        .magic-btn span {
+            font-size: 1.5rem;
+            color: #3182cf;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .magic-btn.pulsing {
+            animation: pulse-fade-ice 0.6s forwards;
+            pointer-events: none;
+        }
+
+        @keyframes pulse-fade-ice {
+            0% { transform: scale(1); opacity: 1; box-shadow: 0 0 40px rgba(255,255,255,0.8); }
+            100% { transform: scale(2.5); opacity: 0; display: none; }
+        }
+
+        /* --- MENSAJES DE NARRATIVA --- */
+        .message-container {
+            position: absolute;
+            width: 90%;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .story-text {
+            font-family: 'Mountains of Christmas', cursive;
+            font-size: 2.5rem;
+            color: #fff;
+            text-shadow: 0 0 15px rgba(173, 216, 255, 0.8);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.8s ease;
+            position: absolute;
+            width: 100%;
+            left: 0;
+        }
+
+        .story-text.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .story-text.exit {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+
+        /* --- CONTENEDOR FINAL --- */
+        .reveal-box {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 1s ease;
+            z-index: 20;
+        }
+
+        .reveal-box.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .intro-label {
+            font-size: 1.2rem;
+            color: #e1f1ff;
+            letter-spacing: 4px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px #3182cf;
+        }
+
+        /* NOMBRE FINAL CON EFECTO HIELO */
+        .final-name {
+            font-size: 5rem; 
+            font-family: 'Courier New', monospace; 
+            font-weight: bold;
+            background: linear-gradient(to right, #ffffff, #c7e5ff, #ffffff, #a9d5ff);
+            -webkit-background-clip: text;
+            color: transparent; 
+            text-shadow: 0 0 40px rgba(255, 255, 255, 0.9);
+            min-width: 300px; 
+            text-align: center;
+            white-space: nowrap;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="btnStart" class="magic-btn">
+        <span>Revelar</span>
+    </div>
+
+    <div class="message-container">
+        <div id="msg1" class="story-text">Consultando a los espíritus del invierno...</div>
+        <div id="msg2" class="story-text">Buscando entre la nieve mágica...</div>
+        <div id="msg3" class="story-text">El nombre se está congelando...</div>
+    </div>
+
+    <div id="finalReveal" class="reveal-box">
+        <div class="intro-label">Tu Amigo Secreto es</div>
+        <div class="final-name" id="friendName"></div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN DEL RESULTADO ---
+        const NOMBRE_REAL = "FERNANDO"; // <-- PRUEBA CON ESTE NOMBRE
+
+        // Referencias DOM
+        const btn = document.getElementById('btnStart');
+        const finalReveal = document.getElementById('finalReveal');
+        const friendNameElement = document.getElementById('friendName');
+        const msgs = [
+            document.getElementById('msg1'),
+            document.getElementById('msg2'),
+            document.getElementById('msg3')
+        ];
+
+        const letrasPosibles = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+        createSnow();
+
+        // --- SECUENCIA DE EVENTOS ---
+        btn.addEventListener('click', () => {
+            btn.classList.add('pulsing');
+            
+            setTimeout(() => showMessage(0), 500);
+            
+            setTimeout(() => {
+                hideMessage(0);
+                showMessage(1);
+            }, 2500);
+
+            setTimeout(() => {
+                hideMessage(1);
+                showMessage(2);
+            }, 4500);
+
+            // REVELACIÓN (6.5s)
+            setTimeout(() => {
+                hideMessage(2);
+                mostrarContenedorFinal();
+                iniciarEfectoLotería(friendNameElement, NOMBRE_REAL);
+            }, 6500);
+        });
+
+        function showMessage(index) { msgs[index].classList.add('active'); }
+        function hideMessage(index) {
+            msgs[index].classList.remove('active');
+            msgs[index].classList.add('exit');
+        }
+
+        function mostrarContenedorFinal() {
+            finalReveal.style.display = "flex";
+            setTimeout(() => finalReveal.classList.add('show'), 50);
+        }
+
+        // === AQUÍ ESTÁ EL CAMBIO DE VELOCIDAD ===
+        function iniciarEfectoLotería(elemento, textoFinal) {
+            let iteraciones = 0;
+            
+            // 1. CAMBIO: Intervalo de 50ms (antes 40ms) para que se vea mejor cada letra
+            const intervalo = setInterval(() => {
+                
+                elemento.innerText = textoFinal
+                    .split("") 
+                    .map((letra, index) => {
+                        if(index < iteraciones) {
+                            return textoFinal[index];
+                        }
+                        return letrasPosibles[Math.floor(Math.random() * 26)];
+                    })
+                    .join("");
+
+                if(iteraciones >= textoFinal.length){ 
+                    clearInterval(intervalo);
+                }
+                
+                // 2. CAMBIO IMPORTANTE: 
+                // 1/10 significa que necesita 10 "vueltas" para fijar UNA letra.
+                // Esto hace que el nombre tarde mucho más en aparecer completo.
+                iteraciones += 1 / 10; 
+
+            }, 50); 
+        }
+
+        function createSnow() {
+            const snowCount = 60;
+            for (let i = 0; i < snowCount; i++) {
+                const snow = document.createElement('div');
+                snow.classList.add('snowflake');
+                snow.style.left = Math.random() * 100 + 'vw';
+                snow.style.width = Math.random() * 4 + 2 + 'px';
+                snow.style.height = snow.style.width;
+                snow.style.animationDuration = Math.random() * 5 + 3 + 's';
+                snow.style.animationDelay = Math.random() * 5 + 's';
+                snow.style.opacity = Math.random() * 0.7 + 0.3;
+                document.body.appendChild(snow);
+            }
+        }
+    </script>
+</body>
+</html>

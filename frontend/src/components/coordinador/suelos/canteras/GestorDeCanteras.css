@@ -1,0 +1,501 @@
+.map-wrapper {
+  position: relative;
+  height: 280px; /* Altura inicial */
+  min-height: 200px; /* Altura mínima */
+  max-height: 85vh; /* Altura máxima (85% de la pantalla) */
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  
+  /* Activar redimensionado nativo del navegador */
+  overflow: auto; 
+  resize: vertical;
+}
+
+/* Opcional: Ocultar la barra de scroll que a veces aparece */
+.map-wrapper::-webkit-scrollbar {
+  display: none;
+}
+.map-wrapper {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* ==========================================================================
+   Cantera Form Modal Styles
+   ========================================================================== */
+
+.cantera-form-modal-container {
+    background: #fff;
+    padding: 0; /* Remove padding from container, add to body */
+    border-radius: var(--radius);
+    width: 90%;
+    max-width: 900px; /* Increased max-width for more content */
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh; /* Limit height for scrollability */
+    overflow: hidden; /* Hide overflow from body */
+    animation: fadeInScale 0.3s ease-out forwards; /* Modal entry animation */
+}
+
+.cantera-form {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.modal-header {
+    background-color: var(--primary);
+    color: white;
+    padding: 15px 25px;
+    border-bottom: 1px solid var(--light-gray);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    color: white;
+}
+
+.close-modal-btn {
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    color: white;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.close-modal-btn:hover {
+    transform: rotate(90deg);
+}
+
+.modal-body {
+    padding: 25px;
+    overflow-y: auto; /* Make body scrollable */
+    flex-grow: 1;
+}
+
+.form-section {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--light-gray);
+}
+
+.form-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.form-section h3 {
+    font-size: 1.2rem;
+    color: var(--dark);
+    margin-bottom: 15px;
+    border-left: 4px solid var(--accent);
+    padding-left: 10px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    font-weight: 500;
+    color: var(--gray);
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group textarea,
+.form-group select {
+    padding: 10px 12px;
+    border: 1px solid var(--light-gray);
+    border-radius: var(--radius);
+    font-size: 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2); /* Custom shadow for focus */
+}
+
+.form-group textarea {
+    resize: vertical;
+}
+
+.form-group .full-width {
+    grid-column: 1 / -1;
+}
+
+.select-with-loader {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.select-with-loader select {
+    flex-grow: 1;
+    padding-right: 35px; /* Make space for loader */
+}
+
+.select-with-loader .loader-icon {
+    position: absolute;
+    right: 10px;
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.modal-footer {
+    padding: 15px 25px;
+    border-top: 1px solid var(--light-gray);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background-color: #f9f9f9;
+    border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.btn-secondary {
+    background-color: var(--light-gray);
+    color: var(--dark);
+    border: 1px solid var(--gray);
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+    background-color: #d0d0d0;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+    border: 1px solid var(--primary);
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+    background-color: #0b3b84;
+    border-color: #0b3b84;
+}
+
+/* Modal Entry Animation */
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Modal Exit Animation (requires JS to add/remove class) */
+.cantera-form-modal-container.exit {
+    animation: fadeOutScale 0.3s ease-in forwards;
+}
+
+@keyframes fadeOutScale {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+}
+
+.detalle-content {
+    padding: 25px;
+    overflow-y: auto;
+}
+
+.detalle-grupo {
+    margin-bottom: 28px;
+}
+
+.detalle-grupo h3 {
+    font-size: 1rem; /* Adjusted from 16px */
+    font-weight: 600;
+    border-bottom: 1px solid var(--light-gray, #e5e7eb);
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+    color: var(--primary, #0d47a1);
+}
+
+.detalle-campo {
+    display: grid;
+    grid-template-columns: 200px 1fr; /* Increased label width slightly */
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 0.9rem; /* Adjusted from 14px */
+    align-items: start; /* Align items to the top */
+}
+
+.detalle-campo label {
+    font-weight: 500;
+    color: var(--gray, #607d8b);
+    text-align: right;
+    padding-right: 16px;
+}
+
+.detalle-campo span {
+    font-weight: 500;
+    color: var(--dark, #0d47a1);
+    white-space: pre-wrap; /* Allow wrapping for long descriptions */
+}
+
+.mini-map-container {
+    height: 220px;
+    position: relative;
+    background-color: #eef2f7;
+    border-radius: var(--radius, 8px);
+    background-image: linear-gradient(45deg, #e9ecef 25%, transparent 25%), linear-gradient(-45deg, #e9ecef 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e9ecef 75%), linear-gradient(-45deg, transparent 75%, #e9ecef 75%);
+    background-size: 20px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #90a4ae;
+    font-size: 1.5em;
+    font-weight: bold;
+    border: 1px solid #dee2e6;
+}
+
+/* ==========================================================================
+   Map Modal & Expand Button
+   ========================================================================== */
+
+.map-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000; /* Ensure it's above other content */
+}
+
+.map-modal-content {
+  background-color: #fff; /* Usar un color de fondo explícito */
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  width: 100vw; /* Ocupa todo el ancho del viewport */
+  height: 100vh; /* Ocupa todo el alto del viewport */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Oculta el overflow del mapa */
+  padding: 0; /* Eliminar padding para que el mapa ocupe todo */
+}
+
+.map-expand-button {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 1001; /* High z-index to be on top of map controls */
+  background-color: rgba(255, 255, 255, 0.8);
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.map-expand-button:hover {
+  background-color: #fff;
+  color: #000;
+}
+
+.map-modal-close-button {
+  position: absolute;
+  top: 10px; /* Ajustar posición */
+  right: 10px; /* Ajustar posición */
+  z-index: 2010; /* Debe estar por encima del contenido del modal */
+  background-color: #e74c3c; /* Color de cierre */
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 1.5rem;
+  font-weight: bold;
+  line-height: 32px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  transition: all 0.2s;
+}
+
+.map-modal-close-button:hover {
+  background-color: #c0392b;
+  transform: scale(1.1);
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 20px; /* 8px de gap vertical, 20px horizontal */
+    margin-bottom: 16px;
+}
+
+.info-grid p {
+    margin: 0;
+    padding: 4px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.info-grid p strong {
+    color: #555;
+}
+
+.full-width-info {
+    grid-column: 1 / -1;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.info-section-grouped {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+}
+
+.info-section-grouped .estratos-list {
+    margin: 20px 20px 20px 20px;
+}
+
+.info-section-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+}
+
+.map-container {
+    height: 300px;
+    border-radius: 8px;
+    margin-top: 10px;
+    border: 1px solid #e0e0e0;
+    resize: vertical;
+    overflow: auto;
+    min-height: 200px;
+}
+
+.map-section {
+    height: 400px; /* Altura por defecto para el mapa */
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    border: 1px solid #e0e0e0;
+}
+
+/* Estilos para Estratos y Ensayos */
+.estratos-y-ensayos-container {
+    margin-top: 20px;
+}
+
+.estratos-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px 10px 10px;
+}
+
+.estratos-header h4 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #333;
+}
+
+.estratos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.estratos-header-canteras {
+    padding: 0 25px;
+}
+
+.cantera-imagen-container {
+    grid-column: 1 / -1; /* Ocupa todo el ancho */
+    margin: 10px 0;
+}
+
+.cantera-imagen {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Fix for react-slick carousel inside flex container */
+.detalle-content .carousel-section-container {
+    width: 100%;
+    min-width: 0; /* Crucial for flex items containing carousels */
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: bold;
+  color: #fff; /* Default white text, will be overridden for specific statuses */
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.status-Activa {
+  background-color: #4CAF50; /* Green */
+  color: #fff; /* White text for contrast */
+}
+
+.status-Potencial {
+  background-color: #FFC107; /* Amber/Yellow */
+  color: #333; /* Dark text for contrast */
+}
+
+.status-Inactiva {
+  background-color: #F44336; /* Red */
+  color: #fff; /* White text for contrast */
+}

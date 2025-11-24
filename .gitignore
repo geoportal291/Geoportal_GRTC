@@ -1,0 +1,39 @@
+# Dependencies
+/node_modules
+/backend/node_modules
+/frontend/node_modules
+
+# Build output
+/frontend/build
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+/backend/.env
+/frontend/.env
+/frontend/.env.development
+
+# IDE and editor directories
+.idea/
+.vscode/
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Temporary and local files
+.sync/
+Sync/
+capturas/
+
+# Service account keys (Be very careful with this, ensure it's the correct file)
+geoportal-drive-b69b29c0bfa0.json
+
+# OS generated files
+.DS_Store
+Thumbs.db

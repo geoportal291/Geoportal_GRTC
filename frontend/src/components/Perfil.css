@@ -1,0 +1,211 @@
+
+.perfil-container {
+    padding: 2rem;
+    background-color: #f4f7f6;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+}
+
+.perfil-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 3rem; /* Aumentado el espacio */
+}
+
+.perfil-header h1 {
+    color: #2c3e50;
+    font-size: 2.5rem;
+    font-weight: 600;
+}
+
+.perfil-settings-btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background-color 0.3s ease;
+}
+
+.perfil-settings-btn:hover {
+    background-color: #2980b9;
+}
+
+.perfil-main-content {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+}
+
+.perfil-card {
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    padding: 2rem;
+}
+
+.perfil-card-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.perfil-avatar-section .perfil-avatar {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 1.5rem;
+    border: 5px solid #ecf0f1;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.perfil-avatar-placeholder {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background-color: #e0e0e0; /* Un fondo gris claro para el círculo */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border: 5px solid #ecf0f1;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.perfil-avatar-icon {
+    font-size: 4rem; /* Ajusta el tamaño según sea necesario */
+    color: #7f8c8d; /* Un gris más oscuro para el icono */
+}
+
+.perfil-avatar-section {
+    width: 100%; /* Asegura que la sección ocupe todo el ancho disponible */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.perfil-avatar-section h2 {
+    margin: 0;
+    font-size: 1.8rem;
+    color: #34495e;
+}
+
+.perfil-avatar-section .perfil-rol {
+    color: #7f8c8d;
+    font-size: 1.1rem;
+    margin-top: 0.5rem;
+}
+
+.perfil-actions {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+}
+
+.action-btn {
+    padding: 0.8rem;
+    border-radius: 8px;
+    border: 1px solid #bdc3c7;
+    background-color: transparent;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.action-btn.primary {
+    background-color: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+
+.action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.action-btn.primary:hover {
+    background-color: #2980b9;
+}
+
+.perfil-card-right h3 {
+    font-size: 1.5rem;
+    color: #2c3e50;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.info-icon {
+    font-size: 1.8rem;
+    color: #3498db;
+}
+
+.info-label {
+    display: block;
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    margin-bottom: 0.2rem;
+}
+
+.info-item p {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #34495e;
+    font-weight: 500;
+}
+
+.divider {
+    border: 0;
+    height: 1px;
+    background-color: #ecf0f1;
+    margin: 2rem 0;
+}
+
+.perfil-error-container, .perfil-loading-container {
+    text-align: center;
+    padding: 3rem;
+    font-size: 1.2rem;
+    color: #7f8c8d;
+}
+
+/* Responsive Design */
+@media (max-width: 992px) {
+    .perfil-main-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 576px) {
+    .perfil-header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}

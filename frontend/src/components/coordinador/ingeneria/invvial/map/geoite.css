@@ -1,0 +1,184 @@
+/* Styles for measure and draw modals */
+.measure-modal {
+    position: absolute;
+    top: 50px;
+    left: 50px;
+    width: auto;
+    max-width: 300px; /* Added max-width */
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    z-index: 9999; /* Increased z-index */
+    display: none;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.measure-modal-header {
+    padding: 8px;
+    background-color: #f7f7f7;
+    cursor: move;
+    border-bottom: 1px solid #ccc;
+    font-weight: bold;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+
+.measure-modal-close {
+    float: right;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.measure-modal-content {
+    padding: 10px;
+}
+
+.measure-modal-content .distance-display {
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+/* Styles for custom buttons */
+.leaflet-control-custom-button {
+    background-color: white;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    width: 34px;
+    height: 34px;
+    line-height: 30px;
+    text-align: center;
+    font-size: 1.4em;
+    cursor: pointer;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.leaflet-control-custom-button:hover {
+    background-color: #f4f4f4;
+}
+
+.leaflet-control-custom-button.active {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Styles for form elements within modals */
+.measure-modal label {
+    display: inline-block;
+    width: 70px; /* Adjust as needed for alignment */
+    text-align: right;
+    margin-right: 5px;
+    font-weight: normal;
+}
+
+.measure-modal input[type="text"],
+.measure-modal select {
+    width: calc(100% - 80px); /* Adjust width considering label */
+    padding: 6px;
+    margin-bottom: 5px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}
+
+.measure-modal input[type="text"].gms-input {
+    width: 50px; /* Smaller width for GMS fields */
+    text-align: center;
+    margin-right: 3px;
+}
+
+.measure-modal button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s;
+}
+
+.measure-modal button:hover {
+    background-color: #0056b3;
+}
+
+.measure-modal button#clearCoordsBtn {
+    background-color: #6c757d;
+}
+
+.measure-modal button#clearCoordsBtn:hover {
+    background-color: #5a6268;
+}
+
+.measure-modal h3, .measure-modal h4 {
+    color: #333;
+    margin-top: 0;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.measure-modal div {
+    margin-bottom: 8px;
+}
+
+.measure-modal .input-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.measure-modal .input-group label {
+    flex-shrink: 0;
+    width: 70px;
+    text-align: right;
+    margin-right: 5px;
+}
+
+.measure-modal .input-group input,
+.measure-modal .input-group select {
+    flex-grow: 1;
+    margin-left: 0; /* Override inline style */
+}
+
+.measure-modal .button-group {
+    margin-top: 20px;
+    text-align: center;
+}
+
+/* New styles for measure points and labels */
+.measure-point-icon {
+    font-size: 12px;
+    color: blue;
+    font-weight: bold;
+    text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+}
+
+.measure-label {
+    background-color: rgba(255, 255, 255, 0.8);
+    border: 1px solid #333;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+
+/* Custom styles for Leaflet popup */
+.leaflet-popup-content-wrapper {
+    border-radius: 12px;
+    background: #fff;
+}
+
+.leaflet-popup-content {
+    width: 220px !important;
+    margin: 0;
+    padding: 10px;
+}
+
+.popup-image {
+    width: 200px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+

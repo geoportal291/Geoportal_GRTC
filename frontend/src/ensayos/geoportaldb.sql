@@ -1,0 +1,49 @@
+--
+-- PostgreSQL database cluster dump
+--
+
+-- Started on 2025-08-29 09:46:54
+
+\restrict 9Ya1dPeuHoBd8rE6aDANQitw2q3zry2jQBZnDH94BFqlydl4C1fG1EcVyK3izTY
+
+SET default_transaction_read_only = off;
+
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+
+--
+-- Roles
+--
+
+CREATE ROLE backend_nameless_log_553;
+ALTER ROLE backend_nameless_log_553 WITH SUPERUSER INHERIT NOCREATEROLE NOCREATEDB LOGIN NOREPLICATION NOBYPASSRLS PASSWORD 'SCRAM-SHA-256$4096:6W3/pkTVp/UqSs4WpjUY7A==$hCOFAgDlfvwz/zx7acomDetAVl/c2VnKCs9YdgBz2JE=:vVgNnQrZ+1+Qk8iidN3CaHRh7Po1kDccDK5SjMRxfLE=';
+CREATE ROLE flypgadmin;
+ALTER ROLE flypgadmin WITH SUPERUSER INHERIT NOCREATEROLE NOCREATEDB LOGIN NOREPLICATION NOBYPASSRLS PASSWORD 'SCRAM-SHA-256$4096:tGt++NcbCIpcBHb9gHJycg==$lEIRLkyTrIWQiVSBesFT4Bryw9gsQLkS3HWNnYpY6ss=:OnY+b7PUqfPgAdYon5IsfIlks9PVYcONv0pjVELv03A=';
+CREATE ROLE postgres;
+ALTER ROLE postgres WITH SUPERUSER INHERIT CREATEROLE CREATEDB LOGIN REPLICATION BYPASSRLS PASSWORD 'SCRAM-SHA-256$4096:LqFI6fiHYzCnXw7VrX5tgg==$8+FWUKa4sSlzhhv9ArJ+C27smFZtpWK9/NeOjVx2PlY=:vE10q1mxWMoMRQu16eLPUIjj6EAW6ewMQxAKy4fN2jc=';
+CREATE ROLE repmgr;
+ALTER ROLE repmgr WITH SUPERUSER INHERIT NOCREATEROLE NOCREATEDB LOGIN NOREPLICATION NOBYPASSRLS PASSWORD 'SCRAM-SHA-256$4096:mGRVSemfiOdPPUlpVF6MyA==$Ew6djM319R3Cb8S1qFFcBG8QS8Oqh5IMOp33IU/dLsI=:+alTI5SHATthpvgq1sT0SeVI2sDydhKEkAmJ+N+Oub4=';
+
+--
+-- User Configurations
+--
+
+
+
+
+
+
+
+
+\unrestrict 9Ya1dPeuHoBd8rE6aDANQitw2q3zry2jQBZnDH94BFqlydl4C1fG1EcVyK3izTY
+
+--
+-- Databases
+--
+
+--
+-- Database "template1" dump
+--
+
+\connect template1
+

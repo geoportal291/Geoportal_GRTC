@@ -1,0 +1,185 @@
+/* Contenedor principal para el layout de ensayos */
+.ensayos-layout-container {
+    font-family: 'Roboto', sans-serif;
+    background-color: #f4f7f9;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+/* Fila para los paneles de información superior */
+.info-panels-row {
+    display: flex;
+    flex-wrap: wrap; /* Permite que los paneles pasen a la siguiente línea en pantallas pequeñas */
+    gap: 20px; /* Espacio entre los paneles */
+    width: 100%;
+}
+
+.info-panels-row > .col-md-6 {
+    flex: 1 1 calc(50% - 20px); /* Cada panel ocupa cerca del 50% del espacio, ajustado por el gap */
+    min-width: 300px; /* Ancho mínimo antes de que se envuelvan */
+}
+
+
+.ensayo-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2rem; /* Aumentado el gap */
+    margin-bottom: 1.5rem;
+}
+
+.ensayo-header-actions .btn {
+    margin: 0 !important; /* Eliminar márgenes que puedan estar pegando los botones */
+    flex-shrink: 0; /* Evitar que los botones se encojan */
+}
+
+.header h4 {
+    color: #333;
+    font-weight: 700;
+}
+
+.header p {
+    color: #666;
+    font-size: 1rem;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    border-radius: 12px; /* Borde más redondeado */
+    overflow: hidden; /* Asegura que el contenido respete los bordes */
+}
+
+.card-header {
+    background-color: #54a0ca; /* Color solicitado */
+    color: #fff; /* Texto blanco para contraste */
+    border-bottom: 1px solid #e0e0e0;
+    font-weight: 600;
+    padding: 1rem 1.25rem; /* Más padding vertical */
+    display: flex; /* Centrado vertical */
+    align-items: center; /* Centrado vertical */
+}
+
+.card-header .nav-tabs {
+    display: flex; /* Asegura que los elementos se alineen en fila */
+    flex-wrap: nowrap; /* Evita que las pestañas se envuelvan a la siguiente línea */
+    margin-bottom: -0.25rem; /* Ajustado al nuevo padding del header */
+}
+
+.nav-tabs .nav-link {
+    border: none;
+    color: rgba(255, 255, 255, 0.8); /* Texto más claro para fondo azul */
+    font-weight: 500;
+    padding: 1rem 1.25rem;
+}
+
+.nav-tabs .nav-link.active {
+    background-color: #fff; /* Fondo blanco */
+    color: #347fa7;      /* Texto azul */
+    border-bottom: none; /* Sin borde inferior */
+    border-radius: 50px; /* Forma de píldora */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Sombra sutil */
+}
+
+.card-body {
+    background-color: #fff;
+    padding: 1.5rem;
+}
+
+.table-responsive {
+    margin-top: 1rem;
+}
+
+.table {
+    border-radius: 8px; /* Bordes redondeados para la tabla */
+    overflow: hidden;   /* Asegura que el contenido respete los bordes redondeados */
+}
+
+.table thead {
+    background-color: #54a0ca; /* Color solicitado */
+    color: #fff;
+    border: 1px solid #4a8fb2; /* Borde para el thead */
+}
+
+.table th, .table td {
+    vertical-align: middle;
+    border: 1px solid #a0a0a0; /* Líneas más visibles para las celdas */
+}
+
+.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.error-container {
+    text-align: center;
+    padding: 40px;
+    background-color: #fff;
+    border-radius: 8px;
+}
+
+.error-container h3 {
+    color: #dc3545;
+}
+
+/* Estilos para los cuadros de resultados */
+.result-box {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background-color: #f8f9fa;
+    border-left: 4px solid #007bff;
+}
+
+.result-title {
+    font-weight: 500;
+    color: #333;
+}
+
+.result-value {
+    font-weight: 700;
+    color: #0056b3;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+canvas {
+    max-height: 500px;
+    width: 100%;
+}
+
+/* --- Estilos para la animación de pestañas deslizantes --- */
+.tab-content-container {
+    overflow: hidden; /* Oculta los paneles que no están en vista */
+}
+
+.tab-content-slider {
+    display: flex;
+    transition: transform 0.4s ease-in-out; /* La animación de deslizamiento */
+}
+
+.tab-panel {
+    width: 100%;
+    flex-shrink: 0;
+    padding: 0 2px; /* Pequeño padding para evitar cortes en los bordes */
+}
+
+/* --- Estilos para el layout flexbox de tablas lado a lado --- */
+.essay-tables-flex-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px; /* Espacio entre los elementos */
+    justify-content: space-around;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+.essay-tables-flex-item {
+    flex: 1 1 calc(50% - 10px); /* Cada elemento toma ~50% menos la mitad del gap */
+    min-width: 300px; /* Ancho mínimo para evitar que se encojan demasiado */
+    max-width: calc(50% - 10px); /* Ancho máximo para dejar espacio */
+    box-sizing: border-box;
+}

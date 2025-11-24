@@ -1,0 +1,58 @@
+.ensayos-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: #f4f7f6;
+}
+
+.ensayos-navigation {
+    display: flex;
+    padding: 0 20px;
+    background-color: #fff;
+    border-bottom: 2px solid #e0e0e0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
+}
+
+.ensayos-navigation .nav-link {
+    padding: 15px 20px;
+    text-decoration: none;
+    color: #555;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ensayos-navigation .nav-link:hover {
+    background-color: #f8f9fa;
+    color: #0056b3;
+}
+
+.ensayos-navigation .nav-link.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+}
+
+.ensayos-content {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.ensayos-placeholder {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    text-align: center;
+    color: #777;
+}
+
+.ensayos-placeholder h2 {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}

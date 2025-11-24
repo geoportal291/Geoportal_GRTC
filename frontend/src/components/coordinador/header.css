@@ -1,0 +1,282 @@
+/* header.css */
+:root {
+  --primary-blue: #1a365d;
+  --secondary-blue: #2a4365;
+  --accent-blue: #3182ce;
+  --light-gray: #edf2f7;
+  --medium-gray: #e2e8f0;
+  --dark-gray: #4a5568;
+  --white: #ffffff;
+}
+
+.main-header {
+  position: fixed;
+  top: 0;
+  left: 200px;
+  right: 0;
+  height: 60px;
+  background-color: var(--white);
+  border-bottom: 1px solid var(--medium-gray);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  transition: left 0.3s ease;
+}
+
+.main-header.sidebar-collapsed {
+  left: 60px;
+}
+
+.header-content {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.header-left-section {
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+}
+
+.title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.page-title {
+  font-family: 'Roboto', sans-serif;
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--primary-blue);
+  margin: 0;
+  line-height: 1;
+}
+
+.traffic-options {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.traffic-option {
+  background-color: transparent;
+  border: 2px solid var(--accent-blue);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent-blue);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.traffic-option:hover {
+  background-color: var(--accent-blue);
+  color: var(--white);
+}
+
+.traffic-option.active {
+  background-color: var(--accent-blue);
+  color: var(--white);
+  font-weight: 600;
+}
+
+.summary-link {
+  background-color: transparent;
+  border: 2px solid var(--accent-blue);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-family: 'Roboto', sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--accent-blue);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.summary-link:hover {
+  background-color: var(--accent-blue);
+  color: var(--white);
+}
+
+.header-right-section {
+  display: flex;
+  align-items: center;
+}
+
+.welcome-button {
+  background-color: var(--light-gray);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--primary-blue);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.welcome-button:hover {
+  background-color: var(--medium-gray);
+}
+
+.profile-menu-modal {
+  position: absolute;
+  top: 60px; /* Ajusta según la altura de tu header */
+  right: 24px;
+  background-color: var(--white);
+  border: 1px solid var(--medium-gray);
+  border-radius: 8px; /* Más redondeado */
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); /* Sombra más pronunciada y suave */
+  display: flex;
+  flex-direction: column;
+  z-index: 1001;
+  min-width: 180px; /* Un poco más ancho */
+  overflow: hidden; /* Asegura que los bordes redondeados se apliquen a los hijos */
+}
+
+.profile-menu-modal button {
+  background-color: transparent;
+  border: none;
+  padding: 12px 20px; /* Más padding */
+  text-align: left;
+  cursor: pointer;
+  font-family: 'Roboto', sans-serif;
+  font-size: 15px; /* Un poco más grande */
+  font-weight: 500; /* Más negrita */
+  color: var(--primary-blue);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.profile-menu-modal button:hover {
+  background-color: var(--accent-blue); /* Color de acento al pasar el ratón */
+  color: var(--white); /* Texto blanco al pasar el ratón */
+}
+
+.profile-menu-modal button:first-child {
+  border-bottom: 1px solid var(--light-gray); /* Borde más sutil */
+}
+
+.profile-menu-modal button:last-child {
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+/* Botón para el sidebar en móvil */
+.mobile-sidebar-toggle {
+  display: none; /* Oculto por defecto en escritorio */
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--primary-blue);
+  cursor: pointer;
+  margin-right: 15px;
+}
+
+/* Media Queries para responsividad */
+@media (max-width: 768px) {
+  .main-header {
+    left: 0; /* Ocupar todo el ancho en pantallas pequeñas */
+    height: 50px; /* Reducir altura */
+  }
+
+  .main-header.sidebar-collapsed {
+    left: 0; /* Asegurar que no haya desplazamiento cuando la sidebar está colapsada */
+  }
+
+  .header-content {
+    padding: 0 15px; /* Reducir padding */
+  }
+
+  .title-wrapper {
+    gap: 15px;
+  }
+
+  .page-title {
+    font-size: 18px; /* Reducir tamaño de fuente */
+  }
+
+  .traffic-options {
+    flex-wrap: wrap; /* Permitir que los botones se envuelvan */
+    justify-content: center;
+    gap: 5px;
+  }
+
+  .traffic-option {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .welcome-button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .profile-menu-modal {
+    top: 50px; /* Ajustar posición según la nueva altura del header */
+    right: 15px;
+    min-width: 150px;
+  }
+
+  .profile-menu-modal button {
+    padding: 10px 15px;
+    font-size: 13px;
+  }
+
+  .mobile-sidebar-toggle {
+    display: block; /* Mostrar en móvil */
+  }
+}
+
+@media (max-width: 480px) {
+  .main-header {
+    height: 45px;
+  }
+
+  .header-content {
+    padding: 0 10px;
+  }
+
+  .title-wrapper {
+    flex-direction: column; /* Apilar título y opciones de tráfico */
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .page-title {
+    font-size: 16px;
+  }
+
+  .traffic-options {
+    justify-content: flex-start;
+  }
+
+  .traffic-option {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .welcome-button {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .profile-menu-modal {
+    top: 45px;
+    right: 10px;
+    min-width: 120px;
+  }
+
+  .profile-menu-modal button {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+}

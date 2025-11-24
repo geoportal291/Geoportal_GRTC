@@ -1,0 +1,62 @@
+.kml-map-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000; /* Ensure it's above other content */
+}
+
+.kml-map-modal-content {
+    background-color: var(--background-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    width: 90%; /* Make it large */
+    max-width: 1200px; /* Max width */
+    height: 90%; /* Make it large */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Hide overflow from map */
+}
+
+.kml-map-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--primary-light);
+    color: var(--text-color-dark);
+}
+
+.kml-map-modal-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+.kml-map-modal-header .close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: var(--text-color-dark);
+    padding: 5px;
+}
+
+.kml-map-modal-body {
+    flex-grow: 1;
+    padding: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative; /* Needed for map to fill */
+}
+
+.kml-map-modal-body .map-container { /* Assuming SuelosMap uses a container with this class */
+    width: 100%;
+    height: 100%;
+}

@@ -1,0 +1,13 @@
+{
+    "short_name": "Tramite",
+    "name": "Sistema de Trámite Documentario",
+    "icons": [{
+        "src": "./imgs/icolo.jpg",
+        "sizes": "192x192",
+        "type": "image/jpeg"
+    }],
+    "start_url": ".",
+    "display": "standalone",
+    "theme_color": "#000000",
+    "background_color": "#ffffff"
+}

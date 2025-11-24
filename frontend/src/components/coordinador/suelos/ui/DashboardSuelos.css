@@ -1,0 +1,139 @@
+/* =============================
+   VARIABLES DE COLOR
+============================= */
+:root {
+    --color-header: #3f51b5;
+    --color-header-dark: #283593;
+    --color-navbar-bg: #343a40;
+    --color-navbar-text: #adb5bd;
+    --color-active: #ffffff;
+    --color-content-bg: #eef2f7;
+    --color-tab-active: #3f51b5;
+    --color-tab-border: #ddd;
+}
+
+/* =============================
+   AJUSTE PARA EXPANDIR TODO EL DASHBOARD
+============================= */
+
+/* Asegura que el contenedor raíz pueda expandirse */
+html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* Si tu layout usa grid, esto asegura que ocupe todo */
+.layout-container {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+}
+/* Busca esta clase o una similar que envuelva a .main-content */
+.dashboard-layout-content {
+    /* ANTES (Causando el problema): */
+    /* max-width: 1400px; */ 
+    /* margin: 0 auto; */
+    
+    /* AHORA (Solución): */
+    width: 100%; /* Asegura que ocupa todo el espacio disponible */
+    max-width: none; /* Elimina la restricción de ancho */
+    margin: 0; /* Elimina el centrado automático */
+    padding: 0; /* Asegúrate de que no hay padding excesivo */
+}
+/* =============================
+   MAPA
+============================= */
+.map-section {
+    background-color: #f0f0f0;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+#map-placeholder {
+    height: 400px;
+    background-color: #c9e6ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-style: italic;
+    color: #555;
+    border: 1px dashed var(--color-tab-active);
+    border-radius: 5px;
+}
+.map-section h2 { 
+    margin-top: 0; 
+    color: var(--color-tab-active); 
+}
+
+/* =============================
+   KPI GRID
+============================= */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.kpi-card {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.metric-value { 
+    font-size: 2em; 
+    font-weight: bold; 
+    color: var(--color-tab-active); 
+    margin: 5px 0; 
+}
+
+.sub-metric { 
+    font-size: 0.85em; 
+    color: #777; 
+}
+
+.canteras { border-bottom: 4px solid #f44336; }
+.agua { border-bottom: 4px solid #2196f3; }
+.tramos { border-bottom: 4px solid #4caf50; }
+.distancia { border-bottom: 4px solid #ff9800; }
+
+/* =============================
+   TABLA DE DETALLES
+============================= */
+.details-table { 
+    background-color: white; 
+    padding: 20px; 
+    border-radius: 8px; 
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
+}
+
+.details-table h2 { 
+    margin-top: 0; 
+    color: var(--color-tab-active); 
+}
+
+.details-table table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin-top: 15px; 
+}
+
+.details-table th, 
+.details-table td { 
+    border: 1px solid #ddd; 
+    padding: 12px; 
+    text-align: left; 
+}
+
+.details-table th { 
+    background-color: #f8f8f8; 
+    color: var(--color-tab-active); 
+}
+
+.details-table td:nth-child(2) { 
+    font-weight: bold; 
+}

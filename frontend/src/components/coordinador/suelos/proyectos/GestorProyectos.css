@@ -1,0 +1,626 @@
+/* GestorProyectos.css - Blue Theme & Thinner Panel - V2 */
+
+/* Color Variables - Blue Theme */
+:root {
+    --primary: #0d47a1; /* Dark Blue */
+    --secondary: #1976d2; /* Medium Blue */
+    --accent: #42a5f5; /* Light Blue */
+    --light: #cbeaff; /* Very Light Blue */
+    --dark: #0d47a1; /* Alias for primary */
+    --gray: #607d8b;
+    --light-gray: #e0e0e0;
+    --shadow: 0 4px 6px rgba(0,0,0,0.1);
+    --radius: 8px;
+    --info: #2196f3;
+    --danger: #f44336;
+    --header-background: #86c1e0; /* New variable for header background color */
+}
+
+.gestor-proyectos-container {
+    padding: 20px;
+    margin-top: 50px;
+}
+
+.gestor-header {
+    margin-bottom: 20px;
+    padding: 15px 20px;
+    background-color: #fff;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    color: var(--primary);
+}
+
+.gestor-main {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 20px;
+}
+
+.lista-tramos-panel {
+    background-color: #fff;
+    /* padding: 20px; */
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    max-height: calc(100vh - 150px);
+    overflow: hidden; /* Added to clip child corners */
+    display: flex;
+    flex-direction: column;
+    border: 2px solid var(--light-gray); /* More prominent border */
+    transition: all 0.3s ease; /* Smooth transition for hover effects */
+}
+
+.lista-tramos-panel:hover {
+    border-color: var(--light-gray); /* Keep original border color */
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2); /* More prominent shadow on hover */
+    transform: translateY(-2px); /* Subtle lift effect */
+}
+
+
+.detalle-proyecto-panel {
+    background-color: #fff;
+    border-radius: 12px; /* Increased border-radius */
+    box-shadow: var(--shadow);
+    /* overflow: hidden; <-- REMOVED */
+    display: flex;
+    flex-direction: column;
+    border: 2px solid var(--light-gray); /* More prominent border */
+    transition: all 0.3s ease; /* Smooth transition for hover effects */
+}
+
+.detalle-proyecto-panel:hover {
+    border-color: var(--light-gray); /* Keep original border color */
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2); /* More prominent shadow on hover */
+    transform: translateY(-2px); /* Subtle lift effect */
+}
+
+.tramos-list {
+    padding: 15px 20px 20px 20px; /* Add padding here */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+}
+
+.panel-footer {
+    padding: 15px 20px;
+    display: flex;
+    justify-content: center; /* Center content horizontally */
+    align-items: center; /* Center content vertically */
+    background-color: transparent; /* Changed to transparent */
+    border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.tramo-list-item {
+    padding: 12px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+    border: 1px solid #eee;
+}
+
+.tramo-list-item:hover {
+    background-color: var(--light);
+    color: var(--primary);
+    border-color: #347fa7   ;
+}
+
+.tramo-list-item.active {
+    background-color: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* Right Panel */
+.panel-header {
+    padding: 20px 25px;
+    background-color: var(--header-background); /* Using the new variable */
+    color: #fff; /* texto en blanco */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--light-gray);
+    gap: 20px;
+}
+
+.btn-change-tramo {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.8em;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.btn-change-tramo:hover {
+  background-color: #5a6268;
+}
+
+.tramo-context-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: #e8eaf6; /* Light blue, similar to table headers */
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #c5cae9;
+  margin-top: -80px;
+}
+
+.tramo-context-bar span {
+  font-size: 1.1em;
+  font-weight: 500;
+  color: #1a237e;
+}
+
+.tramo-context-bar .btn-change-tramo {
+  background-color: #1976d2;
+  font-size: 0.9em;
+  padding: 8px 15px;
+}
+
+.lista-tramos-panel h2 {
+    color: #fff; /* título en blanco */
+    display: flex;
+    align-items: center;
+    gap: 8px; /* para separar el icono del texto */
+}
+
+.panel-header h2 {
+    color: var(--dark);
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.btn:hover {
+    background-color: #0b3b84;
+}
+
+.tabs {
+    display: flex;
+    border-bottom: 1px solid var(--light-gray);
+    padding: 0 25px;
+    background-color: #fff;
+}
+
+.tab {
+    padding: 15px 20px;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--gray);
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab.active {
+    color: var(--dark);
+    border-bottom: 3px solid var(--primary);
+}
+
+.tab-content {
+    display: none;
+    background-color: #f5f7fa;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Progresivas */
+.progressiva-list-container {
+    padding: 1px 0;
+}
+
+.progressiva-item {
+  background-color: #fff; /* White background by default */
+  border: 1px solid #e0e0e0; /* Subtle border for separation */
+  border-radius: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); /* Softer shadow */
+  transition: all 0.3s ease;
+  overflow: hidden; /* Contain child corners */
+}
+
+/* Hover effect is now on the header */
+
+.progresiva-item.progresiva-expanded {
+  background-color: #eaf3fa; /* A very light blue, distinct from hover */
+  border-left: 4px solid var(--primary); /* Reverted to 4px solid primary blue */
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2); /* More prominent shadow */
+  transform: translateY(-2px);
+  margin-bottom: 15px; /* Keep increased margin */
+}
+
+.progressiva-header {
+    padding: 10px 25px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    border-radius: 8px; /* Add radius to header for hover effect */
+}
+
+/* Hover effect for any header */
+.progressiva-header:hover {
+  background-color: #d4e6f1; /* A slightly darker blue for hover */
+}
+
+/* Specific hover for expanded item's header to make it slightly different */
+.progresiva-item.progresiva-expanded .progressiva-header:hover {
+  background-color: #cce0ef;
+}
+
+.progressiva-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.progressiva-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    font-size: 1.2rem;
+}
+
+.progressiva-details h3 {
+    color: var(--dark);
+    font-size: 1.1rem;
+    margin-bottom: 4px;
+}
+
+.progressiva-details p {
+    color: var(--gray);
+    font-size: 0.9rem;
+}
+
+.progresiva-title-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: 20px; /* Added space */
+}
+
+.progressiva-meta {
+  display: flex;
+  flex-direction: row; /* Explicitly set to row */
+  align-items: center;
+  justify-content: flex-end; /* Push items to the right */
+  gap: 8px;
+  font-size: 0.9em;
+  color: #666;
+  flex-wrap: nowrap;
+  flex-grow: 0; /* Prevent meta from growing */
+  flex-shrink: 0; /* Prevent meta from shrinking */
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-grow: 0; /* Prevent item from growing */
+  flex-shrink: 0; /* Prevent item from shrinking */
+}
+
+.progresiva-meta .action-btn.edit {
+  flex-grow: 0; /* Prevent button from growing */
+  flex-shrink: 0; /* Prevent button from shrinking */
+  padding: 5px 10px;
+  font-size: 0.8em;
+}
+
+.meta-item i {
+  color: #1a237e; /* Color del icono */
+}
+
+.coordenadas-display {
+  display: flex;
+  gap: 10px;
+}
+
+.coordenada-item {
+  background-color: #e0e0e0;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.85em;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+.coordenada-item strong {
+  color: #1a237e;
+}
+
+/* Animation for Estratos Container */
+.estratos-container {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  transition: all 0.5s ease-in-out;
+  background-color: #f9f9f9;
+  border-radius: 0 0 8px 8px;
+}
+
+.estratos-container.expanded {
+  max-height: 2000px;
+  opacity: 1;
+  visibility: visible;
+  padding: 20px 25px;
+}
+
+.estratos-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.estratos-title {
+    color: var(--dark);
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+
+
+
+/* ==========================================================================
+   Navegación Unificada
+   ========================================================================== */
+
+.unified-navigation-panel {
+    background-color: #fff;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 15px 25px;
+    margin-bottom: 20px;
+}
+
+.nav-separator {
+    height: 1px;
+    background-color: var(--light-gray);
+    margin: 10px 0;
+}
+
+/* Nivel 1 (Módulos) */
+.nav-level-1 {
+    display: flex;
+    gap: 10px;
+}
+
+.nav-level-1-item {
+    padding: 8px 4px;
+    margin: 0 12px;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--gray);
+    cursor: pointer;
+    border-radius: 0;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.nav-level-1-item:hover {
+    background-color: transparent;
+    color: var(--primary);
+}
+
+.nav-level-1-item.active {
+    background-color: transparent;
+    color: var(--primary);
+    font-weight: 600;
+    border-bottom: 3px solid var(--primary);
+}
+
+/* Nivel 2 (Sub-gestores) */
+.nav-level-2 {
+    display: flex;
+    gap: 5px;
+}
+
+.nav-level-2-item {
+    padding: 10px 4px;
+    margin: 0 11px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--secondary);
+    cursor: pointer;
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.nav-level-2-item:hover {
+    background-color: transparent;
+    color: var(--primary);
+}
+
+.nav-level-2-item.active {
+    background-color: transparent;
+    color: var(--primary);
+    font-weight: 600;
+    border-bottom: 2px solid var(--primary);
+}
+
+/* ==========================================================================
+   Content Card Style
+   ========================================================================== */
+
+.content-card {
+    background-color: #ffffff;
+    border-radius: var(--radius, 8px);
+    box-shadow: var(--shadow, 0 4px 6px rgba(0,0,0,0.1));
+    padding: 25px;
+    margin-top: 0; /* The parent container already has margin */
+}
+
+/* Virtual Table Styles */
+.virtual-table-container {
+    border: 1px solid var(--light-gray);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.virtual-table-header, .virtual-table-row {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--light-gray);
+    padding: 0 10px;
+}
+
+.virtual-table-header {
+    background-color: #f5f7fa;
+    font-weight: 600;
+    color: var(--dark);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.virtual-table-row:hover {
+    background-color: #eaf3fa;
+}
+
+.virtual-table-cell {
+    padding: 12px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+}
+
+/* --- Search Box Styles --- */
+.search-container {
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 300px; /* Give it a defined width */
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 12px 8px 35px; /* Top, Right, Bottom, Left (space for icon) */
+    border-radius: 20px; /* Pill shape */
+    border: 1px solid #ccc;
+    background-color: #f5f7fa;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    color: #333; /* Explicitly set text color to dark gray */
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(13, 71, 161, 0.2); /* Glow effect */
+    background-color: #fff;
+}
+
+/* This is for the icon that will be placed inside the container */
+.search-container > .fa-search {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #999;
+    font-size: 0.9rem;
+    transition: color 0.3s ease;
+}
+
+.search-input:focus ~ .fa-search {
+    color: var(--primary);
+}
+
+/* Hide the original search button */
+.search-button {
+    display: none;
+}
+
+/* --- Pagination Styles --- */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px 0;
+    gap: 5px;
+}
+
+.pagination-button {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    color: var(--primary);
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.pagination-button:hover:not(:disabled) {
+    background-color: var(--light);
+    border-color: var(--accent);
+}
+
+.pagination-button.active {
+    background-color: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    cursor: default;
+}
+
+.pagination-button:disabled {
+    color: #aaa;
+    cursor: not-allowed;
+    background-color: #f9f9f9;
+}
+
+.pagination-ellipsis {
+    padding: 8px 5px;
+    color: #aaa;
+}
+
+/* --- Estratos Header Actions --- */
+.estratos-header-actions {
+    display: flex; /* Ensure it's a flex container */
+    gap: 10px; /* Add separation between buttons */
+    align-items: center;
+}
+
+.estratos-header-actions .btn-outline {
+    padding: 6px 12px; /* Smaller padding */
+    font-size: 0.9rem; /* Slightly smaller font */
+}

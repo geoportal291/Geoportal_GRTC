@@ -1,0 +1,173 @@
+/* CONTENEDOR PRINCIPAL */
+
+.content-wrapper {
+    padding: 0 2rem 4rem 2rem; /* Eliminar padding-top, mantener otros paddings */
+    padding-top: 60px; /* Ajuste para la altura del header */
+    background-color: #f1f3f6;
+    min-height: 100vh;
+    box-sizing: border-box;
+    overflow-y: auto;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+
+/* FORMULARIO */
+
+.formulario {
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    background: #ffffff;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem 1.5rem;
+    overflow: hidden;
+    /* evita scroll dentro del formulario */
+}
+
+@media (max-width: 1100px) {
+    .formulario {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .formulario {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .formulario {
+        grid-template-columns: 1fr;
+    }
+}
+
+.formulario h2 {
+    grid-column: 1 / -1;
+    text-align: center;
+    margin-bottom: 1rem;
+    color: #1f2d3d;
+    font-size: 1.5rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #ccc;
+    font-size: 1rem;
+    width: 100%;
+    box-sizing: border-box;
+    background-color: #fefefe;
+    transition: box-shadow 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+}
+
+.form-buttons {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.form-buttons button {
+    background-color: #007bff;
+    color: white;
+    font-weight: bold;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.form-buttons button:hover {
+    background-color: #0056b3;
+}
+
+.form-buttons button:disabled {
+    background-color: #a4c8f0;
+    cursor: not-allowed;
+}
+
+
+/* TABLA ESTILIZADA */
+
+.tabla-usuarios {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.05);
+    margin-top: 2rem;
+    overflow: hidden;
+}
+
+.tabla-usuarios thead {
+    background-color: #007bff;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+.tabla-usuarios th,
+.tabla-usuarios td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.tabla-usuarios tr:last-child td {
+    border-bottom: none;
+    /* evita doble línea al final */
+}
+
+.tabla-usuarios tbody tr:hover {
+    background-color: #f1f9ff;
+    transition: background-color 0.2s ease;
+}
+
+.tabla-usuarios td {
+    color: #333;
+    font-size: 0.95rem;
+}
+
+
+/* Botones dentro de la tabla */
+
+.tabla-usuarios td button {
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: #007bff;
+    margin-right: 0.5rem;
+    transition: color 0.2s ease;
+}
+
+.tabla-usuarios td button:hover {
+    color: #0056b3;
+}
