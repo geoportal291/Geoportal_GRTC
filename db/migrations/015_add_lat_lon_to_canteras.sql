@@ -1,3 +1,0 @@
-ALTER TABLE canteras
-ADD COLUMN latitud NUMERIC(10, 8),
-ADD COLUMN longitud NUMERIC(11, 8);

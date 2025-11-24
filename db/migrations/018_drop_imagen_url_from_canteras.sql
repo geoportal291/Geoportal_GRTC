@@ -1,1 +1,0 @@
-ALTER TABLE canteras DROP COLUMN imagen_url;

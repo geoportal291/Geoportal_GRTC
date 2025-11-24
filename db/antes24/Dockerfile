@@ -1,7 +1,0 @@
-FROM postgis/postgis:17-3.4
-
-ENV POSTGRES_USER=postgres
-ENV POSTGRES_PASSWORD=admin1234
-ENV POSTGRES_DB=postgres
-
-EXPOSE 5432
