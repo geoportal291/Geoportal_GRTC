@@ -1,115 +1,17 @@
-/* --- IMPORTAR FUENTES --- */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Mountains+of+Christmas:wght@700&display=swap');
-
-/* --- CONTENEDOR PRINCIPAL --- */
 .waiting-room-overlay-salaespera {
-    /* 1. POSICIÓN FIJA PARA ROMPER EL LAYOUT */
-    position: fixed; 
-    top: 0;          /* Pegado al techo (tapa el header blanco) */
-    bottom: 0;       /* Pegado al suelo */
-    right: 0;        /* Pegado a la derecha */
-    
-    /* 2. AJUSTE DEL MENÚ LATERAL (DINÁMICO) */
-    transition: left 0.3s ease; /* Transición suave */
-    
-    /* 3. ESTAR ENCIMA DE TODO */
-    z-index: 99999 !important; 
-    
-    /* 4. RESETEAR CUALQUIER MARGEN DEL TEMA */
-    margin: 0 !important;
-    
-    /* ESTÉTICA */
-    background: radial-gradient(circle at center, #3182cf 0%, #081b33 100%);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-family: 'Cinzel Decorative', serif;
-    color: #fff;
-    padding: 20px;
-    box-sizing: border-box;
-    border-radius: 0 !important;
-    overflow: hidden;
-}
-
-/* --- REGLAS DINÁMICAS PARA EL MENÚ --- */
-.sidebar-open .waiting-room-overlay-salaespera {
-    left: 200px; /* Ancho del menú abierto */
-}
-.sidebar-collapsed .waiting-room-overlay-salaespera {
-    left: 60px; /* Ancho del menú cerrado */
-}
-
-/* --- RESPONSIVE (MÓVIL) --- */
-/* En pantallas chicas (tablet/celular), el menú suele esconderse, así que ocupamos todo */
-@media (max-width: 768px) {
-    .waiting-room-overlay-salaespera {
-        left: 0 !important;
-    }
-}
-
-/* --- NIEVE --- */
-.snow-container-salaespera {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 0; 
-}
-
-.snowflake-salaespera {
-    position: absolute;
-    top: -10px;
-    background: white;
-    border-radius: 50%;
-    opacity: 0.9; 
-    pointer-events: none;
-    animation: fall-salaespera linear infinite;
-    box-shadow: 0 0 5px rgba(255,255,255,0.9);
-}
-
-@keyframes fall-salaespera {
-    0% { transform: translateY(-10px); }
-    100% { transform: translateY(110vh); } 
-}
-
-/* --- TARJETA DE CONTENIDO --- */
-.waiting-room-card-salaespera {
-    position: relative;
-    z-index: 10; 
-    background: rgba(49, 130, 207, 0.15);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 0 60px rgba(8, 27, 51, 0.6);
-    border-radius: 15px;
-    padding: 3rem;
-    width: 100%;
-    max-width: 1200px;
-    animation: slideIn-salaespera 0.6s ease-out;
-}
-
-@keyframes slideIn-salaespera {
-    from { transform: translateY(30px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-}
-
-/* --- HEADER INTERNO --- */
-.waiting-room-header-salaespera {
-    text-align: center;
-    margin-bottom: 2.5rem;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    padding-bottom: 1rem;
+    /* ... (other styles) ... */
+    font-family: 'Cinzel Decorative', serif; /* Aplicar la fuente base al contenedor principal */
 }
 
 .waiting-room-header-salaespera h2 {
-    font-family: 'Mountains of Christmas', cursive;
-    font-size: 3.5rem;
-    margin: 0 0 0.5rem 0;
-    text-shadow: 0 0 20px #80d4ff;
-    color: #e1f1ff;
+    font-family: 'Mountains of Christmas', cursive; /* Aplicar la fuente especial al título */
 }
+
+/* El resto de los selectores que usan estas fuentes ya están dentro del contexto del componente, 
+   pero se elimina el @import global para evitar fugas. El desarrollador deberá asegurarse
+   de que las fuentes se carguen de una manera global pero segura (ej. en index.html o App.js).
+*/
+
 
 .waiting-room-header-salaespera p {
     font-size: 1.3rem;

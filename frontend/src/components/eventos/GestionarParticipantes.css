@@ -1,8 +1,4 @@
-/* Importar las mismas fuentes para consistencia */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Mountains+of+Christmas:wght@700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
-
-/* Hereda el fondo principal del dashboard para la página completa */
+/* Estilos para el contenedor de la página de gestión de participantes */
 .gestionar-participantes-container {
     position: fixed;
     top: 0;

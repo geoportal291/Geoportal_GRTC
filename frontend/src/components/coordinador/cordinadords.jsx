@@ -8,7 +8,7 @@ export default function CoordinadorDashboard() {
   const [activeDashboard, setActiveDashboard] = useState('dash1'); // New state for active dashboard
   const navigate = useNavigate();
 
-  
+
 
   return (
     <div>

@@ -40,14 +40,14 @@ export default function Layout({ children, setPageTitle }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {!isAmigoSecretoRoute && (
-            <Header
-              sidebarCollapsed={collapsed}
-              setPageTitle={setPageTitle}
-              onTrafficOptionChange={handleTrafficOptionChange}
-              onVialOptionChange={handleVialOptionChange}
-              onToggleSidebar={setCollapsed}
-              userProjectEntityName={selectedProjectName} // Pass the name from context
-            />
+        <Header
+          sidebarCollapsed={collapsed}
+          setPageTitle={setPageTitle}
+          onTrafficOptionChange={handleTrafficOptionChange}
+          onVialOptionChange={handleVialOptionChange}
+          onToggleSidebar={setCollapsed}
+          userProjectEntityName={selectedProjectName} // Pass the name from context
+        />
       )}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <div
@@ -65,7 +65,7 @@ export default function Layout({ children, setPageTitle }) {
             flex: 1,
             overflowY: 'auto',
             paddingLeft: collapsed ? '0px' : '60px',
-            paddingTop : isAmigoSecretoRoute ? '0' : '60px',
+            paddingTop: isAmigoSecretoRoute ? '0' : '60px',
             paddingRight: '0',
             paddingBottom: '0',
             backgroundColor: '#f5f7fa',
@@ -75,7 +75,7 @@ export default function Layout({ children, setPageTitle }) {
             position: 'relative',
             zIndex: 0
           }}
-        > 
+        >
           {location.pathname === '/coordinador/ingenieria/trafico/trafico' ? (
             <TrafficOptionProvider value={trafficOption}>
               <Traficods isNavbarExpanded={!collapsed} />

@@ -1,4 +1,4 @@
-/* Universal reset */
+/* Universal reset and base styles */
 * {
   box-sizing: border-box;
 }
@@ -10,35 +10,47 @@ html, body {
   overflow: hidden;
 }
 
-/* Sidebar */
-.sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 200px;
-  height: 100vh;
-  background-color: #2f2f2f;
-  color: white;
-  transition: width 0.3s ease, transform 0.3s ease; /* Añadir transform para animar la entrada/salida */
+/* Main Layout Containers */
+.layout-container {
   display: flex;
   flex-direction: column;
-  z-index: 1001;
-  overflow-y: auto;
-  scrollbar-width: none;
+  height: 100vh;
 }
 
+.main-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Sidebar Wrapper (Desktop) */
+.sidebar-wrapper {
+  width: 200px;
+  flex-shrink: 0;
+  background-color: #2f2f2f;
+  transition: width 0.3s ease;
+  z-index: 1001;
+}
+
+.sidebar-wrapper.collapsed {
+  width: 60px;
+}
+
+/* Sidebar Component (itself) */
+.sidebar {
+  height: 100%;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+}
 .sidebar::-webkit-scrollbar {
   display: none;
 }
 
-.sidebar.collapsed {
-  width: 60px;
-}
-
-/* Header del sidebar: mejor alineación */
 .sidebar-header {
   display: flex;
-  flex-direction: row;
   align-items: center;
   justify-content: center;
   background-color: #252525;
@@ -47,7 +59,6 @@ html, body {
   gap: 12px;
 }
 
-/* Botón toggle pegado a la izquierda y más chico */
 .toggle-btn {
   background: none;
   border: none;
@@ -59,260 +70,93 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  margin-right: 8px;
-  transition: background-color 0.2s ease;
-}
-
-.toggle-btn:hover {
-  background-color: #3a3a3a;
   border-radius: 4px;
 }
-
-/* Logo más grande y mejor alineado */
-.sidebar .logos {
-  display: flex;
-  align-items: center;
-  padding: 10px 10px;
+.toggle-btn:hover {
+  background-color: #3a3a3a;
 }
 
-.sidebar .logos img {
-  width: 130px;
-  max-width: 100%;
-  height: auto;
-  margin: 0 auto;
-  display: block;
-  transition: width 0.3s ease;
-}
-
-.sidebar.collapsed .logos {
-  justify-content: center;
-}
-
-.sidebar.collapsed .logos img {
-  display: none;
-}
-
-/* Navegación principal */
+/* Sidebar Links and Menus */
 .sidebar nav > ul {
   list-style: none;
   padding: 0;
-  margin: 0;
-  margin-top: 10px;
+  margin: 10px 0 0 0;
 }
 
-.sidebar li {
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Enlaces */
-.sidebar a,
-.sidebar .nav-link {
-  width: 100%;
+.sidebar a {
   padding: 10px 16px;
   display: flex;
   align-items: center;
   gap: 10px;
   color: white;
   text-decoration: none;
-  background-color: transparent;
-  transition: background-color 0.2s ease;
-  cursor: pointer;
-  overflow: hidden;
   white-space: nowrap;
 }
-
-.sidebar a:hover,
-.sidebar .nav-link:hover {
+.sidebar a:hover {
   background-color: #222;
-  border-radius: 4px;
 }
 
-.sidebar.collapsed a,
-.sidebar.collapsed .nav-link {
+.sidebar.collapsed a {
   justify-content: center;
-  padding: 10px 0;
 }
 
-.sidebar.collapsed a span,
-.sidebar.collapsed .nav-link span {
+.sidebar.collapsed .nav-link span, .sidebar.collapsed .submenu-arrow {
   display: none;
 }
 
-/* Flecha de submenú */
 .submenu-arrow {
   margin-left: auto;
-  width: 0;
-  height: 0;
-  border-left: 6px solid #ccc;
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
   transition: transform 0.3s ease;
-  flex-shrink: 0;
 }
-
 .submenu-arrow.open {
   transform: rotate(90deg);
 }
 
-.sidebar.collapsed .submenu-arrow {
-  display: none;
-}
-
-/* Submenús animados */
 .submenu {
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.4s ease;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  margin: 0;
+  background-color: rgba(0,0,0,0.2);
 }
-
 .submenu.show {
   max-height: 1000px;
 }
-
-.submenu li {
-  margin: 0;
-  padding: 0;
-}
-
 .submenu a {
-  padding: 8px 8px 8px 30px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #ccc;
+  padding-left: 30px;
   font-size: 14px;
-  text-decoration: none;
-  overflow: hidden;
-  white-space: nowrap;
+  color: #ccc;
 }
 
-.submenu a:hover {
-  background-color: #2c2c2c;
-  border-radius: 4px;
-}
+/* Main Content Area */
 
-.sidebar.collapsed .submenu {
-  display: none;
-}
+.content-wrapper {
 
-/* Contenido principal al lado del sidebar */
-.main-content {
-  transition: margin-left 0.3s ease;
-  padding: 0;
-  height: 100vh;
+  flex-grow: 1;
+
   overflow-y: auto;
+
+  padding-top: 60px; /* Space for Header */
+
+  background-color: #f5f7fa;
+
+  position: relative;
+
+  transition: padding-left 0.3s ease;
+
 }
 
 
 
-/* ====== ACTIVE STATE ====== */
-.sidebar li.active > a,
-.sidebar .nav-link.active {
-  background-color: #444;
-  color: var(--primary-color);
-  font-weight: bold;
-  border-radius: 4px;
+.content-wrapper.sidebar-open {
+
+  padding-left: 200px;
+
 }
 
-.submenu li.active > a {
-  background-color: #3a3a3a;
-  color: var(--primary-color);
-  font-weight: bold;
-  border-radius: 4px;
-}
 
-/* Media Queries para responsividad */
-@media (max-width: 768px) {
-  .sidebar {
-    width: 250px; /* Ancho de la sidebar cuando está abierta en móvil */
-    transform: translateX(-100%); /* Ocultar por defecto */
-    box-shadow: 2px 0 5px rgba(0,0,0,0.5);
-  }
 
-  .sidebar.collapsed {
-    transform: translateX(0); /* Mostrar cuando está 'colapsada' (abierta en móvil) */
-    width: 250px; /* Asegurar que el ancho sea el mismo */
-  }
+.content-wrapper.sidebar-collapsed {
 
-  .sidebar.collapsed .logos img {
-    display: block; /* Mostrar el logo en la vista móvil */
-    width: 130px; /* Mantener el tamaño del logo */
-  }
+  padding-left: 60px;
 
-  .sidebar.collapsed a span,
-  .sidebar.collapsed .nav-link span {
-    display: inline; /* Mostrar texto de los enlaces en la vista móvil */
-  }
-
-  .sidebar.collapsed .submenu-arrow {
-    display: block; /* Mostrar flecha de submenú en la vista móvil */
-  }
-
-  .main-content {
-    margin-left: 0; /* No hay margen a la izquierda en móvil */
-  }
-
-  .sidebar.collapsed ~ .main-content {
-    margin-left: 0; /* No hay margen a la izquierda cuando la sidebar está abierta en móvil */
-  }
-
-  /* Overlay para cuando la sidebar está abierta */
-  .overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    display: none;
-  }
-
-  .sidebar.collapsed + .overlay {
-    display: block;
-  }
-}
-
-@media (max-width: 480px) {
-  .sidebar {
-    width: 100%; /* Ocupar todo el ancho en pantallas muy pequeñas */
-  }
-
-  .sidebar.collapsed {
-    width: 100%;
-  }
-
-  .sidebar-header {
-    height: 60px;
-  }
-
-  .toggle-btn {
-    font-size: 18px;
-    width: 35px;
-    height: 35px;
-  }
-
-  .sidebar .logos img {
-    width: 100px;
-  }
-
-  .sidebar a,
-  .sidebar .nav-link {
-    padding: 8px 12px;
-    font-size: 14px;
-  }
-
-  .submenu a {
-    padding: 6px 6px 6px 20px;
-    font-size: 12px;
-  }
 }

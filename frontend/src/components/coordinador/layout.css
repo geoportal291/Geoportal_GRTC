@@ -31,8 +31,7 @@
 .content-wrapper {
     flex: 1;
     overflow-y: auto;
-    padding-left: 60px;
-    /* Default collapsed padding */
+    /* padding-left: 60px; REMOVED (conflicts with navbar.css) */
     padding-top: 60px;
     /* Header height */
     padding-right: 0;
@@ -46,10 +45,9 @@
     transition: padding-left 0.3s ease;
 }
 
-.content-wrapper.sidebar-open {
+/* .content-wrapper.sidebar-open { REMOVED (conflicts with navbar.css)
     padding-left: 0;
-    /* Flexbox handles the space */
-}
+} */
 
 /* Specific overrides based on original inline styles */
 .content-wrapper.no-top-padding {
