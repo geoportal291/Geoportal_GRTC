@@ -56,8 +56,7 @@ const whitelist = [
     'http://localhost:3000',
     'http://localhost:3001',
     'https://frontend-morning-haze-4592.fly.dev',
-    'http://192.168.1.19:3000'
-];
+    'http://192.168.1.19:3000'];
 
 const corsOptions = {
     origin: function (origin, callback) {

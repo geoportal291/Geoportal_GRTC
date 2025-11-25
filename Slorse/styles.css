@@ -1,0 +1,150 @@
+    /* Estilos Generales y Layout de la Cuadrícula */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    background-color: #eef2f7;
+    color: #333;
+}
+
+.dashboard-container {
+    display: grid;
+    /* Define la estructura de filas y columnas del dashboard principal */
+    grid-template-columns: 200px 1fr; /* 200px para Sidebar, el resto para Contenido */
+    grid-template-rows: auto 1fr;
+    grid-template-areas: 
+        "header header"
+        "sidebar main-content";
+    min-height: 100vh;
+}
+
+/* Encabezado */
+.header {
+    grid-area: header;
+    background-color: #3f51b5; /* Azul profundo para identidad corporativa */
+    color: white;
+    padding: 15px 30px;
+    border-bottom: 5px solid #283593;
+}
+.header p {
+    margin: 0;
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+/* Barra Lateral (Filtros) */
+.sidebar {
+    grid-area: sidebar;
+    background-color: #ffffff;
+    padding: 20px;
+    border-right: 1px solid #ddd;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+}
+
+.filter-group label, .filter-group select {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+}
+.filter-group select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.data-summary {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+.data-summary p {
+    font-size: 0.95em;
+    padding: 5px 0;
+}
+
+/* Contenido Principal */
+.main-content {
+    grid-area: main-content;
+    padding: 30px;
+}
+
+/* Sección de Mapa */
+.map-section {
+    background-color: #f0f0f0;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+#map-placeholder {
+    height: 300px; /* Tamaño del contenedor del mapa */
+    background-color: #c9e6ff; /* Simulación de color de mapa */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-style: italic;
+    color: #555;
+}
+
+/* Cuadrícula de KPIs */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 tarjetas en una fila */
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.kpi-card {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+
+.kpi-card:hover {
+    transform: translateY(-5px);
+}
+
+.metric-value {
+    font-size: 2em;
+    font-weight: bold;
+    color: #3f51b5;
+    margin: 5px 0;
+}
+
+.sub-metric {
+    font-size: 0.85em;
+    color: #777;
+}
+
+/* Colores temáticos para KPIs */
+.canteras { border-bottom: 4px solid #f44336; } /* Rojo */
+.agua { border-bottom: 4px solid #2196f3; }    /* Azul claro */
+.tramos { border-bottom: 4px solid #4caf50; }  /* Verde */
+.distancia { border-bottom: 4px solid #ff9800; } /* Naranja */
+
+/* Estilos de Tabla de Detalles */
+.details-table table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: white;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 15px;
+}
+
+.details-table th, .details-table td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+}
+
+.details-table th {
+    background-color: #f8f8f8;
+    color: #3f51b5;
+}
+
+/* Resalta estados clave */
+.details-table td:nth-child(2) { /* Columna de Estado */
+    font-weight: bold;
+}

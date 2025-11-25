@@ -2,10 +2,9 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE || 'https://backend-weathered-silence-5682.fly.dev' // URL hardcoded temporalmente para fix
+  baseURL: process.env.REACT_APP_API_BASE || 'https://backend-blue-shape-6900.fly.dev' 
 });
 
-// Interceptor para añadir el token de autenticación a cada solicitud
 axiosInstance.interceptors.request.use(
   (config) => {
     const userString = localStorage.getItem('user');
@@ -32,8 +31,6 @@ export const setupInterceptors = (logout) => {
     (response) => response,
     (error) => {
       if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-        // Aquí se podría añadir una lógica más granular si el backend devuelve un código específico para token expirado
-        // Por ahora, cualquier 401 o 403 resultará en un logout para estar seguros.
         if (logout) {
           logout();
         }

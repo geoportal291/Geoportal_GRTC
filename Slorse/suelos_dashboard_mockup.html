@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mockup - Dashboard de Suelos</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f4f7f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .dashboard-container {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 100px);
+        }
+
+        .dashboard-column {
+            flex: 1;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .column-header {
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background-color: #f9fafb;
+        }
+
+        .column-header .title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .column-header .subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 4px 0 0;
+        }
+        
+        .search-bar {
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .search-bar input {
+            width: calc(100% - 20px);
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            font-size: 14px;
+        }
+
+        .item-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow-y: auto;
+        }
+
+        .item-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .item-list::-webkit-scrollbar-thumb {
+            background-color: #d1d5db;
+            border-radius: 3px;
+        }
+
+        .list-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .list-item:hover {
+            background-color: #f9fafb;
+        }
+
+        .list-item.active {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding-left: 12px;
+            font-weight: 600;
+            color: #1e40af;
+        }
+        
+        .list-item .item-title {
+            display: block;
+            font-weight: 500;
+        }
+
+        .list-item .item-subtitle {
+            display: block;
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+        
+        .progresiva-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .estratos-list {
+            list-style: none;
+            padding: 10px 0 10px 20px;
+            margin-top: 8px;
+            border-left: 2px solid #e5e7eb;
+        }
+        
+        .estrato-item {
+            padding: 10px;
+            border-radius: 6px;
+        }
+        
+        .estrato-item.active {
+            background-color: #dbeafe;
+        }
+
+        .ensayo-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .status-aprobado { background-color: #dcfce7; color: #166534; }
+        .status-pendiente { background-color: #fef9c3; color: #854d0e; }
+        .status-en-proceso { background-color: #e0f2fe; color: #0c599e; }
+
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .btn-primary:hover { background-color: #2563eb; }
+
+        .btn-secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        .btn-secondary:hover { background-color: #d1d5db; }
+        
+        .column-footer {
+            padding: 16px;
+            border-top: 1px solid #e5e7eb;
+            margin-top: auto;
+        }
+
+        .btn-full {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Centro de Control de Suelos</h1>
+
+    <div class="dashboard-container">
+        <!-- COLUMNA 1: TRAMOS -->
+        <div class="dashboard-column">
+            <div class="column-header">
+                <h2 class="title">Tramos</h2>
+            </div>
+            <div class="search-bar">
+                <input type="text" placeholder="Buscar tramo...">
+            </div>
+            <ul class="item-list">
+                <li class="list-item">
+                    <span class="item-title">Tramo N° 101</span>
+                    <span class="item-subtitle">Proyecto CU-105</span>
+                </li>
+                <li class="list-item active">
+                    <span class="item-title">Tramo N° 102</span>
+                    <span class="item-subtitle">Proyecto CU-105</span>
+                </li>
+                <li class="list-item">
+                    <span class="item-title">Tramo N° 201</span>
+                    <span class="item-subtitle">Proyecto San Martín</span>
+                </li>
+                <li class="list-item">
+                    <span class="item-title">Tramo N° 202</span>
+                    <span class="item-subtitle">Proyecto San Martín</span>
+                </li>
+                 <li class="list-item">
+                    <span class="item-title">Tramo N° 301</span>
+                    <span class="item-subtitle">Proyecto Amazonas</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- COLUMNA 2: PROGRESIVAS Y ESTRATOS -->
+        <div class="dashboard-column">
+            <div class="column-header">
+                <h2 class="title">Detalle de Tramo</h2>
+                <p class="subtitle">Tramo N° 102</p>
+            </div>
+            <ul class="item-list">
+                <li class="list-item">
+                    <div class="progresiva-header">
+                        <span class="item-title">Progresiva 0+500</span>
+                        <button class="btn btn-secondary">Expandir</button>
+                    </div>
+                </li>
+                <li class="list-item">
+                    <div class="progresiva-header">
+                        <span class="item-title">Progresiva 1+000</span>
+                        <button class="btn btn-secondary">Expandir</button>
+                    </div>
+                </li>
+                <li class="list-item">
+                    <div class="progresiva-header">
+                        <span class="item-title">Progresiva 1+500</span>
+                        <button class="btn btn-secondary">Expandir</button>
+                    </div>
+                    <ul class="estratos-list">
+                        <li class="estrato-item">
+                            <span class="item-title">Estrato 1: Arena Limosa</span>
+                            <span class="item-subtitle">0.00m - 1.50m</span>
+                        </li>
+                        <li class="estrato-item active">
+                            <span class="item-title">Estrato 2: Grava mal graduada</span>
+                            <span class="item-subtitle">1.50m - 3.00m</span>
+                        </li>
+                        <li class="estrato-item">
+                            <span class="item-title">Estrato 3: Arcilla</span>
+                            <span class="item-subtitle">3.00m - 5.20m</span>
+                        </li>
+                    </ul>
+                </li>
+                <li class="list-item">
+                    <div class="progresiva-header">
+                        <span class="item-title">Progresiva 2+000</span>
+                        <button class="btn btn-secondary">Expandir</button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <!-- COLUMNA 3: ENSAYOS -->
+        <div class="dashboard-column">
+            <div class="column-header">
+                <h2 class="title">Ensayos</h2>
+                <p class="subtitle">Progresiva 1+500 / Estrato 2</p>
+            </div>
+            <ul class="item-list">
+                <li class="list-item">
+                    <div class="ensayo-item">
+                        <div>
+                            <span class="item-title">Granulometría</span>
+                            <span class="item-subtitle">MTC E 107</span>
+                        </div>
+                        <div>
+                            <span class="status-badge status-aprobado">Aprobado</span>
+                            <button class="btn btn-secondary" style="margin-left: 10px;">Ver Detalle</button>
+                        </div>
+                    </div>
+                </li>
+                <li class="list-item">
+                    <div class="ensayo-item">
+                        <div>
+                            <span class="item-title">Límites de Consistencia</span>
+                            <span class="item-subtitle">MTC E 110</span>
+                        </div>
+                        <div>
+                            <span class="status-badge status-en-proceso">En Proceso</span>
+                            <button class="btn btn-secondary" style="margin-left: 10px;">Ver Detalle</button>
+                        </div>
+                    </div>
+                </li>
+                <li class="list-item">
+                    <div class="ensayo-item">
+                        <div>
+                            <span class="item-title">Contenido de Humedad</span>
+                            <span class="item-subtitle">MTC E 108</span>
+                        </div>
+                        <div>
+                            <span class="status-badge status-pendiente">Pendiente</span>
+                            <button class="btn btn-secondary" style="margin-left: 10px;">Ver Detalle</button>
+                        </div>
+                    </div>
+                </li>
+            </ul>
+            <div class="column-footer">
+                <button class="btn btn-primary btn-full">+ Nuevo Ensayo</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

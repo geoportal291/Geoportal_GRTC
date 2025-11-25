@@ -1,0 +1,1 @@
+ALTER TABLE tipo_ensayo ADD COLUMN config_tabla JSONB;

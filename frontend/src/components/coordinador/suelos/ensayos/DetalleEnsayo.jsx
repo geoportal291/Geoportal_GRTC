@@ -240,20 +240,28 @@ export default function DetalleEnsayo() {
     }
 
     try {
-      // FIX: Wrap the form data in the structure expected by the calculation formulas ('data.datos_formulario.*')
+      const mainTableName = Object.keys(tableConfig)[0];
+      let dynamicConfig = configToUse;
+
+      // Si el config original tiene 'granulometria' hardcodeado, lo reemplazamos dinámicamente.
+      if (mainTableName && JSON.stringify(configToUse).includes('granulometria')) {
+        const configString = JSON.stringify(configToUse);
+        dynamicConfig = JSON.parse(configString.replace(/granulometria/g, mainTableName));
+      }
+
       const calculationContext = {
         formData: formData,
         tableConfig: tableConfig
       };
 
-      const resultadosCalculados = calcularResultados(configToUse, calculationContext);
+      const resultadosCalculados = calcularResultados(dynamicConfig, calculationContext);
       setResultados(resultadosCalculados);
     } catch (err) {
       console.error('Error en el cálculo automático:', err);
       // Set an error state in the results to give feedback to the user
       setResultados({ error: 'Error en el cálculo. Verifique los datos de entrada.' });
     }
-  }, [formData, tableConfig, calculationConfig, tipoEnsayoId]);
+  }, [formData, tableConfig, calculationConfig, tipoEnsayoId, newCalculationConfig]);
 
   // === ACTUALIZAR DATOS DEL FORMULARIO ===
   const handleInputChange = (e) => {
