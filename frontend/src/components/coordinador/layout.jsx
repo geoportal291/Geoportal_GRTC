@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom'; // Importar useLocation
+import { useLocation } from 'react-router-dom';
 import Header from './header';
 import Navbar from './navbar';
 import ChangelogModal from '../ChangelogModal';
@@ -7,12 +7,11 @@ import Traficods from './ingeneria/trafico/trafico.jsx';
 import Vialds from './ingeneria/invvial/vial.jsx';
 import { TrafficOptionProvider } from '../../data/contexts/TrafficOptionContext';
 import { VialOptionProvider } from '../../data/contexts/VialOptionContext';
-import { useAuth } from '../../data/contexts/AuthContext'; // Import useAuth
-import axios from 'axios'; // Import axios
+import { useAuth } from '../../data/contexts/AuthContext';
 import '../ChangelogModal.css';
 
 export default function Layout({ children, setPageTitle }) {
-  const { user, selectedProjectName } = useAuth(); // Get user and selectedProjectName from context
+  const { selectedProjectName } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [trafficOption, setTrafficOption] = useState('resumen');
   const [vialOption, setVialOption] = useState(() => {
@@ -24,14 +23,12 @@ export default function Layout({ children, setPageTitle }) {
     localStorage.setItem('vialOption', vialOption);
   }, [vialOption]);
 
-  const location = useLocation(); // Obtener la ubicación actual
+  const location = useLocation();
   const isAmigoSecretoRoute = location.pathname.startsWith('/eventos/amigo-secreto');
 
   const handleTrafficOptionChange = (option) => {
     setTrafficOption(option);
   };
-
-
 
   const handleVialOptionChange = (option) => {
     setVialOption(option);
@@ -46,7 +43,7 @@ export default function Layout({ children, setPageTitle }) {
           onTrafficOptionChange={handleTrafficOptionChange}
           onVialOptionChange={handleVialOptionChange}
           onToggleSidebar={setCollapsed}
-          userProjectEntityName={selectedProjectName} // Pass the name from context
+          userProjectEntityName={selectedProjectName}
         />
       )}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
@@ -85,7 +82,7 @@ export default function Layout({ children, setPageTitle }) {
               <Vialds isNavbarExpanded={!collapsed} />
             </VialOptionProvider>
           ) : (
-            children
+            React.cloneElement(children, { isSidebarCollapsed: collapsed })
           )}
         </div>
       </div>

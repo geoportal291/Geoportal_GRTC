@@ -1,22 +1,43 @@
 import React from 'react';
 
 const VisorResultados = ({ config, data }) => {
+  console.log("[DEBUG VisorResultados] Props recibidas:", { config, data });
+
   if (!config || !config.groups) {
     return <div>No hay configuración de resultados disponible.</div>;
   }
 
   const getValue = (obj, name) => {
-    if (!obj) return 0;
+    if (!obj) return null;
     if (obj[name] !== undefined) return obj[name];
     
-    // Intenta buscar en sub-objetos (granulometria, limites, etc.)
     for (const key in obj) {
         if (typeof obj[key] === 'object' && obj[key] !== null && obj[key][name] !== undefined) {
             return obj[key][name];
         }
     }
-    return 0;
+    return null;
   }
+
+  const renderValue = (value, field) => {
+    if (value === null || value === undefined) {
+      return 'N/D';
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value.toFixed(field.digits || 2);
+    }
+    
+    if (typeof value === 'object' && value.error) {
+      return <span className="text-danger" title={value.error}><i className="fas fa-exclamation-triangle"></i> Error</span>;
+    }
+
+    if (typeof value === 'object') {
+        return <span className="text-muted">[Dato complejo]</span>
+    }
+
+    return String(value);
+  };
 
   return (
     <div className="row">
@@ -31,9 +52,7 @@ const VisorResultados = ({ config, data }) => {
                 <div className="result-box" key={fieldIndex}>
                   <div className="result-title">{field.label}:</div>
                   <div className="result-value">
-                    {typeof getValue(data, field.name) === 'number'
-                      ? (getValue(data, field.name) || 0).toFixed(field.digits || 2)
-                      : getValue(data, field.name)}
+                    {renderValue(getValue(data, field.name), field)}
                   </div>
                 </div>
               ))}

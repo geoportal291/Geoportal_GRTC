@@ -16,7 +16,7 @@ import { saveAs } from 'file-saver';
 
 
 // Este componente encapsula TODA la lógica imperativa para no causar re-renders.
-const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick }) => {
+const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick, onRouteLoaded }) => {
     const map = useMap();
     const geoJsonLayerRef = React.useRef(null);
     const alcantarillasLayerRef = React.useRef(new L.FeatureGroup()); // FeatureGroup para alcantarillas
@@ -302,6 +302,12 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 const parser = new DOMParser();
                 const kmlDoc = parser.parseFromString(kmlText, 'text/xml');
                 const convertedGeoJson = kml(kmlDoc);
+
+                // --- START: Pass GeoJSON to parent ---
+                if (onRouteLoaded) {
+                    onRouteLoaded(convertedGeoJson);
+                }
+                // --- END: Pass GeoJSON to parent ---
 
                 const tempGeoJsonLayer = L.geoJSON(convertedGeoJson, {
                     style: function (feature) {
@@ -1205,7 +1211,7 @@ const ImageGallery = ({ imageUrls }) => {
     return null;
 };
 
-const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantarillasData, onAlcantarillaClick }) => {
+const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantarillasData, onAlcantarillaClick, onRouteLoaded }) => {
     // Coordenadas para centrar el mapa en Perú, ya que no hay ruta inicial
     const center = [-12, -75];
 
@@ -1217,7 +1223,7 @@ const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantaril
                     <LayersControl.BaseLayer name="Topográfico"> <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' /> </LayersControl.BaseLayer>
                     <LayersControl.BaseLayer name="Satélite"> <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' /> </LayersControl.BaseLayer>
                 </LayersControl>
-                <MapLogic initialRoute={null} onTramoSelect={onTramoSelect} highlightedTramoId={highlightedTramoId} alcantarillasData={alcantarillasData} onAlcantarillaClick={onAlcantarillaClick} />
+                <MapLogic initialRoute={null} onTramoSelect={onTramoSelect} highlightedTramoId={highlightedTramoId} alcantarillasData={alcantarillasData} onAlcantarillaClick={onAlcantarillaClick} onRouteLoaded={onRouteLoaded} />
             </MapContainer>
         </div>
     );

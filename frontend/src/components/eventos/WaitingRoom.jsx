@@ -5,7 +5,7 @@ const SnowEffect = () => {
     const [snowflakes, setSnowflakes] = useState([]);
 
     useEffect(() => {
-        const count = 60; 
+        const count = 60;
         const flakes = Array.from({ length: count }).map((_, i) => ({
             id: i,
             left: Math.random() * 100 + '%',
@@ -20,8 +20,8 @@ const SnowEffect = () => {
     return (
         <div className="snow-container-salaespera">
             {snowflakes.map(flake => (
-                <div 
-                    key={flake.id} 
+                <div
+                    key={flake.id}
                     className="snowflake-salaespera"
                     style={{
                         left: flake.left,
@@ -37,14 +37,14 @@ const SnowEffect = () => {
     );
 };
 
-const WaitingRoom = ({ participantes, isOrganizer, handleStartDraw, nombreUsuario, handleRestartDraw, sorteoIniciado, handleSkipToDashboard, navigate, selectedParticipantIds = [] }) => {
-    
+const WaitingRoom = ({ participantes, isOrganizer, handleStartDraw, nombreUsuario, handleRestartDraw, sorteoIniciado, handleSkipToDashboard, navigate, selectedParticipantIds = [], isSidebarCollapsed }) => {
+
     // Lógica para comparar participantes conectados y seleccionados
     const connectedUserIds = new Set(participantes.map(p => p.id));
     const allSelectedAreConnected = selectedParticipantIds.every(id => connectedUserIds.has(id));
     const totalSelected = selectedParticipantIds.length;
     const totalConnected = participantes.filter(p => selectedParticipantIds.includes(p.id)).length;
-    
+
     // Lógica para encontrar los nombres de los que faltan (solo si es organizador)
     let missingParticipants = [];
     if (isOrganizer && totalSelected > 0) {
@@ -57,7 +57,7 @@ const WaitingRoom = ({ participantes, isOrganizer, handleStartDraw, nombreUsuari
     const canStartDraw = totalSelected > 1 && totalConnected === totalSelected;
 
     return (
-        <div className="waiting-room-overlay-salaespera">
+        <div className={`waiting-room-overlay-salaespera ${isSidebarCollapsed ? 'navbar-collapsed' : ''}`}>
             {/* Inyectamos la nieve */}
             <SnowEffect />
 
@@ -66,7 +66,7 @@ const WaitingRoom = ({ participantes, isOrganizer, handleStartDraw, nombreUsuari
                     <h2><i className="fas fa-snowflake"></i> Sala de Espera</h2>
                     <p>¡Bienvenido al frío, {nombreUsuario}!</p>
                 </div>
-                
+
                 <div className="waiting-room-content-salaespera">
                     {/* PANEL IZQUIERDO */}
                     <div className="panel-salaespera">
@@ -79,7 +79,7 @@ const WaitingRoom = ({ participantes, isOrganizer, handleStartDraw, nombreUsuari
                                 </li>
                             ))}
                             {participantes.length === 0 && (
-                                <li style={{justifyContent: 'center', fontStyle: 'italic', opacity: 0.7, gridColumn: '1 / -1', border:'none', background: 'transparent', boxShadow:'none'}}>
+                                <li style={{ justifyContent: 'center', fontStyle: 'italic', opacity: 0.7, gridColumn: '1 / -1', border: 'none', background: 'transparent', boxShadow: 'none' }}>
                                     Esperando almas...
                                 </li>
                             )}
@@ -89,26 +89,26 @@ const WaitingRoom = ({ participantes, isOrganizer, handleStartDraw, nombreUsuari
                     {/* PANEL DERECHO */}
                     <div className="panel-salaespera">
                         <h3 className="panel-title-salaespera"><i className="fas fa-crown"></i> Panel del Organizador</h3>
-                        
+
                         {isOrganizer ? (
-                            <div style={{display: 'flex', flexDirection: 'column', height: '100%'}}>
-                                
-                                <div style={{textAlign: 'center', marginBottom: '1rem'}}>
-                                    <p style={{color: '#d0e8ff'}}>Participantes del Sorteo:</p>
-                                    <p style={{fontSize: '2rem', fontWeight: 'bold', color: 'white', margin: '0.5rem 0'}}>{totalConnected} de {totalSelected}</p>
-                                    <p style={{fontSize: '0.9rem', color: '#a9d5ff', fontStyle: 'italic'}}>Todos los participantes seleccionados deben estar conectados.</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+
+                                <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                                    <p style={{ color: '#d0e8ff' }}>Participantes del Sorteo:</p>
+                                    <p style={{ fontSize: '2rem', fontWeight: 'bold', color: 'white', margin: '0.5rem 0' }}>{totalConnected} de {totalSelected}</p>
+                                    <p style={{ fontSize: '0.9rem', color: '#a9d5ff', fontStyle: 'italic' }}>Todos los participantes seleccionados deben estar conectados.</p>
                                 </div>
 
-                                <button 
+                                <button
                                     onClick={() => navigate('/eventos/amigo-secreto/gestionar')}
                                     className="btn-iniciar-salaespera"
-                                    style={{marginBottom: '10px', background: '#5bc0de', order: -1}} // Ponerlo arriba
+                                    style={{ marginBottom: '10px', background: '#5bc0de', order: -1 }} // Ponerlo arriba
                                 >
                                     <i className="fas fa-user-cog"></i> Gestionar Participantes
                                 </button>
 
-                                <button 
-                                    onClick={handleStartDraw} 
+                                <button
+                                    onClick={handleStartDraw}
                                     className="btn-iniciar-salaespera"
                                     disabled={!canStartDraw}
                                 >
@@ -121,25 +121,25 @@ const WaitingRoom = ({ participantes, isOrganizer, handleStartDraw, nombreUsuari
                                     </small>
                                 )}
 
-                                <button 
+                                <button
                                     onClick={handleRestartDraw}
                                     className="btn-reiniciar-salaespera"
                                     disabled={!sorteoIniciado}
                                 >
                                     <i className="fas fa-redo"></i> Reiniciar
                                 </button>
-                                
+
                                 <button
                                     onClick={handleSkipToDashboard}
                                     className="btn-reiniciar-salaespera"
-                                    style={{background: 'rgba(91, 192, 222, 0.2)', borderColor: '#5bc0de', marginTop:'5px'}}
+                                    style={{ background: 'rgba(91, 192, 222, 0.2)', borderColor: '#5bc0de', marginTop: '5px' }}
                                 >
                                     <i className="fas fa-bug"></i> Debug
                                 </button>
                             </div>
                         ) : (
-                            <div style={{textAlign: 'center', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%'}}>
-                                <p style={{color:'#fff'}}>El sorteo se está congelando... ten paciencia.</p>
+                            <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                                <p style={{ color: '#fff' }}>El sorteo se está congelando... ten paciencia.</p>
                                 <div className="loader-salaespera"></div>
                             </div>
                         )}

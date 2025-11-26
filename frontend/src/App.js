@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom'; // Import ReactDOM for portals
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { PageTitleProvider, usePageTitle } from './components/contexts/PageTitleContext';
@@ -23,6 +24,7 @@ import Calendario from './components/coordinador/calendario/calendar.jsx';
 import CoordinadorDashboard from './components/coordinador/cordinadords.jsx';
 import AmigoSecretoDashboard from './components/eventos/AmigoSecretoDashboard'; // NUEVO
 import GestionarParticipantes from './components/eventos/GestionarParticipantes'; // NUEVO
+import VisualizacionAmigo from './components/eventos/visualizacionamigo.jsx'; // NUEVO
 // Coordinado
 import Proyectos from './components/coordinador/suelos/proyectos/proyectos';                                                         
 import GestorDeTramosActual from './components/coordinador/suelos/gestion_tramos/GestorDeTramosActual';                                   
@@ -81,6 +83,15 @@ function AppContent() {
     const navigate = useNavigate();
     const { logout, showProjectSelectionModal } = useAuth(); // NEW: Get showProjectSelectionModal from useAuth
 
+    const [isInitialViz, setIsInitialViz] = useState(false);
+
+    useEffect(() => {
+        if (sessionStorage.getItem('showAmigoSecretoViz') === 'true' && location.pathname !== '/') {
+            setIsInitialViz(true);
+            sessionStorage.removeItem('showAmigoSecretoViz');
+        }
+    }, [location.pathname]);
+
     useEffect(() => {
         const interceptor = axios.interceptors.response.use(
             response => response,
@@ -121,9 +132,17 @@ function AppContent() {
         }
         logAuditEvent('PAGE_VIEW', { path: location.pathname });
     }, [location.pathname]);
+    
+    const handleCloseInitialViz = () => {
+        setIsInitialViz(false);
+    };
 
     return (
         <div className="principal">
+            {isInitialViz && ReactDOM.createPortal(
+                <VisualizacionAmigo onClose={handleCloseInitialViz} isOverlay={true} />,
+                document.getElementById('overlay-root')
+            )}
             <Routes>
                 {/* Login */}
                 <Route path="/" element={<Login />} />

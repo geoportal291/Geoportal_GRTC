@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amigo Secreto MTC 2025</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Mountains+of+Christmas:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Cinzel Decorative', cursive;
+            background: radial-gradient(circle at center, #3182cf 0%, #081b33 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+            padding: 20px;
+        }
+
+        /* Luces navideñas */
+        .christmas-lights {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 30px;
+            background: transparent;
+            z-index: 1;
+        }
+
+        .light {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            top: 5px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            animation: twinkle 1.5s infinite alternate;
+        }
+
+        @keyframes twinkle {
+            0% {
+                opacity: 0.3;
+                transform: scale(0.8);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1.1);
+                box-shadow: 0 0 20px currentColor;
+            }
+        }
+
+        /* Nieve cayendo desde arriba */
+        .snowflake {
+            position: fixed;
+            top: -50px;
+            color: white;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.9);
+            z-index: 2;
+            animation: snowfall linear infinite;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        @keyframes snowfall {
+            0% {
+                transform: translateY(0) rotate(0deg);
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(110vh) rotate(360deg);
+                opacity: 0.8;
+            }
+        }
+
+        /* Tarjeta principal */
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            border-radius: 25px;
+            padding: 50px 40px;
+            text-align: center;
+            width: 100%;
+            max-width: 600px;
+            /* Un poco más ancha para las frases largas */
+            box-shadow: 0 0 40px rgba(49, 130, 207, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.5s ease;
+            position: relative;
+            overflow: visible;
+            z-index: 10;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 60px rgba(169, 213, 255, 0.5);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Título */
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 30px;
+            color: #e1f1ff;
+            text-shadow: 0 0 15px rgba(49, 130, 207, 0.8);
+            letter-spacing: 2px;
+            position: relative;
+            display: inline-block;
+            font-family: 'Mountains of Christmas', cursive;
+        }
+
+        h1::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 10%;
+            width: 80%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #a9d5ff, transparent);
+        }
+
+        .year {
+            font-size: 1.8rem;
+            color: #ffd700;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        /* Área de revelación */
+        .reveal-area {
+            background: rgba(8, 27, 51, 0.4);
+            border-radius: 20px;
+            padding: 30px 25px;
+            margin: 25px 0;
+            border: 2px dashed rgba(169, 213, 255, 0.4);
+            transition: all 0.4s ease;
+            cursor: pointer;
+            position: relative;
+            min-height: 140px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .reveal-area:hover {
+            background: rgba(49, 130, 207, 0.2);
+            border-color: #ffd700;
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(49, 130, 207, 0.3);
+        }
+
+        .reveal-text {
+            font-size: 1.2rem;
+            color: #a9d5ff;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .friend-name {
+            font-size: 2.5rem;
+            font-family: 'Cinzel Decorative', cursive;
+            background: linear-gradient(to right, #ffffff, #c7e5ff, #ffffff);
+            -webkit-background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+            min-height: 70px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.5s ease;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .friend-name.revealed {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Cajas de regalos doradas */
+        .gift-boxes {
+            position: absolute;
+            bottom: -30px;
+            right: -30px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 20;
+        }
+
+        .gift-box {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #d4af37, #ffd700, #ffec8b);
+            border-radius: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .gift-box:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .gift-box:nth-child(2) {
+            animation-delay: 0.5s;
+        }
+
+        .gift-box:nth-child(3) {
+            animation-delay: 1s;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0) rotate(0deg);
+            }
+
+            50% {
+                transform: translateY(-10px) rotate(3deg);
+            }
+        }
+
+        .gift-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.4), transparent);
+        }
+
+        .gift-box::after {
+            content: '';
+            position: absolute;
+            top: 45%;
+            left: 0;
+            width: 100%;
+            height: 12%;
+            background: #c19b2a;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .gift-box:hover {
+            transform: scale(1.15) rotate(8deg);
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+            background: linear-gradient(135deg, #ffd700, #ffec8b, #fffacd);
+            animation-play-state: paused;
+            border-color: #fff;
+        }
+
+        .gift-box .ribbon {
+            position: absolute;
+            width: 100%;
+            height: 18px;
+            background: linear-gradient(90deg, #8B0000, #ff0000, #8B0000);
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .gift-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #8B0000;
+            z-index: 3;
+            text-shadow: 2px 2px 0 rgba(255, 255, 255, 0.4);
+            transition: all 0.3s ease;
+            font-family: 'Cinzel Decorative', cursive;
+        }
+
+        .gift-box:hover .gift-number {
+            transform: scale(1.2);
+            color: #ff0000;
+        }
+
+        .gift-text {
+            position: absolute;
+            bottom: 90px;
+            right: 10px;
+            background: rgba(8, 27, 51, 0.9);
+            color: #e1f1ff;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            max-width: 220px;
+            text-align: center;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+            transition: all 0.4s ease;
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+            z-index: 25;
+            border: 1px solid rgba(255, 215, 0, 0.4);
+            backdrop-filter: blur(5px);
+        }
+
+        .gift-text.revealed {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        /* Duende */
+        .elf {
+            position: absolute;
+            width: 60px;
+            height: 80px;
+            bottom: 10px;
+            left: 10px;
+            z-index: 15;
+            cursor: pointer;
+            transition: all 0.5s ease;
+            animation: elf-bounce 4s infinite ease-in-out;
+        }
+
+        @keyframes elf-bounce {
+
+            0%,
+            100% {
+                transform: translateY(0) rotate(0deg);
+            }
+
+            50% {
+                transform: translateY(-15px) rotate(5deg);
+            }
+        }
+
+        .elf:hover {
+            transform: scale(1.1) rotate(-5deg);
+            animation-play-state: paused;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.6));
+        }
+
+        .elf-body {
+            position: absolute;
+            width: 50px;
+            height: 40px;
+            background: #006400;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            top: 25px;
+            left: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .elf-hat {
+            position: absolute;
+            width: 40px;
+            height: 30px;
+            background: #8B0000;
+            border-radius: 50% 50% 0 0;
+            top: 0;
+            left: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .elf-hat::after {
+            content: '';
+            position: absolute;
+            width: 15px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            top: -10px;
+            right: 5px;
+            box-shadow: 0 0 5px white;
+        }
+
+        .elf-face {
+            position: absolute;
+            width: 30px;
+            height: 25px;
+            background: #ffdbac;
+            border-radius: 50%;
+            top: 30px;
+            left: 15px;
+        }
+
+        .elf-eye {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: black;
+            border-radius: 50%;
+            top: 38px;
+        }
+
+        .elf-eye.left {
+            left: 22px;
+        }
+
+        .elf-eye.right {
+            right: 22px;
+        }
+
+        /* Decoraciones */
+        .holly {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 2.5rem;
+            color: #a9d5ff;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
+            animation: sway 4s infinite ease-in-out;
+        }
+
+        .holly::after {
+            content: '❦';
+            position: absolute;
+            top: -5px;
+            left: 15px;
+            color: #e1f1ff;
+            font-size: 1.2rem;
+            text-shadow: 0 0 5px #fff;
+        }
+
+        @keyframes sway {
+
+            0%,
+            100% {
+                transform: rotate(-5deg);
+            }
+
+            50% {
+                transform: rotate(5deg);
+            }
+        }
+
+        .bell {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 2.2rem;
+            color: #ffd700;
+            animation: ring 3s infinite ease-in-out;
+            transform-origin: top center;
+            text-shadow: 0 0 10px #3182cf;
+        }
+
+        @keyframes ring {
+
+            0%,
+            100% {
+                transform: rotate(-10deg);
+            }
+
+            50% {
+                transform: rotate(10deg);
+            }
+        }
+
+        /* Adornos de esquina */
+        .corner {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            z-index: 5;
+            border-color: #a9d5ff;
+            box-shadow: 0 0 10px rgba(169, 213, 255, 0.3);
+        }
+
+        .corner-tl {
+            top: 15px;
+            left: 15px;
+            border-top: 3px solid #a9d5ff;
+            border-left: 3px solid #a9d5ff;
+        }
+
+        .corner-tr {
+            top: 15px;
+            right: 15px;
+            border-top: 3px solid #a9d5ff;
+            border-right: 3px solid #a9d5ff;
+        }
+
+        .corner-bl {
+            bottom: 15px;
+            left: 15px;
+            border-bottom: 3px solid #a9d5ff;
+            border-left: 3px solid #a9d5ff;
+        }
+
+        .corner-br {
+            bottom: 15px;
+            right: 15px;
+            border-bottom: 3px solid #a9d5ff;
+            border-right: 3px solid #a9d5ff;
+        }
+
+        /* Mensaje navideño ANIMADO */
+        .christmas-message {
+            margin-top: 25px;
+            font-size: 1.3rem;
+            /* Tamaño ajustable si la frase es larga */
+            color: #e1f1ff;
+            text-shadow: 0 0 10px rgba(49, 130, 207, 0.6);
+            font-style: italic;
+            min-height: 80px;
+            /* Espacio reservado */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 1s ease-in-out;
+            opacity: 1;
+            padding: 0 10px;
+        }
+
+        .christmas-message.fade-out {
+            opacity: 0;
+        }
+
+        /* Modal */
+        .gift-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(8, 27, 51, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s ease;
+        }
+
+        .gift-modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: linear-gradient(145deg, #163a5f, #081b33);
+            border: 2px solid #ffd700;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 90%;
+            max-height: 90%;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(49, 130, 207, 0.5);
+            position: relative;
+            color: #fff;
+        }
+
+        .modal-content img {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .gift-link {
+            display: inline-block;
+            margin-top: 10px;
+            color: #8B0000;
+            text-decoration: none;
+            font-weight: bold;
+            padding: 8px 15px;
+            border-radius: 5px;
+            background: #ffd700;
+            transition: all 0.3s ease;
+        }
+
+        .gift-link:hover {
+            background: #fff;
+            box-shadow: 0 0 10px #ffd700;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #e1f1ff;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .close-modal:hover {
+            color: #ffd700;
+            transform: scale(1.2);
+        }
+
+        #modalTitle {
+            font-family: 'Cinzel Decorative', cursive;
+            color: #ffd700;
+            margin-bottom: 15px;
+            font-size: 2rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="christmas-lights" id="lights"></div>
+
+    <div class="card">
+        <div class="holly">❦</div>
+        <div class="bell">🔔</div>
+
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
+
+        <div class="elf" id="elf">
+            <div class="elf-hat"></div>
+            <div class="elf-body"></div>
+            <div class="elf-face"></div>
+            <div class="elf-eye left"></div>
+            <div class="elf-eye right"></div>
+        </div>
+
+        <h1>Amigo Secreto</h1>
+        <div class="year">2025</div>
+
+        <div class="reveal-area" id="revealArea">
+            <div class="reveal-text">
+                <i class="fas fa-snowflake"></i> Pasa el mouse aquí
+            </div>
+            <div class="friend-name" id="friendName">
+                <span></span>
+            </div>
+        </div>
+
+        <div class="christmas-message" id="rotatingMessage">
+            ¡Feliz Navidad! Construyendo puentes de unión y amistad en todo el Perú.
+        </div>
+
+        <div class="gift-boxes">
+            <div class="gift-box" data-gift="1">
+                <div class="ribbon"></div>
+                <div class="gift-number">1</div>
+            </div>
+            <div class="gift-box" data-gift="2">
+                <div class="ribbon"></div>
+                <div class="gift-number">2</div>
+            </div>
+            <div class="gift-box" data-gift="3">
+                <div class="ribbon"></div>
+                <div class="gift-number">3</div>
+            </div>
+        </div>
+
+        <div class="gift-text" id="giftText"></div>
+    </div>
+
+    <div class="gift-modal" id="giftModal">
+        <div class="modal-content">
+            <button class="close-modal" id="closeModal">&times;</button>
+            <h3 id="modalTitle">Regalo</h3>
+            <img id="modalImage" src="" alt="Imagen del regalo">
+            <p id="modalDescription"></p>
+            <a href="#" id="modalLink" class="gift-link" target="_blank">Ver más detalles</a>
+        </div>
+    </div>
+
+    <script>
+        const gifts = {
+            1: [{ name: "Agenda Ejecutiva", description: "Para planificar las próximas obras del año", image: "https://images.unsplash.com/photo-1544816155-12df9643f363?w=400", link: "#" }, { name: "Termo Todo Terreno", description: "Ideal para las visitas a campo", image: "https://images.unsplash.com/photo-1517420879524-86d64ac2f339?w=400", link: "#" }],
+            2: [{ name: "Kit de Herramientas", description: "Siempre listos para cualquier imprevisto", image: "https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=400", link: "#" }],
+            3: [{ name: "Café Reserva Nacional", description: "Energía pura para largas jornadas de diseño", image: "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400", link: "#" }]
+        };
+
+        // --- LISTA DE MENSAJES PARA INGENIEROS MTC ---
+        const messages = [
+            "¡Feliz Navidad! Construyendo puentes de unión y amistad en todo el Perú.",
+            "Ingenieros del GRTC: Que la señal de la paz tenga cobertura total en tu hogar.",
+            "Uniendo pueblos, integrando vidas y trazando nuevas rutas para el 2026.",
+            "Más allá de las obras y el concreto, lo que nos hace fuertes es este equipo.",
+            "¡Felices Fiestas! Gracias por conectar al país con tu esfuerzo y dedicación.",
+            "Que la alegría de la Navidad llegue a cada kilómetro de tu vida.",
+            "Tu compañía en el trabajo es la mejor estructura de soporte. ¡Felicidades!"
+        ];
+
+        let msgIndex = 0;
+        const msgElement = document.getElementById('rotatingMessage');
+
+        // Función para cambiar el mensaje
+        function rotateMessage() {
+            msgElement.classList.add('fade-out');
+            setTimeout(() => {
+                msgIndex = (msgIndex + 1) % messages.length;
+                msgElement.textContent = messages[msgIndex];
+                msgElement.classList.remove('fade-out');
+            }, 1000);
+        }
+
+        // Ejecutar cambio cada 50 segundos (50000 ms)
+        setInterval(rotateMessage, 50000);
+
+        function createLights() {
+            const lightsContainer = document.getElementById('lights');
+            const lightCount = 20;
+            const colors = ['#ffffff', '#00ffff', '#3182cf', '#e1f1ff', '#87ceeb'];
+            for (let i = 0; i < lightCount; i++) {
+                const light = document.createElement('div');
+                light.classList.add('light');
+                light.style.left = (i * (100 / lightCount)) + '%';
+                light.style.background = colors[Math.floor(Math.random() * colors.length)];
+                light.style.animationDelay = (Math.random() * 2) + 's';
+                light.style.boxShadow = `0 0 10px ${light.style.background}`;
+                lightsContainer.appendChild(light);
+            }
+        }
+
+        function createSnowflakes() {
+            const snowflakeCount = 40;
+            const snowflakeSymbols = ['❄', '❅', '❆', '•'];
+
+            for (let i = 0; i < snowflakeCount; i++) {
+                const snowflake = document.createElement('div');
+                snowflake.classList.add('snowflake');
+                snowflake.innerHTML = snowflakeSymbols[Math.floor(Math.random() * snowflakeSymbols.length)];
+
+                snowflake.style.left = Math.random() * 100 + 'vw';
+                snowflake.style.animationDuration = (Math.random() * 10 + 5) + 's';
+                snowflake.style.animationDelay = (Math.random() * 10) + 's';
+                snowflake.style.fontSize = (Math.random() * 15 + 10) + 'px';
+                snowflake.style.opacity = Math.random() * 0.5 + 0.3;
+
+                document.body.appendChild(snowflake);
+
+                setTimeout(() => {
+                    if (snowflake.parentNode) {
+                        snowflake.parentNode.removeChild(snowflake);
+                    }
+                }, 20000);
+            }
+        }
+
+        const revealArea = document.getElementById('revealArea');
+        const friendName = document.getElementById('friendName');
+        const nameSpan = friendName.querySelector('span');
+        let revealTimeout;
+        let isRevealed = false;
+
+        revealArea.addEventListener('mouseenter', function () {
+            if (isRevealed) return;
+            // Nombres de ejemplo
+            const names = ['Ing. Roberto', 'Ing. Carla', 'Ing. Luis', 'Ing. María', 'Ing. Jorge'];
+            const selectedName = names[Math.floor(Math.random() * names.length)];
+            nameSpan.textContent = selectedName;
+            friendName.classList.add('revealed');
+            isRevealed = true;
+            revealTimeout = setTimeout(() => {
+                friendName.classList.remove('revealed');
+                setTimeout(() => { nameSpan.textContent = ''; isRevealed = false; }, 500);
+            }, 3000);
+        });
+
+        revealArea.addEventListener('mouseleave', function () {
+            if (revealTimeout) {
+                clearTimeout(revealTimeout);
+                friendName.classList.remove('revealed');
+                setTimeout(() => { nameSpan.textContent = ''; isRevealed = false; }, 500);
+            }
+        });
+
+        const giftModal = document.getElementById('giftModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalImage = document.getElementById('modalImage');
+        const modalDescription = document.getElementById('modalDescription');
+        const modalLink = document.getElementById('modalLink');
+        const closeModal = document.getElementById('closeModal');
+
+        document.querySelectorAll('.gift-box').forEach(box => {
+            box.addEventListener('click', function () {
+                const giftNum = this.getAttribute('data-gift');
+                const giftList = gifts[giftNum] || [{ name: "Detalle Sorpresa", description: "Un presente especial para un gran colega", image: "https://images.unsplash.com/photo-1512909006721-3d6018887383?w=400", link: "#" }];
+                const selectedGift = giftList[Math.floor(Math.random() * giftList.length)];
+                modalTitle.textContent = selectedGift.name;
+                modalImage.src = selectedGift.image;
+                modalDescription.textContent = selectedGift.description;
+                modalLink.href = selectedGift.link;
+                giftModal.classList.add('active');
+            });
+        });
+
+        closeModal.addEventListener('click', () => giftModal.classList.remove('active'));
+        giftModal.addEventListener('click', (e) => { if (e.target === giftModal) giftModal.classList.remove('active'); });
+
+        const elf = document.getElementById('elf');
+        elf.addEventListener('click', function () {
+            this.style.animation = 'none';
+            setTimeout(() => this.style.animation = 'elf-bounce 4s infinite ease-in-out', 10);
+            const giftText = document.getElementById('giftText');
+            giftText.textContent = "¡Los duendes de obra saludan! 👷‍♂️❄️";
+            giftText.classList.add('revealed');
+            setTimeout(() => { giftText.classList.remove('revealed'); setTimeout(() => giftText.textContent = '', 500); }, 3000);
+        });
+
+        createLights();
+        createSnowflakes();
+        setInterval(createSnowflakes, 3000);
+    </script>
+</body>
+
+</html>

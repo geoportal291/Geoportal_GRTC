@@ -31,12 +31,27 @@ function get(obj, path, defaultValue = undefined) {
  * @returns {object} El objeto modificado.
  */
 function set(obj, path, value) {
-  const keys = Array.isArray(path) ? path : path.split('.');
+  // Regex para separar la parte principal del path de la parte con corchetes
+  const pathRegex = /([a-zA-Z0-9._]+)\[([^\]]+)\]/;
+  const match = path.match(pathRegex);
+
+  let keys;
+  if (match) {
+    // Si hay corchetes, evaluamos la clave dentro de ellos
+    const mainPath = match[1];
+    const dynamicKey = math.evaluate(match[2], obj); // El 'scope' es el mismo objeto
+    keys = [...mainPath.split('.'), dynamicKey];
+  } else {
+    // Si no hay corchetes, funciona como antes
+    keys = Array.isArray(path) ? path : path.split('.');
+  }
+  
   let current = obj;
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
     if (current[key] === undefined || current[key] === null) {
       const nextKey = keys[i + 1];
+      // Si la siguiente clave parece un número, creamos un array, si no un objeto
       const isNextKeyNumeric = !isNaN(parseInt(nextKey, 10));
       current[key] = isNextKeyNumeric ? [] : {};
     }
@@ -46,6 +61,14 @@ function set(obj, path, value) {
   return obj;
 }
 
+function buildPoints(rows, pasa_results) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map(row => ({
+    mm: row.mm,
+    pasa: get(pasa_results, row.key, 0)
+  }));
+}
+
 // Importar helpers en el scope de mathjs para que puedan ser usados en las fórmulas
 math.import({
   get,
@@ -53,6 +76,7 @@ math.import({
   isFinite: Number.isFinite,
   isObject: (val) => typeof val === 'object' && val !== null,
   values: Object.values,
+  buildPoints,
 }, {
   override: true
 });
@@ -72,9 +96,14 @@ const engineMap = {
    * @returns {number | null} El valor Y interpolado, o null si no se puede calcular.
    */
   interpolate: ({ points, targetX, xKey, yKey, logScaleX = false }) => {
-    if (!points || points.length < 2) return null;
+    if (!points || !Array.isArray(points)) return null;
 
-    const sortedPoints = [...points].sort((a, b) => a[xKey] - b[xKey]);
+    // Filtrar puntos inválidos antes de procesar
+    const validPoints = points.filter(p => p && typeof p[xKey] === 'number' && isFinite(p[xKey]));
+
+    if (validPoints.length < 2) return null;
+
+    const sortedPoints = [...validPoints].sort((a, b) => a[xKey] - b[xKey]);
 
     let p1 = null, p2 = null;
     for (let i = 0; i < sortedPoints.length - 1; i++) {
@@ -138,11 +167,13 @@ function _processSteps(steps, context) {
 
           const itemVar = loopConfig.itemVar || 'item';
           const indexVar = loopConfig.indexVar || 'index';
+          const prevItemVar = loopConfig.prevItemVar || 'prev_item';
 
           for (let i = 0; i < items.length; i++) {
             const loopScope = Object.create(context);
             loopScope[itemVar] = items[i];
             loopScope[indexVar] = i;
+            loopScope[prevItemVar] = i > 0 ? items[i - 1] : null;
             
             if (loopConfig.scope_vars) {
                 for (const varName in loopConfig.scope_vars) {
@@ -167,7 +198,12 @@ function _processSteps(steps, context) {
 
           const resolvedInputs = {};
           for (const key in engineConfig.inputs) {
-            resolvedInputs[key] = get(context, engineConfig.inputs[key]);
+            const inputValue = engineConfig.inputs[key];
+            if (typeof inputValue === 'string') {
+              resolvedInputs[key] = math.evaluate(inputValue, context);
+            } else {
+              resolvedInputs[key] = inputValue;
+            }
           }
 
           const result = engineFunc(resolvedInputs);

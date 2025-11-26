@@ -11,7 +11,7 @@ import { getAmigoSecretoParticipantes } from '../../api/amigoSecretoAPI';
 import { getMyWishlist, addWishlistItem, deleteWishlistItem, getWishlistByUserId } from '../../api/wishlistAPI';
 import ChatAnonimo from './ChatAnonimo';
 import WishlistModal from './WishlistModal';
-import WaitingRoom from './WaitingRoom';
+import VisualizacionAmigo from './visualizacionamigo';
 import { SorteoAnimation } from './SorteoAnimation';
 
 // --- Componente de Nieve (Local) ---
@@ -83,7 +83,7 @@ const Countdown = ({ targetDate }) => {
     );
 };
 
-export default function AmigoSecretoDashboard() {
+export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
     const { width, height } = useWindowSize();
     const navigate = useNavigate();
     const { user } = useAuth(); 
@@ -153,7 +153,6 @@ export default function AmigoSecretoDashboard() {
             setIsOrganizer(isOrganizer);
             setSorteoIniciado(esSorteoIniciado || !!asignacion); 
             if (asignacion) {
-                setAnimationStage('revealingContent');
                 setAsignacion({ nombre: `¡${asignacion.nombre}!`, revelado: true, receptorId: asignacion.receptorId });
             }
             const decodedToken = jwtDecode(token);
@@ -172,7 +171,7 @@ export default function AmigoSecretoDashboard() {
             setAsignacion(prev => ({ ...prev, receptorId: receptorId })); // Guardar el ID del receptor
         }
 
-        const resetToWaitingRoom = () => {
+        const resetToVisualizacion = () => {
             setAnimationStage('idle');
             setAsignacion({ nombre: '', revelado: false, receptorId: null });
             setRunConfetti(false);
@@ -181,7 +180,7 @@ export default function AmigoSecretoDashboard() {
             alertify.warning('El sorteo ha sido reiniciado.');
         };
         
-        socket.on('draw_restarted', resetToWaitingRoom);
+        socket.on('draw_restarted', resetToVisualizacion);
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
         socket.on('connect_error', onError);
@@ -215,8 +214,7 @@ export default function AmigoSecretoDashboard() {
         setTimeout(() => setRunConfetti(false), 5000);
     };
 
-    const handleGoToWaitingRoom = () => setAnimationStage('idle');
-    const handleSkipToDashboard = () => setAnimationStage('revealingContent');
+    const handleGoToVisualizacion = () => setAnimationStage('idle');
     const handleInputChange = (e) => setNuevoDeseo(prev => ({ ...prev, [e.target.name]: e.target.value }));
     
     const handleAddDeseo = async () => {
@@ -257,6 +255,8 @@ export default function AmigoSecretoDashboard() {
         }
     };
 
+    const goToDashboard = () => setAnimationStage('revealingContent');
+
     // --- RENDER ---
     if (!isConnected || !currentUser) {
         return (
@@ -272,16 +272,8 @@ export default function AmigoSecretoDashboard() {
     }
     
     if (animationStage === 'idle') {
-        return <WaitingRoom 
-                    participantes={participantesServer} 
-                    isOrganizer={isOrganizer} 
-                    handleStartDraw={handleStartDraw} 
-                    nombreUsuario={currentUser.nombre}
-                    handleRestartDraw={handleRestartDraw}
-                    sorteoIniciado={sorteoIniciado} 
-                    handleSkipToDashboard={handleSkipToDashboard}
-                    navigate={navigate}
-                    selectedParticipantIds={selectedParticipantIds} // Pasar el nuevo estado
+        return <VisualizacionAmigo 
+                    onGoToDashboard={asignacion.revelado ? goToDashboard : null} 
                 />;
     }
 
@@ -301,8 +293,8 @@ export default function AmigoSecretoDashboard() {
                     <h1>Amigo Secreto 2025</h1>
                     <p>¡Bienvenido al Frío, {currentUser.nombre}!</p>
                     {isOrganizer && (
-                        <button onClick={handleGoToWaitingRoom} className="btn-reiniciar-sorteo" style={{backgroundColor: 'rgba(0,0,0,0.3)', marginTop:'10px'}}>
-                            <i className="fas fa-arrow-left"></i> Sala de Espera
+                        <button onClick={() => setAnimationStage('idle')} className="btn-reiniciar-sorteo" style={{backgroundColor: 'rgba(0,0,0,0.3)', marginTop:'10px'}}>
+                            <i className="fas fa-envelope"></i> Ver carta de invitación
                         </button>
                     )}
                 </div>

@@ -28,83 +28,6 @@ export default function DetalleEnsayo() {
   const [tipoEnsayoId, setTipoEnsayoId] = useState(null);
   const [ensayoDetails, setEnsayoDetails] = useState(null);
 
-  // TEMPORAL: Nueva configuración para probar el motor de granulometría
-  const newCalculationConfig = {
-    version: "2.0",
-    vars: {
-      pesoSecoTotal: "get(inputs.formData, 'granulometria.peso_total_muestra', 0)"
-    },
-    steps: [
-      {
-        type: "expression",
-        output: "results.granulometria.sum_retenido",
-        expression: "sum(values(get(inputs.formData, 'granulometria.tamices', {})))"
-      },
-      {
-        type: 'loop',
-        description: "Calcular retenido, acumulado y % pasa para cada tamiz",
-        config: {
-          items: "inputs.tableConfig.granulometria.rows",
-          itemVar: "tamiz",
-          indexVar: "i",
-          actions: [
-            {
-              type: "expression",
-              output: "vars.prev_retenido_acum",
-              expression: "i > 0 ? get(results, 'granulometria.retenido_acum.' + inputs.tableConfig.granulometria.rows[i-1].key, 0) : 0"
-            },
-            {
-              type: "expression",
-              output: "results.granulometria.retenido_acum[tamiz.key]",
-              expression: "vars.prev_retenido_acum + get(inputs.formData, 'granulometria.tamices.' + tamiz.key, 0)"
-            },
-            {
-              type: "expression",
-              output: "results.granulometria.pasa[tamiz.key]",
-              expression: "(1 - get(results, 'granulometria.retenido_acum.' + tamiz.key, 0) / vars.pesoSecoTotal) * 100"
-            }
-          ]
-        }
-      },
-      {
-        type: 'expression',
-        output: 'results.granulometria.pasa.fondo',
-        expression: '0'
-      },
-      {
-        type: 'expression',
-        output: 'vars.puntosCurva',
-        expression: "map(inputs.tableConfig.granulometria.rows, row => ({ mm: row.mm, pasa: get(results.granulometria.pasa, row.key, 0) }))"
-      },
-      ...[10, 30, 60].map(d => ({
-        type: 'engine',
-        config: {
-          name: 'interpolate',
-          inputs: {
-            points: "vars.puntosCurva",
-            targetX: d,
-            xKey: "'pasa'",
-            yKey: "'mm'",
-            logScaleX: false
-          },
-          output: `results.granulometria.D${d}`
-        }
-      })),
-      {
-        type: 'expression',
-        output: 'results.granulometria.coef_uniformidad',
-        condition: "get(results, 'granulometria.D10') > 0",
-        expression: "get(results, 'granulometria.D60', 0) / get(results, 'granulometria.D10', 1)"
-      },
-      {
-        type: 'expression',
-        output: 'results.granulometria.coef_curvatura',
-        condition: "get(results, 'granulometria.D10') > 0 && get(results, 'granulometria.D60') > 0",
-        expression: "(get(results, 'granulometria.D30', 0)^2) / (get(results, 'granulometria.D10', 1) * get(results, 'granulometria.D60', 1))"
-      },
-    ]
-  };
-
   const [resultados, setResultados] = useState({});
   const [activeTab, setActiveTab] = useState('formulario');
 
@@ -231,23 +154,14 @@ export default function DetalleEnsayo() {
 
   // === CÁLCULO AUTOMÁTICO DE RESULTADOS ===
   useEffect(() => {
-    const configToUse = tipoEnsayoId === 1 ? newCalculationConfig : calculationConfig;
-
     // Pre-validation: Do not run calculations if configs are missing or if formData is null/empty.
-    if (!tableConfig || !configToUse || !formData || Object.keys(formData).length === 0) {
+    if (!tableConfig || !calculationConfig || !formData || Object.keys(formData).length === 0) {
       setResultados({}); // Reset results if there's nothing to calculate
       return;
     }
 
     try {
-      const mainTableName = Object.keys(tableConfig)[0];
-      let dynamicConfig = configToUse;
-
-      // Si el config original tiene 'granulometria' hardcodeado, lo reemplazamos dinámicamente.
-      if (mainTableName && JSON.stringify(configToUse).includes('granulometria')) {
-        const configString = JSON.stringify(configToUse);
-        dynamicConfig = JSON.parse(configString.replace(/granulometria/g, mainTableName));
-      }
+      const dynamicConfig = calculationConfig;
 
       const calculationContext = {
         formData: formData,
@@ -261,7 +175,7 @@ export default function DetalleEnsayo() {
       // Set an error state in the results to give feedback to the user
       setResultados({ error: 'Error en el cálculo. Verifique los datos de entrada.' });
     }
-  }, [formData, tableConfig, calculationConfig, tipoEnsayoId, newCalculationConfig]);
+  }, [formData, tableConfig, calculationConfig]);
 
   // === ACTUALIZAR DATOS DEL FORMULARIO ===
   const handleInputChange = (e) => {

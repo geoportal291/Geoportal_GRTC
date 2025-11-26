@@ -4,6 +4,7 @@ import { CSSTransition } from 'react-transition-group';
 import './Alcantarillas.css';
 import Geoite from '../map/geoite';
 import '../map/geoite.css';
+import ListaAlcantarillasModal from './ListaAlcantarillasModal';
 
 // Estructura de datos de ejemplo
 const tramoData = {
@@ -26,6 +27,7 @@ const tramoData = {
 const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages, canUpload, showModal }) => {
 
   const [highlightedTramoId, setHighlightedTramoId] = useState('TRAMO 1');
+  const [kmlRoute, setKmlRoute] = useState([]); // Estado para la ruta del KML
   const [selectedTramo, setSelectedTramo] = useState(null);
   const [isInfoVisible, setIsInfoVisible] = useState(true);
   const [isGeneralInfoVisible, setIsGeneralInfoVisible] = useState(true); // Nuevo estado para el panel de información general
@@ -35,6 +37,7 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
   const [alcantarillasWithImages, setAlcantarillasWithImages] = useState([]); // NEW: State to hold alcantarillas with their images
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState('');
+  const [showListModal, setShowListModal] = useState(false);
   const infoRef = useRef(null);
   const generalInfoRef = useRef(null); // Nueva referencia para el panel de información general
 
@@ -151,14 +154,14 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
         <div className="alcantarillas-tab-wrapper" style={{flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column'}}>
           <div style={{display: 'flex', gap: '20px', flex: 1, minHeight: 0, height: '100%'}}>        {/* Columna del Mapa - Izquierda */}
         <div style={{flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto'}}>
-          <Geoite onTramoSelect={handleTramoSelectFromMap} highlightedTramoId={highlightedTramoId} alcantarillasData={alcantarillasWithImages} onAlcantarillaClick={handleAlcantarillaClick} selectedAlcantarilla={selectedAlcantarilla} />
+          <Geoite onTramoSelect={handleTramoSelectFromMap} highlightedTramoId={highlightedTramoId} alcantarillasData={alcantarillasWithImages} onAlcantarillaClick={handleAlcantarillaClick} selectedAlcantarilla={selectedAlcantarilla} onRouteLoaded={setKmlRoute} />
           <div style={{display: 'flex', gap: '10px', marginBottom: '10px'}}>
             {canUpload && (
               <div onClick={() => { if (showModal) showModal(true); }} style={{ display: 'inline-block' }}>
                   <button style={{ backgroundColor: 'green', color: 'white', padding: '3px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer', width: 'fit-content' }}>Subir Datos</button>
               </div>
             )}
-            <div onClick={() => { if (showModal) showModal(true); }} style={{ display: 'inline-block' }}>
+            <div onClick={() => setShowListModal(true)} style={{ display: 'inline-block' }}>
                 <button style={{ backgroundColor: '#007bff', color: 'white', padding: '3px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer', width: 'fit-content' }}>Mostrar Alcantarillas</button>
             </div>
           </div>
@@ -365,6 +368,13 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
           }}>&times;</button>
         </div>
       )}
+      <ListaAlcantarillasModal
+        show={showListModal}
+        onClose={() => setShowListModal(false)}
+        alcantarillasData={alcantarillasWithImages} // Usar alcantarillasWithImages para pasar también las URLs de las imágenes
+        route={kmlRoute} // Pasar la ruta del KML al modal de lista
+        graphicsImages={graphicsImages} // Pasar la lista completa de imágenes gráficas
+      />
     </div>
   );
 };

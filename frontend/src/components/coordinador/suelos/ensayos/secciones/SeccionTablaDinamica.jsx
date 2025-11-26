@@ -64,21 +64,36 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
     // Celda calculada (resultado)
     if (finalType === 'calculated' && finalResultConfig) {
       const { key: resultKey, group: groupPath, scope } = finalResultConfig;
-      let value = 0;
+      let value;
 
       if (scope === 'global') {
-        value = getNested(resultados, resultKey, 0);
+        value = getNested(resultados, resultKey, null);
       } else {
         const dataGroup = getNested(
           resultados,
           groupPath ? `${groupPath}.${resultKey}` : resultKey,
-          {}
+          null
         );
         const idToUse = isTransposed ? colId : rowId;
-        value = dataGroup[idToUse] || 0;
+        if (dataGroup) {
+            value = dataGroup[idToUse];
+        } else {
+            value = null;
+        }
       }
 
-      return <output className="text-center numeric-output">{Number(value).toFixed(2)}</output>;
+      let displayValue = 'N/D';
+      if (value !== null && value !== undefined) {
+        if (typeof value === 'number' && isFinite(value)) {
+          displayValue = value.toFixed(2);
+        } else if (typeof value === 'object' && value.error) {
+          displayValue = <span className="text-danger" title={value.error}><i className="fas fa-exclamation-triangle"></i></span>;
+        } else {
+          displayValue = <span className="text-warning">!</span>
+        }
+      }
+      
+      return <output className="text-center numeric-output">{displayValue}</output>;
     }
 
     return null; // No renderizar nada si el tipo no es reconocido

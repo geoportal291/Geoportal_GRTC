@@ -55,6 +55,7 @@ require('dotenv').config();
 const whitelist = [
     'http://localhost:3000',
     'http://localhost:3001',
+    'https://geoportalbeta.fly.dev',
     'https://frontend-morning-haze-4592.fly.dev',
     'http://192.168.1.19:3000'];
 
@@ -3697,7 +3698,7 @@ io.on('connection', async (socket) => {
                 allSockets.forEach(sock => {
                     const miAsignacion = asignacionesTemp[sock.data.user.id];
                     if (miAsignacion) {
-                        sock.emit('final_assignment', `¡${miAsignacion.nombre}!`);
+                        sock.emit('final_assignment', { nombre: `¡${miAsignacion.nombre}!`, receptorId: miAsignacion.id });
                     }
                 });
             }, 3000); // Delay para la animación

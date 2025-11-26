@@ -1,30 +1,92 @@
 .waiting-room-overlay-salaespera {
-    /* ... (other styles) ... */
-    font-family: 'Cinzel Decorative', serif; /* Aplicar la fuente base al contenedor principal */
+    position: fixed;
+    top: 0;
+    left: 200px;
+    width: calc(100% - 200px);
+    height: 100%;
+    background: radial-gradient(circle at center, #3182cf 0%, #081b33 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    z-index: 1000;
+    padding: 20px;
+    box-sizing: border-box;
+    font-family: 'Cinzel Decorative', serif;
+    transition: width 0.3s ease, left 0.3s ease;
+}
+
+.waiting-room-overlay-salaespera.navbar-collapsed {
+    left: 60px;
+    width: calc(100% - 60px);
+}
+
+.snow-container-salaespera {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.snowflake-salaespera {
+    position: absolute;
+    top: -10px;
+    background: white;
+    border-radius: 50%;
+    animation: fall-salaespera linear infinite;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+}
+
+@keyframes fall-salaespera {
+    to {
+        transform: translateY(105vh);
+    }
+}
+
+.waiting-room-card-salaespera {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 950px; /* Increased width */
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 15px;
+    padding: 32px; /* 40px * 0.8 */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #fff;
+}
+
+.waiting-room-header-salaespera {
+    text-align: center;
+    margin-bottom: 24px; /* 30px * 0.8 */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 16px; /* 20px * 0.8 */
 }
 
 .waiting-room-header-salaespera h2 {
-    font-family: 'Mountains of Christmas', cursive; /* Aplicar la fuente especial al título */
+    font-family: 'Mountains of Christmas', cursive;
+    font-size: 2.8rem; /* 3.5rem * 0.8 */
+    margin: 0 0 8px 0; /* 10px * 0.8 */
+    color: #fff;
+    text-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
 }
 
-/* El resto de los selectores que usan estas fuentes ya están dentro del contexto del componente, 
-   pero se elimina el @import global para evitar fugas. El desarrollador deberá asegurarse
-   de que las fuentes se carguen de una manera global pero segura (ej. en index.html o App.js).
-*/
-
-
 .waiting-room-header-salaespera p {
-    font-size: 1.3rem;
+    font-size: 1.0rem; /* 1.3rem * 0.8 (rounded) */
     color: #a9d5ff;
-    letter-spacing: 3px;
+    letter-spacing: 2px; /* 3px * 0.8 (rounded) */
     text-transform: uppercase;
 }
 
-/* --- LAYOUT INTERNO --- */
 .waiting-room-content-salaespera {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 40px;
+    gap: 32px; /* 40px * 0.8 */
     align-items: stretch;
 }
 
@@ -34,48 +96,46 @@
     }
 }
 
-/* --- PANELES --- */
 .panel-salaespera {
     background: rgba(0, 0, 0, 0.25);
-    padding: 25px;
+    padding: 20px; /* 25px * 0.8 */
     border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     flex-direction: column;
 }
 
 .panel-title-salaespera {
     color: #fff;
-    border-bottom: 1px solid rgba(255,255,255,0.3);
-    padding-bottom: 15px;
-    margin-bottom: 20px;
-    text-shadow: 0 0 5px rgba(255,255,255,0.5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    padding-bottom: 12px; /* 15px * 0.8 */
+    margin-bottom: 16px; /* 20px * 0.8 */
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
     text-align: center;
-    font-size: 1.4rem;
+    font-size: 1.1rem; /* 1.4rem * 0.8 (rounded) */
     font-family: 'Cinzel Decorative', serif;
 }
 
-/* --- LISTA USUARIOS --- */
 .lista-participantes-salaespera {
     list-style: none;
     padding: 0;
     margin: 0;
-    max-height: 400px;
+    max-height: 320px; /* 400px * 0.8 */
     overflow-y: auto;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 15px;
+    gap: 12px; /* 15px * 0.8 */
 }
 
 .lista-participantes-salaespera li {
     background: rgba(255, 255, 255, 0.08);
-    padding: 20px 10px;
+    padding: 16px 8px; /* 20px 10px * 0.8 */
     border-radius: 6px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(255,255,255,0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     transition: all 0.3s ease;
 }
 
@@ -83,45 +143,53 @@
     transform: translateY(-5px);
     background: rgba(49, 130, 207, 0.3);
     border-color: #fff;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
 }
 
 .lista-participantes-salaespera i {
-    font-size: 2rem;
+    font-size: 1.6rem; /* 2rem * 0.8 */
     color: #80d4ff;
-    margin-bottom: 10px;
+    margin-bottom: 8px; /* 10px * 0.8 */
 }
 
 .lista-participantes-salaespera span {
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.8rem; /* 1rem * 0.8 */
     color: #eef;
 }
 
-.lista-participantes-salaespera::-webkit-scrollbar { width: 8px; }
-.lista-participantes-salaespera::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-.lista-participantes-salaespera::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+.lista-participantes-salaespera::-webkit-scrollbar {
+    width: 8px;
+}
 
-/* --- BOTONES --- */
+.lista-participantes-salaespera::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.lista-participantes-salaespera::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
 .btn-iniciar-salaespera {
     background: linear-gradient(135deg, #fff 0%, #cce4ff 100%);
     color: #003366;
     border: none;
-    padding: 20px;
+    padding: 16px; /* 20px * 0.8 */
     border-radius: 50px;
     font-family: 'Cinzel Decorative', serif;
     font-weight: bold;
-    font-size: 1.2rem;
+    font-size: 1.0rem; /* 1.2rem * 0.8 (rounded) */
     cursor: pointer;
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
     transition: transform 0.2s, box-shadow 0.2s;
     width: 100%;
-    margin-bottom: 20px;
-    margin-top: auto; 
+    margin-bottom: 16px; /* 20px * 0.8 */
+    margin-top: auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px; /* 10px * 0.8 */
 }
 
 .btn-iniciar-salaespera:hover:not(:disabled) {
@@ -139,12 +207,12 @@
     background: rgba(0, 0, 0, 0.3);
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.3);
-    padding: 12px;
+    padding: 10px; /* 12px * 0.8 */
     width: 100%;
     border-radius: 50px;
     cursor: pointer;
     transition: background 0.3s;
-    margin-bottom: 10px;
+    margin-bottom: 8px; /* 10px * 0.8 */
     font-weight: bold;
 }
 
@@ -153,13 +221,13 @@
 }
 
 .loader-salaespera {
-    border: 4px solid rgba(255,255,255,0.1);
+    border: 4px solid rgba(255, 255, 255, 0.1);
     border-left: 4px solid #fff;
     border-radius: 50%;
-    width: 50px;
-    height: 50px;
+    width: 40px; /* 50px * 0.8 */
+    height: 40px; /* 50px * 0.8 */
     animation: spin-salaespera 1s linear infinite;
-    margin: 40px auto;
+    margin: 32px auto; /* 40px * 0.8 */
 }
 
 .warning-text-salaespera {
@@ -167,30 +235,16 @@
     font-size: 0.8rem;
     text-align: center;
     display: block;
-    margin-top: -15px;
-    margin-bottom: 15px;
+    margin-top: -12px; /* -15px * 0.8 */
+    margin-bottom: 12px; /* 15px * 0.8 */
 }
 
-@keyframes spin-salaespera { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-/* Estilos para el modal */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 100000;
-}
+@keyframes spin-salaespera {
+    0% {
+        transform: rotate(0deg);
+    }
 
-.modal-content {
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    min-width: 300px;
-    max-width: 80%;
+    100% {
+        transform: rotate(360deg);
+    }
 }
