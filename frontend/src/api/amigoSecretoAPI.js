@@ -19,3 +19,13 @@ export const updateAmigoSecretoParticipantes = async (userIds) => {
         throw error;
     }
 };
+
+export const getMiAmigoAsignado = async (eventoId) => {
+    try {
+        const response = await axios.get(`/api/eventos/${eventoId}/asignacion`);
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching assigned friend:', error);
+        throw error;
+    }
+};

@@ -30,10 +30,7 @@ export default function Login() {
         login(user); // Llamar a la función login del contexto
         alertify.success('Inicio de sesión exitoso');
 
-        // Set flag to show the visualization overlay on the next page
-        sessionStorage.setItem('showAmigoSecretoViz', 'true');
-
-        navigate('/coordinador/cordinadords');
+        navigate('/eventos/amigo-secreto');
 
       } else {
         alertify.error(res.data.message || 'Credenciales inválidas');

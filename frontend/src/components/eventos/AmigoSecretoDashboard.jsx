@@ -255,25 +255,16 @@ export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
         }
     };
 
-    const goToDashboard = () => setAnimationStage('revealingContent');
+    const handleGoToDashboard = () => setAnimationStage('revealingContent');
 
-    // --- RENDER ---
-    if (!isConnected || !currentUser) {
-        return (
-            <div className="amigo-secreto-dashboard" style={{display:'flex', justifyContent:'center', alignItems:'center'}}>
-                 <SnowEffect />
-                <div className="card-principal" style={{textAlign:'center', maxWidth:'400px', height: 'auto'}}>
-                    <h2><i className="fas fa-snowflake"></i> Amigo Secreto</h2>
-                    <p>Conectando al servidor de eventos...</p>
-                    <div className="loader"></div>
-                </div>
-            </div>
-        );
-    }
-    
+    const handleCloseAndRedirect = () => {
+        navigate('/coordinador/cordinadords');
+    };
+
     if (animationStage === 'idle') {
         return <VisualizacionAmigo 
-                    onGoToDashboard={asignacion.revelado ? goToDashboard : null} 
+                    onGoToDashboard={asignacion.revelado ? handleGoToDashboard : null}
+                    onClose={handleCloseAndRedirect} // Usar la nueva función de redirección
                 />;
     }
 

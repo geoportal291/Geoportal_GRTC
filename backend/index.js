@@ -190,6 +190,23 @@ app.post('/api/amigo-secreto/participantes', authenticateToken, authorizeAdminOr
     }
 });
 
+app.get('/api/eventos/:eventoId/asignacion', authenticateToken, async (req, res) => {
+    try {
+        const { eventoId } = req.params;
+        const dadorUsuarioId = req.user.id;
+        
+        const amigoSecretoNombre = await amigoSecretoService.getMiAmigoSecreto(dadorUsuarioId, eventoId);
+
+        if (amigoSecretoNombre) {
+            res.json({ nombre: amigoSecretoNombre });
+        } else {
+            res.status(404).json({ error: 'Asignación no encontrada para este usuario y evento.' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- Wishlist (Lista de Deseos) ---
 app.get('/api/amigo-secreto/wishlist', authenticateToken, async (req, res) => {
     try {

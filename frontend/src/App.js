@@ -135,6 +135,7 @@ function AppContent() {
     
     const handleCloseInitialViz = () => {
         setIsInitialViz(false);
+        navigate('/coordinador/cordinadords'); // Navegar a la vista principal del coordinador
     };
 
     return (

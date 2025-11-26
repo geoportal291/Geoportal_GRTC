@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './visualizacionamigo.css';
 import { Helmet } from "react-helmet";
+import { getMiAmigoAsignado } from '../../api/amigoSecretoAPI';
 
-const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay }) => {
+const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 }) => {
     // STATE
     const [friendName, setFriendName] = useState('');
+    const [assignedFriend, setAssignedFriend] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [isFriendRevealed, setIsFriendRevealed] = useState(false);
     const [rotatingMessage, setRotatingMessage] = useState("¡Feliz Navidad! Construyendo puentes de unión y amistad en todo el Perú.");
     const [giftText, setGiftText] = useState({ text: '', revealed: false });
@@ -19,6 +23,7 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay }) => {
     const elfRef = useRef(null);
     const giftTextRef = useRef(null);
     const modalRef = useRef(null);
+    const hideTimeoutRef = useRef(null); // Ref para el timeout
 
     // CONSTANTS
     const gifts = {
@@ -35,12 +40,28 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay }) => {
         "Que la alegría de la Navidad llegue a cada kilómetro de tu vida.",
         "Tu compañía en el trabajo es la mejor estructura de soporte. ¡Felicidades!"
     ];
-    const names = ['Ing. Roberto', 'Ing. Carla', 'Ing. Luis', 'Ing. María', 'Ing. Jorge'];
-
-
-
 
     // --- EFFECTS ---
+
+    useEffect(() => {
+        const fetchAmigo = async () => {
+            try {
+                setIsLoading(true);
+                const data = await getMiAmigoAsignado(eventoId);
+                setAssignedFriend(data.nombre);
+                setError(null);
+            } catch (err) {
+                setError('No se pudo encontrar a tu amigo secreto. ¿Ya se realizó el sorteo?');
+                console.error(err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        if (eventoId) {
+            fetchAmigo();
+        }
+    }, [eventoId]);
 
     // Effect for creating christmas lights
     useEffect(() => {
@@ -113,23 +134,20 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay }) => {
     // --- HANDLERS ---
 
     const handleRevealFriend = () => {
-        if (isFriendRevealed) return;
-        const selectedName = names[Math.floor(Math.random() * names.length)];
-        setFriendName(selectedName);
+        if (hideTimeoutRef.current) {
+            clearTimeout(hideTimeoutRef.current);
+        }
+        if (isLoading || error) return;
+
+        setFriendName(assignedFriend);
         setIsFriendRevealed(true);
-
-        const revealTimeout = setTimeout(() => {
-            setIsFriendRevealed(false);
-            setTimeout(() => setFriendName(''), 500);
-        }, 3000);
-
-        // Cleanup on unmount
-        return () => clearTimeout(revealTimeout);
     };
 
     const handleHideFriend = () => {
         setIsFriendRevealed(false);
-        setTimeout(() => setFriendName(''), 500);
+        hideTimeoutRef.current = setTimeout(() => {
+            setFriendName('');
+        }, 500);
     };
 
     const handleGiftClick = (giftNum) => {
@@ -186,10 +204,22 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay }) => {
 
                 <div className="reveal-area" onMouseEnter={handleRevealFriend} onMouseLeave={handleHideFriend}>
                     <div className="reveal-text">
-                        <i className="fas fa-snowflake"></i> Pasa el mouse aquí
+                        {isLoading ? (
+                            <>
+                                <i className="fas fa-spinner fa-spin"></i> Buscando...
+                            </>
+                        ) : error ? (
+                             <>
+                                <i className="fas fa-exclamation-triangle"></i> Error
+                            </>
+                        ) : (
+                            <>
+                                <i className="fas fa-snowflake"></i> Pasa el mouse aquí
+                            </>
+                        )}
                     </div>
                     <div className={`friend-name ${isFriendRevealed ? 'revealed' : ''}`} ref={friendNameRef}>
-                        <span>{friendName}</span>
+                        <span>{isFriendRevealed ? friendName : (error ? error : '')}</span>
                     </div>
                 </div>
 

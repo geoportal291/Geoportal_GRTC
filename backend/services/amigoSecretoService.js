@@ -40,6 +40,26 @@ const amigoSecretoService = {
         } finally {
             client.release();
         }
+    },
+
+    getMiAmigoSecreto: async (dadorUsuarioId, eventoId) => {
+        try {
+            const query = `
+                SELECT u.nombre, u.ap_paterno, u.ap_materno
+                FROM amigo_secreto_asignaciones asa
+                JOIN usuariost u ON asa.receptor_usuario_id = u.id
+                WHERE asa.dador_usuario_id = $1 AND asa.evento_id = $2;
+            `;
+            const { rows } = await db.query(query, [dadorUsuarioId, eventoId]);
+            if (rows.length === 0) {
+                return null; // No assignment found
+            }
+            const user = rows[0];
+            return user.nombre;
+        } catch (error) {
+            console.error('Error getting secret friend:', error);
+            throw new Error('Error al obtener el amigo secreto.');
+        }
     }
 };
 

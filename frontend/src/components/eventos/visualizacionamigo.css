@@ -15,7 +15,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow: hidden;
+    
     padding: 20px;
     z-index: 1000;
     transition: left 0.3s ease;
@@ -656,7 +656,7 @@
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
-    z-index: 1001;
+    z-index: 10000;
 }
 
 .close-viz-btn:hover {

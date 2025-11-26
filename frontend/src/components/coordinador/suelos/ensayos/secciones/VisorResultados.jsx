@@ -1,7 +1,6 @@
 import React from 'react';
 
 const VisorResultados = ({ config, data }) => {
-  console.log("[DEBUG VisorResultados] Props recibidas:", { config, data });
 
   if (!config || !config.groups) {
     return <div>No hay configuración de resultados disponible.</div>;

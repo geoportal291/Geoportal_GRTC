@@ -149,6 +149,11 @@ function _processSteps(steps, context) {
       }
 
       switch (step.type) {
+        case 'comment': {
+          // Ignorar silenciosamente los comentarios
+          break;
+        }
+
         case 'expression': {
           const result = math.evaluate(step.expression, context);
           if (step.output) {
