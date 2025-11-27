@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './coordinador/navbar'; // <-- CORREGIDO
 import Header from './header';
@@ -7,7 +7,7 @@ import './header.css';
 import './menu.css';
 
 export default function Menu() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 768);
   const navigate = useNavigate();
   const irAensayos = ()=> {
     navigate('./ensayos');

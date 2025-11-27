@@ -3,7 +3,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import { useAuth } from '../../../../data/contexts/AuthContext';
+import ResultadosBrevesModal from './ResultadosBrevesModal'; // Import new modal
 import './VistaGeneralEnsayos.css';
+import './ResultadosBrevesModal.css'; // Import new modal's CSS
 
 // ========== ImportModal (No changes) ==========
 const ImportModal = ({ isOpen, onClose, onImport, loading, errors }) => {
@@ -114,6 +116,8 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const [fileToImport, setFileToImport] = useState(null);
   const [selectedEnsayos, setSelectedEnsayos] = useState(new Set());
   const [currentTargetType, setCurrentTargetType] = useState(null);
+  const [isResultsModalOpen, setResultsModalOpen] = useState(false);
+  const [selectedAssayForResults, setSelectedAssayForResults] = useState(null);
   
   const [tramosList, setTramosList] = useState([]);
 
@@ -207,6 +211,12 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       navigate(`/coordinador/suelos/ensayos/tramos/${tramosList[0].id}`);
     }
   }, [tramoId, loading, tramosList, navigate]);
+
+    const handleShowResults = (e, ensayo) => {
+    e.stopPropagation();
+    setSelectedAssayForResults(ensayo);
+    setResultsModalOpen(true);
+  };
 
   // All other handler functions (handleSelectEnsayo, handleBulkDelete, etc.) remain the same
   const handleSelectEnsayo = useCallback((ensayoId) => {
@@ -407,6 +417,12 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
         summary={importSummary}
         loading={importing}
       />
+      {isResultsModalOpen && (
+        <ResultadosBrevesModal 
+          ensayo={selectedAssayForResults} 
+          onClose={() => setResultsModalOpen(false)} 
+        />
+      )}
       <div className="vista-general-ensayos-container">
         <header className="vista-general-header">
           <h1>Resumen de Ensayos: <span className="tramo-name">{tramo?.nombre || 'Cargando...'}</span></h1>
@@ -457,22 +473,37 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                 <div className="card-content">
                   {grupo.ensayos.length > 0 ? (
                     grupo.ensayos.map(ensayo => (
-                      <div className={`mini-card-ensayo ${selectedEnsayos.has(ensayo.id) ? 'selected' : ''}`} key={ensayo.id}>
-                       <div className="selection-checkbox">
-                        <input 
-                          type="checkbox"
-                          checked={selectedEnsayos.has(ensayo.id)}
-                          onChange={() => handleSelectEnsayo(ensayo.id)}
-                        />
+                        <div 
+                        className="mini-card-ensayo"
+                        key={ensayo.id}
+                        onClick={() => navigate(`/coordinador/suelos/ensayos/${ensayo.id}`)}
+                      >
+                        
+                        <div className="mini-card-info-main">
+                            <div className="mini-card-title">
+                              <i className="fas fa-vial"></i>
+                              <span>{ensayo.nombre_ensayo || ensayo.codigo_ensayo}</span>
+                            </div>
+                            <div className="mini-card-location-details">
+                              <span><i className="fas fa-road"></i> {ensayo.progresiva_nombre || 'N/A'}</span>
+                              <span><i className="fas fa-layer-group"></i> Estrato: {ensayo.estrato_orden || 'N/A'}</span>
+                              <span><i className="fas fa-map-marker-alt"></i> E: {ensayo.coordenada_este || 'N/A'}</span>
+                              <span><i className="fas fa-map-marker-alt"></i> N: {ensayo.coordenada_norte || 'N/A'}</span>
+                            </div>
+                            <div className="mini-card-actions">
+                              <button 
+                                className="btn-results" 
+                                title="Ver Resultados Breves"
+                                onClick={(e) => handleShowResults(e, ensayo)}
+                              >
+                                <i className="fas fa-poll-h"></i>
+                              </button>
+                            </div>
+                            <div className="mini-card-action-indicator">
+                              <i className="fas fa-chevron-right"></i>
+                            </div>
+                        </div>
                       </div>
-                      <div className="mini-card-title">
-                        <i className="fas fa-vial"></i>
-                        <span>{ensayo.nombre_ensayo || ensayo.codigo_ensayo}</span>
-                      </div>
-                      <div className="mini-card-actions">
-                        <button className="btn btn-primary btn-sm" onClick={() => navigate(`/coordinador/suelos/ensayos/${ensayo.id}`)}>Ver Detalles</button>
-                      </div>
-                    </div>
                     ))
                   ) : (
                     <p className="no-ensayos-message">No hay ensayos de este tipo para este tramo.</p>

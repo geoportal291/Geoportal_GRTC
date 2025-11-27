@@ -1,5 +1,5 @@
 .main-content {
-    padding: 80px 20px 20px 20px;
+    padding: 80px 50px 20px 50px !important;
     /* Top padding para evitar que lo tape el header */
 }
 

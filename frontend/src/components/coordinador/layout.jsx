@@ -12,7 +12,7 @@ import '../ChangelogModal.css';
 
 export default function Layout({ children, setPageTitle }) {
   const { selectedProjectName } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth < 768);
   const [trafficOption, setTrafficOption] = useState('resumen');
   const [vialOption, setVialOption] = useState(() => {
     const savedVialOption = localStorage.getItem('vialOption');
@@ -34,6 +34,15 @@ export default function Layout({ children, setPageTitle }) {
     setVialOption(option);
   };
 
+  const getCalculatedMarginLeft = () => {
+    if (window.innerWidth < 768) {
+      return '0px'; // On mobile, sidebar overlays, content fills screen
+    }
+    return collapsed ? '60px' : '200px'; // On desktop, sidebar pushes content
+  };
+
+  const calculatedMarginLeft = getCalculatedMarginLeft();
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {!isAmigoSecretoRoute && (
@@ -49,7 +58,6 @@ export default function Layout({ children, setPageTitle }) {
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <div
           style={{
-            width: collapsed ? '80px' : '150px',
             transition: 'width 0.3s ease',
             flexShrink: 0
           }}
@@ -61,10 +69,12 @@ export default function Layout({ children, setPageTitle }) {
           style={{
             flex: 1,
             overflowY: 'auto',
-            paddingLeft: collapsed ? '0px' : '60px',
-            paddingTop: isAmigoSecretoRoute ? '0' : '60px',
-            paddingRight: '0',
-            paddingBottom: '0',
+            marginLeft: calculatedMarginLeft,
+            transition: 'margin-left 0.3s ease',
+            paddingLeft: '40px',
+            paddingTop: isAmigoSecretoRoute ? '20px' : '80px',
+            paddingRight: '40px',
+            paddingBottom: '40px',
             backgroundColor: '#f5f7fa',
             width: '100%',
             maxWidth: 'none',

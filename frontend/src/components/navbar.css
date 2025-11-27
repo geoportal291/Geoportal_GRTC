@@ -19,7 +19,7 @@ html, body {
   height: 100vh;
   background-color: #2f2f2f;
   color: white;
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, transform 0.3s ease;
   display: flex;
   flex-direction: column;
   z-index: 1001;
@@ -62,7 +62,7 @@ html, body {
   justify-content: center;
   padding: 0;
   margin-right: 8px;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, left 0.3s ease;
 }
 
 .toggle-btn:hover {
@@ -269,4 +269,44 @@ html, body {
 /* Hide vial-header-options when sidebar is collapsed */
 .sidebar.collapsed .vial-header-options {
   display: none;
+}
+
+/* --- RESPONSIVE STYLES FOR MOBILE --- */
+@media (max-width: 768px) {
+  /* On mobile, main content should take up the full width */
+  .main-content,
+  .sidebar.collapsed ~ .main-content {
+    margin-left: 0;
+    transition: none; /* Disable transition for immediate effect */
+  }
+
+  /* The expanded sidebar on mobile is an overlay */
+  .sidebar {
+    width: 250px; /* A bit wider for mobile can be better */
+    transform: translateX(0);
+    transition: transform 0.3s ease; /* Animate the slide in/out */
+  }
+
+  /* When collapsed on mobile, the sidebar is completely hidden by moving it off-screen */
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+    width: 250px; /* It should still have a width to slide back in */
+  }
+
+  /* The toggle button is always visible, positioned absolutely relative to the viewport */
+  .toggle-btn {
+    position: fixed;
+    top: 20px;
+    left: 10px;
+    z-index: 1002; /* Ensure it's above the sidebar overlay */
+    background-color: rgba(47, 47, 47, 0.8);
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: left 0.3s ease;
+  }
+  
+  /* When the sidebar is expanded, move the toggle button along with it */
+  .sidebar:not(.collapsed) .toggle-btn {
+    left: calc(250px - 50px); /* Sidebar width - button width approx */
+  }
 }

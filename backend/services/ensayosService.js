@@ -496,15 +496,19 @@ const getEnsayosByTramoId = async (tramoId) => {
                 e.estado,
                 e.tipo_ensayo,
                 e.estrato_id,
+                e.datos_formulario,
                 p.id AS proyecto_id,
                 p.nombre_tramo AS proyecto_nombre,
                 prog.id AS progresiva_id,
-                prog.codigo AS progresiva_codigo,
+                prog.nombre AS progresiva_nombre,
+                prog.coordenada_este,
+                prog.coordenada_norte,
                 est.id AS estrato_perfil_id,
-                est.descripcion AS estrato_descripcion,
+                est.nombre AS estrato_nombre,
                 te.id AS tipo_ensayo_id,
                 te.descripcion AS tipo_ensayo_descripcion,
                 te.config_key,
+                te.results_config,
                 est.orden AS estrato_orden
             FROM ensayos e
             LEFT JOIN tipo_ensayo te ON e.tipo_ensayo = te.id

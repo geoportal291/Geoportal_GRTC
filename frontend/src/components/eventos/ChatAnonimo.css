@@ -1,70 +1,154 @@
-/* --- Estilos para el Modal y Ventana de Chat --- */
+/* =========================================
+   ESTILOS PARA MODALES (CHAT Y WISHLIST)
+   TEMA INVERNAL (PROYECTO QUELLOUNO)
+   ========================================= */
+
 .chat-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  backdrop-filter: blur(5px);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7); /* Fondo oscuro semi-transparente */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000; /* Asegura que esté por encima de todo */
+    backdrop-filter: blur(5px); /* Efecto de desenfoque en el fondo */
+    -webkit-backdrop-filter: blur(5px);
 }
 
 .chat-window {
-  background-color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  width: 90%;
-  max-width: 450px;
-  height: 80%;
-  max-height: 600px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+    background: rgba(22, 58, 95, 0.8); /* Fondo cristalino oscuro */
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 2.5rem;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+    color: #fff; /* Color de texto predeterminado */
+    width: 90%;
+    max-width: 950px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    font-family: 'Roboto', sans-serif;
 }
 
 .chat-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  background-color: var(--primary-color);
-  color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
+
 .chat-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.6rem;
+    color: #e1f1ff;
+    margin: 0;
+    text-shadow: 0 0 10px #80d4ff;
 }
+
 .chat-header h3 i {
     margin-right: 0.75rem;
 }
 
 .chat-close-btn {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 1.75rem;
-  font-weight: 300;
-  cursor: pointer;
-  opacity: 0.8;
-  transition: opacity 0.2s;
+    background: none;
+    border: none;
+    color: #e1f1ff;
+    font-size: 2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0 10px;
 }
+
 .chat-close-btn:hover {
-  opacity: 1;
+    color: #80d4ff;
+    transform: scale(1.2) rotate(90deg);
 }
 
-/* --- Cuerpo del Chat y Burbujas de Mensaje --- */
 .chat-body {
-  flex-grow: 1;
-  padding: 1.5rem;
-  overflow-y: auto;
-  background-color: #f9fafb;
+    flex-grow: 1;
+    overflow-y: auto;
+    padding-right: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
 
+.chat-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-body::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+/* --- Estilos para la Lista de Deseos --- */
+.chat-body ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.chat-body li {
+    padding: 15px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #d0e8ff;
+    line-height: 1.4;
+}
+
+.chat-body li:last-child {
+    border-bottom: none;
+}
+
+.chat-body a {
+    color: #80d4ff;
+    text-decoration: none;
+    font-weight: bold;
+    word-break: break-all;
+}
+
+.chat-body a:hover {
+    text-decoration: underline;
+}
+
+.chat-body .fa-external-link-alt {
+    font-size: 0.8em;
+    margin-left: 5px;
+    color: #a9d5ff;
+}
+
+.tag {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin-right: 5px;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.chat-body p {
+    color: #d0e8ff;
+    text-align: center;
+    margin-top: 20px;
+    font-style: italic;
+}
+
+
+/* --- Estilos específicos para el Chat --- */
 .message-bubble-container {
     display: flex;
     margin-bottom: 1rem;
@@ -74,12 +158,9 @@
     max-width: 80%;
     padding: 0.75rem 1rem;
     border-radius: 18px;
-}
-
-.message-text {
-    margin: 0;
+    color: #e1f1ff;
     line-height: 1.4;
-    white-space: pre-wrap; /* Respeta saltos de línea y espacios */
+    white-space: pre-wrap;
 }
 
 /* Mensajes enviados por el usuario */
@@ -87,8 +168,7 @@
     justify-content: flex-end;
 }
 .message-bubble-container.self .message-bubble {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: #3182cf;
     border-bottom-right-radius: 4px;
 }
 
@@ -97,35 +177,39 @@
     justify-content: flex-start;
 }
 .message-bubble-container.other .message-bubble {
-    background-color: #e5e7eb;
-    color: var(--text-primary);
+    background-color: #2c3e50; /* Un azul más oscuro */
     border-bottom-left-radius: 4px;
 }
 
-/* --- Pie de Página y Campo de Entrada --- */
+/* --- Pie de Página y Campo de Entrada (para Chat) --- */
 .chat-footer {
   display: flex;
-  padding: 1rem;
-  background-color: #fff;
-  border-top: 1px solid var(--border-color);
+  padding: 1rem 1rem 0 1rem; /* Sin padding inferior */
+  margin-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .chat-footer input {
   flex-grow: 1;
-  border: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 20px;
   padding: 0.75rem 1rem;
   font-size: 1rem;
   margin-right: 0.75rem;
+  color: #fff;
+}
+.chat-footer input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
 }
 .chat-footer input:focus {
     outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(197, 48, 48, 0.2);
+    border-color: #80d4ff;
+    box-shadow: 0 0 0 2px rgba(128, 212, 255, 0.3);
 }
 
 .chat-footer button {
-  background-color: var(--primary-color);
+  background-color: #3182cf;
   border: none;
   color: white;
   width: 44px;
@@ -139,8 +223,123 @@
   transition: background-color 0.2s;
 }
 .chat-footer button:hover {
-  background-color: var(--primary-hover);
+  background-color: #4a90e2;
 }
 .chat-footer button i {
     transform: translateX(1px);
+}
+
+/* --- Loader pequeño para previsualización de imágenes --- */
+.loader-small {
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    border-left-color: #80d4ff;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+    margin: 10px auto;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* --- Estilos para la previsualización de imágenes en WishlistModal --- */
+.image-preview-container {
+    margin-top: 10px;
+    text-align: center;
+    background: rgba(0,0,0,0.1);
+    padding: 5px;
+    border-radius: 10px;
+    min-height: 50px; /* Espacio mínimo para el loader */
+}
+
+.product-preview-image {
+    max-width: 100%;
+    height: auto;
+    max-height: 200px; /* Limitar la altura para que no ocupe demasiado espacio */
+    object-fit: contain; /* Asegura que la imagen completa sea visible */
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease-in-out;
+}
+
+.product-preview-image:hover {
+    transform: scale(1.02);
+}
+
+
+/* --- Estilos para el modal de visualizaci�n de deseo individual --- */
+.wish-modal-content {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.wish-image-container {
+    flex-basis: 300px;
+    flex-shrink: 0;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 300px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wish-image-container .loader-small {
+    width: 40px;
+    height: 40px;
+}
+
+.wish-image-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 15px;
+}
+
+.wish-image-container .gift-placeholder {
+    font-size: 80px;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.wish-details {
+    flex-grow: 1;
+}
+
+.wish-details p {
+    text-align: left; /* Anular el centrado general */
+    margin-top: 0;
+    font-size: 1rem;
+    color: #e1f1ff;
+    margin-bottom: 20px;
+}
+
+.wish-details .tags-container {
+    margin-bottom: 20px;
+}
+
+.wish-details a {
+    display: inline-block;
+    background-color: #3182cf;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: background-color 0.2s;
+}
+
+.wish-details a:hover {
+    background-color: #4a90e2;
+}
+
+/* Anular el estilo de <p> general dentro del chat-body para este caso */
+.chat-body > p {
+    text-align: center;
+    margin-top: 20px;
+    font-style: italic;
 }

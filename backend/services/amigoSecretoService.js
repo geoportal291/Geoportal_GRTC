@@ -45,7 +45,7 @@ const amigoSecretoService = {
     getMiAmigoSecreto: async (dadorUsuarioId, eventoId) => {
         try {
             const query = `
-                SELECT u.nombre, u.ap_paterno, u.ap_materno
+                SELECT u.nombre, asa.receptor_usuario_id AS receptor_id
                 FROM amigo_secreto_asignaciones asa
                 JOIN usuariost u ON asa.receptor_usuario_id = u.id
                 WHERE asa.dador_usuario_id = $1 AND asa.evento_id = $2;
@@ -55,7 +55,10 @@ const amigoSecretoService = {
                 return null; // No assignment found
             }
             const user = rows[0];
-            return user.nombre;
+            return {
+                nombre: user.nombre,
+                receptorId: user.receptor_id
+            };
         } catch (error) {
             console.error('Error getting secret friend:', error);
             throw new Error('Error al obtener el amigo secreto.');

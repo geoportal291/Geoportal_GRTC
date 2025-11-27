@@ -107,12 +107,7 @@ export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
     const [showWishlistModal, setShowWishlistModal] = useState(false);
     const [selectedRecipientWishlist, setSelectedRecipientWishlist] = useState({ name: '', items: [] });
 
-    const anuncios = [
-      { id: 1, mensaje: '¡Recuerden que la fecha límite para añadir deseos es el 15 de Diciembre!' },
-      { id: 2, mensaje: 'El intercambio se realizará en el comedor principal.' },
-    ];
-
-    const fechaDelEvento = "2025-12-24T18:00:00";
+    const fechaDelEvento = "2025-12-12T19:00:00";
 
     // --- SOCKET.IO LOGIC & DATA FETCHING ---
     useEffect(() => {
@@ -149,6 +144,7 @@ export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
         function onError(error) { alertify.error(`Error: ${error.message}`); navigate('/'); }
 
         function onInitialState({ participantes, esSorteoIniciado, isOrganizer, asignacion }) {
+            console.log('DEBUG: Recibido initial_state, asignacion:', asignacion); // DEBUG
             setParticipantesServer(participantes);
             setIsOrganizer(isOrganizer);
             setSorteoIniciado(esSorteoIniciado || !!asignacion); 
@@ -167,6 +163,7 @@ export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
         } 
         
         function onFinalAssignment({ nombre, receptorId }) { // Recibir objeto
+            console.log('DEBUG: Recibido final_assignment:', { nombre, receptorId }); // DEBUG
             setFinalResultName(nombre.replace(/[¡!]/g, ''));
             setAsignacion(prev => ({ ...prev, receptorId: receptorId })); // Guardar el ID del receptor
         }
@@ -208,7 +205,11 @@ export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
     };
 
     const handleAnimationComplete = () => {
-        setAsignacion({ revelado: true, nombre: `¡${finalResultName}!` });
+        setAsignacion(prev => ({ 
+            ...prev, // Preserva el receptorId existente
+            revelado: true, 
+            nombre: `¡${finalResultName}!` 
+        }));
         setAnimationStage('revealingContent');
         setRunConfetti(true);
         setTimeout(() => setRunConfetti(false), 5000);
@@ -292,14 +293,14 @@ export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
                 <div className="header-countdown"><Countdown targetDate={fechaDelEvento} /></div>
             </header>
 
-            <div className="dashboard-main-grid">
+                        <div className="dashboard-main-grid">
                 <div className="card-principal" style={{display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '350px'}}>
                     <h2><i className="fas fa-gift"></i> Tu Amigo Secreto</h2>
                     
                     {asignacion.revelado ? (
                         <div className="asignacion-revelada" style={{animation: 'fadeInUp 0.5s ease-out'}}>
                             <h3 className="nombre-asignado">{asignacion.nombre}</h3>
-                            <div className="budget-badge">Presupuesto: S/ 100.00</div>
+                            <div className="budget-badge">Presupuesto: S/ 80.00</div>
                             <button className="btn-ver-lista" onClick={handleViewRecipientWishlist}>
                                 <i className="fas fa-list"></i> Ver su Lista de Deseos
                             </button>
@@ -310,18 +311,6 @@ export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
                             <div className="loader"></div>
                         </div>
                     )}
-                </div>
-
-                <div className="card-lateral">
-                    <h3><i className="fas fa-users"></i> Participantes</h3>
-                    <ul className="lista-participantes">
-                        {participantesServer.map(p => (
-                            <li key={p.id}>
-                                <span><i className="fas fa-user-circle"></i> {p.nombre}</span>
-                                <i className="fas fa-check-circle status-completed" title="Conectado"></i>
-                            </li>
-                        ))}
-                    </ul>
                 </div>
 
                 <div className="card-principal">
@@ -343,11 +332,6 @@ export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
                             </li>
                         ))}
                     </ul>
-                </div>
-
-                <div className="card-lateral">
-                    <h3><i className="fas fa-bullhorn"></i> Anuncios</h3>
-                    <ul className="lista-anuncios">{anuncios.map(a => <li key={a.id}>{a.mensaje}</li>)}</ul>
                 </div>
             </div>
 

@@ -1,19 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './visualizacionamigo.css';
+import './ChatAnonimo.css'; // Importar los estilos del modal unificado
 import { Helmet } from "react-helmet";
 import { getMiAmigoAsignado } from '../../api/amigoSecretoAPI';
+import { getWishlistByUserId } from '../../api/wishlistAPI';
+import axios from '../../api/axios'; // Importar axios
 
 const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 }) => {
     // STATE
     const [friendName, setFriendName] = useState('');
     const [assignedFriend, setAssignedFriend] = useState(null);
+    const [wishlist, setWishlist] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isFriendRevealed, setIsFriendRevealed] = useState(false);
     const [rotatingMessage, setRotatingMessage] = useState("¡Feliz Navidad! Construyendo puentes de unión y amistad en todo el Perú.");
     const [giftText, setGiftText] = useState({ text: '', revealed: false });
     const [isModalActive, setIsModalActive] = useState(false);
-    const [modalContent, setModalContent] = useState({ title: '', image: '', description: '', link: '#' });
+    const [modalContent, setModalContent] = useState({
+        title: '',
+        description: '',
+        link: '#',
+        tags: [],
+        previewUrl: '',
+        isLoadingPreview: false
+    });
 
     // REFS
     const snowContainerRef = useRef(null);
@@ -23,14 +34,9 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
     const elfRef = useRef(null);
     const giftTextRef = useRef(null);
     const modalRef = useRef(null);
-    const hideTimeoutRef = useRef(null); // Ref para el timeout
+    const hideTimeoutRef = useRef(null);
 
     // CONSTANTS
-    const gifts = {
-        1: [{ name: "Agenda Ejecutiva", description: "Para planificar las próximas obras del año", image: "https://images.unsplash.com/photo-1544816155-12df9643f363?w=400", link: "#" }, { name: "Termo Todo Terreno", description: "Ideal para las visitas a campo", image: "https://images.unsplash.com/photo-1517420879524-86d64ac2f339?w=400", link: "#" }],
-        2: [{ name: "Kit de Herramientas", description: "Siempre listos para cualquier imprevisto", image: "https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=400", link: "#" }],
-        3: [{ name: "Café Reserva Nacional", description: "Energía pura para largas jornadas de diseño", image: "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400", link: "#" }]
-    };
     const messages = [
         "¡Feliz Navidad! Construyendo puentes de unión y amistad en todo el Perú.",
         "Ingenieros del GRTC: Que la señal de la paz tenga cobertura total en tu hogar.",
@@ -41,14 +47,24 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
         "Tu compañía en el trabajo es la mejor estructura de soporte. ¡Felicidades!"
     ];
 
+    // --- HELPERS ---
+    const isImageUrl = (url) => {
+        if (!url) return false;
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp'];
+        const lowerCaseUrl = url.toLowerCase();
+        return imageExtensions.some(ext => lowerCaseUrl.endsWith(ext) || lowerCaseUrl.includes(ext + '?') || lowerCaseUrl.includes(ext + '#'));
+    };
+
+
     // --- EFFECTS ---
 
     useEffect(() => {
         const fetchAmigo = async () => {
+            if (!eventoId) return;
             try {
                 setIsLoading(true);
                 const data = await getMiAmigoAsignado(eventoId);
-                setAssignedFriend(data.nombre);
+                setAssignedFriend(data);
                 setError(null);
             } catch (err) {
                 setError('No se pudo encontrar a tu amigo secreto. ¿Ya se realizó el sorteo?');
@@ -57,18 +73,27 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
                 setIsLoading(false);
             }
         };
-
-        if (eventoId) {
-            fetchAmigo();
-        }
+        fetchAmigo();
     }, [eventoId]);
 
-    // Effect for creating christmas lights
+    useEffect(() => {
+        const fetchWishlist = async () => {
+            if (assignedFriend && assignedFriend.receptorId) {
+                try {
+                    const userWishlist = await getWishlistByUserId(assignedFriend.receptorId);
+                    setWishlist(userWishlist);
+                } catch (error) {
+                    console.error("No se pudo obtener la lista de deseos del amigo.", error);
+                }
+            }
+        };
+        fetchWishlist();
+    }, [assignedFriend]);
+
     useEffect(() => {
         const createLights = () => {
             const container = lightsContainerRef.current;
             if (!container) return;
-            // Clear existing lights to prevent duplication on re-renders
             container.innerHTML = '';
             const lightCount = 20;
             const colors = ['#ffffff', '#00ffff', '#3182cf', '#e1f1ff', '#87ceeb'];
@@ -85,14 +110,12 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
         createLights();
     }, []);
 
-    // Effect for creating snowflakes
     useEffect(() => {
         const snowContainer = snowContainerRef.current;
         if (!snowContainer) return;
-
         const createSnowflakes = () => {
             const snowflakeCount = 40;
-            const snowflakeSymbols = ['❄', '❅', '❆']; // Removed '•'
+            const snowflakeSymbols = ['❄', '❅', '❆'];
             for (let i = 0; i < snowflakeCount; i++) {
                 const snowflake = document.createElement('div');
                 snowflake.className = 'snowflake';
@@ -100,7 +123,7 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
                 snowflake.style.left = Math.random() * 100 + 'vw';
                 snowflake.style.animationDuration = (Math.random() * 10 + 5) + 's';
                 snowflake.style.animationDelay = (Math.random() * 10) + 's';
-                snowflake.style.fontSize = (Math.random() * 8 + 6) + 'px'; // Smaller font sizes
+                snowflake.style.fontSize = (Math.random() * 8 + 6) + 'px';
                 snowflake.style.opacity = Math.random() * 0.5 + 0.3;
                 snowContainer.appendChild(snowflake);
                 setTimeout(() => {
@@ -118,28 +141,51 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
         };
     }, []);
 
-
-    // Effect for rotating messages
     useEffect(() => {
         let msgIndex = 0;
         const rotateMessage = () => {
             msgIndex = (msgIndex + 1) % messages.length;
             setRotatingMessage(messages[msgIndex]);
         };
-        const messageInterval = setInterval(rotateMessage, 5000); // 5 seconds for easier testing
+        const messageInterval = setInterval(rotateMessage, 5000);
         return () => clearInterval(messageInterval);
     }, [messages]);
 
+    // Efecto para buscar la previsualización de la imagen cuando el modal se activa
+    useEffect(() => {
+        const fetchPreview = async () => {
+            const url = modalContent.link;
+            if (!isModalActive || !url || url === '#') {
+                return;
+            }
+
+            if (isImageUrl(url)) {
+                setModalContent(prev => ({ ...prev, previewUrl: url }));
+                return;
+            }
+
+            setModalContent(prev => ({ ...prev, isLoadingPreview: true }));
+            try {
+                const response = await axios.get(`/api/url-preview?url=${encodeURIComponent(url)}`);
+                if (response.data.imageUrl) {
+                    setModalContent(prev => ({ ...prev, previewUrl: response.data.imageUrl }));
+                }
+            } catch (error) {
+                console.error('Error fetching URL preview:', error);
+            } finally {
+                setModalContent(prev => ({ ...prev, isLoadingPreview: false }));
+            }
+        };
+
+        fetchPreview();
+    }, [isModalActive, modalContent.link]);
+
 
     // --- HANDLERS ---
-
     const handleRevealFriend = () => {
-        if (hideTimeoutRef.current) {
-            clearTimeout(hideTimeoutRef.current);
-        }
-        if (isLoading || error) return;
-
-        setFriendName(assignedFriend);
+        if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+        if (isLoading || error || !assignedFriend || !assignedFriend.nombre) return;
+        setFriendName(assignedFriend.nombre);
         setIsFriendRevealed(true);
     };
 
@@ -150,10 +196,18 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
         }, 500);
     };
 
-    const handleGiftClick = (giftNum) => {
-        const giftList = gifts[giftNum] || [{ name: "Detalle Sorpresa", description: "Un presente especial para un gran colega", image: "https://images.unsplash.com/photo-1512909006721-3d6018887383?w=400", link: "#" }];
-        const selectedGift = giftList[Math.floor(Math.random() * giftList.length)];
-        setModalContent(selectedGift);
+    const handleGiftClick = (wishIndex) => {
+        const wish = wishlist[wishIndex];
+        if (!wish) return;
+
+        setModalContent({
+            title: wish.texto,
+            description: "Este es un deseo de tu amigo secreto. Si hay un enlace, puedes ver más detalles del producto.", // Descripción genérica
+            tags: wish.tags || [],
+            link: wish.url || '#',
+            previewUrl: '', // Resetear
+            isLoadingPreview: false // Resetear
+        });
         setIsModalActive(true);
     };
 
@@ -164,10 +218,11 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
             setTimeout(() => elf.style.animation = 'elf-bounce 4s infinite ease-in-out', 10);
         }
         setGiftText({ text: "¡Los duendes de obra saludan! 👷‍♂️❄️", revealed: true });
-        setTimeout(() => {
-            setGiftText({ text: '', revealed: false });
-        }, 3000);
+        setTimeout(() => setGiftText({ text: '', revealed: false }), 3000);
     };
+
+    const giftCount = Math.min(wishlist.length, 3);
+    const giftArray = Array.from({ length: giftCount }, (_, i) => i);
 
 
     return (
@@ -185,12 +240,10 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
             <div className="card">
                 <div className="holly">❦</div>
                 <div className="bell">🔔</div>
-
                 <div className="corner corner-tl"></div>
                 <div className="corner corner-tr"></div>
                 <div className="corner corner-bl"></div>
                 <div className="corner corner-br"></div>
-
                 <div className="elf" ref={elfRef} onClick={handleElfClick}>
                     <div className="elf-hat"></div>
                     <div className="elf-body"></div>
@@ -198,64 +251,80 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
                     <div className="elf-eye left"></div>
                     <div className="elf-eye right"></div>
                 </div>
-
                 <h1>Amigo Secreto</h1>
                 <div className="year">2025</div>
-
                 <div className="reveal-area" onMouseEnter={handleRevealFriend} onMouseLeave={handleHideFriend}>
                     <div className="reveal-text">
                         {isLoading ? (
-                            <>
-                                <i className="fas fa-spinner fa-spin"></i> Buscando...
-                            </>
+                            <><i className="fas fa-spinner fa-spin"></i> Buscando...</>
                         ) : error ? (
-                             <>
-                                <i className="fas fa-exclamation-triangle"></i> Error
-                            </>
+                            <><i className="fas fa-exclamation-triangle"></i> Error</>
                         ) : (
-                            <>
-                                <i className="fas fa-snowflake"></i> Pasa el mouse aquí
-                            </>
+                            <><i className="fas fa-snowflake"></i> Pasa el mouse aquí</>
                         )}
                     </div>
                     <div className={`friend-name ${isFriendRevealed ? 'revealed' : ''}`} ref={friendNameRef}>
-                        <span>{isFriendRevealed ? friendName : (error ? error : '')}</span>
+                        <span>{isFriendRevealed ? friendName : (error || '')}</span>
                     </div>
                 </div>
-
-                <div className="christmas-message">
-                    {rotatingMessage}
-                </div>
-
+                <div className="christmas-message">{rotatingMessage}</div>
                 {onGoToDashboard && (
                     <button onClick={onGoToDashboard} className="btn-go-dashboard">
-                        Ver Lista de Deseos
+                        Ir al Dashboard
                     </button>
                 )}
-
                 <div className="gift-boxes">
-                    {[1, 2, 3].map(num => (
-                        <div className="gift-box" data-gift={num} key={num} onClick={() => handleGiftClick(num)}>
+                    {giftArray.map(index => (
+                        <div className="gift-box" data-gift={index} key={index} onClick={() => handleGiftClick(index)}>
                             <div className="ribbon"></div>
-                            <div className="gift-number">{num}</div>
+                            <div className="gift-number">{index + 1}</div>
                         </div>
                     ))}
                 </div>
-
                 <div className={`gift-text ${giftText.revealed ? 'revealed' : ''}`} ref={giftTextRef}>
                     {giftText.text}
                 </div>
             </div>
-
-            <div className={`gift-modal ${isModalActive ? 'active' : ''}`} ref={modalRef} onClick={(e) => e.target === modalRef.current && setIsModalActive(false)}>
-                <div className="modal-content">
-                    <button className="close-modal" onClick={() => setIsModalActive(false)}>&times;</button>
-                    <h3 id="modalTitle">{modalContent.title}</h3>
-                    <img id="modalImage" src={modalContent.image} alt="Imagen del regalo" />
-                    <p id="modalDescription">{modalContent.description}</p>
-                    <a href={modalContent.link} id="modalLink" className="gift-link" target="_blank" rel="noopener noreferrer">Ver más detalles</a>
+            
+            {/* Modal refactorizado */}
+            {isModalActive && (
+                <div className="chat-modal-overlay" onClick={() => setIsModalActive(false)}>
+                    <div className="chat-window" onClick={e => e.stopPropagation()}>
+                        <header className="chat-header">
+                            <h3>{modalContent.title}</h3>
+                            <button className="chat-close-btn" onClick={() => setIsModalActive(false)}>&times;</button>
+                        </header>
+                        <div className="chat-body">
+                            <div className="wish-modal-content">
+                                <div className="wish-image-container">
+                                    {modalContent.isLoadingPreview ? (
+                                        <div className="loader-small"></div>
+                                    ) : modalContent.previewUrl ? (
+                                        <img src={modalContent.previewUrl} alt="Previsualización del deseo" />
+                                    ) : (
+                                        <div className="gift-placeholder">
+                                            <i className="fas fa-gift"></i>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="wish-details">
+                                    <div className="tags-container">
+                                        {modalContent.tags.map((tag, i) => (
+                                            <span key={i} className="tag">{tag}</span>
+                                        ))}
+                                    </div>
+                                    <p>{modalContent.description}</p>
+                                    {modalContent.link && modalContent.link !== '#' && (
+                                        <a href={modalContent.link} target="_blank" rel="noopener noreferrer">
+                                            <i className="fas fa-external-link-alt"></i> Ver producto
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };

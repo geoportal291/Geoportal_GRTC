@@ -40,6 +40,8 @@ const wishlistService = require('./services/wishlistService'); // NUEVO
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { put, del } = require('@vercel/blob');
+const axios = require('axios'); // Asegurarse de que axios esté importado
+const { parse } = require('node-html-parser'); // Importar el parser de node-html-parser
 const alcantarillasE1Service = require('./services/alcantarillasE1Service');
 const tokml = require('tokml');
 const shpwrite = require('@mapbox/shp-write');
@@ -143,6 +145,57 @@ app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
+// --------------------- URL PREVIEWER ---------------------
+app.get('/api/url-preview', async (req, res) => {
+    const { url } = req.query;
+
+    if (!url) {
+        return res.status(400).json({ error: 'URL no proporcionada.' });
+    }
+
+    try {
+        const { data } = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+
+        const root = parse(data);
+
+        // Buscar la imagen Open Graph (og:image)
+        const ogImageElement = root.querySelector('meta[property="og:image"]');
+        let imageUrl = ogImageElement ? ogImageElement.getAttribute('content') : null;
+
+        // Fallback: si no hay og:image, buscar la primera imagen grande
+        if (!imageUrl) {
+            const firstImg = root.querySelector('img');
+            if (firstImg) {
+                const src = firstImg.getAttribute('src');
+                if (src && !src.startsWith('data:')) {
+                    imageUrl = src;
+                }
+            }
+        }
+
+        // Si la URL es relativa, completarla con el dominio de origen
+        if (imageUrl && !imageUrl.startsWith('http')) {
+            const origin = new URL(url).origin;
+            imageUrl = new URL(imageUrl, origin).href;
+        }
+
+        if (imageUrl) {
+            res.json({ imageUrl });
+        } else {
+            res.status(404).json({ error: 'No se pudo encontrar una imagen de previsualización.' });
+        }
+
+    } catch (error) {
+        console.error(`Error al obtener la previsualización de ${url}:`, error.message);
+        res.status(500).json({ error: 'Error al procesar la URL.' });
+    }
+});
+
+
 // --------------------- LOGIN ---------------------
 app.post('/login', async(req, res) => {
     const { usuario, password } = req.body;
@@ -198,7 +251,7 @@ app.get('/api/eventos/:eventoId/asignacion', authenticateToken, async (req, res)
         const amigoSecretoNombre = await amigoSecretoService.getMiAmigoSecreto(dadorUsuarioId, eventoId);
 
         if (amigoSecretoNombre) {
-            res.json({ nombre: amigoSecretoNombre });
+            res.json(amigoSecretoNombre);
         } else {
             res.status(404).json({ error: 'Asignación no encontrada para este usuario y evento.' });
         }
@@ -3585,14 +3638,18 @@ io.on('connection', async (socket) => {
         let asignacion = null;
         if (esSorteoIniciado) {
             const asignacionResult = await db.query(
-                `SELECT u.nombre 
+                `SELECT u.nombre, asa.receptor_usuario_id AS receptor_id
                  FROM amigo_secreto_asignaciones asa
                  JOIN usuariost u ON asa.receptor_usuario_id = u.id
                  WHERE asa.evento_id = 1 AND asa.dador_usuario_id = $1`,
                 [socket.data.user.id]
             );
             if (asignacionResult.rows.length > 0) {
-                asignacion = asignacionResult.rows[0];
+                const row = asignacionResult.rows[0];
+                asignacion = {
+                    nombre: row.nombre,
+                    receptorId: row.receptor_id
+                };
             }
         }
         
