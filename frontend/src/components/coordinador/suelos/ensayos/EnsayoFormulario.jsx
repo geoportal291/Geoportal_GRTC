@@ -44,25 +44,41 @@ const EnsayoFormulario = ({ data, onInputChange, resultados, formConfig, tableCo
   if ((!formConfig || !formConfig.secciones || formConfig.secciones.length === 0) && 
       (tableConfig && typeof tableConfig === 'object' && Object.keys(tableConfig).length > 0)) {
     
-    return (
-      <div className="essay-tables-flex-container" style={{ flexDirection: 'column', gap: '1rem' }}>
-        {Object.keys(tableConfig).map(key => {
-          const seccionTableConfig = tableConfig[key];
-          // Creamos un objeto 'seccion' simulado para pasar al componente de tabla
-          const mockSeccion = {
-            id: `fallback-${key}`,
-            titulo: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '), // Capitaliza y quita guiones bajos
-            componente_key: 'SeccionTablaDinamica'
-          };
-          console.log(`DEBUG: Generando mockSeccion con título: ${mockSeccion.titulo}`);
+    // Fallback v2: Renderiza tanto campos generales como tablas desde la config.
+    const generalFieldsConfig = tableConfig.general_fields;
+    const tablesConfig = tableConfig.tables || tableConfig; // Soporte para la estructura anidada y la antigua
 
-          return (
-            <div key={mockSeccion.id} className="essay-tables-flex-item">
-              {renderSectionComponent(mockSeccion, seccionTableConfig)}
-            </div>
-          );
-        })}
-      </div>
+    return (
+      <>
+        {generalFieldsConfig && (
+          <FormularioSimple
+            seccion={{
+              titulo: generalFieldsConfig.title,
+              campos: generalFieldsConfig.fields.map(f => ({ ...f, name: f.key })), // Mapea key a name para compatibilidad
+            }}
+            data={data}
+            onInputChange={onInputChange}
+          />
+        )}
+        <div className="essay-tables-flex-container" style={{ flexDirection: 'column', gap: '1rem' }}>
+          {Object.keys(tablesConfig)
+            // Filtramos para no intentar renderizar la config de campos generales o layout como una tabla
+            .filter(key => key !== 'general_fields' && key !== 'layout')
+            .map(key => {
+            const seccionTableConfig = tablesConfig[key];
+            const mockSeccion = {
+              id: `fallback-${key}`,
+              titulo: seccionTableConfig.title || key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
+              componente_key: 'SeccionTablaDinamica'
+            };
+            return (
+              <div key={mockSeccion.id} className="essay-tables-flex-item">
+                {renderSectionComponent(mockSeccion, seccionTableConfig)}
+              </div>
+            );
+          })}
+        </div>
+      </>
     );
   }
 

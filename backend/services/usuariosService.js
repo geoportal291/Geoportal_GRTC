@@ -265,6 +265,40 @@ const usuariosService = {
         throw new Error('Error getting users grouped by project: ' + error.message);
     }
   },
+
+  getUserPermissions: async (userId, rolId) => {
+    const permissions = {};
+    try {
+      // 1. Obtener permisos del rol
+      const rolePermissionsQuery = `
+        SELECT p.nombre, rp.tipo_acceso
+        FROM roles_permisos rp
+        JOIN permisos p ON rp.permiso_id = p.id
+        WHERE rp.rol_id = $1;
+      `;
+      const rolePermissionsResult = await db.query(rolePermissionsQuery, [rolId]);
+      rolePermissionsResult.rows.forEach(row => {
+        permissions[row.nombre] = row.tipo_acceso;
+      });
+
+      // 2. Obtener permisos directos del usuario (que pueden sobreescribir los del rol)
+      const userPermissionsQuery = `
+        SELECT p.nombre, up.tipo_acceso
+        FROM user_permisos up
+        JOIN permisos p ON up.permiso_id = p.id
+        WHERE up.user_id = $1;
+      `;
+      const userPermissionsResult = await db.query(userPermissionsQuery, [userId]);
+      userPermissionsResult.rows.forEach(row => {
+        permissions[row.nombre] = row.tipo_acceso; // Sobreescribe el permiso del rol si existe
+      });
+
+      return permissions;
+    } catch (error) {
+      console.error('Error getting user permissions:', error);
+      throw new Error('Error getting user permissions: ' + error.message);
+    }
+  },
 };
 
 module.exports = usuariosService;

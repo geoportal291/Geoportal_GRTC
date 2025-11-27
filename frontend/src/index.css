@@ -22,15 +22,18 @@ body::-webkit-scrollbar,
 
 /* Cuando el menú está colapsado, mover el contenido */
 .main-content {
-    transition: margin-left 0.3s ease; /* Suavizar la transición */
+    transition: margin-left 0.3s ease;
+    /* Suavizar la transición */
 }
 
 .main-content.collapsed {
-    margin-left: 60px; /* Reducir el espacio a la izquierda cuando el menú está colapsado */
+    margin-left: 60px;
+    /* Reducir el espacio a la izquierda cuando el menú está colapsado */
 }
 
 .main-content {
-    margin-left: 220px; /* Ancho normal del menú cuando está expandido */
+    margin-left: 220px;
+    /* Ancho normal del menú cuando está expandido */
 }
 
 /* Estilos generales del body */
@@ -50,16 +53,20 @@ body {
     padding: 5px 10px;
     border-radius: 0px;
     font-size: 12px;
-    z-index: 9999; /* Asegurar que esté por encima de otros elementos */
+    z-index: 9999;
+    /* Asegurar que esté por encima de otros elementos */
 }
 
 .hide-scrollbar::-webkit-scrollbar {
-  display: none;
+    display: none;
 }
 
 .hide-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
 }
-/* --- Importaci�n Global de Fuentes para Eventos --- */
+
+/* --- Importaci�n Global de Fuentes para Eventos --- */
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Mountains+of+Christmas:wght@700&family=Roboto:wght@300;400;700&display=swap');

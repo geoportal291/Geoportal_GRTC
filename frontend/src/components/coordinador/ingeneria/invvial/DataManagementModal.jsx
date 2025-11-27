@@ -121,14 +121,18 @@ const DataManagementModal = ({
   const handleDeleteGraphicImage = async (imageId) => {
     alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar esta imagen de gráfico? Esta acción no se puede deshacer.',
       async () => {
+        setUploadStatus({ message: 'Eliminando imagen...', type: 'info' });
         try {
-          setUploadStatus({ message: 'Eliminando imagen...', type: 'info' });
           await axiosInstance.delete(`/api/alcantarillas/graphics/${imageId}?projectId=${projectId}`);
           setUploadStatus({ message: 'Imagen eliminada correctamente.', type: 'success' });
           fetchGraphicsImages();
         } catch (error) {
           console.error('Error al eliminar imagen de gráfico:', error);
-          setUploadStatus({ message: 'Error al eliminar imagen de gráfico: ' + (error.response?.data?.message || error.message), type: 'error' });
+          if (error.response && error.response.status === 403) {
+            alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
+          } else {
+            setUploadStatus({ message: 'Error al eliminar imagen de gráfico: ' + (error.response?.data?.message || error.message), type: 'error' });
+          }
         }
       },
       () => {
@@ -147,7 +151,11 @@ const DataManagementModal = ({
           setGraphicsImages([]);
         } catch (error) {
           console.error('Error al eliminar todas las imágenes de gráfico:', error);
-          setUploadStatus({ message: 'Error al eliminar todas las imágenes de gráfico: ' + (error.response?.data?.message || error.message), type: 'error' });
+          if (error.response && error.response.status === 403) {
+            alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
+          } else {
+            setUploadStatus({ message: 'Error al eliminar todas las imágenes de gráfico: ' + (error.response?.data?.message || error.message), type: 'error' });
+          }
         }
       },
       () => {
@@ -247,12 +255,12 @@ const DataManagementModal = ({
 
   const handleProcessExcel = async () => {
     if (!filesToUpload) {
-      setUploadStatus({ message: 'Por favor, selecciona un archivo Excel.', type: 'error' });
+      alertify.warning('Por favor, selecciona un archivo Excel.');
       return;
     }
     if (!projectId) {
-        setUploadStatus({ message: 'Error: No se ha proporcionado un ID de proyecto.', type: 'error' });
-        return;
+      alertify.error('Error: No se ha proporcionado un ID de proyecto.');
+      return;
     }
     setUploadStatus({ message: 'Subiendo y procesando archivo Excel...', type: 'info' });
     const formData = new FormData();
@@ -276,17 +284,21 @@ const DataManagementModal = ({
       setFilesToUpload(null);
     } catch (error) {
       console.error('Error al subir o procesar el archivo Excel:', error);
-      setUploadStatus({ message: 'Error al subir o procesar el archivo Excel: ' + (error.response?.data?.message || error.message), type: 'error' });
+      if (error.response && error.response.status === 403) {
+        alertify.error('Usted solo tiene acceso a lectura, no puede subir archivos');
+      } else {
+        setUploadStatus({ message: 'Error al subir o procesar el archivo Excel: ' + (error.response?.data?.message || error.message), type: 'error' });
+      }
     }
   };
 
   const handleImageUploadProcess = async () => {
     if (!filesToUpload || filesToUpload.length === 0) {
-      setUploadStatus({ message: 'Por favor, selecciona uno o más archivos.', type: 'error' });
+      alertify.error('Por favor, selecciona uno o más archivos.');
       return;
     }
     if (!projectId) {
-      setUploadStatus({ message: 'Error: No se ha proporcionado un ID de proyecto.', type: 'error' });
+      alertify.error('Error: No se ha proporcionado un ID de proyecto.');
       return;
     }
 
@@ -362,7 +374,11 @@ const DataManagementModal = ({
           }
       } catch (error) {
           console.error('Error al subir el archivo:', error);
-          setUploadStatus({ message: 'Error al subir el archivo: ' + (error.response?.data?.message || error.message), type: 'error' });
+          if (error.response && error.response.status === 403) {
+            alertify.error('Usted solo tiene acceso a lectura, no puede subir archivos');
+          } else {
+            setUploadStatus({ message: 'Error al subir el archivo: ' + (error.response?.data?.message || error.message), type: 'error' });
+          }
       } finally {
           setIsUploading(false);
       }
@@ -400,6 +416,12 @@ const DataManagementModal = ({
           break;
         } catch (error) {
           console.error(`Error al subir el chunk ${chunkIndex + 1}, intento ${attempt}:`, error);
+          if (error.response && error.response.status === 403) {
+            alertify.error('Usted solo tiene acceso a lectura, no puede subir archivos. La subida se ha detenido.');
+            setIsUploading(false);
+            setEtr(null);
+            return; // Detener la subida completa
+          }
           if (attempt === maxRetries) {
             setUploadStatus({ message: `Error de red al subir la parte ${chunkIndex + 1}. Por favor, verifica tu conexión.`, type: 'error' });
             setIsUploading(false);
@@ -447,7 +469,11 @@ const DataManagementModal = ({
       }
     } catch (error) {
       console.error('Error al finalizar la subida:', error);
-      setUploadStatus({ message: 'Error al finalizar la subida: ' + (error.response?.data?.message || error.message), type: 'error' });
+      if (error.response && error.response.status === 403) {
+        alertify.error('Usted solo tiene acceso a lectura, no puede subir archivos');
+      } else {
+        setUploadStatus({ message: 'Error al finalizar la subida: ' + (error.response?.data?.message || error.message), type: 'error' });
+      }
     } finally {
       setIsUploading(false);
     }
@@ -455,7 +481,7 @@ const DataManagementModal = ({
       
   const handleDeleteExcelData = async () => {
     if (!projectId) {
-      setUploadStatus({ message: 'Error: No se ha proporcionado un ID de proyecto.', type: 'error' });
+      alertify.error('Error: No se ha proporcionado un ID de proyecto.');
       return;
     }
     alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar el archivo Excel y TODAS las alcantarillas asociadas a este proyecto? Esta acción no se puede deshacer.',
@@ -473,7 +499,11 @@ const DataManagementModal = ({
           setFilesToUpload(null);
         } catch (error) {
           console.error('Error al eliminar el archivo Excel y los datos:', error);
-          setUploadStatus({ message: 'Error al eliminar el archivo Excel y los datos: ' + (error.response?.data?.message || error.message), type: 'error' });
+          if (error.response && error.response.status === 403) {
+            alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
+          } else {
+            setUploadStatus({ message: 'Error al eliminar el archivo Excel y los datos: ' + (error.response?.data?.message || error.message), type: 'error' });
+          }
         }
       },
       () => {

@@ -489,7 +489,7 @@ const handleSubmit = async (e) => {
       const headers = getAuthHeaders();
       const requestHeaders = { 'Content-Type': 'application/json', ...headers };
       const createRes = await axios.post(
-        `${API_URL}/progresivas/registrar-bulk`,
+        `${API_URL}/progresivas/importar-con-ensayos`,
         { parentProgresiva, generationParams, generatedChildren: generatedSubProgresivas },
         { headers: requestHeaders }
       );

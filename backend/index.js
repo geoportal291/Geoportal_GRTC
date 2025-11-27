@@ -78,16 +78,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const dest = '/tmp/';
-        fs.mkdirSync(dest, { recursive: true });
-        cb(null, dest);
-    },
-    filename: function (req, file, cb) {
-        cb(null, `${uuidv4()}-${file.originalname}`);
-    }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
     storage: storage,
@@ -117,9 +108,15 @@ const authenticateToken = async (req, res, next) => {
                 return res.sendStatus(403); // User from token not found
             }
 
-            req.user = userResult.rows[0]; // Attach the full user object
+            const user = userResult.rows[0];
+            const permissions = await usuariosService.getUserPermissions(user.id, user.rol_id);
+            
+            user.permissions = permissions; // Adjuntar permisos al objeto de usuario
+            req.user = user; // Adjuntar el objeto de usuario completo (con permisos) a la solicitud
+
             next();
         } catch (err) {
+            console.error("Error en middleware de autenticación:", err);
             return res.sendStatus(403); // Invalid token
         }
     } else {
@@ -136,13 +133,36 @@ const authorizeAdminOrCoordinator = (req, res, next) => {
 };
 
 // Middleware de autorización genérico para permisos específicos
-const authorizePermission = (permissionName, accessType) => {
+const authorizePermission = (permissionName, requiredAccessType) => {
     return (req, res, next) => {
-        if (!req.user || !req.user.permissions) {
-            // Lógica simplificada para el ejemplo, idealmente se validan permisos aquí
-            next(); 
-        } else {
+        const { user } = req;
+
+        // Si el usuario es ADMIN, tiene acceso total a todo.
+        if (user && user.rol_nombre === 'ADMIN') {
+            return next();
+        }
+
+        const userPermissions = user ? user.permissions : {};
+        const userAccess = userPermissions ? userPermissions[permissionName] : undefined;
+
+        if (!userAccess) {
+            return res.status(403).json({ error: `Acceso denegado. No tienes permisos para el módulo '${permissionName}'.` });
+        }
+
+        const hasPermission = (required, userPerm) => {
+            if (required === 'lectura') {
+                return userPerm === 'lectura' || userPerm === 'edicion';
+            }
+            if (required === 'edicion') {
+                return userPerm === 'edicion';
+            }
+            return false;
+        };
+
+        if (hasPermission(requiredAccessType, userAccess)) {
             next();
+        } else {
+            return res.status(403).json({ error: `Acceso denegado. Se requiere permiso de '${requiredAccessType}' para el módulo '${permissionName}'.` });
         }
     };
 };
@@ -1114,7 +1134,7 @@ async function uploadEncuestaVelocidadFileToVercelBlob(file, description, index)
     }
 }
 // Nuevo endpoint para subir imágenes de estación de control
-app.post('/api/trafico/estacion/upload-image', upload.single('image'), async (req, res) => {
+app.post('/api/trafico/estacion/upload-image', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
@@ -1123,6 +1143,13 @@ app.post('/api/trafico/estacion/upload-image', upload.single('image'), async (re
         if (!stationId) {
             return res.status(400).json({ error: 'stationId es requerido.' });
         }
+
+        // Verificar si la estación existe
+        const stationExists = await db.query('SELECT id FROM elementos_trafico WHERE id = $1', [stationId]);
+        if (stationExists.rows.length === 0) {
+            return res.status(404).json({ error: `La estación con id ${stationId} no fue encontrada.` });
+        }
+
         const imageUrl = await uploadStationImageToVercelBlob(req.file, description, index);
         
         //insertar la nueva imagen en la tabla trafico_imagenes
@@ -1134,12 +1161,16 @@ app.post('/api/trafico/estacion/upload-image', upload.single('image'), async (re
         res.status(201).json({ status: 'ok', message: 'Imagen de estación subida y guardada correctamente', imageData: { ...result.rows[0], index } });
     } catch (error) {
         console.error('Error al subir imagen de estación de control:', error);
+        // Verificar si el error es de clave foránea
+        if (error.code === '23503') { // Código de error de PostgreSQL para foreign key violation
+            return res.status(400).json({ status: 'error', message: `Error de referencia: la estación con id ${stationId} no existe.` });
+        }
         res.status(500).json({ status: 'error', message: 'Error al subir la imagen de estación de control.' });
     }
 });
 
 //nuevo endpoint para subir imagenes de tramo
-app.post('/api/trafico/tramo/upload-image', upload.single('image'), async (req, res) => {
+app.post('/api/trafico/tramo/upload-image', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
@@ -1164,7 +1195,7 @@ app.post('/api/trafico/tramo/upload-image', upload.single('image'), async (req, 
 });
 
 //endpoint para subir archivos e imagenes para conteovehicular
-app.post('/api/trafico/conteovehicular/upload-file', upload.single('file'), async (req, res) => {
+app.post('/api/trafico/conteovehicular/upload-file', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
@@ -1204,7 +1235,7 @@ async function uploadConteoVehicularExcelToVercelBlob(file, stationId) {
 }
 
 // Nuevo endpoint para subir archivos Excel de conteo vehicular
-app.post('/api/trafico/conteovehicular/upload-excel', upload.single('excelFile'), async (req, res) => {
+app.post('/api/trafico/conteovehicular/upload-excel', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('excelFile'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
@@ -1257,7 +1288,7 @@ async function uploadKmlToVercelBlob(file) {
 }
 
 // Endpoint to upload a KML file
-app.post('/api/kml/upload', upload.single('kmlFile'), async (req, res) => {
+app.post('/api/kml/upload', authenticateToken, authorizePermission('proyectos', 'edicion'), upload.single('kmlFile'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo KML.' });
@@ -1320,7 +1351,7 @@ async function uploadAlcantarillasExcelToVercelBlob(fileBuffer, originalFilename
 }
 
 // Nuevo endpoint para subir archivos Excel de alcantarillas
-app.post('/api/alcantarillas/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
+app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermission('alcantarillas', 'edicion'), upload.single('excelFile'), async (req, res) => {
     const { projectId, utmZone, entregableNum } = req.body;
     const userId = req.user.id; // Get authenticated user ID
     try {
@@ -1396,7 +1427,7 @@ async function uploadTempFileToVercelBlob(fileBuffer, originalFilename, folder =
 }
 
 // Nuevo endpoint para subir archivos Excel de gráficos de alcantarillas (AHORA ASÍNCRONO)
-app.post('/api/alcantarillas/upload-graphics-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
+app.post('/api/alcantarillas/upload-graphics-excel', authenticateToken, authorizePermission('alcantarillas', 'edicion'), upload.single('excelFile'), async (req, res) => {
     const { projectId } = req.body;
     const userId = req.user.id;
 
@@ -1443,7 +1474,7 @@ app.post('/api/alcantarillas/upload-graphics-excel', authenticateToken, upload.s
 const uploadChunk = multer({ storage: multer.memoryStorage() });
 
 // NEW ENDPOINT: For receiving file chunks
-app.post('/api/alcantarillas/upload-chunk', authenticateToken, uploadChunk.single('fileChunk'), async (req, res) => {
+app.post('/api/alcantarillas/upload-chunk', authenticateToken, authorizePermission('alcantarillas', 'edicion'), uploadChunk.single('fileChunk'), async (req, res) => {
     try {
         const { uploadId, chunkIndex } = req.body;
         const chunkBuffer = req.file.buffer;
@@ -1464,7 +1495,7 @@ app.post('/api/alcantarillas/upload-chunk', authenticateToken, uploadChunk.singl
 });
 
 // NEW ENDPOINT: For finalizing a chunked upload
-app.post('/api/alcantarillas/complete-upload', authenticateToken, async (req, res) => {
+app.post('/api/alcantarillas/complete-upload', authenticateToken, authorizePermission('alcantarillas', 'edicion'), async (req, res) => {
     const { projectId, uploadId, originalFilename } = req.body;
     const userId = req.user.id;
 
@@ -1482,7 +1513,7 @@ app.post('/api/alcantarillas/complete-upload', authenticateToken, async (req, re
 });
 
 // NEW ENDPOINT: For simple (non-chunked) file uploads
-app.post('/api/alcantarillas/upload-images', authenticateToken, upload.single('files'), async (req, res) => {
+app.post('/api/alcantarillas/upload-images', authenticateToken, authorizePermission('alcantarillas', 'edicion'), upload.single('files'), async (req, res) => {
     const { projectId } = req.body;
     const userId = req.user.id;
 
@@ -1675,7 +1706,7 @@ async function uploadEncuestaOrigenDestinoFileToVercelBlob(file, description, in
 }
 
 // Nuevo endpoint para subir archivos de encuesta origen destino
-app.post('/api/trafico/encuestaorigendestino/upload-file', upload.single('file'), async (req, res) => {
+app.post('/api/trafico/encuestaorigendestino/upload-file', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
@@ -1699,7 +1730,7 @@ app.post('/api/trafico/encuestaorigendestino/upload-file', upload.single('file')
 });
 
 // Nuevo endpoint para subir archivos de censo de cargas
-app.post('/api/trafico/censodecargas/upload-file', upload.single('file'), async (req, res) => {
+app.post('/api/trafico/censodecargas/upload-file', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
@@ -1723,7 +1754,7 @@ app.post('/api/trafico/censodecargas/upload-file', upload.single('file'), async 
 });
 
 // Nuevo endpoint para subir archivos de encuesta de velocidad
-app.post('/api/trafico/encuestavelocidad/upload-file', upload.single('file'), async (req, res) => {
+app.post('/api/trafico/encuestavelocidad/upload-file', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });

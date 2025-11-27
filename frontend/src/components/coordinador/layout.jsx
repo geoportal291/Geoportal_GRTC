@@ -65,16 +65,16 @@ export default function Layout({ children, setPageTitle }) {
           <Navbar onToggle={setCollapsed} isCollapsed={collapsed} />
         </div>
         <div
-          className={`content-wrapper ${collapsed ? 'sidebar-collapsed' : 'sidebar-open'}`}
+          className={`content-wrapper ${collapsed ? 'sidebar-collapsed' : 'sidebar-open'} ${location.pathname === '/ingenieria/inventario-vial' ? 'hide-scrollbar' : ''}`}
           style={{
             flex: 1,
             overflowY: 'auto',
             marginLeft: calculatedMarginLeft,
             transition: 'margin-left 0.3s ease',
-            paddingLeft: '40px',
-            paddingTop: isAmigoSecretoRoute ? '20px' : '80px',
-            paddingRight: '40px',
-            paddingBottom: '40px',
+            paddingLeft: (location.pathname === '/coordinador/ingenieria/trafico/trafico' || location.pathname === '/ingenieria/inventario-vial') ? '0px' : '40px',
+            paddingTop: (location.pathname === '/coordinador/ingenieria/trafico/trafico' || location.pathname === '/ingenieria/inventario-vial') ? '60px' : (isAmigoSecretoRoute ? '20px' : '80px'),
+            paddingRight: (location.pathname === '/coordinador/ingenieria/trafico/trafico' || location.pathname === '/ingenieria/inventario-vial') ? '0px' : '40px',
+            paddingBottom: (location.pathname === '/coordinador/ingenieria/trafico/trafico' || location.pathname === '/ingenieria/inventario-vial') ? '0px' : '40px',
             backgroundColor: '#f5f7fa',
             width: '100%',
             maxWidth: 'none',

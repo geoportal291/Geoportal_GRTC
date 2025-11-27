@@ -27,10 +27,11 @@ const ResultadosBrevesModal = ({ ensayo, onClose }) => {
                 {group.title && <h4>{group.title}</h4>}
                 <div className="results-grid">
                   {group.fields.map((field, fieldIndex) => {
-                    const resultsKey = ensayo.config_key?.toLowerCase();
+                    // Universal approach: Get data source key from the group, fallback to top-level.
+                    const resultsKey = group.data_source_key || config.data_source_key;
                     const fullPath = resultsKey ? `${resultsKey}.${field.name}` : field.name;
 
-                    // 1. Try the full path within datos_formulario (e.g., datos_formulario.granulometria.porc_grava)
+                    // 1. Try the full path within datos_formulario (e.g., datos_formulario.limites.indice_plasticidad)
                     let value = getNestedValue(ensayo.datos_formulario, fullPath);
 
                     // 2. Fallback: try the simple name within datos_formulario (for raw inputs if needed)

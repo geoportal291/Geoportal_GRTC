@@ -11,25 +11,31 @@
 .trafico-container {
   display: flex;
   flex-direction: column;
-  height: 100vh; /* Full viewport height */
+  height: 100%;
+  /* Ajustado de 100vh a 100% para ajustarse al contenedor padre */
   background-color: #f0f2f5;
-  padding-top: 60px; /* Ajuste para la altura del header */
-  overflow: hidden; /* Prevent body scroll */
+  padding-top: 0;
+  /* Eliminado padding-top de 60px ya que layout.jsx maneja el espaciado */
+  overflow: hidden;
+  /* Prevent body scroll */
 }
 
 /* Asegurar que los controles del mapa no se superpongan al header */
 .leaflet-control-container {
-  z-index: 998; /* Menor que el z-index del header (1000) */
+  z-index: 998;
+  /* Menor que el z-index del header (1000) */
 }
 
 .leaflet-control-zoom {
-  z-index: 999; /* Menor que el z-index del header (1000) */
+  z-index: 999;
+  /* Menor que el z-index del header (1000) */
 }
 
 .trafico-container h1.page-title {
   font-size: 1.5rem;
   color: var(--dark-color);
-  margin: 15px 15px 20px 15px;
+  margin: 10px 10px 5px 10px;
+  /* Reducido márgenes laterales */
   display: flex;
   align-items: center;
   gap: 10px;
@@ -38,42 +44,59 @@
 /* Tabs Styling - Estilo replicado de mecanicadesuelos */
 .trafico-container .tabs {
   display: flex;
-  gap: 10px;
-  margin: 20px 20px 20px 20px; /* Añadido padding para que el contenido se mueva más a la izquierda */
-  border-bottom: 2px solid var(--light-color);
-  padding-bottom: 5px;
+  gap: 20px;
+  /* Mayor separación para un look más limpio */
+  margin: 0 20px;
+  /* Margen lateral alineado */
+  border-bottom: 1px solid #d1d5db;
+  /* Línea sutil separadora */
+  padding-bottom: 0;
+  background-color: transparent;
+  /* Fondo transparente */
 }
 
 .trafico-container .tabs button {
-  background-color: transparent;
-  border: none;
-  padding: 10px 20px;
-  font-size: 0.95rem;
+  padding: 12px 4px;
+  /* Padding vertical, horizontal menor */
   cursor: pointer;
-  color: var(--dark-color);
-  border-radius: 5px 5px 0 0;
-  transition: background-color 0.2s, color 0.2s;
+  background-color: transparent;
+  /* Fondo transparente por defecto */
+  border: none;
+  border-bottom: 3px solid transparent;
+  /* Borde inferior invisible por defecto */
+  font-size: 1rem;
+  font-weight: 500;
+  color: #6b7280;
+  /* Color gris suave para inactivos */
+  transition: all 0.2s ease;
+  outline: none;
+  position: relative;
+  top: 1px;
+  /* Para superponerse a la línea del contenedor */
 }
 
 .trafico-container .tabs button:hover {
-  background-color: var(--light-color);
+  color: var(--primary-color);
+  background-color: transparent;
 }
 
 .trafico-container .tabs button.active {
-  background-color: transparent !important;
+  background-color: transparent;
   color: var(--primary-color);
-  border-bottom: 2px solid var(--primary-color);
-  font-weight: bold;
-  box-shadow: none;
+  border-bottom: 3px solid var(--primary-color);
+  /* Indicador activo */
+  font-weight: 600;
 }
 
 /* Content Layout for Ensayos Tab */
 .content-layout {
   display: flex;
   flex-direction: row;
-  gap: 20px;
+  gap: 10px;
+  /* Reducido gap */
   margin: 0;
-  padding: 20px;
+  padding: 10px;
+  /* Reducido padding de 20px a 10px */
   width: 100%;
   box-sizing: border-box;
   align-items: stretch;
@@ -238,12 +261,12 @@
   .content-layout {
     flex-direction: column;
   }
-  
+
   .left-container {
     flex: 1;
     width: 100%;
   }
-  
+
   .right-container {
     flex: 1;
     width: 100%;
@@ -251,12 +274,12 @@
     flex-wrap: wrap;
     gap: 15px;
   }
-  
+
   .right-container .info-container {
     flex: 1;
     min-width: 250px;
   }
-  
+
   .map-container {
     height: 400px;
   }
@@ -266,65 +289,65 @@
   .trafico-container {
     padding: 10px;
   }
-  
+
   .content-layout {
     flex-direction: column;
     gap: 15px;
   }
-  
+
   .left-container,
   .right-container {
     flex: 1;
     width: 100%;
   }
-  
+
   .right-container {
     flex-direction: column;
   }
-  
+
   .map-container {
     height: 300px;
   }
-  
+
   .analysis-grid,
   .reports-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .trafico-container .tabs {
     flex-wrap: wrap;
   }
-  
+
   .feature-list {
     grid-template-columns: 1fr;
   }
-  
+
   .info-message h2 {
     font-size: 1.5rem;
   }
-  
+
   .info-message p {
     font-size: 1rem;
   }
-  
+
   .traffic-table {
     padding: 15px;
   }
-  
+
   .traffic-table table {
     font-size: 0.9rem;
   }
-  
+
   .buttons-container {
     flex-direction: column;
     align-items: center;
   }
-  
+
   .station-btn {
     width: 100%;
     max-width: 200px;
   }
-  
+
   .photo-grid {
     grid-template-columns: 1fr;
   }
@@ -334,7 +357,7 @@
   .stations-buttons-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .control-btn {
     padding: 6px 8px;
     font-size: 0.75rem;
@@ -349,7 +372,7 @@
 
 .station-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
 }
 
 .station-btn:active {
@@ -362,7 +385,7 @@
 
 .control-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
 }
 
 .control-btn:active {
@@ -439,11 +462,11 @@
   .visualizacion-campo-container .controls-container-below {
     flex-direction: column;
   }
-  
+
   .visualization-info {
     max-width: 100%;
   }
-  
+
   .status-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -462,7 +485,7 @@
   padding: 15px;
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .subwindow-btn {
@@ -506,7 +529,7 @@
   flex: 2;
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
@@ -529,7 +552,7 @@
 .info-card {
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   padding: 20px;
 }
 
@@ -578,14 +601,16 @@
   color: #2c3e50;
 }
 
-.service-level, .status {
+.service-level,
+.status {
   padding: 4px 8px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: bold;
 }
 
-.service-level.a, .service-level.b {
+.service-level.a,
+.service-level.b {
   background-color: #d4edda;
   color: #155724;
 }
@@ -731,16 +756,16 @@
     flex-direction: column;
     height: auto;
   }
-  
+
   .map-section {
     height: 400px;
   }
-  
+
   .info-panel {
     flex-direction: row;
     overflow-x: auto;
   }
-  
+
   .info-card {
     min-width: 280px;
   }
@@ -750,20 +775,20 @@
   .dashboard-main {
     flex-direction: column;
   }
-  
+
   .subwindow-buttons {
     flex-wrap: wrap;
   }
-  
+
   .subwindow-btn {
     font-size: 12px;
     padding: 8px 12px;
   }
-  
+
   .info-panel {
     flex-direction: column;
   }
-  
+
   .info-card {
     min-width: auto;
   }
@@ -1018,11 +1043,11 @@
   border-radius: 50%;
 }
 
-.toggle-switch input:checked + .toggle-slider {
+.toggle-switch input:checked+.toggle-slider {
   background-color: #3498db;
 }
 
-.toggle-switch input:checked + .toggle-slider:before {
+.toggle-switch input:checked+.toggle-slider:before {
   transform: translateX(20px);
 }
 
@@ -1036,38 +1061,37 @@
   width: 14px;
 }
 
-.toggle-switch.small input:checked + .toggle-slider:before {
+.toggle-switch.small input:checked+.toggle-slider:before {
   transform: translateX(18px);
 }
 
 /* Responsive para móviles */
 @media (max-width: 768px) {
+
   .stations-container-box,
   .legend-container-box {
     margin: 5px;
     padding: 15px;
   }
-  
+
   .stations-header,
   .legend-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
   }
-  
+
   .legend-controls {
     width: 100%;
     justify-content: space-between;
   }
-  
+
   .stations-grid {
     grid-template-columns: 1fr;
   }
-  
+
   /* Contenedor principal responsive */
   div[style*="display: flex"] {
     flex-direction: column;
   }
 }
-
-

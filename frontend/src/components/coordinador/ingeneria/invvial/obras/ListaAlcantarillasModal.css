@@ -1,0 +1,12 @@
+/* ListaAlcantarillasModal.css */
+
+.alcantarilla-row {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.alcantarilla-row:hover {
+  transform: translateY(-3px); /* Levanta ligeramente la fila */
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); /* Agrega una sombra sutil */
+  cursor: pointer;
+  background-color: #f0f0f0; /* Cambia el color de fondo al pasar el ratón */
+}

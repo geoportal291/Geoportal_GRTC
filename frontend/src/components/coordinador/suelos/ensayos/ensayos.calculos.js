@@ -12,7 +12,7 @@ const math = create(all);
  * @param {*} defaultValue - El valor a devolver si la ruta no existe.
  * @returns {*} El valor encontrado o el valor por defecto.
  */
-function get(obj, path, defaultValue = undefined) {
+function get(obj, path, defaultValue = 0) {
   const travel = (regexp) =>
     String.prototype.split
       .call(path, regexp)

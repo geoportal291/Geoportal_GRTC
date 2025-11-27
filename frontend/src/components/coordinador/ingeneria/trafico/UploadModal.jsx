@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import axiosInstance from '../../../../api/axios';
 import { logAuditEvent } from '../../../../api/audit';
+import alertify from 'alertifyjs';
+import 'alertifyjs/build/css/alertify.min.css';
+import 'alertifyjs/build/css/themes/default.min.css';
 
 const UploadModal = ({ isOpen, onClose, entityId, onUploadSuccess, uploadUrl, entityIdName }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -46,11 +49,11 @@ const UploadModal = ({ isOpen, onClose, entityId, onUploadSuccess, uploadUrl, en
 
   const handleUpload = async () => {
     if (selectedFiles.length === 0) {
-      alert('Por favor, selecciona al menos una imagen.');
+      alertify.warning('Por favor, selecciona al menos una imagen.');
       return;
     }
     if (!groupDescription) {
-      alert('Por favor, ingresa una descripción para el grupo de fotos.');
+      alertify.warning('Por favor, ingresa una descripción para el grupo de fotos.');
       return;
     }
 
@@ -73,7 +76,11 @@ const UploadModal = ({ isOpen, onClose, entityId, onUploadSuccess, uploadUrl, en
         return response.data.imageData;
       } catch (error) {
         console.error('Error uploading image:', error);
-        alert('Error al subir la imagen: ' + file.name);
+        if (error.response && error.response.status === 403) {
+          alertify.error('Usted solo tiene acceso a lectura, no puede subir archivos');
+        } else {
+          alertify.error('Error al subir la imagen: ' + file.name);
+        }
         return null;
       }
     });

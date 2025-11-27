@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import DetalleAlcantarillaView from './DetalleAlcantarillaView';
+import './ListaAlcantarillasModal.css';
 
 const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, graphicsImages }) => {
   const modalRef = useRef();
@@ -143,7 +144,7 @@ const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, grap
                     const numB = parseInt(b.codigo.match(/\d+/)?.[0] || '0', 10);
                     return numA - numB;
                   }).map((element) => (
-                    <tr key={element.id_alcantarilla} onClick={() => handleRowClick(element)} style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}>
+                    <tr key={element.id_alcantarilla} className="alcantarilla-row" onClick={() => handleRowClick(element)} style={{ borderBottom: '1px solid #f0f0f0' }}>
                       <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>{element.codigo}</td>
                       <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>{element.tipo}</td>
                       <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>{element.diametro_lado}</td>
