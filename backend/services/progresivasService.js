@@ -354,10 +354,26 @@ const getSubProgresivas = async (req, res) => {
         if (estratoIds.length > 0) {
             const ensayosResult = await db.query(`
                 SELECT 
-                    ens.*, 
-                    te.descripcion AS tipo_ensayo_descripcion 
+                    ens.id,
+                    ens.nombre_ensayo,
+                    ens.codigo_ensayo,
+                    ens.fecha,
+                    ens.resultado,
+                    ens.estado,
+                    ens.tipo_ensayo,
+                    ens.estrato_id,
+                    ens.datos_formulario,
+                    prog.nombre AS progresiva_nombre,
+                    prog.coordenada_este,
+                    prog.coordenada_norte,
+                    est.orden AS estrato_orden,
+                    te.descripcion AS tipo_ensayo_descripcion,
+                    te.config_key,
+                    te.results_config
                 FROM ensayos ens
                 LEFT JOIN tipo_ensayo te ON ens.tipo_ensayo = te.id
+                LEFT JOIN estratos est ON ens.estrato_id = est.id
+                LEFT JOIN progresivas prog ON est.parent_type = 'progresiva' AND est.parent_id = prog.id
                 WHERE ens.estrato_id = ANY($1::int[]) 
                 ORDER BY ens.fecha DESC
             `, [estratoIds]);
@@ -386,16 +402,6 @@ const getSubProgresivas = async (req, res) => {
             ...p,
             estratos_perfil: estratosPorProgresivaMap.get(p.id) || []
         }));
-
-        // Add debug logging here
-        console.log('[DEBUG] Datos de ensayos antes de enviar al frontend:');
-        data.forEach(p => {
-            p.estratos_perfil.forEach(e => {
-                e.ensayos.forEach(ens => {
-                    console.log(`  Ensayo ID: ${ens.id}, Fecha: ${ens.fecha}`);
-                });
-            });
-        });
 
         return res.json({
             total,
@@ -449,10 +455,26 @@ const getAllSubProgresivas = async (req, res) => {
         if (estratoIds.length > 0) {
             const ensayosResult = await db.query(`
                 SELECT 
-                    ens.*, 
-                    te.descripcion AS tipo_ensayo_descripcion 
+                    ens.id,
+                    ens.nombre_ensayo,
+                    ens.codigo_ensayo,
+                    ens.fecha,
+                    ens.resultado,
+                    ens.estado,
+                    ens.tipo_ensayo,
+                    ens.estrato_id,
+                    ens.datos_formulario,
+                    prog.nombre AS progresiva_nombre,
+                    prog.coordenada_este,
+                    prog.coordenada_norte,
+                    est.orden AS estrato_orden,
+                    te.descripcion AS tipo_ensayo_descripcion,
+                    te.config_key,
+                    te.results_config
                 FROM ensayos ens
                 LEFT JOIN tipo_ensayo te ON ens.tipo_ensayo = te.id
+                LEFT JOIN estratos est ON ens.estrato_id = est.id
+                LEFT JOIN progresivas prog ON est.parent_type = 'progresiva' AND est.parent_id = prog.id
                 WHERE ens.estrato_id = ANY($1::int[]) 
                 ORDER BY ens.fecha DESC
             `, [estratoIds]);

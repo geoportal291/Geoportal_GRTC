@@ -71,7 +71,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
     ).set('labels', { ok: 'Sí, cerrar sesión', cancel: 'Cancelar' });
   };
 
-  const isActiveLink = (path) => currentPath === path;
+  const isActiveLink = (path) => currentPath.startsWith(path);
 
   const isNavItemVisible = (linkKey) => {
     return navbarVisibility[linkKey] === true;
@@ -163,8 +163,8 @@ export default function Navbar({ onToggle, isCollapsed }) {
                   </li>
                 )}
                 {isNavItemVisible('/coordinador/ingenieria/mecanicadesuelos') && (
-                  <li className={isActiveLink('/coordinador/ingenieria/mecanicadesuelos') ? 'active' : ''}>
-                    <Link to="/coordinador/ingenieria/mecanicadesuelos">
+                  <li className={isActiveLink('/coordinador/recoleccion-datos') ? 'active' : ''}>
+                    <Link to="/coordinador/recoleccion-datos">
                       <i className="fas fa-layer-group"></i><span>Mecánica de Suelos</span>
                     </Link>
                   </li>

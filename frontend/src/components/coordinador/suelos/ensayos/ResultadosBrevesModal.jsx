@@ -27,16 +27,31 @@ const ResultadosBrevesModal = ({ ensayo, onClose }) => {
                 {group.title && <h4>{group.title}</h4>}
                 <div className="results-grid">
                   {group.fields.map((field, fieldIndex) => {
-                    // First, try to get the value from the root object, then fallback to datos_formulario
-                    let value = getNestedValue(ensayo, field.key);
+                    const resultsKey = ensayo.config_key?.toLowerCase();
+                    const fullPath = resultsKey ? `${resultsKey}.${field.name}` : field.name;
+
+                    // 1. Try the full path within datos_formulario (e.g., datos_formulario.granulometria.porc_grava)
+                    let value = getNestedValue(ensayo.datos_formulario, fullPath);
+
+                    // 2. Fallback: try the simple name within datos_formulario (for raw inputs if needed)
                     if (value === undefined) {
-                      value = getNestedValue(ensayo.datos_formulario, field.key);
+                      value = getNestedValue(ensayo.datos_formulario, field.name);
                     }
+
+                    // 3. Fallback: try the simple name on the root ensayo object (for codigo_ensayo, etc.)
+                    if (value === undefined) {
+                        value = getNestedValue(ensayo, field.name);
+                    }
+                      
                     return (
                       <div className="result-item" key={fieldIndex}>
                         <span className="result-label">{field.label}:</span>
                         <span className="result-value">
-                          {value !== undefined && value !== null ? String(value) : 'N/A'}
+                          {value !== undefined && value !== null
+                            ? (typeof value === 'number' && field.digits !== undefined
+                                ? value.toFixed(field.digits)
+                                : String(value))
+                            : 'N/A'}
                         </span>
                       </div>
                     );

@@ -519,6 +519,7 @@ const getEnsayosByTramoId = async (tramoId) => {
             ORDER BY te.descripcion, e.fecha DESC
         `, [tramoId]);
 
+        console.log('[DEBUG] Datos de ensayos por tramoId:', JSON.stringify(result.rows, null, 2)); // Add debug log
         return result.rows;
     } catch (err) {
         console.error('Error al obtener ensayos por tramoId en service:', err);

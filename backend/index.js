@@ -104,13 +104,24 @@ const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     if (authHeader) {
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
-            if (err) {
-                return res.sendStatus(403);
+        try {
+            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+            const userResult = await db.query(`
+                SELECT u.*, r.nombre AS rol_nombre
+                FROM usuariost u
+                LEFT JOIN roles r ON u.rol_id = r.id
+                WHERE u.id = $1
+            `, [decoded.id]);
+
+            if (userResult.rows.length === 0) {
+                return res.sendStatus(403); // User from token not found
             }
-            req.user = user;
+
+            req.user = userResult.rows[0]; // Attach the full user object
             next();
-        });
+        } catch (err) {
+            return res.sendStatus(403); // Invalid token
+        }
     } else {
         res.sendStatus(401);
     }
@@ -156,24 +167,67 @@ app.get('/api/url-preview', async (req, res) => {
     try {
         const { data } = await axios.get(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Connection': 'keep-alive',
             }
         });
 
         const root = parse(data);
 
-        // Buscar la imagen Open Graph (og:image)
-        const ogImageElement = root.querySelector('meta[property="og:image"]');
-        let imageUrl = ogImageElement ? ogImageElement.getAttribute('content') : null;
+        let imageUrl = null;
+        const selectors = [
+            'meta[property="og:image"]',
+            'meta[property="twitter:image"]',
+            'meta[name="twitter:image"]',
+            'link[rel="image_src"]'
+        ];
 
-        // Fallback: si no hay og:image, buscar la primera imagen grande
+        for (const selector of selectors) {
+            const element = root.querySelector(selector);
+            if (element) {
+                imageUrl = element.getAttribute('content') || element.getAttribute('href');
+                if (imageUrl) break;
+            }
+        }
+        
+        // Fallback 1: JSON-LD
         if (!imageUrl) {
-            const firstImg = root.querySelector('img');
-            if (firstImg) {
-                const src = firstImg.getAttribute('src');
-                if (src && !src.startsWith('data:')) {
-                    imageUrl = src;
+            const jsonLdElement = root.querySelector('script[type="application/ld+json"]');
+            if (jsonLdElement) {
+                try {
+                    const jsonData = JSON.parse(jsonLdElement.textContent);
+                    const imageSources = Array.isArray(jsonData.image) ? jsonData.image : [jsonData.image];
+                    const firstImage = imageSources.find(img => typeof img === 'string' || (typeof img === 'object' && img.url));
+                    if (firstImage) {
+                        imageUrl = typeof firstImage === 'string' ? firstImage : firstImage.url;
+                    }
+                } catch (e) {
+                    console.error('Error parsing JSON-LD for URL preview:', e.message);
                 }
+            }
+        }
+
+        // Fallback 2: si no hay og:image, buscar la primera imagen grande
+        if (!imageUrl) {
+            const images = root.querySelectorAll('img');
+            for(const img of images) {
+                const src = img.getAttribute('src');
+                if (src && !src.startsWith('data:') && !src.toLowerCase().includes('logo')) {
+                    const width = parseInt(img.getAttribute('width') || '0', 10);
+                    const height = parseInt(img.getAttribute('height') || '0', 10);
+                    if (width > 100 && height > 100) {
+                        imageUrl = src;
+                        break;
+                    }
+                }
+            }
+            if (!imageUrl && images.length > 0) {
+                 const firstImgSrc = images.find(img => img.getAttribute('src') && !img.getAttribute('src').startsWith('data:'))?.getAttribute('src');
+                 if(firstImgSrc) {
+                    imageUrl = firstImgSrc;
+                 }
             }
         }
 

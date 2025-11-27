@@ -335,7 +335,7 @@ export default function AmigoSecretoDashboard({ isSidebarCollapsed }) {
                 </div>
             </div>
 
-            {asignacion.revelado && (<button className="fab-chat-btn" onClick={() => setShowChat(true)} title="Enviar Mensaje Anónimo"><i className="fas fa-mask"></i></button>)}
+            {/* {asignacion.revelado && (<button className="fab-chat-btn" onClick={() => setShowChat(true)} title="Enviar Mensaje Anónimo"><i className="fas fa-mask"></i></button>)} */}
             {showChat && <ChatAnonimo onClose={() => setShowChat(false)} />}
             <WishlistModal isOpen={showWishlistModal} onClose={() => setShowWishlistModal(false)} recipientName={selectedRecipientWishlist.name} wishlist={selectedRecipientWishlist.items} />
         </div>

@@ -165,6 +165,7 @@ function AppContent() {
                 <Route path="/coordinador/tareas/tareas" element={<RutaPrivada><Layout><Tareas /></Layout></RutaPrivada>} />
                 <Route path="/eventos/amigo-secreto" element={<RutaPrivada><Layout><AmigoSecretoDashboard /></Layout></RutaPrivada>} />
                 <Route path="/eventos/amigo-secreto/gestionar" element={<RutaPrivada><Layout><GestionarParticipantes /></Layout></RutaPrivada>} />
+                <Route path="/gestionar-participantes" element={<RutaPrivada><Layout><GestionarParticipantes /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/proyectos" element={<RutaPrivada><Layout><Proyectos /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/recoleccion-datos/*" element={<RutaPrivada><Layout><RecoleccionDeDatosContainer /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/suelos/ensayos/*" element={<RutaPrivada><Layout><EnsayosContainer /></Layout></RutaPrivada>} />

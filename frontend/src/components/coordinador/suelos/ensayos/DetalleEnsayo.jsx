@@ -204,16 +204,26 @@ export default function DetalleEnsayo() {
 
   // === GUARDAR ENSAYO ===
   const handleSaveEnsayo = async () => {
-    console.log('[Debug] Nombre de ensayo al guardar:', ensayoDetails?.nombre_ensayo);
     try {
       setLoading(true);
       const headers = getAuthHeaders();
-      const payload = {
+
+      // Exclude 'error' property from results before merging
+      const { error: calcError, ...validResults } = resultados;
+
+      // Merge the valid calculated results into the form data
+      const finalFormData = {
         ...formData,
-        nombre_ensayo: ensayoDetails?.nombre_ensayo, // <-- FIX: Preserve existing name
+        ...validResults
+      };
+
+      const payload = {
+        ...finalFormData,
+        nombre_ensayo: ensayoDetails?.nombre_ensayo,
         tipo_ensayo_id: tipoEnsayoId,
         estrato_id: ensayoDetails?.estrato_id
       };
+
       await axios.put(`${API_URL}/api/ensayos/full-assay/${ensayoId}`, payload, { headers });
       alertify.success('Ensayo actualizado correctamente.');
     } catch (err) {

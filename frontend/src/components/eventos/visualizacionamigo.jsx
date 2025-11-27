@@ -160,20 +160,25 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
             }
 
             if (isImageUrl(url)) {
-                setModalContent(prev => ({ ...prev, previewUrl: url }));
+                setModalContent(prev => ({ ...prev, previewUrl: url, isLoadingPreview: false }));
                 return;
             }
 
             setModalContent(prev => ({ ...prev, isLoadingPreview: true }));
+            let newPreviewUrl = '';
             try {
                 const response = await axios.get(`/api/url-preview?url=${encodeURIComponent(url)}`);
                 if (response.data.imageUrl) {
-                    setModalContent(prev => ({ ...prev, previewUrl: response.data.imageUrl }));
+                    newPreviewUrl = response.data.imageUrl;
                 }
             } catch (error) {
                 console.error('Error fetching URL preview:', error);
             } finally {
-                setModalContent(prev => ({ ...prev, isLoadingPreview: false }));
+                setModalContent(prev => ({
+                    ...prev,
+                    previewUrl: newPreviewUrl,
+                    isLoadingPreview: false
+                }));
             }
         };
 
@@ -264,7 +269,7 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
                         )}
                     </div>
                     <div className={`friend-name ${isFriendRevealed ? 'revealed' : ''}`} ref={friendNameRef}>
-                        <span>{isFriendRevealed ? friendName : (error || '')}</span>
+                        <span>{isFriendRevealed ? friendName : (error ? 'Error al cargar' : '')}</span>
                     </div>
                 </div>
                 <div className="christmas-message">{rotatingMessage}</div>
@@ -285,7 +290,7 @@ const VisualizacionAmigo = ({ onGoToDashboard, onClose, isOverlay, eventoId = 1 
                     {giftText.text}
                 </div>
             </div>
-            
+
             {/* Modal refactorizado */}
             {isModalActive && (
                 <div className="chat-modal-overlay" onClick={() => setIsModalActive(false)}>

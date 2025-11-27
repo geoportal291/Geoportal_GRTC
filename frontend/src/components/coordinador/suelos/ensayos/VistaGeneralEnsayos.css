@@ -79,8 +79,8 @@
     min-width: auto;
     cursor: pointer;
     gap: 1rem;
-    background-color: #f8f9fa;
-    border: 1px solid #e0e0e0;
+    background-color: #c9dbe7; /* Slightly darker background */
+    border: 1px solid #646567; /* More prominent border */
     border-radius: 6px;
     transition: box-shadow 0.2s ease-in-out, background-color 0.2s ease-in-out;
 }
@@ -305,6 +305,7 @@
     width: 40px; /* Give it a fixed width matching the collapsed button */
     height: 40px; /* Give it a fixed height */
     font-size: 1.2rem;
+    color: white; /* Make the icon white */
 }
 
 .vista-general-header div {
