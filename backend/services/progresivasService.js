@@ -16,13 +16,16 @@ const importarConEnsayos = async ({ parentProgresiva, generatedChildren, estrato
     try {
         client = await db.connect();
 
-        const tipoEnsayoGranulometria = await client.query("SELECT id FROM tipo_ensayo WHERE config_key = 'Granulometria'");
-        const idGranulometria = tipoEnsayoGranulometria.rows[0]?.id;
-        const tipoEnsayoLimites = await client.query("SELECT id FROM tipo_ensayo WHERE config_key = 'Límites de Consistencia'");
-        const idLimites = tipoEnsayoLimites.rows[0]?.id;
+        let idGranulometria, idLimites;
+        if (estratosSeleccionados && estratosSeleccionados.length > 0) {
+            const tipoEnsayoGranulometria = await client.query("SELECT id FROM tipo_ensayo WHERE config_key = 'Granulometria'");
+            idGranulometria = tipoEnsayoGranulometria.rows[0]?.id;
+            const tipoEnsayoLimites = await client.query("SELECT id FROM tipo_ensayo WHERE config_key = 'Límites de Consistencia'");
+            idLimites = tipoEnsayoLimites.rows[0]?.id;
 
-        if (!idGranulometria || !idLimites) {
-            throw new Error('No se encontraron los tipos de ensayo requeridos (G, L) en la base de datos.');
+            if (!idGranulometria || !idLimites) {
+                throw new Error('No se encontraron los tipos de ensayo requeridos (G, L) para la creación automática de ensayos.');
+            }
         }
 
         await client.query('BEGIN');

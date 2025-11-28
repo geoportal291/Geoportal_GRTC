@@ -501,6 +501,7 @@ const getEnsayosByTramoId = async (tramoId) => {
                 p.nombre_tramo AS proyecto_nombre,
                 prog.id AS progresiva_id,
                 prog.nombre AS progresiva_nombre,
+                prog.descripcion AS progresiva_descripcion,
                 prog.coordenada_este,
                 prog.coordenada_norte,
                 est.id AS estrato_perfil_id,
@@ -681,6 +682,8 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
                                     value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
                                 }
                             }
+                            // DEBUG LOG
+                            console.log(`[EXPORT DEBUG] Key: "${key}" | Value: "${value}"`);
                             newRow.getCell(col).value = value !== undefined && value !== null ? value : '';
                         });
                     });

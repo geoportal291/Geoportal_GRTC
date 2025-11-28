@@ -3,7 +3,8 @@ import ReactDOM from 'react-dom';
 import alertify from 'alertifyjs';
 import '../gestion_tramos/Progresivas.css';
 import { getTiposDeEnsayo } from '../../../../api/ensayosAPI'; // Import the new API function
-import MultiSelect from '../ui/MultiSelect'; // Import the new MultiSelect component
+import AssayTypeSelector from './AssayTypeSelector'; // Import the new AssayTypeSelector component
+import { cn } from '../../../../lib/utils';
 
 const SeleccionarEstratosModal = ({ isOpen, onClose, data, onConfirm }) => {
   const [selectedEstratos, setSelectedEstratos] = useState({});
@@ -21,7 +22,7 @@ const SeleccionarEstratosModal = ({ isOpen, onClose, data, onConfirm }) => {
         setIsLoading(true);
         try {
           const data = await getTiposDeEnsayo();
-          const options = data.map(tipo => ({ value: tipo.id, label: tipo.nombre_ensayo }));
+          const options = data.map(tipo => ({ value: tipo.id, label: tipo.descripcion }));
           setTiposDeEnsayoOptions(options);
         } catch (error) {
           alertify.error('Error al cargar los tipos de ensayo.');
@@ -107,70 +108,78 @@ const SeleccionarEstratosModal = ({ isOpen, onClose, data, onConfirm }) => {
                         {isLoading ? (
                             <p>Cargando tipos de ensayo...</p>
                         ) : (
-                            <MultiSelect
+                            <AssayTypeSelector
                                 options={tiposDeEnsayoOptions}
                                 selected={selectedTiposDeEnsayo}
                                 onChange={setSelectedTiposDeEnsayo}
-                                className="w-full"
                             />
                         )}
                       </div>
           
                       <div className="form-group">
                         <label style={{marginBottom: '8px', display: 'block'}}>2. Seleccione los estratos donde se crearán los ensayos</label>
-                        <div className="modal-toolbar">
-                            <button type="button" className="btn-secondary" onClick={handleSelectToggleAll}>
-                            {allSelected ? 'Deseleccionar Todo' : 'Seleccionar Todo'}
-                            </button>
-                        </div>
-                        <div className="estratos-selection-container excel-table-container">
-                            {reconstructedSubProgresivas.length > 0 ? (
-                            <table className="excel-style-table">
-                                <thead>
-                                <tr>
-                                    <th>Progresiva</th>
-                                    {[...Array(maxEstratos)].map((_, i) => (
-                                    <th key={i}>Estrato {i + 1}</th>
-                                    ))}
-                                </tr>
-                                </thead>
-                                <tbody>
-                                {reconstructedSubProgresivas.map((progresiva, progIndex) => (
-                                    <tr key={progIndex}>
-                                    <td>{progresiva.nombre}</td>
-                                    {[...Array(maxEstratos)].map((_, estratoIndex) => {
-                                        const estrato = progresiva.estratos_perfil?.[estratoIndex];
-                                        if (!estrato) {
-                                        return <td key={estratoIndex} className="empty-cell"></td>;
-                                        }
-                                        const key = `${progresiva.codigo}-${estratoIndex}`;
-                                        const isSelected = !!selectedEstratos[key];
-                                        return (
-                                        <td 
-                                            key={estratoIndex} 
-                                            className={`estrato-cell ${isSelected ? 'selected' : ''}`}
-                                            onClick={() => handleToggleEstrato(progresiva.codigo, estratoIndex)}
-                                        >
-                                            <input 
-                                            type="checkbox" 
-                                            checked={isSelected} 
-                                            onChange={() => handleToggleEstrato(progresiva.codigo, estratoIndex)} 
-                                            className="estrato-checkbox"
-                                            />
-                                            <div className="estrato-cell-info">
-                                            <span>{estrato.descripcion}</span>
-                                            <small>({estrato.profundidad_inicial}m - {estrato.profundidad_final}m)</small>
-                                            </div>
-                                        </td>
-                                        );
-                                    })}
+                        
+                        {selectedTiposDeEnsayo.length === 0 && (
+                            <p className="text-sm text-red-500 mb-2 font-semibold">
+                                ↑ Primero seleccione al menos un tipo de ensayo para habilitar esta sección.
+                            </p>
+                        )}
+
+                        <div className={cn(selectedTiposDeEnsayo.length === 0 && "opacity-50 pointer-events-none")}>
+                            <div className="modal-toolbar">
+                                <button type="button" className="btn-secondary" onClick={handleSelectToggleAll}>
+                                {allSelected ? 'Deseleccionar Todo' : 'Seleccionar Todo'}
+                                </button>
+                            </div>
+                            <div className="estratos-selection-container excel-table-container">
+                                {reconstructedSubProgresivas.length > 0 ? (
+                                <table className="excel-style-table">
+                                    <thead>
+                                    <tr>
+                                        <th>Progresiva</th>
+                                        {[...Array(maxEstratos)].map((_, i) => (
+                                        <th key={i}>Estrato {i + 1}</th>
+                                        ))}
                                     </tr>
-                                ))}
-                                </tbody>
-                            </table>
-                            ) : (
-                            <p>El archivo no contiene progresivas con estratos definidos.</p>
-                            )}
+                                    </thead>
+                                    <tbody>
+                                    {reconstructedSubProgresivas.map((progresiva, progIndex) => (
+                                        <tr key={progIndex}>
+                                        <td>{progresiva.nombre}</td>
+                                        {[...Array(maxEstratos)].map((_, estratoIndex) => {
+                                            const estrato = progresiva.estratos_perfil?.[estratoIndex];
+                                            if (!estrato) {
+                                            return <td key={estratoIndex} className="empty-cell"></td>;
+                                            }
+                                            const key = `${progresiva.codigo}-${estratoIndex}`;
+                                            const isSelected = !!selectedEstratos[key];
+                                            return (
+                                            <td 
+                                                key={estratoIndex} 
+                                                className={`estrato-cell ${isSelected ? 'selected' : ''}`}
+                                                onClick={() => handleToggleEstrato(progresiva.codigo, estratoIndex)}
+                                            >
+                                                <input 
+                                                type="checkbox" 
+                                                checked={isSelected} 
+                                                onChange={() => handleToggleEstrato(progresiva.codigo, estratoIndex)} 
+                                                className="estrato-checkbox"
+                                                />
+                                                <div className="estrato-cell-info">
+                                                <span>{estrato.descripcion}</span>
+                                                <small>({estrato.profundidad_inicial}m - {estrato.profundidad_final}m)</small>
+                                                </div>
+                                            </td>
+                                            );
+                                        })}
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                                ) : (
+                                <p>El archivo no contiene progresivas con estratos definidos.</p>
+                                )}
+                            </div>
                         </div>
                       </div>
                     </div>
