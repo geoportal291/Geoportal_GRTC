@@ -16,11 +16,11 @@ import { saveAs } from 'file-saver';
 
 
 // Este componente encapsula TODA la lógica imperativa para no causar re-renders.
-const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick, onRouteLoaded }) => {
+const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails }) => {
     const map = useMap();
     const geoJsonLayerRef = React.useRef(null);
     const alcantarillasLayerRef = React.useRef(new L.FeatureGroup()); // FeatureGroup para alcantarillas
-    
+
     useEffect(() => {
         if (!map) return;
 
@@ -44,7 +44,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         let areaDrawer = null;
         let currentDrawer = null; // Para manejar el dibujador activo
 
-        
+
 
         // --- Control de Dibujo (para editar/borrar y como base) ---
         const drawControl = new L.Control.Draw({
@@ -62,7 +62,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         // --- Lógica de Coordenadas en Pantalla ---
         const coordContainer = L.DomUtil.create('div', 'leaflet-control-coordinates');
         const coordControl = new L.Control({ position: 'bottomleft' });
-        coordControl.onAdd = function() { return coordContainer; };
+        coordControl.onAdd = function () { return coordContainer; };
         coordControl.addTo(map);
         const parent = coordControl.getContainer()?.parentNode;
         if (parent) { Object.assign(parent.style, { left: '50%', transform: 'translateX(-50%)', right: 'auto', width: 'auto' }); }
@@ -77,7 +77,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         measureHeader.appendChild(document.createTextNode('Mediciones'));
         const measureContent = L.DomUtil.create('div', 'measure-modal-content', measureModal);
         const measureButtonContainer = L.DomUtil.create('div', '', measureContent);
-        
+
         const distanceButton = L.DomUtil.create('a', 'leaflet-control-custom-button leaflet-control-distance-button', measureButtonContainer);
         distanceButton.innerHTML = '↔';
         distanceButton.title = 'Medir distancia';
@@ -206,7 +206,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         downloadCloseButton.innerHTML = '&times;';
         downloadHeader.appendChild(document.createTextNode('Descargar Datos'));
         const downloadContent = L.DomUtil.create('div', 'measure-modal-content', downloadModal);
-        
+
         const handleExportKML = async () => {
             const geoJsonDrawn = drawnItems.toGeoJSON();
             const geoJsonMeasured = measurementLayers.toGeoJSON();
@@ -270,7 +270,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             Descargar como Shapefile (ZIP)
           </button>
         `;
-        
+
         const exportKmlBtn = downloadContent.querySelector('#exportKmlBtn');
         if (exportKmlBtn) {
             exportKmlBtn.onclick = handleExportKML;
@@ -360,7 +360,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 alertify.error('No se pudo cargar el KML desde la URL.');
             }
         };
-        
+
         const handleKmlUpload = async () => {
             const kmlUploadInput = uploadContent.querySelector('#kmlUploadInput');
             const file = kmlUploadInput.files[0];
@@ -383,7 +383,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
                 const { url: newUrl } = uploadResponse.data;
                 alertify.success('Archivo subido correctamente.');
-                
+
                 // Persist the new URL to the project
                 await axiosInstance.post(`/api/proyectos/${projectId}/kml`, { url: newUrl });
                 alertify.message('Asociando KML con el proyecto.');
@@ -404,25 +404,25 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         };
 
         const handleDeleteKml = async () => {
-            alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar el KML de este proyecto? Esta acción no se puede deshacer.', 
-                function() { // On OK
+            alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar el KML de este proyecto? Esta acción no se puede deshacer.',
+                function () { // On OK
                     try {
                         alertify.message('Eliminando KML...');
                         axiosInstance.delete(`/api/proyectos/${projectId}/kml`);
-                        
+
                         // Clear all KML-related layers from the map
                         drawnItems.clearLayers();
-                        
+
                         alertify.success('El KML ha sido eliminado del proyecto.');
                     } catch (error) {
                         alertify.error('No se pudo eliminar el KML.');
                     }
                 },
-                function() { // On Cancel
+                function () { // On Cancel
                     alertify.error('Eliminación cancelada.');
                 }
             );
-        };        uploadContent.innerHTML = `
+        }; uploadContent.innerHTML = `
             <p style="margin-top: 0; margin-bottom: 10px;">Seleccione un archivo KML para guardarlo y mostrarlo en el mapa.</p>
             <input type="file" id="kmlUploadInput" accept=".kml" style="margin-bottom: 10px; width: 100%;"/>
             <button id="uploadKmlBtn" style="padding: 10px; width: 100%; background-color: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer;">
@@ -530,10 +530,10 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                         map.fitBounds(tempGeoJsonLayer.getBounds());
                     }
 
-                                        alertify.success('Archivo KML procesado y características añadidas al mapa.');
+                    alertify.success('Archivo KML procesado y características añadidas al mapa.');
                     drawModal.style.display = 'none'; // Close modal after processing
                 } catch (error) {
-                                        alertify.error('Ocurrió un error al procesar el archivo KML.');
+                    alertify.error('Ocurrió un error al procesar el archivo KML.');
                 }
             };
             reader.onerror = () => {
@@ -653,8 +653,8 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     let value = e.target.value;
                     // Eliminar CUALQUIER caracter que no sea un dígito, un punto o un signo menos
                     // Esto removerá las comas directamente, como en "767,733" -> "767733"
-                    value = value.replace(/[^-0-9.]/g, ''); 
-                    
+                    value = value.replace(/[^-0-9.]/g, '');
+
                     // Asegura que el signo negativo solo esté al principio
                     // Si hay múltiples signos negativos, o uno en medio, elimina los extras y mantiene el inicial
                     const negativeCount = (value.match(/-/g) || []).length;
@@ -719,7 +719,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         group1Container.appendChild(mainDrawButton);
         group1Container.appendChild(updateInfoButton);
         const group1Controls = new L.Control({ position: 'topleft' });
-        group1Controls.onAdd = function() { return group1Container; };
+        group1Controls.onAdd = function () { return group1Container; };
         group1Controls.addTo(map);
 
         // Grupo 2: Subir KML
@@ -727,7 +727,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         L.DomEvent.disableClickPropagation(group2Container);
         group2Container.appendChild(mainUploadButton);
         const group2Controls = new L.Control({ position: 'topleft' });
-        group2Controls.onAdd = function() { return group2Container; };
+        group2Controls.onAdd = function () { return group2Container; };
         group2Controls.addTo(map);
 
         // Grupo 3: Descargar y Eliminar
@@ -736,7 +736,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         group3Container.appendChild(mainDownloadButton);
         group3Container.appendChild(deleteKmlButton);
         const group3Controls = new L.Control({ position: 'topleft' });
-        group3Controls.onAdd = function() { return group3Container; };
+        group3Controls.onAdd = function () { return group3Container; };
         group3Controls.addTo(map);
 
         // --- KML Persistence ---
@@ -785,7 +785,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             }
 
             // FIXME: This needs to be obtained from the current project context
-            const id_proyecto = 1; 
+            const id_proyecto = 1;
 
             const puntosParaGuardar = points.map(feature => ({
                 nombre: feature.properties?.name || 'Punto sin nombre',
@@ -797,7 +797,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
             try {
                 alertify.message('Guardando puntos en la base de datos...');
-                
+
                 // This endpoint needs to be created in your backend.
                 // It should accept an array of points.
                 const response = await axiosInstance.post('/api/puntos-mapa/bulk', { puntos: puntosParaGuardar });
@@ -824,10 +824,10 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
         // --- Lógica para hacer modales arrastrables ---
         const makeDraggable = (modal, header) => {
-            let dragging = false, offset = [0,0];
+            let dragging = false, offset = [0, 0];
             header.onmousedown = (e) => {
                 dragging = true; offset = [modal.offsetLeft - e.clientX, modal.offsetTop - e.clientY];
-                document.onmousemove = (e) => { if(dragging){ modal.style.left = (e.clientX + offset[0]) + 'px'; modal.style.top = (e.clientY + offset[1]) + 'px'; } };
+                document.onmousemove = (e) => { if (dragging) { modal.style.left = (e.clientX + offset[0]) + 'px'; modal.style.top = (e.clientY + offset[1]) + 'px'; } };
                 document.onmouseup = () => { dragging = false; document.onmousemove = document.onmouseup = null; };
             };
         };
@@ -857,23 +857,23 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         clearButton.onclick = clearMeasurement;
 
         const handleCoordsMouseMove = (e) => {
-    if (isDrawing || isMeasuring) {
-        coordContainer.style.display = 'none'; // Ocultar si está dibujando o midiendo
-        return;
-    }
+            if (isDrawing || isMeasuring) {
+                coordContainer.style.display = 'none'; // Ocultar si está dibujando o midiendo
+                return;
+            }
 
-    const lat = e.latlng.lat;
-    const lon = e.latlng.lng;
-    const zoom = map.getZoom();
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+            const zoom = map.getZoom();
 
-    // Cálculo aproximado de escala (metros por pixel * factor para convertir a escala 1:x)
-    const metersPerPixel = 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
-    const scale = Math.round(metersPerPixel * 3779.52); // 1 metro = 3779.52 pulgadas
+            // Cálculo aproximado de escala (metros por pixel * factor para convertir a escala 1:x)
+            const metersPerPixel = 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
+            const scale = Math.round(metersPerPixel * 3779.52); // 1 metro = 3779.52 pulgadas
 
-    // Coordenadas UTM
-    const utmCoords = fromLatLon(lat, lon);
+            // Coordenadas UTM
+            const utmCoords = fromLatLon(lat, lon);
 
-    coordContainer.innerHTML = `
+            coordContainer.innerHTML = `
       <div style="display: grid; grid-template-columns: auto auto; column-gap: 1.5em;">
         <div>Escala: ~1:${scale.toLocaleString('en-US')}</div>
         <div>Coordenada Este: ${utmCoords.easting.toFixed(2)}</div>
@@ -883,12 +883,12 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         <div>Sistema Coordenadas: WGS'84 Zona ${utmCoords.zoneNum}${utmCoords.zoneLetter}</div>
       </div>
     `;
-    coordContainer.style.display = 'block';
-};
+            coordContainer.style.display = 'block';
+        };
         const handleCoordsMouseOut = () => { coordContainer.style.display = 'none'; };
-        const handleDrawStart = (e) => { 
-            isDrawing = true; 
-            coordContainer.style.display = 'none'; 
+        const handleDrawStart = (e) => {
+            isDrawing = true;
+            coordContainer.style.display = 'none';
             // Desactivar otros botones
             L.DomUtil.removeClass(areaButton, 'active');
         };
@@ -962,7 +962,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
                 // Add label for segment distance
                 const segmentDistanceKm = (segmentDistance / 1000);
-                if (segmentDistanceKm > 0) { 
+                if (segmentDistanceKm > 0) {
                     L.marker(segment.getCenter(), {
                         icon: L.divIcon({
                             className: 'measure-label',
@@ -984,12 +984,12 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             L.DomUtil.removeClass(distanceButton, 'active');
             map.getContainer().style.cursor = '';
             map.off('mousemove', handleMeasureMouseMove);
-       
+
         };
 
         const handleDrawCreated = (e) => {
             const layer = e.layer;
-            
+
             // Si es el polígono de medición de área, calcula y muestra el popup
             if (areaDrawer && e.layerType === 'polygon') {
                 const area = getPolygonArea(layer.getLatLngs()[0]);
@@ -998,7 +998,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 const popupContent = `<b>Área:</b><br>${area.toFixed(2)} m²<br>${areaHa} ha<br>${areaKm} km²`;
                 layer.bindPopup(popupContent).openPopup();
             }
-            
+
             drawnItems.addLayer(layer);
 
             // Resetear estados
@@ -1028,7 +1028,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             map.off(L.Draw.Event.DRAWSTART, handleDrawStart).off(L.Draw.Event.DRAWSTOP, handleDrawStop);
             map.off('click', handleMapClick).off('dblclick', handleMapDoubleClick);
             map.off('mousemove', handleMeasureMouseMove);
-            coordControl.remove(); 
+            coordControl.remove();
             group1Controls.remove();
             group2Controls.remove();
             group3Controls.remove();
@@ -1058,46 +1058,73 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
     }, [highlightedTramoId, map]); // Dependency on highlightedTramoId
 
-// Componente React para la galería de imágenes del popup
-const ImageGallery = ({ imageUrls }) => {
-    const [currentIndex, setCurrentIndex] = useState(0);
+    // Componente React para la galería de imágenes del popup
+    const ImageGallery = ({ imageUrls, onShowDetails }) => {
+        const [currentIndex, setCurrentIndex] = useState(0);
 
-    if (!imageUrls || imageUrls.length === 0) {
-        return null;
-    }
+        if (!imageUrls || imageUrls.length === 0) {
+            return (
+                <div style={{ marginTop: '5px', textAlign: 'center' }}>
+                    <button
+                        onClick={onShowDetails}
+                        style={{
+                            display: 'block',
+                            marginTop: '5px',
+                            backgroundColor: '#007bff',
+                            color: 'white',
+                            border: 'none',
+                            padding: '5px 10px',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            width: '100%'
+                        }}
+                    >
+                        Ver detallado
+                    </button>
+                </div>
+            );
+        }
 
-    const goToPrevious = () => {
-        setCurrentIndex(prevIndex => (prevIndex > 0 ? prevIndex - 1 : 0));
-    };
+        const goToPrevious = () => {
+            setCurrentIndex(prevIndex => (prevIndex > 0 ? prevIndex - 1 : 0));
+        };
 
-    const goToNext = () => {
-        setCurrentIndex(prevIndex => (prevIndex < imageUrls.length - 1 ? prevIndex + 1 : prevIndex));
-    };
+        const goToNext = () => {
+            setCurrentIndex(prevIndex => (prevIndex < imageUrls.length - 1 ? prevIndex + 1 : prevIndex));
+        };
 
-    return (
-        <div style={{ marginTop: '5px', textAlign: 'center' }}>
-            <img 
-                src={imageUrls[currentIndex]} 
-                alt="Alcantarilla" 
-                className="popup-image"
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '5px' }}>
-                <button onClick={goToPrevious} disabled={currentIndex === 0}>Anterior</button>
-                <span>{`${currentIndex + 1} de ${imageUrls.length}`}</span>
-                <button onClick={goToNext} disabled={currentIndex === imageUrls.length - 1}>Siguiente</button>
+        return (
+            <div style={{ marginTop: '5px', textAlign: 'center' }}>
+                <img
+                    src={imageUrls[currentIndex]}
+                    alt="Alcantarilla"
+                    className="popup-image"
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '5px' }}>
+                    <button onClick={goToPrevious} disabled={currentIndex === 0}>Anterior</button>
+                    <span>{`${currentIndex + 1} de ${imageUrls.length}`}</span>
+                    <button onClick={goToNext} disabled={currentIndex === imageUrls.length - 1}>Siguiente</button>
+                </div>
+
+                <button
+                    onClick={onShowDetails}
+                    style={{
+                        display: 'block',
+                        marginTop: '5px',
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        border: 'none',
+                        padding: '5px 10px',
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                        width: '100%'
+                    }}
+                >
+                    Ver detallado
+                </button>
             </div>
-       
-            <a 
-                href={imageUrls[currentIndex]} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                style={{ display: 'block', marginTop: '5px' }}
-            >
-                Ver más grande
-            </a>
-        </div>
-    );
-};
+        );
+    };
 
     const markerRefMap = React.useRef({});
     const popupRoots = React.useRef({});
@@ -1108,7 +1135,7 @@ const ImageGallery = ({ imageUrls }) => {
             if (!map || !alcantarillasData) return;
 
             const alcantarillasLayer = alcantarillasLayerRef.current;
-            
+
             const getIcon = (zoom) => {
                 let iconSize = [16, 16];
                 let iconAnchor = [8, 16];
@@ -1141,7 +1168,7 @@ const ImageGallery = ({ imageUrls }) => {
                 alcantarillasData.forEach(alcantarilla => {
                     if (typeof alcantarilla.latitud === 'number' && !isNaN(alcantarilla.latitud) &&
                         typeof alcantarilla.longitud === 'number' && !isNaN(alcantarilla.longitud)) {
-                        
+
                         const marker = L.marker([alcantarilla.latitud, alcantarilla.longitud], { icon: icon });
 
                         marker.on('click', (e) => {
@@ -1150,13 +1177,13 @@ const ImageGallery = ({ imageUrls }) => {
                                 onAlcantarillaClick(alcantarilla);
                             }
                         });
-                        
+
                         const popupContainerId = `popup-gallery-${alcantarilla.id_alcantarilla}`;
                         const popupContent = `
                             <b>Alcantarilla:</b> ${alcantarilla.codigo || alcantarilla.id_alcantarilla}<br/>
                             <div id="${popupContainerId}"></div>
                         `;
-                        
+
                         marker.bindPopup(popupContent);
 
                         marker.on('popupopen', () => {
@@ -1164,7 +1191,7 @@ const ImageGallery = ({ imageUrls }) => {
                             if (container) {
                                 const root = createRoot(container);
                                 popupRoots.current[popupContainerId] = root;
-                                root.render(<ImageGallery imageUrls={alcantarilla.imageUrls} />);
+                                root.render(<ImageGallery imageUrls={alcantarilla.imageUrls} onShowDetails={() => onShowDetails(alcantarilla)} />);
                             }
                         });
 
@@ -1205,13 +1232,13 @@ const ImageGallery = ({ imageUrls }) => {
         } catch (error) {
             console.error('ERROR: Uncaught error in alcantarillas useEffect:', error);
         }
-    }, [alcantarillasData, map]);
+    }, [alcantarillasData, map, onShowDetails]);
 
 
     return null;
 };
 
-const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantarillasData, onAlcantarillaClick, onRouteLoaded }) => {
+const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails }) => {
     // Coordenadas para centrar el mapa en Perú, ya que no hay ruta inicial
     const center = [-12, -75];
 
@@ -1223,7 +1250,7 @@ const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantaril
                     <LayersControl.BaseLayer name="Topográfico"> <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' /> </LayersControl.BaseLayer>
                     <LayersControl.BaseLayer name="Satélite"> <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' /> </LayersControl.BaseLayer>
                 </LayersControl>
-                <MapLogic initialRoute={null} onTramoSelect={onTramoSelect} highlightedTramoId={highlightedTramoId} alcantarillasData={alcantarillasData} onAlcantarillaClick={onAlcantarillaClick} onRouteLoaded={onRouteLoaded} />
+                <MapLogic initialRoute={null} onTramoSelect={onTramoSelect} highlightedTramoId={highlightedTramoId} alcantarillasData={alcantarillasData} onAlcantarillaClick={onAlcantarillaClick} onRouteLoaded={onRouteLoaded} onShowDetails={onShowDetails} />
             </MapContainer>
         </div>
     );

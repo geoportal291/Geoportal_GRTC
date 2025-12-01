@@ -88,11 +88,11 @@ const ImageCarousel = ({ images, metadata, alcantarillaId }) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div style={{
         position: 'relative',
         width: '100%',
-        paddingTop: '56.25%', // Relación de aspecto 16:9
+        paddingTop: '40%', // Reduced aspect ratio from 56.25% (16:9) to make it shorter
         backgroundColor: '#f0f0f0',
         borderRadius: '8px',
         overflow: 'hidden',
@@ -121,10 +121,10 @@ const ImageCarousel = ({ images, metadata, alcantarillaId }) => {
           </div>
         )}
 
-        <img 
-          src={imageSrc} 
+        <img
+          src={imageSrc}
           onLoad={handleImageLoad}
-          alt={`Alcantarilla ${alcantarillaId} - ${currentIndex + 1}`} 
+          alt={`Alcantarilla ${alcantarillaId} - ${currentIndex + 1}`}
           style={{
             position: 'absolute',
             top: 0,
@@ -134,7 +134,7 @@ const ImageCarousel = ({ images, metadata, alcantarillaId }) => {
             objectFit: 'cover',
             opacity: isLoading ? 0.5 : 1, // Optionally make the old image less visible while loading
             transition: 'opacity 0.2s'
-          }} 
+          }}
         />
         {/* Metadatos superpuestos */}
         <div style={{

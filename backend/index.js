@@ -35,21 +35,6 @@ const puntosMapaService = require('./services/puntosMapaService');
 const canterasService = require('./services/canterasService');
 const alcantarillasService = require('./services/alcantarillasService');
 const alcantarillasGraphicsService = require('./services/alcantarillasGraphicsService');
-const amigoSecretoService = require('./services/amigoSecretoService');
-const wishlistService = require('./services/wishlistService'); // NUEVO
-const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
-const { put, del } = require('@vercel/blob');
-const axios = require('axios'); // Asegurarse de que axios esté importado
-const { parse } = require('node-html-parser'); // Importar el parser de node-html-parser
-const alcantarillasE1Service = require('./services/alcantarillasE1Service');
-const tokml = require('tokml');
-const shpwrite = require('@mapbox/shp-write');
-const archiver = require('archiver');
-const { Server } = require("socket.io");
-
-const app = express();
-const server = http.createServer(app);
 
 console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
@@ -110,7 +95,7 @@ const authenticateToken = async (req, res, next) => {
 
             const user = userResult.rows[0];
             const permissions = await usuariosService.getUserPermissions(user.id, user.rol_id);
-            
+
             user.permissions = permissions; // Adjuntar permisos al objeto de usuario
             req.user = user; // Adjuntar el objeto de usuario completo (con permisos) a la solicitud
 
@@ -211,7 +196,7 @@ app.get('/api/url-preview', async (req, res) => {
                 if (imageUrl) break;
             }
         }
-        
+
         // Fallback 1: JSON-LD
         if (!imageUrl) {
             const jsonLdElement = root.querySelector('script[type="application/ld+json"]');
@@ -232,7 +217,7 @@ app.get('/api/url-preview', async (req, res) => {
         // Fallback 2: si no hay og:image, buscar la primera imagen grande
         if (!imageUrl) {
             const images = root.querySelectorAll('img');
-            for(const img of images) {
+            for (const img of images) {
                 const src = img.getAttribute('src');
                 if (src && !src.startsWith('data:') && !src.toLowerCase().includes('logo')) {
                     const width = parseInt(img.getAttribute('width') || '0', 10);
@@ -244,10 +229,10 @@ app.get('/api/url-preview', async (req, res) => {
                 }
             }
             if (!imageUrl && images.length > 0) {
-                 const firstImgSrc = images.find(img => img.getAttribute('src') && !img.getAttribute('src').startsWith('data:'))?.getAttribute('src');
-                 if(firstImgSrc) {
+                const firstImgSrc = images.find(img => img.getAttribute('src') && !img.getAttribute('src').startsWith('data:'))?.getAttribute('src');
+                if (firstImgSrc) {
                     imageUrl = firstImgSrc;
-                 }
+                }
             }
         }
 
@@ -271,7 +256,7 @@ app.get('/api/url-preview', async (req, res) => {
 
 
 // --------------------- LOGIN ---------------------
-app.post('/login', async(req, res) => {
+app.post('/login', async (req, res) => {
     const { usuario, password } = req.body;
     try {
         const result = await db.query(`
@@ -321,7 +306,7 @@ app.get('/api/eventos/:eventoId/asignacion', authenticateToken, async (req, res)
     try {
         const { eventoId } = req.params;
         const dadorUsuarioId = req.user.id;
-        
+
         const amigoSecretoNombre = await amigoSecretoService.getMiAmigoSecreto(dadorUsuarioId, eventoId);
 
         if (amigoSecretoNombre) {
@@ -606,7 +591,7 @@ app.put('/api/ensayos/full-assay/:id', authenticateToken, async (req, res) => {
 });
 
 // Eliminar un ensayo por ID
-app.delete('/api/ensayos/:id', authenticateToken, async(req, res) => {
+app.delete('/api/ensayos/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const rowCount = await ensayosService.deleteEnsayo(id);
@@ -640,7 +625,7 @@ app.post('/api/ensayos/bulk-delete', authenticateToken, async (req, res) => {
 });
 
 // --------------------- ROLES ---------------------
-app.get('/roles', async(req, res) => {
+app.get('/roles', async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM roles');
         res.json(result.rows);
@@ -651,7 +636,7 @@ app.get('/roles', async(req, res) => {
 });
 
 // --------------------- ESPECIALIDADES ---------------------
-app.get('/especialidades', async(req, res) => {
+app.get('/especialidades', async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM especialidades');
         res.json(result.rows);
@@ -662,7 +647,7 @@ app.get('/especialidades', async(req, res) => {
 });
 
 // --------------------- USUARIOS ---------------------
-app.post('/usuarios', authenticateToken, authorizePermission('usuarios', 'edicion'), async(req, res) => {
+app.post('/usuarios', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
     try {
         const result = await usuariosService.createUser(req.body);
         res.status(201).json({ status: 'ok', mensaje: 'Usuario creado correctamente', userId: result.userId });
@@ -679,7 +664,7 @@ app.post('/usuarios', authenticateToken, authorizePermission('usuarios', 'edicio
     }
 });
 
-app.get('/usuarios', authenticateToken, authorizePermission('usuarios', 'lectura'), async(req, res) => {
+app.get('/usuarios', authenticateToken, authorizePermission('usuarios', 'lectura'), async (req, res) => {
     try {
         const result = await db.query(`
             SELECT u.*, r.nombre AS rol_nombre, e.nombre AS especialidad_nombre
@@ -694,7 +679,7 @@ app.get('/usuarios', authenticateToken, authorizePermission('usuarios', 'lectura
     }
 });
 
-app.get('/usuarios/:id', authenticateToken, authorizePermission('usuarios', 'lectura'), async(req, res) => {
+app.get('/usuarios/:id', authenticateToken, authorizePermission('usuarios', 'lectura'), async (req, res) => {
     const { id } = req.params;
     try {
         const user = await usuariosService.getUserById(id);
@@ -720,7 +705,7 @@ app.get('/api/usuarios/por-proyecto', authenticateToken, authorizeAdminOrCoordin
     }
 });
 
-app.delete('/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async(req, res) => {
+app.delete('/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
     const { dni } = req.params;
     try {
         const result = await usuariosService.deleteUser(dni);
@@ -741,7 +726,7 @@ app.delete('/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 
     }
 });
 
-app.put('/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async(req, res) => {
+app.put('/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
     const { dni } = req.params;
     const {
         tramo, usuario, password, nombre, ap_paterno,
@@ -1006,7 +991,7 @@ async function uploadFileToVercelBlob(file) {
 }
 
 // Crear un nuevo anuncio con archivo y subirlo
-app.post('/anuncios', authenticateToken, upload.single('file'), async(req, res) => {
+app.post('/anuncios', authenticateToken, upload.single('file'), async (req, res) => {
     const { titulo, contenido, fecha_inicio, fecha_fin, usuario_id, duracion_horas } = req.body;
     const creador_id = req.user.id;
     const archivo = req.file;
@@ -1151,7 +1136,7 @@ app.post('/api/trafico/estacion/upload-image', authenticateToken, authorizePermi
         }
 
         const imageUrl = await uploadStationImageToVercelBlob(req.file, description, index);
-        
+
         //insertar la nueva imagen en la tabla trafico_imagenes
         const result = await db.query(
             'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
@@ -1180,7 +1165,7 @@ app.post('/api/trafico/tramo/upload-image', authenticateToken, authorizePermissi
             return res.status(400).json({ error: 'tramoId es requerido.' });
         }
         const imageUrl = await uploadTramoImageToVercelBlob(req.file, description, index);
-        
+
         // Reutilizamos la tabla trafico_imagenes, guardando el tramoId en la columna station_id
         const result = await db.query(
             'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
@@ -1205,7 +1190,7 @@ app.post('/api/trafico/conteovehicular/upload-file', authenticateToken, authoriz
             return res.status(400).json({ error: 'stationId es requerido.' });
         }
         const fileUrl = await uploadConteoVehicularImageToVercelBlob(req.file, description, index);
-        
+
         const result = await db.query(
             'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
             [stationId, fileUrl, description, upload_date, source_type]
@@ -1254,7 +1239,7 @@ app.post('/api/trafico/conteovehicular/upload-excel', authenticateToken, authori
         );
 
         res.status(201).json({ status: 'ok', message: 'Archivo Excel subido correctamente', excelUrl, imageData: result.rows[0] });
-        
+
         // --- Audit Log: Subida de Archivo de Tráfico ---
         await db.query(
             'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
@@ -1295,19 +1280,19 @@ app.post('/api/kml/upload', authenticateToken, authorizePermission('proyectos', 
         }
         // Read the file from disk into a buffer because multer is configured with diskStorage
         const fileBuffer = await fsp.readFile(req.file.path);
-        
+
         // Create a file-like object that the helper function expects (with a buffer)
         const fileForBlob = {
             originalname: req.file.originalname,
             buffer: fileBuffer
         };
-        
+
         // Use the helper function to upload the file buffer
         const blobUrl = await uploadKmlToVercelBlob(fileForBlob);
-        
+
         // Clean up the temporary file from disk
         await fsp.unlink(req.file.path);
-        
+
         // Respond with the public URL of the uploaded file
         res.status(201).json({ url: blobUrl });
     } catch (error) {
@@ -1364,19 +1349,19 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
         if (!entregableNum) {
             return res.status(400).json({ error: 'entregableNum es requerido.' });
         }
-        
+
         // Leer el archivo del disco ya que multer.diskStorage no llena el buffer
         const fileBuffer = await fsp.readFile(req.file.path);
-        
+
         // Procesar el Excel y guardar las alcantarillas en la base de datos, pasando el buffer
         const processResult = await alcantarillasService.processExcelAndSaveAlcantarillas(fileBuffer, projectId, utmZone);
-        
+
         // Si el procesamiento fue exitoso, subir el archivo a Vercel Blob
         const excelUrl = await uploadAlcantarillasExcelToVercelBlob(fileBuffer, req.file.originalname, projectId);
-        
+
         // Eliminar el archivo temporal
         await fsp.unlink(req.file.path);
-        
+
         // Guardar la URL del archivo Excel en la tabla invvial
         const columnName = `alcantarillas_excel_url_entregable${entregableNum}`;
         await db.query(
@@ -1524,9 +1509,9 @@ app.post('/api/alcantarillas/upload-images', authenticateToken, authorizePermiss
         if (!projectId) {
             return res.status(400).json({ error: 'projectId es requerido.' });
         }
-        
+
         const result = await alcantarillasGraphicsService.deleteGraphicImage(imageId, projectId);
-        
+
         // --- Audit Log: Eliminación de Imagen de Gráfico de Alcantarillas ---
         await db.query(
             'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
@@ -1549,7 +1534,7 @@ app.delete('/api/alcantarillas/graphics/:imageId', authenticateToken, async (req
 
     try {
         const result = await alcantarillasGraphicsService.deleteGraphicImage(imageId, projectId);
-        
+
         // --- Audit Log: Eliminación de Imagen de Gráfico de Alcantarillas ---
         await db.query(
             'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
@@ -1571,7 +1556,7 @@ app.delete('/api/alcantarillas/graphics/all/:projectId', authenticateToken, asyn
 
     try {
         const result = await alcantarillasGraphicsService.deleteAllGraphicImages(projectId);
-        
+
         // --- Audit Log: Eliminación de Todas las Imágenes de Gráfico de Alcantarillas ---
         await db.query(
             'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
@@ -1628,6 +1613,33 @@ app.get('/api/proyectos/:projectId/alcantarillas', authenticateToken, async (req
     }
 });
 
+// Endpoint para crear una nueva alcantarilla
+app.post('/api/alcantarillas', authenticateToken, async (req, res) => {
+    try {
+        const newAlcantarilla = await alcantarillasService.createAlcantarilla(req.body);
+        res.status(201).json(newAlcantarilla);
+    } catch (error) {
+        console.error('Error al crear alcantarilla:', error);
+        res.status(500).json({ error: 'Error al crear alcantarilla', details: error.message });
+    }
+});
+
+// Endpoint para actualizar una alcantarilla existente
+app.put('/api/alcantarillas/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const updatedAlcantarilla = await alcantarillasService.updateAlcantarilla(id, req.body);
+        if (updatedAlcantarilla) {
+            res.json(updatedAlcantarilla);
+        } else {
+            res.status(404).json({ error: 'Alcantarilla no encontrada' });
+        }
+    } catch (error) {
+        console.error(`Error al actualizar alcantarilla ${id}:`, error);
+        res.status(500).json({ error: 'Error al actualizar alcantarilla', details: error.message });
+    }
+});
+
 // NEW: Endpoint para eliminar el archivo Excel de alcantarillas y sus datos asociados
 app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, async (req, res) => {
     const { projectId } = req.params;
@@ -1639,22 +1651,22 @@ app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, asyn
             return res.status(400).json({ error: 'entregableNum es requerido.' });
         }
         const columnName = `alcantarillas_excel_url_entregable${entregableNum}`;
-        
+
         // 1. Obtener la URL del Excel de la tabla invvial
         const invvialResult = await db.query(`SELECT ${columnName} FROM invvial WHERE id_proyecto = $1`, [projectId]);
         const excelUrl = invvialResult.rows.length > 0 ? invvialResult.rows[0][columnName] : null;
-        
+
         // 2. Eliminar el archivo de Vercel Blob si existe
         if (excelUrl) {
             await del(excelUrl, { token: process.env.BLOB_READ_WRITE_TOKEN });
         }
-        
+
         // 3. Eliminar la entrada de alcantarillas_excel_url de la tabla invvial
         await db.query(`UPDATE invvial SET ${columnName} = NULL WHERE id_proyecto = $1`, [projectId]);
-        
+
         // 4. Eliminar todas las alcantarillas asociadas a este proyecto
         await db.query('DELETE FROM alcantarillas WHERE id_proyecto = $1', [projectId]);
-        
+
         // --- Audit Log: Eliminación de Archivo Excel de Alcantarillas ---
         await db.query(
             'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
@@ -1716,7 +1728,7 @@ app.post('/api/trafico/encuestaorigendestino/upload-file', authenticateToken, au
             return res.status(400).json({ error: 'stationId es requerido.' });
         }
         const fileUrl = await uploadEncuestaOrigenDestinoFileToVercelBlob(req.file, description, index);
-        
+
         // Insertar el nuevo archivo en la tabla trafico_imagenes
         const result = await db.query(
             'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *'
@@ -1740,7 +1752,7 @@ app.post('/api/trafico/censodecargas/upload-file', authenticateToken, authorizeP
             return res.status(400).json({ error: 'stationId es requerido.' });
         }
         const fileUrl = await uploadCensoDeCargasFileToVercelBlob(req.file, description, index);
-        
+
         // Insertar el nuevo archivo en la tabla trafico_imagenes
         const result = await db.query(
             'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *'
@@ -1764,7 +1776,7 @@ app.post('/api/trafico/encuestavelocidad/upload-file', authenticateToken, author
             return res.status(400).json({ error: 'sectionId es requerido.' });
         }
         const fileUrl = await uploadEncuestaVelocidadFileToVercelBlob(req.file, description, index);
-        
+
         // Insertar el nuevo archivo en la tabla trafico_imagenes
         const result = await db.query(
             'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *'
@@ -1786,7 +1798,7 @@ app.delete('/api/trafico/delete-image-group', async (req, res) => {
             'DELETE FROM trafico_imagenes WHERE station_id = $1 AND description = $2 AND upload_date = $3',
             [stationId, description, uploadDate]
         );
-        
+
         if (result.rowCount > 0) {
             res.status(200).json({ status: 'ok', message: 'Grupo de imágenes eliminado correctamente.' });
         } else {
@@ -1821,7 +1833,7 @@ app.delete('/api/trafico/delete-image', async (req, res) => {
 });
 
 // ✅ Listar anuncios activos
-app.get('/anuncios/activos', async(req, res) => {
+app.get('/anuncios/activos', async (req, res) => {
     try {
         const result = await db.query(`
             SELECT a.id, a.titulo, a.contenido,
@@ -1863,7 +1875,7 @@ app.get('/api/ruta-kml', async (req, res) => {
     }
 });
 
-app.get('/anuncios', async(req, res) => {
+app.get('/anuncios', async (req, res) => {
     try {
         const result = await db.query(`
             SELECT a.*, CONCAT(u.nombre, ' ', u.ap_paterno) AS autor
@@ -1878,7 +1890,7 @@ app.get('/anuncios', async(req, res) => {
     }
 });
 
-app.delete('/anuncios/:id', async(req, res) => {
+app.delete('/anuncios/:id', async (req, res) => {
     const { id } = req.params;
     try {
         const result = await db.query('DELETE FROM anuncios WHERE id = $1', [id]);
@@ -1893,7 +1905,7 @@ app.delete('/anuncios/:id', async(req, res) => {
     }
 });
 
-app.put('/anuncios/:id', authenticateToken, async(req, res) => {
+app.put('/anuncios/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { titulo, contenido, fecha_inicio, fecha_fin, usuario_id } = req.body;
 
@@ -2439,7 +2451,7 @@ app.post('/api/canteras/:id/kml', authenticateToken, async (req, res) => {
         }
         // 1. Create the KML record in kml_trazados table
         const kmlTrazado = await kmlService.createKmlTrazado(kmlContent, userId);
-        
+
         // 2. Associate the new KML ID with the cantera
         const updatedCantera = await canterasService.asociarKml(canteraId, kmlTrazado.id);
         res.status(200).json({
@@ -3623,28 +3635,28 @@ app.delete('/api/trafico/delete-image-group', authenticateToken, async (req, res
 });
 
 app.get('/api/trafico/download-excel', async (req, res) => {
-  try {
-    const { url } = req.query;
-    if (!url) {
-      return res.status(400).send('URL query parameter is required.');
+    try {
+        const { url } = req.query;
+        if (!url) {
+            return res.status(400).send('URL query parameter is required.');
+        }
+
+        // Use axios to fetch the file as a stream
+        const response = await axios({
+            method: 'get',
+            url: url,
+            responseType: 'stream'
+        });
+
+        // Set the content type from the original response
+        res.setHeader('Content-Type', response.headers['content-type']);
+        // Pipe the stream to the response
+        response.data.pipe(res);
+
+    } catch (error) {
+        console.error('Error proxying Excel download:', error);
+        res.status(500).send('Error downloading file.');
     }
-
-    // Use axios to fetch the file as a stream
-    const response = await axios({
-      method: 'get',
-      url: url,
-      responseType: 'stream'
-    });
-
-    // Set the content type from the original response
-    res.setHeader('Content-Type', response.headers['content-type']);
-    // Pipe the stream to the response
-    response.data.pipe(res);
-
-  } catch (error) {
-    console.error('Error proxying Excel download:', error);
-    res.status(500).send('Error downloading file.');
-  }
 });
 
 
@@ -3672,7 +3684,7 @@ let participantesSorteo = [];
 io.use(async (socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
-         return next(new Error('Authentication error: Token not provided.'));
+        return next(new Error('Authentication error: Token not provided.'));
     }
     try {
         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
@@ -3684,7 +3696,7 @@ io.use(async (socket, next) => {
         `, [decodedToken.id]);
 
         if (userResult.rows.length === 0) {
-             return next(new Error('Authentication error: User not found.'));
+            return next(new Error('Authentication error: User not found.'));
         }
         socket.data.user = userResult.rows[0];
         next();
@@ -3697,7 +3709,7 @@ io.use(async (socket, next) => {
 // ===== SOCKET.IO CONNECTION LOGIC (DATABASE PERSISTENT) =====
 io.on('connection', async (socket) => {
     console.log(`🔌 Usuario autenticado conectado: ${socket.data.user.nombre} (ID: ${socket.id})`);
-    
+
     const isOrganizer = ['ADMIN', 'COORDINADOR PROYECTO'].includes(socket.data.user.rol_nombre);
 
     try {
@@ -3737,7 +3749,7 @@ io.on('connection', async (socket) => {
                 };
             }
         }
-        
+
         socket.emit('initial_state', {
             participantes: participantesSorteo,
             esSorteoIniciado,
@@ -3760,7 +3772,7 @@ io.on('connection', async (socket) => {
         if (!isOrganizer) { // Re-check authorization
             return socket.emit('error_event', { message: 'No tienes permiso para iniciar el sorteo.' });
         }
-        
+
         const client = await db.connect();
         try {
             // Obtener participantes autorizados desde la base de datos
@@ -3770,7 +3782,7 @@ io.on('connection', async (socket) => {
             `);
 
             if (authorizedParticipants.length < 2) {
-                 return io.emit('error_event', { message: 'No hay suficientes participantes seleccionados para el sorteo (mínimo 2).' });
+                return io.emit('error_event', { message: 'No hay suficientes participantes seleccionados para el sorteo (mínimo 2).' });
             }
 
             console.log(`🎉 Sorteo iniciado por ${socket.data.user.nombre}! con ${authorizedParticipants.length} participantes.`);
@@ -3805,7 +3817,7 @@ io.on('connection', async (socket) => {
                         }
                     }
                 }
-                
+
                 // Después de intentar corregir conflictos, re-verificamos la validez de toda la asignación
                 hayConflictos = false;
                 for (let i = 0; i < authorizedParticipants.length; i++) {
@@ -3836,7 +3848,7 @@ io.on('connection', async (socket) => {
             // 4. Guardar en la Base de Datos
             await client.query('BEGIN');
             await client.query('DELETE FROM amigo_secreto_asignaciones WHERE evento_id = 1'); // Limpiar asignaciones anteriores
-            
+
             const insertPromises = Object.entries(asignacionesTemp).map(([dadorId, receptorData]) => {
                 return client.query(
                     'INSERT INTO amigo_secreto_asignaciones (evento_id, dador_usuario_id, receptor_usuario_id) VALUES (1, $1, $2)',
@@ -3844,14 +3856,14 @@ io.on('connection', async (socket) => {
                 );
             });
             await Promise.all(insertPromises);
-            
+
             await client.query('UPDATE amigo_secreto_eventos SET es_sorteo_iniciado = true WHERE id = 1');
             await client.query('COMMIT');
             console.log("Asignaciones guardadas en la DB.");
 
             // 5. Notificar a los clientes
             io.emit('draw_started'); // Notificar que el sorteo ha comenzado
-            
+
             setTimeout(async () => {
                 const allSockets = await io.fetchSockets();
                 allSockets.forEach(sock => {
@@ -3875,7 +3887,7 @@ io.on('connection', async (socket) => {
         if (!isOrganizer) { // Re-check authorization
             return socket.emit('error_event', { message: 'No tienes permiso para reiniciar el sorteo.' });
         }
-        
+
         console.log(`🔄 Sorteo reiniciado por ${socket.data.user.nombre}!`);
 
         const client = await db.connect();

@@ -168,6 +168,8 @@ export default function DetalleEnsayo() {
         tableConfig: tableConfig
       };
 
+      console.log('[DEBUG] Pre-cálculo - Contexto:', calculationContext);
+
       const resultadosCalculados = calcularResultados(dynamicConfig, calculationContext);
       setResultados(resultadosCalculados);
     } catch (err) {
@@ -180,6 +182,7 @@ export default function DetalleEnsayo() {
   // === ACTUALIZAR DATOS DEL FORMULARIO ===
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
+    console.log('[DEBUG] InputChange:', { name, value });
     const val = type === 'number' ? parseFloat(value) || 0 : value;
 
     const set = (obj, path, value) => {

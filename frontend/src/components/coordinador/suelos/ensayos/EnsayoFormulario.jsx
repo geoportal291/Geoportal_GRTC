@@ -1,132 +1,117 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 // --- Sub-componentes de Sección --- //
 import FormularioSimple from './secciones/CamposGenerales.jsx';
-import SeccionTablaDinamica from './secciones/SeccionTablaDinamica.jsx'; // Unico componente para tablas
+import SeccionTablaDinamica from './secciones/SeccionTablaDinamica.jsx';
 
 // --- Mapa de Componentes --- //
-
 const componentMap = {
   'CamposGenerales': FormularioSimple,
-  'TablaTamices': SeccionTablaDinamica,
-  'TablaLimiteLiquido': SeccionTablaDinamica,
-  'TablaLimitePlastico': SeccionTablaDinamica,
-  // Añadimos una clave genérica para el nuevo sistema
   'SeccionTablaDinamica': SeccionTablaDinamica,
 };
 
-// --- Componente Principal --- //
+// --- Componente Principal con Lógica de Pestañas --- //
+const EnsayoFormulario = ({ data, onInputChange, resultados, tableConfig }) => {
+  const [activeTab, setActiveTab] = useState(0);
 
-const EnsayoFormulario = ({ data, onInputChange, resultados, formConfig, tableConfig }) => {
-
-  const renderSectionComponent = (seccion, customTableConfig = null) => {
-    const ComponenteDinamico = componentMap[seccion.componente_key];
-    // Usa el customTableConfig si se provee (para el modo fallback), si no, busca en el tableConfig general.
-    const seccionTableConfig = customTableConfig || (tableConfig ? tableConfig[seccion.config_key] : null);
-
-    if (ComponenteDinamico) {
-      return (
-        <ComponenteDinamico
-          key={seccion.id}
-          seccion={seccion}
-          data={data}
-          onInputChange={onInputChange}
-          resultados={resultados}
-          tableConfig={seccionTableConfig}
-        />
-      );
-    }
-    return <div key={seccion.id}>Error: Componente no encontrado para la clave: {seccion.componente_key}</div>;
-  };
-
-  // Si no hay secciones definidas en la DB, pero sí hay una config de tabla, renderizamos desde la config de tabla.
-  // Esto es para ensayos más nuevos como CBR.
-  if ((!formConfig || !formConfig.secciones || formConfig.secciones.length === 0) && 
-      (tableConfig && typeof tableConfig === 'object' && Object.keys(tableConfig).length > 0)) {
-    
-    // Fallback v2: Renderiza tanto campos generales como tablas desde la config.
-    const generalFieldsConfig = tableConfig.general_fields;
-    const tablesConfig = tableConfig.tables || tableConfig; // Soporte para la estructura anidada y la antigua
-
-    return (
-      <>
-        {generalFieldsConfig && (
-          <FormularioSimple
-            seccion={{
-              titulo: generalFieldsConfig.title,
-              campos: generalFieldsConfig.fields.map(f => ({ ...f, name: f.key })), // Mapea key a name para compatibilidad
-            }}
-            data={data}
-            onInputChange={onInputChange}
-          />
-        )}
-        <div className="essay-tables-flex-container" style={{ flexDirection: 'column', gap: '1rem' }}>
-          {Object.keys(tablesConfig)
-            // Filtramos para no intentar renderizar la config de campos generales o layout como una tabla
-            .filter(key => key !== 'general_fields' && key !== 'layout')
-            .map(key => {
-            const seccionTableConfig = tablesConfig[key];
-            const mockSeccion = {
-              id: `fallback-${key}`,
-              titulo: seccionTableConfig.title || key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
-              componente_key: 'SeccionTablaDinamica'
-            };
-            return (
-              <div key={mockSeccion.id} className="essay-tables-flex-item">
-                {renderSectionComponent(mockSeccion, seccionTableConfig)}
-              </div>
-            );
-          })}
-        </div>
-      </>
-    );
-  }
-
-  // Lógica original para ensayos que sí usan `formulario_secciones`
-  if (!formConfig || !formConfig.secciones) {
+  if (!tableConfig || (Object.keys(tableConfig).length === 0)) {
     return <div>Cargando configuración del formulario...</div>;
   }
 
-  const renderSections = () => {
-    const groupedSections = [];
-    let i = 0;
-    while (i < formConfig.secciones.length) {
-      const currentSection = formConfig.secciones[i];
-      if (currentSection.layout_style === 'side-by-side') {
-        const group = [currentSection];
-        let j = i + 1;
-        while (j < formConfig.secciones.length && formConfig.secciones[j].layout_style === 'side-by-side') {
-          group.push(formConfig.secciones[j]);
-          j++;
-        }
-        groupedSections.push(group);
-        i = j;
-      } else {
-        groupedSections.push(currentSection);
-        i++;
-      }
+  // Extraer campos generales y tablas de la configuración
+  const generalFieldsSection = tableConfig.general_fields ? {
+    key: 'general_fields',
+    ...tableConfig.general_fields,
+    componente_key: 'CamposGenerales'
+  } : null;
+
+  // Lógica simplificada: asume que las tablas siempre están bajo la clave "tables"
+  const tableSections = tableConfig.tables ? Object.keys(tableConfig.tables).map(key => ({
+    key,
+    ...tableConfig.tables[key],
+    componente_key: 'SeccionTablaDinamica'
+  })) : [];
+  
+  const hasMultipleTables = tableSections.length > 2;
+
+  // --- Funciones de Renderizado --- //
+
+  const renderSingleSection = (section, isTabContent = false) => {
+    const ComponenteDinamico = componentMap[section.componente_key];
+    
+    if (!ComponenteDinamico) {
+      return <div key={section.key}>Error: Componente no encontrado para {section.componente_key}</div>;
     }
 
-    return groupedSections.map((group, index) => {
-      if (Array.isArray(group)) {
-        return (
-          <div key={`group-${index}`} className="essay-tables-flex-container">
-            {group.map(seccion => (
-              <div key={seccion.id} className="essay-tables-flex-item">
-                {renderSectionComponent(seccion)}
-              </div>
-            ))}
-          </div>
-        );
-      } else {
-        return renderSectionComponent(group);
-      }
-    });
-  };
+    // El estilo dinámico solo se aplica si no estamos en modo Pestaña
+    const style = isTabContent ? {} : {
+      flexBasis: section.layout?.width || '100%',
+      maxWidth: section.layout?.width || '100%',
+    };
 
+    let componentProps = {};
+    if (section.componente_key === 'CamposGenerales') {
+      componentProps = {
+        seccion: { titulo: section.title, campos: section.fields.map(f => ({ ...f, name: f.key })) },
+        data, onInputChange,
+      };
+    } else { // SeccionTablaDinamica
+      componentProps = {
+        seccion: { id: section.key, titulo: section.title, componente_key: section.componente_key },
+        data, onInputChange, resultados, tableConfig: section,
+      };
+    }
+
+    return (
+      <div key={section.key} style={style} className="dynamic-section-item">
+        <ComponenteDinamico {...componentProps} />
+      </div>
+    );
+  };
+  
+  const renderColumnLayout = () => {
+    const allSections = generalFieldsSection ? [generalFieldsSection, ...tableSections] : tableSections;
+    const groupedSections = allSections.reduce((acc, section) => {
+      const groupKey = section.layout?.group || `group_${section.key}`;
+      if (!acc[groupKey]) acc[groupKey] = [];
+      acc[groupKey].push(section);
+      return acc;
+    }, {});
+
+    return Object.keys(groupedSections).map(groupKey => (
+      <div key={groupKey} className="dynamic-section-group">
+        {groupedSections[groupKey].map(section => renderSingleSection(section, false))}
+      </div>
+    ));
+  };
+  
+  const renderTabLayout = () => (
+    <>
+      {generalFieldsSection && renderSingleSection(generalFieldsSection, true)}
+      <div className="form-tabs-container">
+        <ul className="nav nav-tabs">
+          {tableSections.map((table, index) => (
+            <li className="nav-item" key={table.key}>
+              <button
+                className={`nav-link ${activeTab === index ? 'active' : ''}`}
+                onClick={() => setActiveTab(index)}
+              >
+                {table.title || table.key}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="form-tab-content mt-3">
+        {renderSingleSection(tableSections[activeTab], true)}
+      </div>
+    </>
+  );
+
+  // --- Renderizado Principal --- //
   return (
     <div>
-      {renderSections()}
+      {hasMultipleTables ? renderTabLayout() : renderColumnLayout()}
     </div>
   );
 };

@@ -155,6 +155,7 @@ function _processSteps(steps, context) {
         }
 
         case 'expression': {
+          console.log(`[DEBUG] Evaluando expresión: ${step.expression}`);
           const result = math.evaluate(step.expression, context);
           if (step.output) {
             set(context, step.output, result);

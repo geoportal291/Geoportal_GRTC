@@ -44,8 +44,8 @@
   background-color: rgba(0, 0, 0, 0.75);
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 50px;
+  align-items: flex-start; /* Align content to the top */
+  padding: 100px 50px 50px 50px; /* Add top padding to avoid navbar */
   z-index: 2000;
   overflow-y: auto; /* Allow vertical scroll for tall forms */
 }
@@ -64,7 +64,7 @@
 /* Specific layout for the Excel-style modal */
 .progresivas-form-container.excel-modal {
   max-width: 90vw;
-  overflow: visible; /* DIAGNOSTIC: Changed from hidden */
+  overflow: hidden; /* Contains content within the modal boundaries */
   display: flex;
   flex-direction: column;
 }
@@ -74,8 +74,12 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  /* REMOVED: overflow: hidden; */
-  overflow: visible; /* DIAGNOSTIC: Changed from hidden */
+}
+
+.modal-scroll-content {
+  flex-grow: 1; /* Allows this area to fill available space */
+  overflow-y: auto; /* Enables vertical scrolling for the content */
+  padding: 5px 15px 15px 15px; /* Adds some spacing */
 }
 
 .progresivas-form .form-grid {
@@ -121,7 +125,7 @@
   overflow: auto; /* Allow both horizontal and vertical scrolling */
   border: 1px solid #ccc;
   border-radius: 8px;
-  max-height: 300px; /* ADDED: Explicit max-height for scrolling */
+  /* REMOVED: max-height: 300px; The parent .modal-scroll-content now handles scrolling */
 }
 
 .excel-style-table {

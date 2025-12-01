@@ -13,32 +13,18 @@ const FitBounds = ({ point, geoJsonData }) => {
     // Crear límites para GeoJSON
     let geoJsonBounds = null;
     if (geoJsonData && geoJsonData.features) {
-        const geoJsonLayer = L.geoJSON(geoJsonData);
-        geoJsonBounds = geoJsonLayer.getBounds();
+      const geoJsonLayer = L.geoJSON(geoJsonData);
+      geoJsonBounds = geoJsonLayer.getBounds();
     }
 
     // Si hay un punto (alcantarilla)
     if (point && typeof point.lat === 'number' && typeof point.lng === 'number') {
       const pointLatLng = L.latLng(point.lat, point.lng);
-
-      // Si hay datos GeoJSON y la alcantarilla está dentro o cerca de esos límites,
-      // intentamos incluir ambos, pero priorizando el centrado de la alcantarilla.
-      if (geoJsonBounds && geoJsonBounds.isValid()) {
-        const combinedBounds = new L.LatLngBounds(pointLatLng).extend(geoJsonBounds);
-        
-        // Centrar en la alcantarilla y luego ajustar el zoom para ver la ruta si es necesario.
-        // Esto es un balance. Se centrará la alcantarilla y luego se intentará incluir la ruta.
-        // Un maxZoom puede evitar que la ruta sea demasiado pequeña si es muy extensa.
-        map.setView(pointLatLng, map.getZoom() < 13 ? 13 : map.getZoom()); // Mantener un zoom razonable en la alcantarilla
-        map.fitBounds(combinedBounds, { padding: [20, 20], maxZoom: 15 }); 
-
-      } else {
-        // Solo hay alcantarilla, centrar directamente en ella con un zoom adecuado
-        map.setView(pointLatLng, 15); // Zoom más cercano para solo la alcantarilla
-      }
+      // Priorizar siempre la vista cercana a la alcantarilla
+      map.setView(pointLatLng, 17);
     } else if (geoJsonBounds && geoJsonBounds.isValid()) {
-        // Solo hay ruta GeoJSON, ajustar a sus límites
-        map.fitBounds(geoJsonBounds, { padding: [20, 20], maxZoom: 15 });
+      // Solo hay ruta GeoJSON, ajustar a sus límites
+      map.fitBounds(geoJsonBounds, { padding: [20, 20], maxZoom: 15 });
     }
     // Si no hay nada (ni alcantarilla ni GeoJSON), no hacemos nada y el MapContainer usará sus valores por defecto
 
@@ -49,29 +35,29 @@ const FitBounds = ({ point, geoJsonData }) => {
 
 // Función de estilo copiada de Geoite.jsx para consistencia
 const styleFunction = (feature) => {
-    if (feature.properties) {
-        let color;
-        switch (feature.properties.id) {
-            case 'TRAMO 1':
-                color = '#26af60';
-                break;
-            case 'TRAMO 2':
-                color = '#3998d5';
-                break;
-            case 'TRAMO 3':
-                color = '#f09c0c';
-                break;
-            default:
-                color = feature.properties.stroke || '#3388ff';
-                break;
-        }
-        return {
-            color: color,
-            weight: feature.properties['stroke-width'] || 5,
-            opacity: feature.properties['stroke-opacity'] || 1.0,
-        };
+  if (feature.properties) {
+    let color;
+    switch (feature.properties.id) {
+      case 'TRAMO 1':
+        color = '#26af60';
+        break;
+      case 'TRAMO 2':
+        color = '#3998d5';
+        break;
+      case 'TRAMO 3':
+        color = '#f09c0c';
+        break;
+      default:
+        color = feature.properties.stroke || '#3388ff';
+        break;
     }
-    return { color: '#3388ff', weight: 3 }; // Default style
+    return {
+      color: color,
+      weight: feature.properties['stroke-width'] || 5,
+      opacity: feature.properties['stroke-opacity'] || 1.0,
+    };
+  }
+  return { color: '#3388ff', weight: 3 }; // Default style
 };
 
 
@@ -96,6 +82,7 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
       <MapContainer
         center={currentCenter}
         zoom={13}
+        renderer={L.canvas()} // Force canvas rendering for better html2canvas compatibility
         whenCreated={map => {
           // Desactivar interacciones del mapa
           map.touchZoom.disable();

@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import DetalleAlcantarillaView from './DetalleAlcantarillaView';
 import './ListaAlcantarillasModal.css';
 
-const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, graphicsImages }) => {
+const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, graphicsImages, initialSelectedAlcantarilla }) => {
   const modalRef = useRef();
   const [showDetailView, setShowDetailView] = useState(false);
   const [selectedAlcantarillaDetail, setSelectedAlcantarillaDetail] = useState(null);
@@ -22,16 +22,22 @@ const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, grap
     if (show) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleEscapeKey);
-      // Reset view when modal is reopened
-      setShowDetailView(false);
-      setSelectedAlcantarillaDetail(null);
-      setDetailedImages([]);
+
+      // Check if there is an initial selection
+      if (initialSelectedAlcantarilla) {
+        handleRowClick(initialSelectedAlcantarilla);
+      } else {
+        // Reset view when modal is reopened without initial selection
+        setShowDetailView(false);
+        setSelectedAlcantarillaDetail(null);
+        setDetailedImages([]);
+      }
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscapeKey);
     };
-  }, [show, onClose]);
+  }, [show, onClose, initialSelectedAlcantarilla]);
 
   const handleRowClick = (alcantarilla) => {
     // Set the selected manhole for detail view
@@ -43,7 +49,7 @@ const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, grap
       const parts = code.split(' - ');
       const rangePart = parts[0];
       const suffix = parts.length > 1 ? `-${parts[1]}` : '';
-      
+
       const [startStr, endStr] = rangePart.split('-');
       const start = parseInt(startStr, 10);
       const end = parseInt(endStr, 10);
@@ -120,7 +126,7 @@ const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, grap
             cursor: 'pointer',
             color: '#555'
           }}>&times;</button>
-          
+
           <h2 style={{ marginBottom: '20px', color: '#333', textAlign: 'center', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
             Lista de Alcantarillas
           </h2>

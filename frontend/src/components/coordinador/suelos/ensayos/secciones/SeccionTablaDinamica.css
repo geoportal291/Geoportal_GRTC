@@ -1,0 +1,23 @@
+/* Estilos para el componente SeccionTablaDinamica */
+
+.table-responsive {
+    /* Si se necesita algún estilo específico para el contenedor de la tabla, irá aquí. */
+    /* Por ejemplo, podemos definir un borde o una sombra si queremos diferenciarlo. */
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden; /* Asegura que la tabla interior respete los bordes redondeados */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.table-responsive .info-section-header {
+    background-color: #f8f9fa;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.table-responsive .table {
+    margin-bottom: 0; /* Bootstrap añade un margen, lo removemos porque el contenedor ya lo maneja */
+}

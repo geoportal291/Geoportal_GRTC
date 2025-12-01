@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import '../proyectos/GestorProyectos.css';
+import '../../suelos/proyectos/GestorProyectos.css';
 import alertify from 'alertifyjs';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../../data/contexts/AuthContext';
@@ -934,17 +934,7 @@ export default function GestorDeTramosActual() {
                 </div>
             )}
 
-            {showGestionarEstratosModal && (
-                <PerfilEstratigraficoModal
-                    isOpen={showGestionarEstratosModal}
-                    onClose={() => setShowGestionarEstratosModal(false)}
-                    progresiva={progresivaParaGestionar} // Pass progresiva instead of cantera
-                    onSave={() => {
-                        setShowGestionarEstratosModal(false);
-                        fetchProgresivas(tramoSeleccionado.id, currentPage);
-                    }}
-                />
-            )}
+
 
             {viewingEstratos && (
                 <div className="overlay" onClick={() => setViewingEstratos(null)}>

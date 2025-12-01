@@ -7,32 +7,43 @@ import alertify from 'alertifyjs';
 // Import new sub-components
 import ListaAlcantarillasView from './AlcantarillaModalViews/ListaAlcantarillasView';
 import FormularioAlcantarillaView from './AlcantarillaModalViews/FormularioAlcantarillaView';
+import FormularioBadenView from './AlcantarillaModalViews/FormularioBadenView'; // Import Badenes Form
 import SubirExcelAlcantarillasView from './AlcantarillaModalViews/SubirExcelAlcantarillasView';
 import SubirImagenesAlcantarillasView from './AlcantarillaModalViews/SubirImagenesAlcantarillasView';
 
 const DataManagementModal = ({
   show,
   onClose,
-  listData: allAlcantarillasData,
+  listData: allData, // Renamed for clarity
   editData,
   mode: initialMode = 'list',
   onSaveManualData,
   onUploadExcelData,
   projectId,
   vialHeaderOption,
+  type = 'alcantarillas', // Default type
 }) => {
   const initialFormData = {
     id_alcantarilla: '',
+    id_baden: '', // Add id_baden
     codigo: '',
     tipo: '',
     material: '',
     diametro_lado: '',
     longitud_alcantarilla: '',
+    longitud_baden: '', // Add longitud_baden
     estado: '',
     observaciones: '',
     progresiva: '',
     latitud: '',
     longitud: '',
+    luz: '',
+    alto: '',
+    ancho: '',
+    altitud: '',
+    caracteristicas: '',
+    clase: '',
+    panel_fotografico_codigo: '',
   };
 
   const modalRef = useRef();
@@ -99,9 +110,9 @@ const DataManagementModal = ({
           setEtr(null);
           setUploadStatus({ message: `Error en el procesamiento: ${result.error || 'Error desconocido.'}`, type: 'error' });
         } else if (status === 'processing') {
-            setUploadStatus({ message: 'Procesando imágenes... Esto puede tardar varios minutos.', type: 'info' });
+          setUploadStatus({ message: 'Procesando imágenes... Esto puede tardar varios minutos.', type: 'info' });
         } else if (status === 'pending') {
-            setUploadStatus({ message: 'En cola para procesar...', type: 'info' });
+          setUploadStatus({ message: 'En cola para procesar...', type: 'info' });
         }
 
       } catch (error) {
@@ -172,7 +183,7 @@ const DataManagementModal = ({
           ...editData,
           estado: editData.estado ? editData.estado.trim() : ''
         };
-        setFormData(normalizedData); 
+        setFormData(normalizedData);
       } else {
         setFormData(initialFormData);
       }
@@ -230,7 +241,6 @@ const DataManagementModal = ({
     e.preventDefault();
     if (onSaveManualData) {
       onSaveManualData(formData);
-      setModalViewMode('list'); 
     }
   };
 
@@ -316,7 +326,7 @@ const DataManagementModal = ({
 
       setUploadProgress(0);
       setEtr(null);
-      
+
       if (file.size > 50 * 1024 * 1024) {
         await handleChunkedUpload(file, startTime);
       } else {
@@ -341,47 +351,47 @@ const DataManagementModal = ({
   };
 
   const handleSimpleUpload = async (file, startTime) => {
-      const formData = new FormData();
-      formData.append('projectId', projectId);
-      formData.append('files', file);
+    const formData = new FormData();
+    formData.append('projectId', projectId);
+    formData.append('files', file);
 
-      setUploadStatus({ message: 'Subiendo archivo...', type: 'info' });
-      
-      try {
-          const response = await axiosInstance.post('/api/alcantarillas/upload-images', formData, {
-              headers: { 'Content-Type': 'multipart/form-data' },
-              onUploadProgress: (progressEvent) => {
-                const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                setUploadProgress(progress);
-                setUploadStatus({ message: `Subiendo archivo... ${progress}%`, type: 'info' });
-                
-                const elapsedTime = (Date.now() - startTime) / 1000;
-                if (elapsedTime > 0 && progressEvent.loaded > 0) {
-                    const speed = progressEvent.loaded / elapsedTime;
-                    const bytesRemaining = progressEvent.total - progressEvent.loaded;
-                    const remainingSeconds = bytesRemaining / speed;
-                    setEtr(remainingSeconds);
-                }
-              }
-          });
+    setUploadStatus({ message: 'Subiendo archivo...', type: 'info' });
 
-          if (response.status === 202) {
-              setUploadStatus({ message: response.data.message, type: 'info' });
-              setPollingJobId(response.data.jobId);
-          } else {
-              setUploadStatus({ message: `${file.name} ha sido procesado. ${response.data.message || 'Operación completada.'}`, type: 'success' });
-              fetchGraphicsImages();
+    try {
+      const response = await axiosInstance.post('/api/alcantarillas/upload-images', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+          setUploadStatus({ message: `Subiendo archivo... ${progress}%`, type: 'info' });
+
+          const elapsedTime = (Date.now() - startTime) / 1000;
+          if (elapsedTime > 0 && progressEvent.loaded > 0) {
+            const speed = progressEvent.loaded / elapsedTime;
+            const bytesRemaining = progressEvent.total - progressEvent.loaded;
+            const remainingSeconds = bytesRemaining / speed;
+            setEtr(remainingSeconds);
           }
-      } catch (error) {
-          console.error('Error al subir el archivo:', error);
-          if (error.response && error.response.status === 403) {
-            alertify.error('Usted solo tiene acceso a lectura, no puede subir archivos');
-          } else {
-            setUploadStatus({ message: 'Error al subir el archivo: ' + (error.response?.data?.message || error.message), type: 'error' });
-          }
-      } finally {
-          setIsUploading(false);
+        }
+      });
+
+      if (response.status === 202) {
+        setUploadStatus({ message: response.data.message, type: 'info' });
+        setPollingJobId(response.data.jobId);
+      } else {
+        setUploadStatus({ message: `${file.name} ha sido procesado. ${response.data.message || 'Operación completada.'}`, type: 'success' });
+        fetchGraphicsImages();
       }
+    } catch (error) {
+      console.error('Error al subir el archivo:', error);
+      if (error.response && error.response.status === 403) {
+        alertify.error('Usted solo tiene acceso a lectura, no puede subir archivos');
+      } else {
+        setUploadStatus({ message: 'Error al subir el archivo: ' + (error.response?.data?.message || error.message), type: 'error' });
+      }
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleChunkedUpload = async (file, startTime) => {
@@ -436,14 +446,14 @@ const DataManagementModal = ({
 
       const progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
       setUploadProgress(progress);
-      
+
       const elapsedTime = (Date.now() - startTime) / 1000;
       if (elapsedTime > 0) {
-          const bytesUploadedSoFar = Math.min((chunkIndex + 1) * chunkSize, file.size);
-          const speed = bytesUploadedSoFar / elapsedTime;
-          const bytesRemaining = file.size - bytesUploadedSoFar;
-          const remainingSeconds = bytesRemaining / speed;
-          setEtr(remainingSeconds);
+        const bytesUploadedSoFar = Math.min((chunkIndex + 1) * chunkSize, file.size);
+        const speed = bytesUploadedSoFar / elapsedTime;
+        const bytesRemaining = file.size - bytesUploadedSoFar;
+        const remainingSeconds = bytesRemaining / speed;
+        setEtr(remainingSeconds);
       }
 
       setUploadStatus({ message: `Subiendo parte ${chunkIndex + 1} de ${totalChunks}...`, type: 'info' });
@@ -478,7 +488,7 @@ const DataManagementModal = ({
       setIsUploading(false);
     }
   };
-      
+
   const handleDeleteExcelData = async () => {
     if (!projectId) {
       alertify.error('Error: No se ha proporcionado un ID de proyecto.');
@@ -558,14 +568,14 @@ const DataManagementModal = ({
           color: '#555',
           transition: 'color 0.2s ease'
         }} onMouseOver={(e) => e.currentTarget.style.color = '#333'} onMouseOut={(e) => e.currentTarget.style.color = '#555'}>&times;</button>
-        
+
         <h2 style={{ marginBottom: '20px', color: '#333', textAlign: 'center', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
-          {modalViewMode === 'edit' ? 'Editar Alcantarilla' : (modalViewMode === 'create' ? 'Ingresar Nueva Alcantarilla' : 'Gestión de Alcantarillas')}
+          {modalViewMode === 'edit' ? `Editar ${type === 'badenes' ? 'Badén' : 'Alcantarilla'}` : (modalViewMode === 'create' ? `Ingresar Nueva ${type === 'badenes' ? 'Badén' : 'Alcantarilla'}` : `Gestión de ${type === 'badenes' ? 'Badenes' : 'Alcantarillas'}`)}
         </h2>
 
         {modalViewMode === 'list' && (
           <ListaAlcantarillasView
-            allAlcantarillasData={allAlcantarillasData}
+            allAlcantarillasData={allData}
             handleCreateNewClick={handleCreateNewClick}
             handleEditClick={handleEditClick}
             setModalViewMode={setModalViewMode}
@@ -574,14 +584,25 @@ const DataManagementModal = ({
         )}
 
         {(modalViewMode === 'create' || modalViewMode === 'edit') && (
-          <FormularioAlcantarillaView
-            formData={formData}
-            handleChange={handleChange}
-            handleSubmit={handleSubmit}
-            modalViewMode={modalViewMode}
-            setModalViewMode={setModalViewMode}
-            submitButtonText={submitButtonText}
-          />
+          type === 'badenes' ? (
+            <FormularioBadenView
+              formData={formData}
+              handleChange={handleChange}
+              handleSubmit={handleSubmit}
+              modalViewMode={modalViewMode}
+              setModalViewMode={setModalViewMode}
+              submitButtonText={submitButtonText}
+            />
+          ) : (
+            <FormularioAlcantarillaView
+              formData={formData}
+              handleChange={handleChange}
+              handleSubmit={handleSubmit}
+              modalViewMode={modalViewMode}
+              setModalViewMode={setModalViewMode}
+              submitButtonText={submitButtonText}
+            />
+          )
         )}
 
         {modalViewMode === 'upload_excel' && (

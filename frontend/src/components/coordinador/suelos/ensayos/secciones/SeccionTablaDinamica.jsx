@@ -1,4 +1,5 @@
 import React from 'react';
+import './SeccionTablaDinamica.css';
 
 // Helper para obtener valores anidados de forma segura
 const getNested = (obj, path, defaultValue = 0) => {
@@ -10,15 +11,14 @@ const getNested = (obj, path, defaultValue = 0) => {
 
 const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableConfig }) => {
   const config = tableConfig;
-  const headers = config?.headers || []; // Para tablas normales, son las columnas. Para transpuestas, son las filas.
-  const rows = config?.rows || [];       // Para tablas normales, son las filas. Para transpuestas, son las columnas.
+  const headers = config?.headers || [];
+  const rows = config?.rows || [];
   const isTransposed = config?.transposed || false;
 
   if (!config) {
     return <div>Cargando configuración de la tabla...</div>;
   }
 
-  // Función auxiliar para renderizar una celda individual
   const renderCell = (cellConfig, rowData, colData) => {
     const { type, input_config, result_config } = cellConfig;
     const override = rowData.cell_overrides ? rowData.cell_overrides[cellConfig.key] : null;
@@ -31,24 +31,18 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
     const colId = isTransposed ? colData?.id : null;
     const rowId = !isTransposed ? (rowData?.key || rowData?.id) : null;
 
-    // Celda de texto estático
     if (finalType === 'static') {
       return isTransposed ? rowData.label : rowData[cellKey];
     }
 
-    // Celda de entrada (input)
     if (finalType === 'input') {
       let fieldName;
-      // Lógica para configuraciones de tabla antiguas (ej. Granulometría)
       if (finalInputConfig) {
         fieldName = `${finalInputConfig.name}_${isTransposed ? colId : rowId}`;
-      } 
-      // Lógica para configuraciones de tabla nuevas tipo matriz (ej. CBR)
-      else {
+      } else {
         const sectionKey = seccion.titulo.toLowerCase().replace(/ /g, '_').replace(/[^a-z0-9_]/g, '');
         fieldName = `${sectionKey}.${rowId}.${cellKey}`;
       }
-
       return (
         <input
           type={'number'}
@@ -61,7 +55,6 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
       );
     }
 
-    // Celda calculada (resultado)
     if (finalType === 'calculated' && finalResultConfig) {
       const { key: resultKey, group: groupPath, scope } = finalResultConfig;
       let value;
@@ -69,11 +62,7 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
       if (scope === 'global') {
         value = getNested(resultados, resultKey, null);
       } else {
-        const dataGroup = getNested(
-          resultados,
-          groupPath ? `${groupPath}.${resultKey}` : resultKey,
-          null
-        );
+        const dataGroup = getNested(resultados, groupPath ? `${groupPath}.${resultKey}` : resultKey, null);
         const idToUse = isTransposed ? colId : rowId;
         if (dataGroup) {
             value = dataGroup[idToUse];
@@ -92,22 +81,20 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
           displayValue = <span className="text-warning">!</span>
         }
       }
-      
       return <output className="text-center numeric-output">{displayValue}</output>;
     }
 
-    return null; // No renderizar nada si el tipo no es reconocido
+    return null;
   };
 
-  // Renderizado de la tabla principal
-        return (
-          <div className="table-responsive" key={seccion.titulo}>
-            <h3 className="info-section-header">{seccion.titulo}</h3>
-            <table
-              className="table table-bordered table-sm"
-              style={{ width: '100%', margin: '0 auto', textAlign: 'center' }}
-            >
-              <thead className="table-dark">
+  return (
+    <div className="table-responsive" key={seccion.titulo}>
+      <h3 className="info-section-header">{seccion.titulo}</h3>
+      <table
+        className="table table-bordered table-sm"
+        style={{ width: '100%', margin: '0 auto', textAlign: 'center' }}
+      >
+        <thead className="table-dark">
           <tr>
             {isTransposed
               ? (
@@ -129,7 +116,6 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
         <tbody>
           {isTransposed
             ? (
-              // Cuerpo para tablas transpuestas
               headers.map(header => {
                 const headerKey = header.key;
                 return (
@@ -145,7 +131,6 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
               })
             )
             : (
-              // Cuerpo para tablas normales
               rows.map(row => {
                 const rowKey = row.key || row.id;
                 return (

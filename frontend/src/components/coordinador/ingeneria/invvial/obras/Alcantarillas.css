@@ -1,21 +1,27 @@
 /* Add any specific styles for Alcantarillas component here */
 .alcantarillas-tab-wrapper {
   /* Estilos básicos para hacer visible el scrollbar */
-  scrollbar-width: thin; /* Firefox */
-  scrollbar-color: #888 #f1f1f1; /* Firefox */
+  scrollbar-width: thin;
+  /* Firefox */
+  scrollbar-color: #888 #f1f1f1;
+  /* Firefox */
 }
 
 .alcantarillas-tab-wrapper::-webkit-scrollbar {
-  width: 8px; /* Ancho del scrollbar para WebKit */
+  width: 8px;
+  /* Ancho del scrollbar para WebKit */
 }
 
 .alcantarillas-tab-wrapper::-webkit-scrollbar-track {
-  background: #f1f1f1; /* Color de la pista del scrollbar para WebKit */
+  background: #f1f1f1;
+  /* Color de la pista del scrollbar para WebKit */
 }
 
 .alcantarillas-tab-wrapper::-webkit-scrollbar-thumb {
-  background: #888; /* Color del "pulgar" del scrollbar para WebKit */
-  border-radius: 4px; /* Bordes redondeados para el "pulgar" */
+  background: #888;
+  /* Color del "pulgar" del scrollbar para WebKit */
+  border-radius: 4px;
+  /* Bordes redondeados para el "pulgar" */
 }
 
 .accordion-content-enter {
@@ -25,13 +31,15 @@
 }
 
 .accordion-content-enter-active {
-  max-height: 1000px; /* Adjust to a value larger than the content's max height */
+  max-height: 1000px;
+  /* Adjust to a value larger than the content's max height */
   opacity: 1;
   transition: max-height 500ms ease-in-out, opacity 500ms ease-in-out;
 }
 
 .accordion-content-exit {
-  max-height: 1000px; /* Adjust to a value larger than the content's max height */
+  max-height: 1000px;
+  /* Adjust to a value larger than the content's max height */
   opacity: 1;
   overflow: hidden;
 }
@@ -48,4 +56,55 @@
 
 .accordion-icon.collapsed {
   transform: rotate(-90deg);
+}
+
+/* Modal Styles */
+.alcantarilla-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+
+.alcantarilla-modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.alcantarilla-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+}
+
+.alcantarilla-modal-header {
+  margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.alcantarilla-modal-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 1.5rem;
+}
+
+.alcantarilla-modal-body {
+  color: #555;
 }

@@ -87,6 +87,7 @@
 
 .table-responsive {
     margin-top: 1rem;
+    width: 100%; /* Asegurar que el contenedor de la tabla ocupe todo el ancho */
 }
 
 .table {
@@ -168,18 +169,105 @@ canvas {
     padding: 0 2px; /* Pequeño padding para evitar cortes en los bordes */
 }
 
-/* --- Estilos para el layout flexbox de tablas lado a lado --- */
-.essay-tables-flex-container {
+/* --- NUEVOS ESTILOS PARA LAYOUT DINÁMICO DE FORMULARIO --- */
+
+.dynamic-section-group {
     display: flex;
     flex-wrap: wrap;
-    gap: 20px; /* Espacio entre los elementos */
-    justify-content: space-around;
-    align-items: flex-start;
+    width: 100%;
+    gap: 1rem; /* Espacio entre items */
     margin-bottom: 1rem;
 }
-.essay-tables-flex-item {
-    flex: 1 1 calc(50% - 10px); /* Cada elemento toma ~50% menos la mitad del gap */
-    min-width: 300px; /* Ancho mínimo para evitar que se encojan demasiado */
-    max-width: calc(50% - 10px); /* Ancho máximo para dejar espacio */
+
+.dynamic-section-item {
     box-sizing: border-box;
 }
+
+/* --- Estilos para las pestañas del formulario --- */
+.form-tabs-container .nav-tabs {
+  border-bottom: 1px solid #dee2e6;
+  display: flex; /* Asegura que los nav-item estén en una línea */
+  margin-bottom: 0; /* Elimina el margen inferior predeterminado para un mejor control del espaciado */
+}
+
+.form-tabs-container .nav-item {
+  margin-bottom: -1px; /* Para que el borde de la pestaña activa se superponga con el borde inferior del nav-tabs */
+}
+
+.form-tabs-container .nav-link {
+  color: #6c757d;
+  background-color: transparent;
+  border: 1px solid transparent; /* Bordes transparentes para simular que no hay */
+  border-bottom-color: transparent; /* Solo el borde inferior para el efecto de la línea */
+  border-radius: 0;
+  padding: 0.5rem 1rem; /* Ajuste del padding para el espaciado */
+  transition: all .15s ease-in-out; /* Transición suave para los cambios de estado */
+}
+
+.form-tabs-container .nav-link:hover {
+  color: #495057; /* Un poco más oscuro al pasar el ratón */
+  border-color: #e9ecef #e9ecef #dee2e6; /* Borde superior, lateral y el inferior ligeramente distinto */
+}
+
+.form-tabs-container .nav-link.active {
+  color: #347fa7; /* Color del texto de la pestaña activa */
+  background-color: #fff; /* Fondo blanco para la pestaña activa */
+  border-color: #dee2e6 #dee2e6 #347fa7; /* Borde superior, lateral y la línea azul en la parte inferior */
+  border-bottom-color: #347fa7; /* ¡La línea azul! */
+  font-weight: 600; /* Texto más prominente */
+}
+
+
+/* --- ESTILOS PARA CAMPOS GENERALES (PESAJE, ETC) --- */
+
+.campos-generales-container {
+  width: 100%;
+  /* No necesita margen inferior, el gap del grupo se encarga */
+}
+
+/* Ocultar el título de la sección para un look más limpio */
+.campos-generales-container .campos-generales-header {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+/* Grid para los campos individuales */
+.campos-generales-grid {
+  display: flex;
+  flex-wrap: wrap; 
+  gap: 1.5rem; 
+  width: 100%;
+}
+
+/* Cada campo dentro del grid */
+.campo-general-item {
+  flex: 1 1 calc(33.333% - 1.5rem); 
+  min-width: 200px; 
+}
+
+.campo-general-item .form-group {
+  margin-bottom: 0 !important;
+}
+
+.campo-general-item label {
+
+    font-weight: 500;
+
+    color: #495057;
+
+    margin-bottom: 0.5rem;
+
+}
+
+
+
+.form-tab-content {
+
+    width: 100%;
+
+}
+
+
