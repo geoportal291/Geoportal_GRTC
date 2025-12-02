@@ -816,11 +816,11 @@
 }
 
 .stations-container-box {
-  margin-right: 10px;
+  /* margin-right: 10px; Removed to fix alignment */
 }
 
 .legend-container-box {
-  margin-left: 10px;
+  /* margin-left: 10px; Removed to fix alignment */
 }
 
 .stations-header,

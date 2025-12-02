@@ -57,14 +57,14 @@ const alcantarillasService = {
                         tipo: row[18] || null, // Columna S
                         material: null, // No especificado en el nuevo mapeo
                         diametro_lado: row[21] || null, // Columna V
-                        longitud_alcantarilla: parseFloat(String(row[22]).replace(/,/g, '')) || null, // Columna W 
+                        longitud_alcantarilla: parseFloat(String(row[20]).replace(/,/g, '')) || null, // Columna U (antes luz)
                         estado: row[19] || null, // Columna T
                         observaciones: row[28] || null, // Columna AC
                         progresiva: row[15] || null, // Columna P
                         latitud: latLon.latitude,
                         longitud: latLon.longitude,
-                        luz: row[20] || null, // Columna U
-                        alto: row[22] || null, // Columna W
+                        luz: row[23] || null, // Columna X (antes ancho)
+                        alto: parseFloat(String(row[22]).replace(/,/g, '')) || null, // Columna W
                         ancho: row[23] || null, // Columna X
                         altitud: row[26] || null, // Columna AA
                         caracteristicas: row[27] || null, // Columna AB

@@ -95,6 +95,123 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         const distanceDisplay = L.DomUtil.create('div', 'distance-display', measureContent);
         distanceDisplay.innerHTML = 'Seleccione una herramienta.';
 
+        // --- NEW: Lógica para Ubicar Progresiva ---
+        const progresivaContainer = L.DomUtil.create('div', 'progresiva-container', measureContent);
+        progresivaContainer.innerHTML = `
+            <hr style="margin: 15px 0;">
+            <div class="input-group">
+                <label for="progresivaInput" style="font-weight: bold; margin-bottom: 5px;">Ubicar Progresiva:</label>
+                <input type="text" id="progresivaInput" placeholder="Ej: 4+780" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
+            </div>
+            <button id="ubicarProgresivaBtn" style="padding: 10px; width: 100%; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">
+                Ubicar Punto
+            </button>
+        `;
+
+        // Función para convertir progresiva (ej. "4+780" o "KM 4+780") a metros
+        const progresivaToMeters = (progresiva) => {
+            if (!progresiva || typeof progresiva !== 'string') return NaN;
+            const cleanedProgresiva = progresiva.replace(/km/i, '').trim();
+            const parts = cleanedProgresiva.split('+');
+            if (parts.length === 2) {
+                const km = parseInt(parts[0], 10);
+                const meters = parseInt(parts[1], 10);
+                if (!isNaN(km) && !isNaN(meters)) {
+                    return km * 1000 + meters;
+                }
+            } else if (parts.length === 1) {
+                const singleValue = parseInt(parts[0], 10);
+                if (!isNaN(singleValue)) return singleValue;
+            }
+            return NaN;
+        };
+
+        // Función para obtener Lat/Lon desde progresiva a lo largo de una ruta combinada
+        const getCoordsFromProgresiva = (targetMeters, routeLatLngs) => {
+            if (!routeLatLngs || routeLatLngs.length < 2) return null;
+
+            let accumulatedDistance = 0;
+
+            for (let i = 0; i < routeLatLngs.length - 1; i++) {
+                const p1 = routeLatLngs[i];
+                const p2 = routeLatLngs[i + 1];
+                const segmentLength = p1.distanceTo(p2);
+
+                if (accumulatedDistance + segmentLength >= targetMeters) {
+                    const distanceIntoSegment = targetMeters - accumulatedDistance;
+                    const ratio = segmentLength === 0 ? 0 : distanceIntoSegment / segmentLength;
+
+                    const lat = p1.lat + (p2.lat - p1.lat) * ratio;
+                    const lng = p1.lng + (p2.lng - p1.lng) * ratio;
+                    return { lat, lng };
+                }
+                accumulatedDistance += segmentLength;
+            }
+            
+            // Si la progresiva excede la longitud de la ruta, retorna el último punto
+            alertify.warning(`La progresiva excede la longitud total del trazado (${(accumulatedDistance / 1000).toFixed(3)} km). Se ubicará al final.`);
+            return routeLatLngs[routeLatLngs.length - 1];
+        };
+
+        const handleUbicarProgresiva = () => {
+            const progresivaInput = document.getElementById('progresivaInput');
+            const targetMeters = progresivaToMeters(progresivaInput.value);
+
+            if (isNaN(targetMeters)) {
+                alertify.error('Formato de progresiva no válido. Use "KM+M", ej: 4+780.');
+                return;
+            }
+
+            const routeLayer = geoJsonLayerRef.current;
+            if (!routeLayer) {
+                alertify.error('No hay un trazado KML cargado en el mapa.');
+                return;
+            }
+
+            const sourceLayers = routeLayer.getLayers().filter(l => l.getLatLngs && l.feature?.properties?.name);
+            if (sourceLayers.length === 0) {
+                alertify.error('El KML cargado no contiene tramos con la propiedad "name" requerida (ej: "TRAMO 1").');
+                return;
+            }
+
+            // --- NEW: Sort layers by "TRAMO X" name ---
+            sourceLayers.sort((a, b) => {
+                const numA = parseInt(a.feature.properties.name.replace(/[^0-9]/g, ''), 10);
+                const numB = parseInt(b.feature.properties.name.replace(/[^0-9]/g, ''), 10);
+                return numA - numB;
+            });
+            
+            let orderedLatLngs = [];
+            sourceLayers.forEach(layer => {
+                const latlngs = layer.getLatLngs();
+                if (orderedLatLngs.length > 0 && orderedLatLngs[orderedLatLngs.length - 1].equals(latlngs[0], 1)) { // Tolerance of 1 meter
+                    latlngs.shift(); // Remove duplicate start point
+                }
+                orderedLatLngs = orderedLatLngs.concat(latlngs);
+            });
+            // --- END NEW ---
+
+            if (orderedLatLngs.length < 2) {
+                alertify.error('No se encontró una ruta válida en el KML después de ordenar los tramos.');
+                return;
+            }
+
+            const finalCoords = getCoordsFromProgresiva(targetMeters, orderedLatLngs);
+
+            if (finalCoords) {
+                const marker = L.marker([finalCoords.lat, finalCoords.lng]).addTo(drawnItems);
+                marker.bindPopup(`Progresiva: ${progresivaInput.value}`).openPopup();
+                map.setView([finalCoords.lat, finalCoords.lng], 16); // Zoom in closer
+                alertify.success(`Marcador añadido en la progresiva ${progresivaInput.value}`);
+            } else {
+                alertify.error('No se pudo calcular la ubicación. Verifique el KML y la progresiva.');
+            }
+        };
+
+        const ubicarProgresivaBtn = progresivaContainer.querySelector('#ubicarProgresivaBtn');
+        ubicarProgresivaBtn.onclick = handleUbicarProgresiva;
+
+
         // --- Lógica del Modal de Dibujo ---
         const drawModal = L.DomUtil.create('div', 'measure-modal', map.getContainer());
         drawModal.style.width = '400px'; // Ancho del modal de dibujo
@@ -313,7 +430,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     style: function (feature) {
                         if (feature.properties) {
                             let color;
-                            switch (feature.properties.id) {
+                            switch (feature.properties.name) { // Use .name instead of .id
                                 case 'TRAMO 1':
                                     color = '#26af60';
                                     break;
@@ -329,11 +446,11 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                             }
                             return {
                                 color: color,
-                                weight: feature.properties['stroke-width'] || 5, // Increased weight for better visibility
+                                weight: 5, // Fixed weight for better visibility
                                 opacity: feature.properties['stroke-opacity'] || 1.0,
                             };
                         }
-                        return { color: '#3388ff', weight: 3 }; // Default style
+                        return { color: '#3388ff', weight: 10 }; // Default style
                     },
                     onEachFeature: (feature, layer) => {
                         if (feature.properties && feature.properties.name) {
@@ -405,17 +522,21 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
         const handleDeleteKml = async () => {
             alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar el KML de este proyecto? Esta acción no se puede deshacer.',
-                function () { // On OK
+                async function () { // On OK - Make this async
                     try {
                         alertify.message('Eliminando KML...');
-                        axiosInstance.delete(`/api/proyectos/${projectId}/kml`);
+                        // Await the delete request
+                        await axiosInstance.delete(`/api/proyectos/${projectId}/kml`);
 
                         // Clear all KML-related layers from the map
                         drawnItems.clearLayers();
 
                         alertify.success('El KML ha sido eliminado del proyecto.');
                     } catch (error) {
-                        alertify.error('No se pudo eliminar el KML.');
+                        console.error("Error deleting KML:", error);
+                        // Show specific error if available, otherwise a generic one
+                        const errorMessage = error.response?.data?.error || 'No se pudo eliminar el KML.';
+                        alertify.error(errorMessage);
                     }
                 },
                 function () { // On Cancel

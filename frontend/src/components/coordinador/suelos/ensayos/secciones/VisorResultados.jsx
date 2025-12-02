@@ -1,22 +1,20 @@
 import React from 'react';
 
 const VisorResultados = ({ config, data }) => {
+  console.log('[DEBUG VisorResultados] Config:', config, 'Data:', data);
 
   if (!config || !config.groups) {
     return <div>No hay configuración de resultados disponible.</div>;
   }
 
-  const getValue = (obj, name) => {
-    if (!obj) return null;
-    if (obj[name] !== undefined) return obj[name];
-    
-    for (const key in obj) {
-        if (typeof obj[key] === 'object' && obj[key] !== null && obj[key][name] !== undefined) {
-            return obj[key][name];
-        }
-    }
-    return null;
-  }
+  // Usar una función 'get' robusta que entienda paths anidados
+  const getValue = (obj, path, defaultValue = null) => {
+    if (!path) return defaultValue;
+    const pathArray = Array.isArray(path) ? path : path.split('.');
+    const result = pathArray.reduce((acc, key) => (acc && acc[key] !== undefined) ? acc[key] : undefined, obj);
+    return result === undefined ? defaultValue : result;
+  };
+
 
   const renderValue = (value, field) => {
     if (value === null || value === undefined) {

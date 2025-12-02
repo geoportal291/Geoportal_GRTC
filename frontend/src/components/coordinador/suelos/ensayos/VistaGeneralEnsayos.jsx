@@ -487,7 +487,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                             <div className="mini-card-location-details">
                               <span><i className="fas fa-road"></i> {ensayo.progresiva_nombre || 'N/A'}</span>
                               <span><i className="fas fa-layer-group"></i> E: {ensayo.estrato_orden || 'N/A'}</span>
-                              <span><i calssName="fas fa-map-marker-alt"></i> {ensayo.progresiva_descripcion || 'N/A'}</span>
+                              <span><i className="fas fa-map-marker-alt"></i> {ensayo.progresiva_descripcion || 'N/A'}</span>
                             </div>
                             <div className="mini-card-actions">
                               <button 

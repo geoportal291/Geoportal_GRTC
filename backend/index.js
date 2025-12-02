@@ -4,13 +4,11 @@ process.on('uncaughtException', (err) => {
     process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('UNHANDLED REJECTION:', reason.message || reason, reason.stack || 'No stack trace available');
-    process.exit(1);
-});
 
 const express = require('express');
 const http = require('http');
+const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
@@ -19,6 +17,10 @@ const fsp = require('fs').promises;
 const fs = require('fs');
 const AdmZip = require('adm-zip');
 const { XMLParser } = require('fast-xml-parser');
+const axios = require('axios');
+const { put, del } = require('@vercel/blob');
+const tokml = require('tokml');
+const archiver = require('archiver');
 const db = require('./conexion');
 const distritosService = require('./services/distritosService');
 const ensayosService = require('./services/ensayosService');
@@ -35,6 +37,7 @@ const puntosMapaService = require('./services/puntosMapaService');
 const canterasService = require('./services/canterasService');
 const alcantarillasService = require('./services/alcantarillasService');
 const alcantarillasGraphicsService = require('./services/alcantarillasGraphicsService');
+const alcantarillasE1Service = require('./services/alcantarillasE1Service');
 
 console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
@@ -57,6 +60,9 @@ const corsOptions = {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
 };
+
+const app = express();
+const server = http.createServer(app);
 
 app.options('*', cors(corsOptions)); // enable pre-flight
 app.use(cors(corsOptions));
@@ -1278,22 +1284,18 @@ app.post('/api/kml/upload', authenticateToken, authorizePermission('proyectos', 
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo KML.' });
         }
-        // Read the file from disk into a buffer because multer is configured with diskStorage
-        const fileBuffer = await fsp.readFile(req.file.path);
-
-        // Create a file-like object that the helper function expects (with a buffer)
+        // El buffer del archivo ya está en req.file.buffer gracias a multer.memoryStorage
         const fileForBlob = {
             originalname: req.file.originalname,
-            buffer: fileBuffer
+            buffer: req.file.buffer
         };
 
-        // Use the helper function to upload the file buffer
+        // Usar la función de ayuda para subir el buffer del archivo
         const blobUrl = await uploadKmlToVercelBlob(fileForBlob);
 
-        // Clean up the temporary file from disk
-        await fsp.unlink(req.file.path);
+        // No es necesario limpiar el archivo del disco ya que se usó memoryStorage
 
-        // Respond with the public URL of the uploaded file
+        // Responder con la URL pública del archivo subido
         res.status(201).json({ url: blobUrl });
     } catch (error) {
         console.error('Error en el endpoint /api/kml/upload:', error);
@@ -1350,17 +1352,14 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
             return res.status(400).json({ error: 'entregableNum es requerido.' });
         }
 
-        // Leer el archivo del disco ya que multer.diskStorage no llena el buffer
-        const fileBuffer = await fsp.readFile(req.file.path);
+        // El buffer del archivo ya está en req.file.buffer gracias a multer.memoryStorage
+        const fileBuffer = req.file.buffer;
 
         // Procesar el Excel y guardar las alcantarillas en la base de datos, pasando el buffer
         const processResult = await alcantarillasService.processExcelAndSaveAlcantarillas(fileBuffer, projectId, utmZone);
 
         // Si el procesamiento fue exitoso, subir el archivo a Vercel Blob
         const excelUrl = await uploadAlcantarillasExcelToVercelBlob(fileBuffer, req.file.originalname, projectId);
-
-        // Eliminar el archivo temporal
-        await fsp.unlink(req.file.path);
 
         // Guardar la URL del archivo Excel en la tabla invvial
         const columnName = `alcantarillas_excel_url_entregable${entregableNum}`;
@@ -1383,14 +1382,6 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
         res.status(201).json({ status: 'ok', message: 'Archivo Excel de alcantarillas subido y procesado correctamente', excelUrl, processResult });
     } catch (error) {
         console.error('Error en la ruta /api/alcantarillas/upload-excel:', error);
-        // Asegurarse de eliminar el archivo temporal incluso si hay un error después de leerlo
-        if (req.file && req.file.path) {
-            try {
-                await fsp.unlink(req.file.path);
-            } catch (unlinkError) {
-                console.error('Error al eliminar archivo temporal en el bloque catch:', unlinkError);
-            }
-        }
         res.status(500).json({ status: 'error', message: error.message || 'Error al subir el archivo Excel de alcantarillas.' });
     }
 });
@@ -3315,6 +3306,28 @@ app.post('/api/admin/changelog', authenticateToken, authorizeAdminOrCoordinator,
             return res.status(409).json({ error: 'La versión del changelog ya existe.' });
         }
         res.status(500).json({ error: 'Error al crear changelog' });
+    }
+});
+
+// --------------------- ALCANTARILLAS (GENERAL) ---------------------
+app.post('/api/alcantarillas/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
+        }
+        const { projectId, utmZone } = req.body;
+        if (!projectId) {
+            return res.status(400).json({ error: 'El ID del proyecto es requerido.' });
+        }
+
+        // Default UTM zone if not provided (though frontend sends it)
+        const zone = utmZone || '18L';
+
+        const result = await alcantarillasService.processExcelAndSaveAlcantarillas(req.file.buffer, projectId, zone);
+        res.status(200).json({ status: 'ok', message: result.message, count: result.count });
+    } catch (error) {
+        console.error('Error en /api/alcantarillas/upload-excel:', error);
+        res.status(500).json({ status: 'error', message: error.message || 'Error al procesar el archivo Excel.' });
     }
 });
 

@@ -110,7 +110,7 @@ const VisorGraficos = ({ graficosConfig, resultados }) => {
     return (
         <div className="container-fluid">
             <div className="row">
-                {graficosConfig.map(chartConfig => (
+                {(Array.isArray(graficosConfig) ? graficosConfig : []).map(chartConfig => (
                     <div className="col-12 mb-4" key={chartConfig.id}>
                         <div className="chart-container">
                             <canvas ref={el => (chartRefs.current[chartConfig.id] = el)}></canvas>

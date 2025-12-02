@@ -135,6 +135,37 @@ const engineMap = {
         return y1 + factor * (y2 - y1);
     }
   },
+
+  findMaxPoint: ({ points, xKey, yKey }) => {
+    console.log('[DEBUG findMaxPoint] Received points:', points);
+    
+    // Si es un objeto DenseMatrix de math.js, usa su array interno _data
+    const dataPoints = points && points._data ? points._data : points;
+
+    if (!dataPoints || !Array.isArray(dataPoints) || dataPoints.length === 0) {
+      return { maxima_densidad_seca: null, humedad_optima: null };
+    }
+
+    let maxDensity = -Infinity;
+    let optimalHumidity = null;
+
+    for (const point of dataPoints) {
+      const currentDensity = get(point, yKey, -Infinity);
+      const currentHumidity = get(point, xKey, null);
+
+      if (currentDensity > 0 && currentDensity > maxDensity) { // Asegurarse de que la densidad sea positiva
+        maxDensity = currentDensity;
+        optimalHumidity = currentHumidity;
+      }
+    }
+    
+    // Si no se encontró ninguna densidad válida, devolver null
+    if (maxDensity === -Infinity) {
+      return { maxima_densidad_seca: null, humedad_optima: null };
+    }
+
+    return { maxima_densidad_seca: maxDensity, humedad_optima: optimalHumidity };
+  },
 };
 
 
@@ -155,7 +186,6 @@ function _processSteps(steps, context) {
         }
 
         case 'expression': {
-          console.log(`[DEBUG] Evaluando expresión: ${step.expression}`);
           const result = math.evaluate(step.expression, context);
           if (step.output) {
             set(context, step.output, result);
@@ -295,6 +325,8 @@ export function calcularResultados(calculationConfig, inputData) {
   }
 
   _processSteps(calculationConfig.steps, context);
+
+  console.log('[DEBUG calcularResultados] Final results:', context.results);
 
   return context.results;
 }
