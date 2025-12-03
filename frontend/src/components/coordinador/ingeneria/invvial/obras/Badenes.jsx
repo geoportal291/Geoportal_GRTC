@@ -103,13 +103,12 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                         }
                     }
                 }
-                return { ...baden, imageUrls: imageUrls };
-            });
-            setBadenesWithImages(processedBadenes);
-        } else {
-            setBadenesWithImages(badenesData.map(baden => ({ ...baden, imageUrls: [] })));
-        }
-    }, [badenesData, graphicsImages]);
+                        return { ...baden, imageUrls: imageUrls, type: 'baden' };
+                      });
+                      setBadenesWithImages(processedBadenes);
+                    } else {
+                      setBadenesWithImages(badenesData.map(baden => ({ ...baden, imageUrls: [], type: 'baden' })));
+                    }    }, [badenesData, graphicsImages]);
 
     useEffect(() => {
         if (highlightedTramoId && tramoData[highlightedTramoId]) {

@@ -2,7 +2,8 @@ const db = require('../conexion');
 const xlsx = require('xlsx');
 const axios = require('axios');
 const { toLatLon } = require('utm');
-const rutaKmlService = require('./rutaKmlService');
+const { kml } = require('@tmcw/togeojson');
+const { DOMParser } = require('xmldom');
 
 // Helper function to convert progresiva string (e.g., "0+100") to meters
 const progresivaToMeters = (progresiva) => {
@@ -61,24 +62,77 @@ const calculateCoordinates = (targetMeters, routePositions) => {
     return { latitude: lastPoint[0], longitude: lastPoint[1] };
 };
 
+const calculateDistance = (p1, p2) => {
+    const R = 6371e3; // metres
+    const φ1 = p1[0] * Math.PI / 180;
+    const φ2 = p2[0] * Math.PI / 180;
+    const Δφ = (p2[0] - p1[0]) * Math.PI / 180;
+    const Δλ = (p2[1] - p1[1]) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+};
+
+const calculateRouteLength = (routePositions) => {
+    let totalDistance = 0;
+    if (!routePositions || routePositions.length < 2) {
+        return 0;
+    }
+    for (let i = 0; i < routePositions.length - 1; i++) {
+        totalDistance += calculateDistance(routePositions[i], routePositions[i + 1]);
+    }
+    return totalDistance;
+};
+
 const badenesService = {
     processExcelAndSaveBadenes: async (fileBuffer, projectId, utmZone) => {
         try {
-            // 1. Get Route Data for Coordinate Calculation
-            const rutas = await rutaKmlService.getRutaKml();
-            // Assuming we use the first route found or filter by project if needed. 
-            // The current getRutaKml returns all routes grouped by tramo_id.
-            // For now, we'll try to use the first available route or a specific logic if project_id was linked to tramo_id.
-            // Since we don't have direct project->tramo link here easily without more queries, 
-            // we will assume the first route is the relevant one or combine them.
-            // BETTER APPROACH: Use the first route that has data.
-            const routePositions = rutas.length > 0 ? rutas[0].positions : [];
-
-            if (routePositions.length === 0) {
-                console.warn('No se encontró una ruta KML para calcular coordenadas.');
+            // 1. Get KML URL from the same source as the frontend
+            const kmlUrlRes = await db.query('SELECT kml_url FROM invvial WHERE id_proyecto = $1', [projectId]);
+            if (kmlUrlRes.rows.length === 0 || !kmlUrlRes.rows[0].kml_url) {
+                throw new Error(`No se encontró una URL de KML para el proyecto ${projectId}. Por favor, suba un KML en el mapa.`);
             }
+            const kmlUrl = kmlUrlRes.rows[0].kml_url;
 
-            // 2. Process Excel
+            // 2. Download and process the KML file
+            const response = await axios.get(kmlUrl);
+            const kmlText = response.data;
+            const parser = new DOMParser();
+            const kmlDoc = parser.parseFromString(kmlText, 'text/xml');
+            const geoJson = kml(kmlDoc);
+
+            const routesMap = {};
+            geoJson.features.forEach(feature => {
+                if (feature.geometry && (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') && feature.properties && feature.properties.name) {
+                    const tramoName = feature.properties.name.toUpperCase().trim();
+                    // In GeoJSON LineString, coordinates are [lng, lat], switch to [lat, lng]
+                    const positions = feature.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                    routesMap[tramoName] = positions;
+                    
+                    // Also add by number key for flexibility
+                    const tramoNumberMatch = tramoName.match(/\d+/);
+                    if (tramoNumberMatch) {
+                        routesMap[tramoNumberMatch[0]] = positions;
+                    }
+                }
+            });
+            console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
+
+            // 3. Get calibration data for the project
+            const calibrationRes = await db.query(
+                'SELECT * FROM proyecto_calibracion_tramos WHERE id_proyecto = $1',
+                [projectId]
+            );
+            const calibrations = calibrationRes.rows.reduce((acc, cal) => {
+                acc[cal.nombre_tramo.toUpperCase().trim()] = cal;
+                return acc;
+            }, {});
+            console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
+
+            // 4. Process Excel
             const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
             const sheetName = 'OBR. ARTE';
             const worksheet = workbook.Sheets[sheetName];
@@ -89,105 +143,173 @@ const badenesService = {
 
             const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: false });
             const badenesData = [];
+            let badenesSinCoords = 0;
 
-            // Iterate from row 12 (index 11)
+            // 5. Iterate through rows from row 12 (index 11)
             for (let i = 11; i < jsonData.length; i++) {
                 const row = jsonData[i];
-                if (!row) continue;
+                if (!row || row.length === 0) continue;
 
-                // Column AI (Index 34) is Description/Keyword search
-                const descripcionCell = row[34];
+                const descripcionCell = row[34]; // Column AI
 
-                if (typeof descripcionCell === 'string' && descripcionCell.toLowerCase().includes('baden')) {
-                    console.log(`DEBUG: 'baden' encontrado en fila ${i + 1}, Columna AI.`);
+                if (typeof descripcionCell === 'string' && /^Baden N/.test(descripcionCell)) {
+                    console.log(`DEBUG: 'Baden N...' encontrado en fila ${i + 1}, Columna AI: "${descripcionCell}"`);
 
-                    // Extract Data from AE to AN
-                    // AE (30) -> Estacion (Not used directly for DB but maybe for logic?)
-                    // AF (31) -> Panel Fotografico
-                    // AG (32) -> Numero del orden (Codigo?)
-                    // AH (33) -> Progresiva
-                    // AI (34) -> Descripcion (Already checked)
-                    // AJ (35) -> Clase
-                    // AK (36) -> Tipo
-                    // AL (37) -> Luz
-                    // AM (38) -> Ancho
-                    // AN (39) -> Estado
+                    const progresivaStr = row[33]; // Column AH
+                    if (!progresivaStr) {
+                        console.warn(`Fila ${i + 1}: Se encontró un baden pero falta la progresiva. Saltando.`);
+                        continue;
+                    }
+                    
+                    const progresivaExcelM = progresivaToMeters(progresivaStr);
+                    if (isNaN(progresivaExcelM)) {
+                        console.warn(`Fila ${i + 1}: Formato de progresiva no válido: '${progresivaStr}'. Saltando.`);
+                        continue;
+                    }
 
-                    const progresivaStr = row[33]; // AH
-                    const progresivaMeters = progresivaToMeters(progresivaStr);
+                    let tramoName = null;
+                    let calibration = null;
+                    
+                    for (const calibKey in calibrations) {
+                        const cal = calibrations[calibKey];
+                        const calInicioM = progresivaToMeters(cal.progresiva_inicio);
+                        const calFinM = progresivaToMeters(cal.progresiva_fin);
+                        
+                        if (!isNaN(calInicioM) && !isNaN(calFinM) && progresivaExcelM >= calInicioM && progresivaExcelM <= calFinM) {
+                            tramoName = cal.nombre_tramo.toUpperCase().trim();
+                            calibration = cal;
+                            break;
+                        }
+                    }
 
                     let latitud = null;
                     let longitud = null;
 
-                    if (!isNaN(progresivaMeters) && routePositions.length > 0) {
-                        const coords = calculateCoordinates(progresivaMeters, routePositions);
-                        if (coords) {
-                            latitud = coords.latitude;
-                            longitud = coords.longitude;
+                    if (tramoName && calibration) {
+                        const tramoNumberMatch = tramoName.match(/\d+/);
+                        const tramoIdKey = tramoNumberMatch ? tramoNumberMatch[0] : null;
+
+                        let routePositions = null;
+                        if (tramoIdKey && routesMap[tramoIdKey]) {
+                            routePositions = routesMap[tramoIdKey];
+                        } else if (routesMap[tramoName]) {
+                            routePositions = routesMap[tramoName];
+                        }
+
+                        if (!routePositions) {
+                            console.error(`Could not find KML route for tramo key '${tramoIdKey}' or tramo name '${tramoName}'. Available route keys are: [${Object.keys(routesMap).join(', ')}]`);
+                            console.warn(`Fila ${i + 1}: No se encontró ruta KML para el tramo '${tramoName}'. Saltando.`);
+                            continue;
+                        }
+
+                        try {
+                            const calInicioM = progresivaToMeters(calibration.progresiva_inicio);
+                            const calFinM = progresivaToMeters(calibration.progresiva_fin);
+                            const kmlRouteLength = calculateRouteLength(routePositions);
+                            const calLengthM = calFinM - calInicioM;
+
+                            if (calLengthM <= 0 || kmlRouteLength <= 0) {
+                                throw new Error(`Invalid calibration or KML route length for tramo ${tramoName}.`);
+                            }
+
+                            const distOnKml = ((progresivaExcelM - calInicioM) / calLengthM) * kmlRouteLength;
+                            if (distOnKml >= 0) {
+                                const coords = calculateCoordinates(distOnKml, routePositions);
+                                if (coords) {
+                                    latitud = coords.latitude;
+                                    longitud = coords.longitude;
+                                }
+                            }
+                        } catch (e) {
+                            console.error(`Error processing calibrated coordinates for row ${i + 1}: ${e.message}`);
+                        }
+                    } else {
+                        console.warn(`Fila ${i + 1}: No se encontró un tramo calibrado para la progresiva '${progresivaStr}'. Usando cálculo geométrico simple.`);
+                        
+                        const orderedRouteKeys = Object.keys(routesMap).sort((a, b) => {
+                            const numA = parseInt(a.replace(/[^0-9]/g, ''), 10);
+                            const numB = parseInt(b.replace(/[^0-9]/g, ''), 10);
+                            return numA - numB;
+                        });
+                        let fullRoute = [];
+                        orderedRouteKeys.forEach(key => {
+                            const routeSegment = routesMap[key];
+                            if (routeSegment && Array.isArray(routeSegment)) {
+                               if (fullRoute.length > 0 && routeSegment.length > 0) {
+                                    const lastPoint = fullRoute[fullRoute.length - 1];
+                                    const firstPoint = routeSegment[0];
+                                    if (lastPoint[0] === firstPoint[0] && lastPoint[1] === firstPoint[1]) {
+                                        fullRoute.push(...routeSegment.slice(1));
+                                    } else {
+                                        fullRoute.push(...routeSegment);
+                                    }
+                                } else {
+                                    fullRoute.push(...routeSegment);
+                                }
+                            }
+                        });
+
+                        if (fullRoute.length > 1) {
+                            const coords = calculateCoordinates(progresivaExcelM, fullRoute);
+                            if (coords) {
+                                latitud = coords.latitude;
+                                longitud = coords.longitude;
+                                console.log(`Fila ${i + 1}: Coordenadas (sin calibrar) calculadas: ${latitud}, ${longitud}`);
+                            }
+                        } else {
+                            console.warn(`Fila ${i + 1}: No se pudo construir una ruta KML completa para el cálculo geométrico.`);
                         }
                     }
 
-                    // Fallback if calculation failed but we need to save it (maybe with 0,0 or null)
-                    // The DB requires NOT NULL for lat/lon. 
-                    // If we can't calculate, we might skip or use a default.
-                    // For now, let's warn and skip if no coords, as they won't show on map.
                     if (latitud === null || longitud === null) {
-                        console.warn(`Fila ${i + 1}: No se pudieron calcular coordenadas para progresiva ${progresivaStr}. Saltando.`);
-                        continue;
+                        badenesSinCoords++;
+                        console.warn(`Fila ${i + 1}: No se pudieron calcular coordenadas para progresiva ${progresivaStr}.`);
+                        continue; 
                     }
 
                     const baden = {
                         id_proyecto: projectId,
                         entregable: row[30] || null, // AE
-                        codigo: row[32] || `BAD-${i}`, // AG or generated
                         panel_fotografico_codigo: row[31] || null, // AF
+                        codigo: row[32] || `BAD-${i}`, // AG
                         progresiva: progresivaStr || null, // AH
+                        observaciones: descripcionCell, // AI
                         clase: row[35] || null, // AJ
                         tipo: row[36] || null, // AK
                         luz: row[37] || null, // AL
                         ancho: row[38] || null, // AM
                         estado: row[39] || null, // AN
-                        observaciones: row[34] || null, // AI (Description as observations)
                         latitud: latitud,
-                        longitud: longitud,
-                        // Other fields can be null or default
-                        material: null,
-                        diametro_lado: null,
-                        longitud_baden: null, // Maybe 'luz' maps to this? User said AL is Luz.
-                        alto: null,
-                        altitud: null,
-                        caracteristicas: null
+                        longitud: longitud
                     };
+                    console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, baden);
 
                     badenesData.push(baden);
                 }
+            }
+
+            if (badenesSinCoords > 0) {
+                console.warn(`Se encontraron ${badenesSinCoords} badenes a los que no se les pudo calcular coordenadas.`);
             }
 
             if (badenesData.length === 0) {
                 return { message: 'No se encontraron datos de badenes válidos para importar.', count: 0 };
             }
 
-            // 3. Save to DB
             const client = await db.connect();
             try {
                 await client.query('BEGIN');
-                // Optional: Delete existing badenes for this project if replacing?
-                // Usually "Upload Excel" implies adding or replacing. 
-                // The previous logic deleted all for the project. Let's stick to that for consistency or check requirements.
-                // "se sube un excel y se procesa... haremos lo mismo para badenes" -> Implies same behavior.
                 await client.query('DELETE FROM badenes WHERE id_proyecto = $1', [projectId]);
 
                 const insertPromises = badenesData.map(b =>
                     client.query(
                         `INSERT INTO badenes (
-                            id_proyecto, codigo, tipo, material, diametro_lado, longitud_baden,
-                            estado, observaciones, progresiva, latitud, longitud,
-                            luz, alto, ancho, altitud, caracteristicas, clase, panel_fotografico_codigo, entregable
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id_baden`,
+                            id_proyecto, codigo, tipo, estado, observaciones, progresiva, latitud, longitud,
+                            luz, ancho, clase, panel_fotografico_codigo, entregable
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id_baden`,
                         [
-                            b.id_proyecto, b.codigo, b.tipo, b.material, b.diametro_lado, b.longitud_baden,
-                            b.estado, b.observaciones, b.progresiva, b.latitud, b.longitud,
-                            b.luz, b.alto, b.ancho, b.altitud, b.caracteristicas, b.clase, b.panel_fotografico_codigo, b.entregable
+                            b.id_proyecto, b.codigo, b.tipo, b.estado, b.observaciones, b.progresiva, b.latitud, b.longitud,
+                            b.luz, b.ancho, b.clase, b.panel_fotografico_codigo, b.entregable
                         ]
                     )
                 );

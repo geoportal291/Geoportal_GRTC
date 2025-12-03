@@ -524,6 +524,7 @@ const getEnsayosByTramoId = async (tramoId) => {
 
 
 const exportEnsayosToExcelByTramo = async (tramoId) => {
+    console.info('[EXPORT TRAMO DEBUG] Entrando a exportEnsayosToExcelByTramo');
     try {
         const tramoResult = await db.query('SELECT id, nombre, codigo FROM progresivas WHERE id = $1', [tramoId]);
         if (tramoResult.rows.length === 0) throw new Error('Tramo no encontrado.');
@@ -636,6 +637,7 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
                         currentRowIndex += hasSubheaders ? 2 : 1;
 
                         grupo.ensayos.forEach(ensayo => {
+                            console.info(`[EXPORT TRAMO DEBUG] Procesando Ensayo ID: ${ensayo.id}. Datos Formulario:`, JSON.stringify(ensayo.datos_formulario, null, 2));
                             const newRow = worksheet.getRow(currentRowIndex++);
                             
                             headerKeys.forEach(({ key, col }) => {
@@ -726,6 +728,7 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
 };
 
 const exportEnsayosToExcelByTipo = async (tramoId, tipoEnsayoId) => {
+    console.info('[EXPORT DEBUG] Entrando a exportEnsayosToExcelByTipo');
     try {
         const tramoResult = await db.query('SELECT id, nombre, codigo FROM progresivas WHERE id = $1', [tramoId]);
         if (tramoResult.rows.length === 0) throw new Error('Tramo no encontrado.');
@@ -847,6 +850,7 @@ const exportEnsayosToExcelByTipo = async (tramoId, tipoEnsayoId) => {
                     currentRowIndex += hasSubheaders ? 2 : 1;
 
                                     ensayosResult.rows.forEach(ensayo => {
+                                        console.info(`[EXPORT DEBUG] Procesando Ensayo ID: ${ensayo.id}. Datos Formulario:`, JSON.stringify(ensayo.datos_formulario, null, 2));
                                         const newRow = worksheet.getRow(currentRowIndex++);
                                         
                                         headerKeys.forEach(({ key, col }) => {

@@ -38,6 +38,7 @@ const canterasService = require('./services/canterasService');
 const alcantarillasService = require('./services/alcantarillasService');
 const alcantarillasGraphicsService = require('./services/alcantarillasGraphicsService');
 const alcantarillasE1Service = require('./services/alcantarillasE1Service');
+const badenesService = require('./services/badenesService');
 
 console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
@@ -1692,46 +1693,70 @@ app.put('/api/badenes/:id', authenticateToken, async (req, res) => {
 // NEW: Endpoint para eliminar el archivo Excel de alcantarillas y sus datos asociados
 app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, async (req, res) => {
     const { projectId } = req.params;
-    const { entregableNum } = req.query; // Get entregableNum from query
-    const userId = req.user.id; // Get authenticated user ID
+    const { entregableNum, tipos } = req.query; // Get entregableNum and tipos from query
+    const userId = req.user.id; 
+
+    const client = await db.connect();
 
     try {
         if (!entregableNum) {
             return res.status(400).json({ error: 'entregableNum es requerido.' });
         }
-        // 1. Obtener la URL del Excel de la nueva tabla invvial_excels
-        const invvialResult = await db.query(
+        
+        const typesToDelete = tipos ? tipos.split(',') : [];
+        if (typesToDelete.length === 0) {
+            return res.status(400).json({ error: 'Debe especificar al menos un tipo de dato para eliminar (alcantarillas, badenes).' });
+        }
+
+        // 1. Get Excel URL
+        const invvialResult = await client.query(
             `SELECT excel_url FROM invvial_excels WHERE id_proyecto = $1 AND entregable_num = $2`,
             [projectId, entregableNum]
         );
         const excelUrl = invvialResult.rows.length > 0 ? invvialResult.rows[0].excel_url : null;
 
-        // 2. Eliminar el archivo de Vercel Blob si existe
+        // 2. Delete file from Vercel Blob if it exists and we are deleting all associated data
         if (excelUrl) {
             try {
                 await del(excelUrl, { token: process.env.BLOB_READ_WRITE_TOKEN });
             } catch (blobError) {
-                console.warn(`No se pudo eliminar el archivo de Vercel Blob: ${blobError.message}. Puede que ya no exista. Continuando con la limpieza de la base de datos.`);
+                console.warn(`No se pudo eliminar el archivo de Vercel Blob: ${blobError.message}. Puede que ya no exista.`);
             }
         }
 
-        // 3. Eliminar la entrada de la tabla invvial_excels
-        await db.query(`DELETE FROM invvial_excels WHERE id_proyecto = $1 AND entregable_num = $2`, [projectId, entregableNum]);
+        // 3. Delete DB entries in a transaction
+        let deletedMessages = [];
+        await client.query('BEGIN');
 
-        // 4. Eliminar todas las alcantarillas asociadas a este proyecto
-        await db.query('DELETE FROM alcantarillas WHERE id_proyecto = $1', [projectId]);
+        if (typesToDelete.includes('alcantarillas')) {
+            await client.query('DELETE FROM alcantarillas WHERE id_proyecto = $1', [projectId]);
+            deletedMessages.push('datos de alcantarillas');
+        }
+        if (typesToDelete.includes('badenes')) {
+            await client.query('DELETE FROM badenes WHERE id_proyecto = $1', [projectId]);
+            deletedMessages.push('datos de badenes');
+        }
 
-        // --- Audit Log: Eliminación de Archivo Excel de Alcantarillas ---
-        await db.query(
+        // 4. Delete the entry from invvial_excels table
+        await client.query(`DELETE FROM invvial_excels WHERE id_proyecto = $1 AND entregable_num = $2`, [projectId, entregableNum]);
+
+        await client.query('COMMIT');
+
+        // --- Audit Log ---
+        const auditDetails = `Archivo Excel, ${deletedMessages.join(' y ')} eliminados para proyecto ${projectId} (entregable ${entregableNum}) por usuario ${userId}.`;
+        await client.query(
             'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
-            [userId, 'Eliminación de Archivo Excel de Alcantarillas', `Archivo Excel de Alcantarillas y datos asociados eliminados para proyecto ${projectId} por usuario ${userId}.`]
+            [userId, 'Eliminación de Datos de Inventario Vial', auditDetails]
         );
         // --- End Audit Log ---
 
-        res.status(200).json({ status: 'ok', message: 'Archivo Excel de alcantarillas y datos asociados eliminados correctamente.' });
+        res.status(200).json({ status: 'ok', message: `Archivo Excel, ${deletedMessages.join(' y ')} eliminados correctamente.` });
     } catch (error) {
-        console.error('Error al eliminar el archivo Excel de alcantarillas y los datos:', error);
-        res.status(500).json({ status: 'error', message: error.message || 'Error al eliminar el archivo Excel de alcantarillas y los datos.' });
+        await client.query('ROLLBACK');
+        console.error('Error al eliminar el archivo Excel y los datos:', error);
+        res.status(500).json({ status: 'error', message: error.message || 'Error al eliminar el archivo Excel y los datos.' });
+    } finally {
+        client.release();
     }
 });
 

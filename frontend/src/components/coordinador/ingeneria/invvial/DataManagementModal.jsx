@@ -9,7 +9,6 @@ import ListaAlcantarillasView from './AlcantarillaModalViews/ListaAlcantarillasV
 import FormularioAlcantarillaView from './AlcantarillaModalViews/FormularioAlcantarillaView';
 import FormularioBadenView from './AlcantarillaModalViews/FormularioBadenView'; // Import Badenes Form
 import SubirExcelAlcantarillasView from './AlcantarillaModalViews/SubirExcelAlcantarillasView';
-import SubirExcelBadenesView from './AlcantarillaModalViews/SubirExcelBadenesView'; // Import Badenes Excel View
 import SubirImagenesAlcantarillasView from './AlcantarillaModalViews/SubirImagenesAlcantarillasView';
 
 const DataManagementModal = ({
@@ -81,8 +80,8 @@ const DataManagementModal = ({
         setExcelFileInfo(null);
         return;
       }
-      const endpoint = type === 'badenes' ? 'badenes' : 'alcantarillas';
-      const response = await axiosInstance.get(`/api/${endpoint}/excel-info/${projectId}/${entregableNum}`);
+      // Siempre consulta la información del excel de alcantarillas, ya que es el global
+      const response = await axiosInstance.get(`/api/alcantarillas/excel-info/${projectId}/${entregableNum}`);
       setExcelFileInfo(response.data);
     } catch (error) {
       setExcelFileInfo(null);
@@ -319,8 +318,8 @@ const DataManagementModal = ({
       formData.append('entregableNum', entregableMatch[1]);
     }
     try {
-      const endpoint = type === 'badenes' ? 'badenes' : 'alcantarillas';
-      const response = await axiosInstance.post(`/api/${endpoint}/upload-excel`, formData, {
+      // SIEMPRE usar el endpoint de alcantarillas para la subida global
+      const response = await axiosInstance.post(`/api/alcantarillas/upload-excel`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -536,26 +535,54 @@ const DataManagementModal = ({
       alertify.error('Error: No se ha proporcionado un ID de proyecto.');
       return;
     }
-    alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar el archivo Excel y TODAS las alcantarillas asociadas a este proyecto? Esta acción no se puede deshacer.',
+
+    const confirmContent = `
+        <div style="text-align: left; padding: 10px;">
+            <p>¿Estás seguro de que quieres eliminar el archivo Excel y los datos asociados?</p>
+            <p><strong>Seleccione los tipos de datos a eliminar:</strong></p>
+            <label for="delete-alcantarillas" style="display: block; margin: 5px 0;">
+                <input type="checkbox" id="delete-alcantarillas" value="alcantarillas" checked> Alcantarillas
+            </label>
+            <label for="delete-badenes" style="display: block; margin: 5px 0;">
+                <input type="checkbox" id="delete-badenes" value="badenes" checked> Badenes
+            </label>
+            <p style="font-size: 0.8em; color: #888; margin-top: 15px;">Esta acción no se puede deshacer.</p>
+        </div>
+    `;
+
+    alertify.confirm('Confirmar Eliminación', confirmContent,
       async () => {
-        setUploadStatus({ message: 'Eliminando archivo Excel y datos...', type: 'info' });
+        const deleteAlcantarillas = document.getElementById('delete-alcantarillas').checked;
+        const deleteBadenes = document.getElementById('delete-badenes').checked;
+        
+        const typesToDelete = [];
+        if (deleteAlcantarillas) typesToDelete.push('alcantarillas');
+        if (deleteBadenes) typesToDelete.push('badenes');
+
+        if (typesToDelete.length === 0) {
+            setUploadStatus({ message: 'No se seleccionó ningún tipo de dato para eliminar. Operación cancelada.', type: 'info' });
+            return;
+        }
+
+        setUploadStatus({ message: 'Eliminando archivo Excel y datos seleccionados...', type: 'info' });
         try {
           const entregableMatch = vialHeaderOption.match(/(\d+)/);
           const entregableNum = entregableMatch ? entregableMatch[1] : '';
-          const endpoint = type === 'badenes' ? 'badenes' : 'alcantarillas';
-          const response = await axiosInstance.delete(`/api/${endpoint}/delete-excel/${projectId}?entregableNum=${entregableNum}`);
+          
+          const response = await axiosInstance.delete(`/api/alcantarillas/delete-excel/${projectId}?entregableNum=${entregableNum}&tipos=${typesToDelete.join(',')}`);
+          
           setUploadStatus({ message: response.data.message, type: 'success' });
-          fetchExcelInfo(); // Re-fetch to update the UI
+          fetchExcelInfo();
           if (onUploadExcelData) {
             onUploadExcelData();
           }
           setFilesToUpload(null);
         } catch (error) {
-          if (error.response && error.response.status === 403) {
-            alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
-          } else {
-            setUploadStatus({ message: 'Error al eliminar el archivo Excel y los datos: ' + (error.response?.data?.message || error.message), type: 'error' });
-          }
+            if (error.response && error.response.status === 403) {
+                alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
+            } else {
+                setUploadStatus({ message: 'Error al eliminar el archivo Excel y los datos: ' + (error.response?.data?.message || error.message), type: 'error' });
+            }
         }
       },
       () => {
@@ -650,21 +677,6 @@ const DataManagementModal = ({
         )}
 
         {modalViewMode === 'upload_excel' && (
-          type === 'badenes' ? (
-            <SubirExcelBadenesView
-              utmZone={utmZone}
-              setUtmZone={setUtmZone}
-              handleFileChange={handleFileChange}
-              handleProcessExcel={handleProcessExcel}
-              handleDeleteExcelData={handleDeleteExcelData}
-              uploadStatus={uploadStatus}
-              setModalViewMode={setModalViewMode}
-              setUploadStatus={setUploadStatus}
-              filesToUpload={filesToUpload}
-              existingExcelFile={excelFileInfo}
-              handleDownloadExcel={handleDownloadExcel}
-            />
-          ) : (
             <SubirExcelAlcantarillasView
               utmZone={utmZone}
               setUtmZone={setUtmZone}
@@ -678,7 +690,6 @@ const DataManagementModal = ({
               existingExcelFile={excelFileInfo}
               handleDownloadExcel={handleDownloadExcel}
             />
-          )
         )}
 
         {modalViewMode === 'upload_graphics_excel' && (

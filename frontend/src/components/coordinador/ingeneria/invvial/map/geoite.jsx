@@ -1451,7 +1451,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
             const alcantarillasLayer = alcantarillasLayerRef.current;
 
-            const getIcon = (zoom) => {
+            const getIcon = (zoom, type) => {
                 let iconSize = [16, 16];
                 let iconAnchor = [8, 16];
                 let popupAnchor = [0, -16];
@@ -1466,8 +1466,17 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     popupAnchor = [0, -24];
                 }
 
+                let iconUrl = '';
+                if (type === 'alcantarilla') {
+                    iconUrl = '/imgs/alcantarilla_icon.png';
+                } else if (type === 'baden') {
+                    iconUrl = '/imgs/baden_icon.svg';
+                } else {
+                    iconUrl = '/imgs/alcantarilla_icon.png'; // Default or error icon
+                }
+
                 return L.icon({
-                    iconUrl: '/imgs/alcantarilla_icon.png',
+                    iconUrl: iconUrl,
                     iconSize: iconSize,
                     iconAnchor: iconAnchor,
                     popupAnchor: popupAnchor
@@ -1478,11 +1487,12 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 alcantarillasLayer.clearLayers();
                 markerRefMap.current = {};
                 const zoom = map.getZoom();
-                const icon = getIcon(zoom);
 
                 alcantarillasData.forEach(alcantarilla => {
                     if (typeof alcantarilla.latitud === 'number' && !isNaN(alcantarilla.latitud) &&
                         typeof alcantarilla.longitud === 'number' && !isNaN(alcantarilla.longitud)) {
+
+                        const icon = getIcon(zoom, alcantarilla.type); // Moved inside the loop and passing type
 
                         const marker = L.marker([alcantarilla.latitud, alcantarilla.longitud], { icon: icon });
 
@@ -1493,9 +1503,9 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                             }
                         });
 
-                        const popupContainerId = `popup-gallery-${alcantarilla.id_alcantarilla}`;
+                        const popupContainerId = `popup-gallery-${alcantarilla.id_alcantarilla || alcantarilla.id_baden}`;
                         const popupContent = `
-                            <b>Alcantarilla:</b> ${alcantarilla.codigo || alcantarilla.id_alcantarilla}<br/>
+                            <b>${alcantarilla.type === 'baden' ? 'Badén' : 'Alcantarilla'}:</b> ${alcantarilla.codigo || alcantarilla.id_alcantarilla || alcantarilla.id_baden}<br/>
                             <div id="${popupContainerId}"></div>
                         `;
 
@@ -1519,10 +1529,10 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                         });
 
                         alcantarillasLayer.addLayer(marker);
-                        markerRefMap.current[alcantarilla.id_alcantarilla] = marker;
+                        markerRefMap.current[alcantarilla.id_alcantarilla || alcantarilla.id_baden] = marker;
 
                     } else {
-                        console.warn(`Alcantarilla con ID ${alcantarilla.id_alcantarilla || 'N/A'} tiene coordenadas inválidas.`);
+                        console.warn(`${alcantarilla.type === 'baden' ? 'Badén' : 'Alcantarilla'} con ID ${alcantarilla.id_alcantarilla || alcantarilla.id_baden || 'N/A'} tiene coordenadas inválidas.`);
                     }
                 });
             };
@@ -1530,13 +1540,15 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             renderMarkers();
 
             if (alcantarillasData.length > 0) {
-                const latLngs = alcantarillasData.map(a => [a.latitud, a.longitud]);
-                const bounds = L.latLngBounds(latLngs);
-                if (bounds.isValid() && map && map.getContainer()) {
-                    try {
-                        map.fitBounds(bounds, { maxZoom: 15 });
-                    } catch (error) {
-                        console.error('ERROR: Failed to fit map bounds:', error);
+                const latLngs = alcantarillasData.map(a => [a.latitud, a.longitud]).filter(p => p[0] !== undefined && p[1] !== undefined);
+                if (latLngs.length > 0) {
+                    const bounds = L.latLngBounds(latLngs);
+                    if (bounds.isValid() && map && map.getContainer()) {
+                        try {
+                            map.fitBounds(bounds, { maxZoom: 15 });
+                        } catch (error) {
+                            console.error('ERROR: Failed to fit map bounds:', error);
+                        }
                     }
                 }
             }

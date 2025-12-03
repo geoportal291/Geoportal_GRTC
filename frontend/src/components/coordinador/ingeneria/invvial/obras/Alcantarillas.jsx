@@ -105,11 +105,11 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
             }
           }
         }
-        return { ...alcantarilla, imageUrls: imageUrls };
+        return { ...alcantarilla, imageUrls: imageUrls, type: 'alcantarilla' };
       });
       setAlcantarillasWithImages(processedAlcantarillas);
     } else {
-      setAlcantarillasWithImages(alcantarillasData.map(alcantarilla => ({ ...alcantarilla, imageUrls: [] })));
+      setAlcantarillasWithImages(alcantarillasData.map(alcantarilla => ({ ...alcantarilla, imageUrls: [], type: 'alcantarilla' })));
     }
   }, [alcantarillasData, graphicsImages]);
 
