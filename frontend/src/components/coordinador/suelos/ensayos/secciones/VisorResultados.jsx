@@ -45,14 +45,21 @@ const VisorResultados = ({ config, data }) => {
               <h6 className="card-title mb-0"><i className="fas fa-calculator me-1"></i>{group.title}</h6>
             </div>
             <div className="card-body">
-              {group.fields.map((field, fieldIndex) => (
-                <div className="result-box" key={fieldIndex}>
-                  <div className="result-title">{field.label}:</div>
-                  <div className="result-value">
-                    {renderValue(getValue(data, field.name), field)}
+              {group.fields.map((field, fieldIndex) => {
+                // --- CORRECCIÓN ---
+                // Usamos data_source_key para apuntar al sub-objeto correcto (ej: data['finales'])
+                // antes de buscar el valor del campo (ej: 'limite_liquido').
+                const dataSubSource = group.data_source_key ? data[group.data_source_key] : data;
+                
+                return (
+                  <div className="result-box" key={fieldIndex}>
+                    <div className="result-title">{field.label}:</div>
+                    <div className="result-value">
+                      {renderValue(getValue(dataSubSource, field.name), field)}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

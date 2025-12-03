@@ -627,6 +627,7 @@ const Vialds = ({ isNavbarExpanded }) => {
         projectId={projectId} // NEW: Pasar projectId al modal
         vialHeaderOption={vialHeaderOption} // NEW: Pasar vialHeaderOption al modal
         type={activeObrasSubTab === 'BADENES' ? 'badenes' : 'alcantarillas'} // Pass type
+        isNavbarExpanded={isNavbarExpanded}
       />
     </div>
 

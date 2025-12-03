@@ -211,17 +211,34 @@ export default function DetalleEnsayo() {
       setLoading(true);
       const headers = getAuthHeaders();
 
-      // Exclude 'error' property from results before merging
       const { error: calcError, ...validResults } = resultados;
+      const finalFormData = JSON.parse(JSON.stringify(formData));
 
-      // Merge the valid calculated results into the form data
-      const finalFormData = {
-        ...formData,
-        ...validResults
-      };
+      for (const key in validResults) {
+        if (finalFormData[key] instanceof Object && validResults[key] instanceof Object) {
+          finalFormData[key] = { ...finalFormData[key], ...validResults[key] };
+        } else {
+          finalFormData[key] = validResults[key];
+        }
+      }
+
+      // --- ¡LA CORRECCIÓN FINAL ESTÁ AQUÍ! ---
+      // Antes de guardar, eliminamos el objeto anidado corrupto si existe.
+      // Esto rompe el bucle de corrupción de datos.
+      if (finalFormData.datos_ensayo) {
+        delete finalFormData.datos_ensayo;
+      }
+      // También eliminamos los restos de las claves con errores de tipeo
+      if (finalFormData.lmite_lquido) {
+        delete finalFormData.lmite_lquido;
+      }
+      if (finalFormData.lmite_plstico) {
+        delete finalFormData.lmite_plstico;
+      }
+      // ------------------------------------
 
       const payload = {
-        ...finalFormData,
+        datos_ensayo: finalFormData,
         nombre_ensayo: ensayoDetails?.nombre_ensayo,
         tipo_ensayo_id: tipoEnsayoId,
         estrato_id: ensayoDetails?.estrato_id

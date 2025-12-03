@@ -1356,30 +1356,47 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
         const fileBuffer = req.file.buffer;
 
         // Procesar el Excel y guardar las alcantarillas en la base de datos, pasando el buffer
-        const processResult = await alcantarillasService.processExcelAndSaveAlcantarillas(fileBuffer, projectId, utmZone);
+        const processResultAlcantarillas = await alcantarillasService.processExcelAndSaveAlcantarillas(fileBuffer, projectId, utmZone);
+
+        // Ahora, procesa el mismo archivo para los badenes
+        const processResultBadenes = await badenesService.processExcelAndSaveBadenes(fileBuffer, projectId, utmZone);
 
         // Si el procesamiento fue exitoso, subir el archivo a Vercel Blob
         const excelUrl = await uploadAlcantarillasExcelToVercelBlob(fileBuffer, req.file.originalname, projectId);
 
-        // Guardar la URL del archivo Excel en la tabla invvial
-        const columnName = `alcantarillas_excel_url_entregable${entregableNum}`;
+        // Guardar la URL del archivo Excel en la nueva tabla invvial_excels
         await db.query(
-            `INSERT INTO invvial (id_proyecto, kml_url, ${columnName})
-             VALUES ($1, '', $2)
-             ON CONFLICT (id_proyecto)
-             DO UPDATE SET ${columnName} = EXCLUDED.${columnName}
-             RETURNING *`,
-            [projectId, excelUrl]
+            `INSERT INTO invvial_excels (id_proyecto, excel_url, entregable_num, uploaded_by_user_id, original_filename)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (id_proyecto, entregable_num)
+             DO UPDATE SET 
+                excel_url = EXCLUDED.excel_url,
+                uploaded_at = NOW(),
+                uploaded_by_user_id = EXCLUDED.uploaded_by_user_id,
+                original_filename = EXCLUDED.original_filename`,
+            [projectId, excelUrl, entregableNum, userId, req.file.originalname]
         );
 
-        // --- Audit Log: Subida de Archivo Excel de Alcantarillas ---
+        // --- Audit Log: Subida de Archivo Excel ---
         await db.query(
             'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
-            [userId, 'Subida de Archivo Excel de Alcantarillas', `Archivo Excel de Alcantarillas subido para proyecto ${projectId} por usuario ${userId}. URL: ${excelUrl}. ${processResult.message}`]
+            [userId, 'Subida de Archivo Excel de Inventario Vial', `Archivo subido para proyecto ${projectId} por usuario ${userId}. URL: ${excelUrl}. ${processResultAlcantarillas.message}. ${processResultBadenes.message}`]
         );
         // --- End Audit Log ---
 
-        res.status(201).json({ status: 'ok', message: 'Archivo Excel de alcantarillas subido y procesado correctamente', excelUrl, processResult });
+        res.status(201).json({
+            status: 'ok',
+            message: 'Archivo Excel procesado. ' + processResultAlcantarillas.message + ' ' + processResultBadenes.message,
+            excelUrl,
+            processResult: { // Manteniendo una estructura similar
+                alcantarillas: processResultAlcantarillas,
+                badenes: processResultBadenes
+            },
+            fileInfo: {
+                excel_url: excelUrl,
+                original_filename: req.file.originalname
+            }
+        });
     } catch (error) {
         console.error('Error en la ruta /api/alcantarillas/upload-excel:', error);
         res.status(500).json({ status: 'error', message: error.message || 'Error al subir el archivo Excel de alcantarillas.' });
@@ -1631,6 +1648,47 @@ app.put('/api/alcantarillas/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// --------------------- BADENES ---------------------
+// Nuevo endpoint para obtener badenes por ID de proyecto
+app.get('/api/proyectos/:projectId/badenes', authenticateToken, async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const badenes = await badenesService.getBadenesByProjectId(projectId);
+        res.json(badenes);
+    } catch (error) {
+        console.error(`Error al obtener badenes para el proyecto ${projectId}:`, error);
+        res.status(500).json({ error: 'Error al obtener badenes', details: error.message });
+    }
+});
+
+// Endpoint para crear un nuevo badén
+app.post('/api/badenes', authenticateToken, async (req, res) => {
+    try {
+        const newBaden = await badenesService.createBaden(req.body);
+        res.status(201).json(newBaden);
+    } catch (error) {
+        console.error('Error al crear badén:', error);
+        res.status(500).json({ error: 'Error al crear badén', details: error.message });
+    }
+});
+
+// Endpoint para actualizar un badén existente
+app.put('/api/badenes/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const updatedBaden = await badenesService.updateBaden(id, req.body);
+        if (updatedBaden) {
+            res.json(updatedBaden);
+        } else {
+            res.status(404).json({ error: 'Badén no encontrado' });
+        }
+    } catch (error) {
+        console.error(`Error al actualizar badén ${id}:`, error);
+        res.status(500).json({ error: 'Error al actualizar badén', details: error.message });
+    }
+});
+
+
 // NEW: Endpoint para eliminar el archivo Excel de alcantarillas y sus datos asociados
 app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, async (req, res) => {
     const { projectId } = req.params;
@@ -1641,19 +1699,24 @@ app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, asyn
         if (!entregableNum) {
             return res.status(400).json({ error: 'entregableNum es requerido.' });
         }
-        const columnName = `alcantarillas_excel_url_entregable${entregableNum}`;
-
-        // 1. Obtener la URL del Excel de la tabla invvial
-        const invvialResult = await db.query(`SELECT ${columnName} FROM invvial WHERE id_proyecto = $1`, [projectId]);
-        const excelUrl = invvialResult.rows.length > 0 ? invvialResult.rows[0][columnName] : null;
+        // 1. Obtener la URL del Excel de la nueva tabla invvial_excels
+        const invvialResult = await db.query(
+            `SELECT excel_url FROM invvial_excels WHERE id_proyecto = $1 AND entregable_num = $2`,
+            [projectId, entregableNum]
+        );
+        const excelUrl = invvialResult.rows.length > 0 ? invvialResult.rows[0].excel_url : null;
 
         // 2. Eliminar el archivo de Vercel Blob si existe
         if (excelUrl) {
-            await del(excelUrl, { token: process.env.BLOB_READ_WRITE_TOKEN });
+            try {
+                await del(excelUrl, { token: process.env.BLOB_READ_WRITE_TOKEN });
+            } catch (blobError) {
+                console.warn(`No se pudo eliminar el archivo de Vercel Blob: ${blobError.message}. Puede que ya no exista. Continuando con la limpieza de la base de datos.`);
+            }
         }
 
-        // 3. Eliminar la entrada de alcantarillas_excel_url de la tabla invvial
-        await db.query(`UPDATE invvial SET ${columnName} = NULL WHERE id_proyecto = $1`, [projectId]);
+        // 3. Eliminar la entrada de la tabla invvial_excels
+        await db.query(`DELETE FROM invvial_excels WHERE id_proyecto = $1 AND entregable_num = $2`, [projectId, entregableNum]);
 
         // 4. Eliminar todas las alcantarillas asociadas a este proyecto
         await db.query('DELETE FROM alcantarillas WHERE id_proyecto = $1', [projectId]);
@@ -1669,6 +1732,26 @@ app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, asyn
     } catch (error) {
         console.error('Error al eliminar el archivo Excel de alcantarillas y los datos:', error);
         res.status(500).json({ status: 'error', message: error.message || 'Error al eliminar el archivo Excel de alcantarillas y los datos.' });
+    }
+});
+
+// NEW: Endpoint to get excel info
+app.get('/api/alcantarillas/excel-info/:projectId/:entregableNum', authenticateToken, async (req, res) => {
+    const { projectId, entregableNum } = req.params;
+    try {
+        const result = await db.query(
+            'SELECT excel_url, original_filename FROM invvial_excels WHERE id_proyecto = $1 AND entregable_num = $2',
+            [projectId, entregableNum]
+        );
+
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            res.status(404).json({ error: 'Información del archivo Excel no encontrada.' });
+        }
+    } catch (error) {
+        console.error('Error al obtener información del archivo Excel:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
 
@@ -2284,6 +2367,39 @@ app.get('/api/user-projects', authenticateToken, async (req, res) => {
 });
 
 // --------------------- CANTERAS ---------------------
+// --- NEW: Endpoints for Calibration Data ---
+app.get('/api/proyectos/:id/calibracion', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const data = await proyectosService.getCalibracionByProyecto(id);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/proyectos/:id/calibracion', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const calibracionData = req.body;
+    try {
+        const result = await proyectosService.saveCalibracionForProyecto(id, calibracionData);
+        res.status(200).json(result);
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.delete('/api/proyectos/:id/calibracion', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await proyectosService.deleteCalibracionForProyecto(id);
+        res.status(200).json(result);
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 app.get('/api/proyectos/:proyectoId/canteras', authenticateToken, async (req, res) => {
     const { proyectoId } = req.params;
     try {
@@ -3891,31 +4007,7 @@ io.on('connection', async (socket) => {
             await client.query('ROLLBACK');
             console.error('Fallo la transacción del sorteo:', e);
             io.emit('error_event', { message: 'Error en el servidor al realizar el sorteo.' });
-        } finally {
-            client.release();
-        }
-    });
-
-    socket.on('restart_draw', async () => {
-        if (!isOrganizer) { // Re-check authorization
-            return socket.emit('error_event', { message: 'No tienes permiso para reiniciar el sorteo.' });
-        }
-
-        console.log(`🔄 Sorteo reiniciado por ${socket.data.user.nombre}!`);
-
-        const client = await db.connect();
-        try {
-            await client.query('BEGIN');
-            await client.query('DELETE FROM amigo_secreto_asignaciones WHERE evento_id = 1');
-            await client.query('UPDATE amigo_secreto_eventos SET es_sorteo_iniciado = false WHERE id = 1');
-            await client.query('COMMIT');
-
-            io.emit('draw_restarted');
-
-        } catch (e) {
-            await client.query('ROLLBACK');
-            console.error('Fallo la transacción de reinicio:', e);
-            io.emit('error_event', { message: 'Error en el servidor al reiniciar el sorteo.' });
+            socket.emit('error_event', { message: 'Error en el servidor al reiniciar el sorteo.' });
         } finally {
             client.release();
         }
@@ -3928,8 +4020,175 @@ io.on('connection', async (socket) => {
     });
 });
 
+// --------------------- BADENES ---------------------
+
+// Helper function for Badenes Excel upload
+async function uploadBadenesExcelToVercelBlob(fileBuffer, originalFilename, projectId) {
+    try {
+        const originalExtension = path.extname(originalFilename);
+        const filename = `tramoinv/invexcel/badenes_${projectId}_${Date.now()}${originalExtension}`;
+        const blob = await put(filename, fileBuffer, {
+            access: 'public',
+            allowOverwrite: true,
+        });
+        return blob.url;
+    } catch (error) {
+        console.error('Error al subir archivo Excel de badenes a Vercel Blob:', error);
+        throw new Error('Error al subir archivo Excel de badenes a Vercel Blob');
+    }
+}
+
+app.get('/api/proyectos/:projectId/badenes', authenticateToken, async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const badenes = await badenesService.getBadenesByProjectId(projectId);
+        res.json(badenes);
+    } catch (error) {
+        console.error('Error al obtener badenes:', error);
+        res.status(500).json({ error: 'Error al obtener badenes.' });
+    }
+});
+
+app.post('/api/badenes', authenticateToken, async (req, res) => {
+    try {
+        const newBaden = await badenesService.createBaden(req.body);
+        res.status(201).json(newBaden);
+    } catch (error) {
+        console.error('Error al crear badén:', error);
+        res.status(500).json({ error: 'Error al crear badén.' });
+    }
+});
+
+app.put('/api/badenes/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updatedBaden = await badenesService.updateBaden(id, req.body);
+        res.json(updatedBaden);
+    } catch (error) {
+        console.error('Error al actualizar badén:', error);
+        res.status(500).json({ error: 'Error al actualizar badén.' });
+    }
+});
+
+app.post('/api/badenes/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
+        }
+        const { projectId, utmZone, entregableNum } = req.body;
+        if (!projectId) {
+            return res.status(400).json({ error: 'El ID del proyecto es requerido.' });
+        }
+
+        const zone = utmZone || '18L';
+        const userId = req.user.id;
+
+        const result = await badenesService.processExcelAndSaveBadenes(req.file.buffer, projectId, zone);
+
+        // Upload to Vercel Blob
+        const excelUrl = await uploadBadenesExcelToVercelBlob(req.file.buffer, req.file.originalname, projectId);
+
+        // Save to invvial_excels if entregableNum is provided
+        if (entregableNum) {
+            await db.query(
+                `INSERT INTO invvial_excels (id_proyecto, excel_url, entregable_num, uploaded_by_user_id, original_filename)
+                 VALUES ($1, $2, $3, $4, $5)
+                 ON CONFLICT (id_proyecto, entregable_num)
+                 DO UPDATE SET 
+                    excel_url = EXCLUDED.excel_url,
+                    uploaded_at = NOW(),
+                    uploaded_by_user_id = EXCLUDED.uploaded_by_user_id,
+                    original_filename = EXCLUDED.original_filename`,
+                [projectId, excelUrl, entregableNum, userId, req.file.originalname]
+            );
+        }
+
+        // Audit Log
+        await db.query(
+            'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
+            [userId, 'Subida de Archivo Excel de Badenes', `Archivo Excel de Badenes subido para proyecto ${projectId} por usuario ${userId}. URL: ${excelUrl}. ${result.message}`]
+        );
+
+        res.status(200).json({
+            status: 'ok',
+            message: result.message,
+            count: result.count,
+            fileInfo: {
+                excel_url: excelUrl,
+                original_filename: req.file.originalname
+            }
+        });
+    } catch (error) {
+        console.error('Error en /api/badenes/upload-excel:', error);
+        res.status(500).json({ status: 'error', message: error.message || 'Error al procesar el archivo Excel.' });
+    }
+});
+
+app.get('/api/badenes/excel-info/:projectId/:entregableNum', authenticateToken, async (req, res) => {
+    const { projectId, entregableNum } = req.params;
+    try {
+        const result = await db.query(
+            'SELECT excel_url, original_filename FROM invvial_excels WHERE id_proyecto = $1 AND entregable_num = $2',
+            [projectId, entregableNum]
+        );
+
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            res.status(404).json({ error: 'Información del archivo Excel no encontrada.' });
+        }
+    } catch (error) {
+        console.error('Error al obtener información del archivo Excel de badenes:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.delete('/api/badenes/delete-excel/:projectId', authenticateToken, async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { entregableNum } = req.query;
+        const userId = req.user.id;
+
+        // 1. Get Excel URL to delete from Blob
+        if (entregableNum) {
+            const invvialResult = await db.query(
+                `SELECT excel_url FROM invvial_excels WHERE id_proyecto = $1 AND entregable_num = $2`,
+                [projectId, entregableNum]
+            );
+            const excelUrl = invvialResult.rows.length > 0 ? invvialResult.rows[0].excel_url : null;
+
+            if (excelUrl) {
+                try {
+                    await del(excelUrl, { token: process.env.BLOB_READ_WRITE_TOKEN });
+                } catch (blobError) {
+                    console.warn(`No se pudo eliminar el archivo de Vercel Blob: ${blobError.message}.`);
+                }
+            }
+
+            // 2. Delete from invvial_excels
+            await db.query(`DELETE FROM invvial_excels WHERE id_proyecto = $1 AND entregable_num = $2`, [projectId, entregableNum]);
+        }
+
+        // 3. Delete Badenes data
+        const result = await badenesService.deleteExcelAndBadenes(projectId);
+
+        // Audit Log
+        await db.query(
+            'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
+            [userId, 'Eliminación de Datos de Badenes', `Datos de Badenes eliminados para proyecto ${projectId} por usuario ${userId}.`]
+        );
+
+        res.json(result);
+    } catch (error) {
+        console.error('Error al eliminar datos de badenes:', error);
+        res.status(500).json({ error: 'Error al eliminar datos de badenes.' });
+    }
+});
+
 
 const PORT = process.env.PORT || 3001;
+
+
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Listening on port ${PORT}`);

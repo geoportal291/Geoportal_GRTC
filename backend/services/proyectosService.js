@@ -628,6 +628,69 @@ const uploadKmlToProyecto = async (proyectoId, file, userId) => {
     }
 };
 
+// --- Funciones de Calibración de Tramos ---
+
+const getCalibracionByProyecto = async (id_proyecto) => {
+    try {
+        const result = await db.query(
+            'SELECT nombre_tramo, progresiva_inicio, progresiva_fin FROM proyecto_calibracion_tramos WHERE id_proyecto = $1',
+            [id_proyecto]
+        );
+        // Convert array of objects to the desired format: { "TRAMO 1": { start: "0+000", end: "34+000" } }
+        const calibrationData = {};
+        result.rows.forEach(row => {
+            calibrationData[row.nombre_tramo] = {
+                start: row.progresiva_inicio,
+                end: row.progresiva_fin,
+            };
+        });
+        return calibrationData;
+    } catch (err) {
+        console.error(`Error al obtener calibración para el proyecto ${id_proyecto}:`, err);
+        throw new Error('Error al obtener datos de calibración.');
+    }
+};
+
+const saveCalibracionForProyecto = async (id_proyecto, calibracionData) => {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+        
+        for (const tramoName in calibracionData) {
+            const { start, end } = calibracionData[tramoName];
+            if (start && end) { // Only save if both start and end are provided
+                await client.query(
+                    `INSERT INTO proyecto_calibracion_tramos (id_proyecto, nombre_tramo, progresiva_inicio, progresiva_fin)
+                     VALUES ($1, $2, $3, $4)
+                     ON CONFLICT (id_proyecto, nombre_tramo)
+                     DO UPDATE SET progresiva_inicio = EXCLUDED.progresiva_inicio, progresiva_fin = EXCLUDED.progresiva_fin, actualizado_en = NOW()`,
+                    [id_proyecto, tramoName, start, end]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+        return { status: 'ok', message: 'Datos de calibración guardados correctamente.' };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`Error al guardar calibración para el proyecto ${id_proyecto}:`, err);
+        throw new Error('Error al guardar datos de calibración.');
+    } finally {
+        client.release();
+    }
+};
+
+const deleteCalibracionForProyecto = async (id_proyecto) => {
+    try {
+        await db.query('DELETE FROM proyecto_calibracion_tramos WHERE id_proyecto = $1', [id_proyecto]);
+        return { status: 'ok', message: 'Datos de calibración eliminados correctamente.' };
+    } catch (err) {
+        console.error(`Error al eliminar calibración para el proyecto ${id_proyecto}:`, err);
+        throw new Error('Error al eliminar datos de calibración.');
+    }
+};
+
+
 module.exports = {
     getDetailedProyectos,
     getSimpleProyectos,
@@ -647,4 +710,7 @@ module.exports = {
     getAllProjectsForAdmin, // NEW
     getAssignedDetailedProyectos,
     uploadKmlToProyecto, // NEW: Export the new function
+    getCalibracionByProyecto,
+    saveCalibracionForProyecto,
+    deleteCalibracionForProyecto,
 };

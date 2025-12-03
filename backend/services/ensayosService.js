@@ -1,17 +1,7 @@
 const db = require('../conexion');
 const XLSX = require('xlsx');
 
-// Objeto para almacenar las funciones de transformación
-const transformers = {
-    pivotLimites: (datos_formulario, ensayo, tramo) => {
-        // Este transformador asume que datos_formulario ya contiene todos los datos
-        // necesarios (inputs y resultados calculados) con las claves correctas.
-        // Si se necesita una lógica de pivoteo o reestructuración más compleja,
-        // se implementaría aquí.
-        return datos_formulario;
-    },
-    // Otros transformadores se añadirían aquí
-};
+
 
 // Helper para generar códigos únicos
 const generateUniqueCode = (prefix = 'ENS') => {
@@ -124,12 +114,16 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
     try {
         await client.query('BEGIN');
 
+        // --- CORRECCIÓN CLAVE AQUÍ ---
+        // Extraemos 'datos_ensayo' explícitamente del payload que manda el frontend
+        // y lo renombramos a 'datos_formulario' para que coincida con la variable de la consulta SQL.
         const { 
             nombre_ensayo, 
             tipo_ensayo_id, 
-            estrato_id, 
-            ...datos_formulario 
+            estrato_id,
+            datos_ensayo: datos_formulario // <--- ESTA ES LA LÍNEA CORREGIDA
         } = assayData;
+        // -----------------------------
 
         let proyectoId = null;
         if (estrato_id) {
@@ -551,21 +545,208 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
             return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
         };
 
-        const ensayosAgrupados = ensayosResult.rows.reduce((acc, ensayo) => {
-            const key = normalizeString(ensayo.config_key || ensayo.tipo_ensayo_descripcion);
-            if (!key) {
-                return acc;
-            }
+        const staticHeaders = [
+            { header: 'CÓDIGO ENSAYO', key: 'codigo_ensayo', width: 20 },
+            { header: 'Fecha de Creación', key: 'fecha', width: 15 },
+            { header: 'Progresiva', key: 'progresiva_formateada', width: 15 },
+            { header: 'Estrato', key: 'estrato_orden', width: 10 }
+        ];
 
-            if (!acc[key]) {
-                acc[key] = {
-                    config: typeof ensayo.config_export_excel === 'string' ? JSON.parse(ensayo.config_export_excel) : ensayo.config_export_excel,
-                    ensayos: []
+        // START OF MODIFIED LOGIC TO HANDLE MULTIPLE SHEET CONFIGS
+        for (const normalizedKey in ensayosAgrupados) {
+            const grupo = ensayosAgrupados[normalizedKey];
+            let configs = Array.isArray(grupo.config) ? grupo.config : [grupo.config]; // Convert to array if not already
+
+            configs.forEach(config => {
+                if (!config || (!config.tablas && !config.headers)) return; // Skip invalid configs
+
+                const worksheet = workbook.addWorksheet(config.sheetName || normalizedKey);
+
+                const mainTitleStyle = {
+                    font: { bold: true, size: 14 },
+                    alignment: { vertical: 'middle', horizontal: 'center' },
+                    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } },
+                    border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
                 };
-            }
-            acc[key].ensayos.push(ensayo);
-            return acc;
-        }, {});
+                const groupedHeaderStyle = {
+                    font: { bold: true },
+                    alignment: { vertical: 'middle', horizontal: 'center' },
+                    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC0C0C0' } },
+                    border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+                };
+                const subHeaderStyle = {
+                    font: { bold: true },
+                    alignment: { vertical: 'middle', horizontal: 'center', wrapText: true },
+                    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } },
+                    border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+                };
+
+                if (config.tablas && Array.isArray(config.tablas)) {
+                    let currentRowIndex = 1;
+
+                    if (config.mainTitle) {
+                        const titleCell = worksheet.getCell(currentRowIndex, 1);
+                        titleCell.value = config.mainTitle.replace('{tramo.nombre}', tramo.nombre);
+                        worksheet.mergeCells(currentRowIndex, 1, currentRowIndex, 20);
+                        Object.assign(titleCell, mainTitleStyle);
+                        currentRowIndex += 2;
+                    }
+
+                    config.tablas.forEach(tablaConfig => {
+                        if (tablaConfig.title) {
+                            const tableTitleCell = worksheet.getCell(currentRowIndex, 1);
+                            const allHeadersForCount = [...staticHeaders, ...tablaConfig.headers];
+                            const headerCount = allHeadersForCount.reduce((acc, h) => acc + (h.subheaders ? h.subheaders.length : 1), 0);
+                            worksheet.mergeCells(currentRowIndex, 1, currentRowIndex, headerCount > 0 ? headerCount : 1);
+                            tableTitleCell.value = tablaConfig.title;
+                            Object.assign(tableTitleCell, { ...groupedHeaderStyle, alignment: { ...groupedHeaderStyle.alignment, horizontal: 'left' } });
+                            currentRowIndex++;
+                        }
+
+                        const headerKeys = [];
+                        const headerRow = worksheet.getRow(currentRowIndex);
+                        const allHeaders = [...staticHeaders, ...tablaConfig.headers];
+                        const hasSubheaders = allHeaders.some(h => h.subheaders && h.subheaders.length > 0);
+                        const subHeaderRow = hasSubheaders ? worksheet.getRow(currentRowIndex + 1) : null;
+                        let colIndex = 1;
+
+                        allHeaders.forEach(header => {
+                            const cell = headerRow.getCell(colIndex);
+                            cell.value = header.header;
+
+                            if (header.subheaders && header.subheaders.length > 0) {
+                                worksheet.mergeCells(currentRowIndex, colIndex, currentRowIndex, colIndex + header.subheaders.length - 1);
+                                Object.assign(cell, groupedHeaderStyle);
+
+                                header.subheaders.forEach((subheader, subIndex) => {
+                                    const subCell = subHeaderRow.getCell(colIndex + subIndex);
+                                    subCell.value = subheader.header;
+                                    Object.assign(subCell, subHeaderStyle);
+                                    headerKeys.push({ key: subheader.key, col: colIndex + subIndex });
+                                });
+                                colIndex += header.subheaders.length;
+                            } else {
+                                worksheet.mergeCells(currentRowIndex, colIndex, currentRowIndex + (hasSubheaders ? 1 : 0), colIndex);
+                                Object.assign(cell, subHeaderStyle);
+                                headerKeys.push({ key: header.key, col: colIndex });
+                                colIndex++;
+                            }
+                        });
+
+                        currentRowIndex += hasSubheaders ? 2 : 1;
+
+                        grupo.ensayos.forEach(ensayo => {
+                            const newRow = worksheet.getRow(currentRowIndex++);
+                            
+                            headerKeys.forEach(({ key, col }) => {
+                                let value;
+                                if (key === 'progresiva_formateada') {
+                                    value = formatProgresivaForExport(ensayo.progresiva_codigo);
+                                } else {
+                                    const dataPath = key.replace(/^datos_formulario\./, '');
+                                    // Directamente usamos ensayo.datos_formulario en lugar de transformedData
+                                    value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo.datos_formulario);
+                                    
+                                    // Fallback al objeto ensayo para claves como 'codigo_ensayo'
+                                    if (value === undefined) {
+                                        value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
+                                    }
+                                }
+                                newRow.getCell(col).value = value !== undefined && value !== null ? value : '';
+                            });
+                        });
+                        currentRowIndex++;
+                    });
+                } 
+                else if (config.headers && Array.isArray(config.headers)) {
+                    // Simplified logic for single-table export (kept as is)
+                    let currentRowIndex = 1;
+                    const headerKeys = [];
+                    const headerRow = worksheet.getRow(currentRowIndex);
+                    let colIndex = 1;
+
+                    const allHeaders = [...staticHeaders, ...config.headers];
+                    allHeaders.forEach(header => {
+                        const cell = headerRow.getCell(colIndex);
+                        cell.value = header.header;
+                        Object.assign(cell, subHeaderStyle);
+                        headerKeys.push({ key: header.key, col: colIndex });
+                        colIndex++;
+                    });
+
+                    currentRowIndex++;
+
+                    grupo.ensayos.forEach(ensayo => {
+                        const newRow = worksheet.getRow(currentRowIndex++);
+                        headerKeys.forEach(({ key, col }) => {
+                            let value;
+                            if (key === 'progresiva_formateada') {
+                                value = formatProgresivaForExport(ensayo.progresiva_codigo);
+                            } else {
+                                const dataPath = key.replace(/^datos_formulario\./, '');
+                                value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo.datos_formulario);
+                                if (value === undefined) {
+                                    value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
+                                }
+                            }
+                            newRow.getCell(col).value = value !== undefined && value !== null ? value : '';
+                        });
+                    });
+                }
+
+                worksheet.columns.forEach((column, idx) => {
+                    if (idx < staticHeaders.length) { // Check if it's one of our static headers
+                        const staticHeader = staticHeaders[idx]; // idx is 0-indexed
+                        if (staticHeader.width) {
+                            column.width = staticHeader.width;
+                            return; // Skip dynamic calculation if fixed width is set
+                        }
+                    }
+
+                    let maxLength = 0;
+                    column.eachCell({ includeEmpty: true }, cell => {
+                        const length = cell.value ? String(cell.value).length : 10;
+                        if (length > maxLength) {
+                            maxLength = length;
+                        }
+                    });
+                    column.width = Math.min(50, Math.max(12, maxLength + 2));
+                });
+            }); // END configs.forEach
+        } // END for (const normalizedKey in ensayosAgrupados)
+        // END OF MODIFIED LOGIC
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        return buffer;
+
+    } catch (err) {
+        console.error('Error al exportar ensayos a Excel:', err);
+        throw new Error('Error al exportar ensayos a Excel: ' + err.message);
+    }
+};
+
+const exportEnsayosToExcelByTipo = async (tramoId, tipoEnsayoId) => {
+    try {
+        const tramoResult = await db.query('SELECT id, nombre, codigo FROM progresivas WHERE id = $1', [tramoId]);
+        if (tramoResult.rows.length === 0) throw new Error('Tramo no encontrado.');
+        const tramo = tramoResult.rows[0];
+
+        const ensayosResult = await db.query(`
+            SELECT e.*, te.descripcion AS tipo_ensayo_descripcion, te.config_export_excel, te.config_key,
+                   prog.codigo AS progresiva_codigo, est.descripcion AS estrato_descripcion, est.orden AS estrato_orden
+            FROM ensayos e
+            JOIN tipo_ensayo te ON e.tipo_ensayo = te.id
+            JOIN estratos est ON e.estrato_id = est.id
+            JOIN progresivas prog ON est.parent_type = 'progresiva' AND est.parent_id = prog.id
+            WHERE prog.parent_id = $1 AND e.tipo_ensayo = $2
+            ORDER BY e.fecha DESC
+        `, [tramoId, tipoEnsayoId]);
+
+        if (ensayosResult.rows.length === 0) {
+            throw new Error('No se encontraron ensayos de este tipo para exportar.');
+        }
+
+        const { config_export_excel, tipo_ensayo_descripcion } = ensayosResult.rows[0];
 
         const ExcelJS = require('exceljs');
         const workbook = new ExcelJS.Workbook();
@@ -578,36 +759,38 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
         };
         
         const staticHeaders = [
-            { header: 'CÓDIGO ENSAYO', key: 'codigo_ensayo' },
-            { header: 'Progresiva', key: 'progresiva_formateada' },
-            { header: 'Estrato', key: 'estrato_orden' }
+            { header: 'CÓDIGO ENSAYO', key: 'codigo_ensayo', width: 20 },
+            { header: 'Fecha de Creación', key: 'fecha', width: 15 },
+            { header: 'Progresiva', key: 'progresiva_formateada', width: 15 },
+            { header: 'Estrato', key: 'estrato_orden', width: 10 }
         ];
 
-        for (const normalizedKey in ensayosAgrupados) {
-            const grupo = ensayosAgrupados[normalizedKey];
-            const config = grupo.config;
-            if (!config || (!config.tablas && !config.headers)) continue;
+        const mainTitleStyle = {
+            font: { bold: true, size: 14 },
+            alignment: { vertical: 'middle', horizontal: 'center' },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } },
+            border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const groupedHeaderStyle = {
+            font: { bold: true },
+            alignment: { vertical: 'middle', horizontal: 'center' },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC0C0C0' } },
+            border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const subHeaderStyle = {
+            font: { bold: true },
+            alignment: { vertical: 'middle', horizontal: 'center', wrapText: true },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } },
+            border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
+        };
 
-            const worksheet = workbook.addWorksheet(config.sheetName || normalizedKey);
+        // --- INICIO DE LA LÓGICA CORREGIDA ---
+        let configs = Array.isArray(config_export_excel) ? config_export_excel : [config_export_excel];
 
-            const mainTitleStyle = {
-                font: { bold: true, size: 14 },
-                alignment: { vertical: 'middle', horizontal: 'center' },
-                fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } },
-                border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
-            };
-            const groupedHeaderStyle = {
-                font: { bold: true },
-                alignment: { vertical: 'middle', horizontal: 'center' },
-                fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC0C0C0' } },
-                border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
-            };
-            const subHeaderStyle = {
-                font: { bold: true },
-                alignment: { vertical: 'middle', horizontal: 'center', wrapText: true },
-                fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } },
-                border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
-            };
+        configs.forEach(config => {
+            if (!config || (!config.tablas && !config.headers)) return;
+
+            const worksheet = workbook.addWorksheet(config.sheetName || tipo_ensayo_descripcion);
 
             if (config.tablas && Array.isArray(config.tablas)) {
                 let currentRowIndex = 1;
@@ -663,246 +846,48 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
 
                     currentRowIndex += hasSubheaders ? 2 : 1;
 
-                    const transformer = tablaConfig.transformer && transformers[tablaConfig.transformer]
-                        ? transformers[tablaConfig.transformer]
-                        : (datos) => datos;
-
-                    grupo.ensayos.forEach(ensayo => {
-                        const transformedData = transformer(ensayo.datos_formulario, ensayo, tramo);
-                        const newRow = worksheet.getRow(currentRowIndex++);
-                        
-                        headerKeys.forEach(({ key, col }) => {
-                            let value;
-                            if (key === 'progresiva_formateada') {
-                                value = formatProgresivaForExport(ensayo.progresiva_codigo);
-                            } else {
-                                const dataPath = key.replace(/^datos_formulario\./, '');
-                                value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), transformedData);
-                                if (value === undefined) {
-                                    value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
-                                }
-                            }
-                            // DEBUG LOG
-                            console.log(`[EXPORT DEBUG] Key: "${key}" | Value: "${value}"`);
-                            newRow.getCell(col).value = value !== undefined && value !== null ? value : '';
-                        });
-                    });
-                    currentRowIndex++;
+                                    ensayosResult.rows.forEach(ensayo => {
+                                        const newRow = worksheet.getRow(currentRowIndex++);
+                                        
+                                        headerKeys.forEach(({ key, col }) => {
+                                            let value;
+                                            if (key === 'progresiva_formateada') {
+                                                value = formatProgresivaForExport(ensayo.progresiva_codigo);
+                                            } else {
+                                                const dataPath = key.replace(/^datos_formulario\./, '');
+                                                value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo.datos_formulario);
+                                                if (value === undefined) {
+                                                    value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
+                                                }
+                                            }
+                                            newRow.getCell(col).value = value !== undefined && value !== null ? value : '';
+                                        });
+                                    });                    currentRowIndex++;
                 });
             } 
-            else if (config.headers && Array.isArray(config.headers)) {
-                let currentRowIndex = 1;
-                const headerKeys = [];
-                const headerRow = worksheet.getRow(currentRowIndex);
-                let colIndex = 1;
 
-                const allHeaders = [...staticHeaders, ...config.headers];
-                allHeaders.forEach(header => {
-                    const cell = headerRow.getCell(colIndex);
-                    cell.value = header.header;
-                    Object.assign(cell, subHeaderStyle);
-                    headerKeys.push({ key: header.key, col: colIndex });
-                    colIndex++;
-                });
-
-                currentRowIndex++;
-
-                grupo.ensayos.forEach(ensayo => {
-                    const newRow = worksheet.getRow(currentRowIndex++);
-                    headerKeys.forEach(({ key, col }) => {
-                        let value;
-                         if (key === 'progresiva_formateada') {
-                            value = formatProgresivaForExport(ensayo.progresiva_codigo);
-                        } else {
-                            const dataPath = key.replace(/^datos_formulario\./, '');
-                            value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo.datos_formulario);
-                            if (value === undefined) {
-                                value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
-                            }
+                worksheet.columns.forEach((column, idx) => {
+                    // Check if this column corresponds to a static header with an explicit width
+                    // ExcelJS column.number is 1-indexed, idx is 0-indexed
+                    if (idx < staticHeaders.length) {
+                        const staticHeader = staticHeaders[idx];
+                        if (staticHeader.width) {
+                            column.width = staticHeader.width;
+                            return; // Skip dynamic calculation if fixed width is set
                         }
-                        newRow.getCell(col).value = value !== undefined && value !== null ? value : '';
-                    });
-                });
-            }
-
-            worksheet.columns.forEach(column => {
-                let maxLength = 0;
-                column.eachCell({ includeEmpty: true }, cell => {
-                    const length = cell.value ? String(cell.value).length : 10;
-                    if (length > maxLength) {
-                        maxLength = length;
                     }
-                });
-                column.width = Math.min(50, Math.max(12, maxLength + 2));
-            });
-        }
 
-        const buffer = await workbook.xlsx.writeBuffer();
-        return buffer;
-
-    } catch (err) {
-        console.error('Error al exportar ensayos a Excel:', err);
-    }
-};
-
-const exportEnsayosToExcelByTipo = async (tramoId, tipoEnsayoId) => {
-    try {
-        const tramoResult = await db.query('SELECT id, nombre, codigo FROM progresivas WHERE id = $1', [tramoId]);
-        if (tramoResult.rows.length === 0) throw new Error('Tramo no encontrado.');
-        const tramo = tramoResult.rows[0];
-
-        const ensayosResult = await db.query(`
-            SELECT e.*, te.descripcion AS tipo_ensayo_descripcion, te.config_export_excel, te.config_key,
-                   prog.codigo AS progresiva_codigo, est.descripcion AS estrato_descripcion, est.orden AS estrato_orden
-            FROM ensayos e
-            JOIN tipo_ensayo te ON e.tipo_ensayo = te.id
-            JOIN estratos est ON e.estrato_id = est.id -- Join to generic estratos
-            JOIN progresivas prog ON est.parent_type = 'progresiva' AND est.parent_id = prog.id -- Join to progresivas
-            WHERE prog.parent_id = $1 AND e.tipo_ensayo = $2
-            ORDER BY e.fecha DESC
-        `, [tramoId, tipoEnsayoId]);
-
-        if (ensayosResult.rows.length === 0) {
-            throw new Error('No se encontraron ensayos de este tipo para exportar.');
-        }
-
-        const { config_export_excel, config_key, tipo_ensayo_descripcion } = ensayosResult.rows[0];
-
-        const config = typeof config_export_excel === 'string' ? JSON.parse(config_export_excel) : config_export_excel;
-        const grupo = { config, ensayos: ensayosResult.rows };
-
-        const ExcelJS = require('exceljs');
-        const workbook = new ExcelJS.Workbook();
-
-        const formatProgresivaForExport = (codigo) => {
-            if (!codigo || !codigo.includes('-')) return codigo;
-            const parts = codigo.split('-');
-            const numberPart = parts[1];
-            return `0+${numberPart}`;
-        };
-        
-        const staticHeaders = [
-            { header: 'CÓDIGO ENSAYO', key: 'codigo_ensayo' },
-            { header: 'Progresiva', key: 'progresiva_formateada' },
-            { header: 'Estrato', key: 'estrato_orden' }
-        ];
-
-        if (!config || (!config.tablas && !config.headers)) {
-            throw new Error('La configuración de exportación para este tipo de ensayo es inválida.');
-        }
-
-        const worksheet = workbook.addWorksheet(config.sheetName || tipo_ensayo_descripcion);
-
-        const mainTitleStyle = {
-            font: { bold: true, size: 14 },
-            alignment: { vertical: 'middle', horizontal: 'center' },
-            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } },
-            border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
-        };
-        const groupedHeaderStyle = {
-            font: { bold: true },
-            alignment: { vertical: 'middle', horizontal: 'center' },
-            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC0C0C0' } },
-            border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
-        };
-        const subHeaderStyle = {
-            font: { bold: true },
-            alignment: { vertical: 'middle', horizontal: 'center', wrapText: true },
-            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } },
-            border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
-        };
-
-        if (config.tablas && Array.isArray(config.tablas)) {
-            let currentRowIndex = 1;
-
-            if (config.mainTitle) {
-                const titleCell = worksheet.getCell(currentRowIndex, 1);
-                titleCell.value = config.mainTitle.replace('{tramo.nombre}', tramo.nombre);
-                worksheet.mergeCells(currentRowIndex, 1, currentRowIndex, 20); // Assuming max 20 cols
-                Object.assign(titleCell, mainTitleStyle);
-                currentRowIndex += 2;
-            }
-
-            config.tablas.forEach(tablaConfig => {
-                if (tablaConfig.title) {
-                    const tableTitleCell = worksheet.getCell(currentRowIndex, 1);
-                    const allHeadersForCount = [...staticHeaders, ...tablaConfig.headers];
-                    const headerCount = allHeadersForCount.reduce((acc, h) => acc + (h.subheaders ? h.subheaders.length : 1), 0);
-                    worksheet.mergeCells(currentRowIndex, 1, currentRowIndex, headerCount > 0 ? headerCount : 1);
-                    tableTitleCell.value = tablaConfig.title;
-                    Object.assign(tableTitleCell, { ...groupedHeaderStyle, alignment: { ...groupedHeaderStyle.alignment, horizontal: 'left' } });
-                    currentRowIndex++;
-                }
-
-                const headerKeys = [];
-                const headerRow = worksheet.getRow(currentRowIndex);
-                const allHeaders = [...staticHeaders, ...tablaConfig.headers];
-                const hasSubheaders = allHeaders.some(h => h.subheaders && h.subheaders.length > 0);
-                const subHeaderRow = hasSubheaders ? worksheet.getRow(currentRowIndex + 1) : null;
-                let colIndex = 1;
-
-                allHeaders.forEach(header => {
-                    const cell = headerRow.getCell(colIndex);
-                    cell.value = header.header;
-
-                    if (header.subheaders && header.subheaders.length > 0) {
-                        worksheet.mergeCells(currentRowIndex, colIndex, currentRowIndex, colIndex + header.subheaders.length - 1);
-                        Object.assign(cell, groupedHeaderStyle);
-
-                        header.subheaders.forEach((subheader, subIndex) => {
-                            const subCell = subHeaderRow.getCell(colIndex + subIndex);
-                            subCell.value = subheader.header;
-                            Object.assign(subCell, subHeaderStyle);
-                            headerKeys.push({ key: subheader.key, col: colIndex + subIndex });
-                        });
-                        colIndex += header.subheaders.length;
-                    } else {
-                        worksheet.mergeCells(currentRowIndex, colIndex, currentRowIndex + (hasSubheaders ? 1 : 0), colIndex);
-                        Object.assign(cell, subHeaderStyle);
-                        headerKeys.push({ key: header.key, col: colIndex });
-                        colIndex++;
-                    }
-                });
-
-                currentRowIndex += hasSubheaders ? 2 : 1;
-
-                const transformer = tablaConfig.transformer && transformers[tablaConfig.transformer]
-                    ? transformers[tablaConfig.transformer]
-                    : (datos) => datos;
-
-                grupo.ensayos.forEach(ensayo => {
-                    const transformedData = transformer(ensayo.datos_formulario, ensayo, tramo);
-                    const newRow = worksheet.getRow(currentRowIndex++);
-                    
-                    headerKeys.forEach(({ key, col }) => {
-                        let value;
-                        if (key === 'progresiva_formateada') {
-                            value = formatProgresivaForExport(ensayo.progresiva_codigo);
-                        } else {
-                            const dataPath = key.replace(/^datos_formulario\./, '');
-                            value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), transformedData);
-                            if (value === undefined) {
-                                value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
-                            }
+                    let maxLength = 0;
+                    column.eachCell({ includeEmpty: true }, cell => {
+                        const length = cell.value ? String(cell.value).length : 10;
+                        if (length > maxLength) {
+                            maxLength = length;
                         }
-                        newRow.getCell(col).value = value !== undefined && value !== null ? value : '';
                     });
+                    column.width = Math.min(50, Math.max(12, maxLength + 2));
                 });
-                currentRowIndex++;
-            });
-        } 
-        else if (config.headers && Array.isArray(config.headers)) {
-            // Simplified logic for single-table export
-        }
-
-        worksheet.columns.forEach(column => {
-            let maxLength = 0;
-            column.eachCell({ includeEmpty: true }, cell => {
-                const length = cell.value ? String(cell.value).length : 10;
-                if (length > maxLength) maxLength = length;
-            });
-            column.width = Math.min(50, Math.max(12, maxLength + 2));
         });
+        // --- FIN DE LA LÓGICA CORREGIDA ---
 
         const buffer = await workbook.xlsx.writeBuffer();
         return buffer;

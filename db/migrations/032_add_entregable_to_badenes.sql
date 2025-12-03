@@ -1,0 +1,1 @@
+ALTER TABLE badenes ADD COLUMN entregable VARCHAR(255);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { MapContainer, TileLayer, LayersControl, useMap, Polyline, Marker, Popup } from 'react-leaflet';
@@ -20,6 +20,8 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
     const map = useMap();
     const geoJsonLayerRef = React.useRef(null);
     const alcantarillasLayerRef = React.useRef(new L.FeatureGroup()); // FeatureGroup para alcantarillas
+    const [calibrationData, setCalibrationData] = useState(null); // NEW: State for calibration
+    const calibrationDataRef = useRef(null); // NEW: Ref to avoid stale closures
 
     useEffect(() => {
         if (!map) return;
@@ -126,29 +128,23 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             return NaN;
         };
 
-        // Función para obtener Lat/Lon desde progresiva a lo largo de una ruta combinada
-        const getCoordsFromProgresiva = (targetMeters, routeLatLngs) => {
+        // Versión antigua para cálculo geométrico simple
+        const getCoordsFromSimpleProgresiva = (targetMeters, routeLatLngs) => {
             if (!routeLatLngs || routeLatLngs.length < 2) return null;
-
             let accumulatedDistance = 0;
-
             for (let i = 0; i < routeLatLngs.length - 1; i++) {
                 const p1 = routeLatLngs[i];
                 const p2 = routeLatLngs[i + 1];
                 const segmentLength = p1.distanceTo(p2);
-
                 if (accumulatedDistance + segmentLength >= targetMeters) {
                     const distanceIntoSegment = targetMeters - accumulatedDistance;
                     const ratio = segmentLength === 0 ? 0 : distanceIntoSegment / segmentLength;
-
                     const lat = p1.lat + (p2.lat - p1.lat) * ratio;
                     const lng = p1.lng + (p2.lng - p1.lng) * ratio;
                     return { lat, lng };
                 }
                 accumulatedDistance += segmentLength;
             }
-            
-            // Si la progresiva excede la longitud de la ruta, retorna el último punto
             alertify.warning(`La progresiva excede la longitud total del trazado (${(accumulatedDistance / 1000).toFixed(3)} km). Se ubicará al final.`);
             return routeLatLngs[routeLatLngs.length - 1];
         };
@@ -174,37 +170,104 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 return;
             }
 
-            // --- NEW: Sort layers by "TRAMO X" name ---
             sourceLayers.sort((a, b) => {
                 const numA = parseInt(a.feature.properties.name.replace(/[^0-9]/g, ''), 10);
                 const numB = parseInt(b.feature.properties.name.replace(/[^0-9]/g, ''), 10);
                 return numA - numB;
             });
-            
-            let orderedLatLngs = [];
-            sourceLayers.forEach(layer => {
-                const latlngs = layer.getLatLngs();
-                if (orderedLatLngs.length > 0 && orderedLatLngs[orderedLatLngs.length - 1].equals(latlngs[0], 1)) { // Tolerance of 1 meter
-                    latlngs.shift(); // Remove duplicate start point
-                }
-                orderedLatLngs = orderedLatLngs.concat(latlngs);
-            });
-            // --- END NEW ---
 
-            if (orderedLatLngs.length < 2) {
-                alertify.error('No se encontró una ruta válida en el KML después de ordenar los tramos.');
+            // Si no hay datos de calibración, usar el método antiguo
+            if (!calibrationDataRef.current) {
+                alertify.warning('Usando cálculo geométrico simple. Para mayor precisión, calibre el trazado.');
+                let orderedLatLngs = [];
+                sourceLayers.forEach(layer => {
+                    const latlngs = layer.getLatLngs();
+                    if (orderedLatLngs.length > 0 && orderedLatLngs[orderedLatLngs.length - 1].equals(latlngs[0], 1)) {
+                        latlngs.shift();
+                    }
+                    orderedLatLngs = orderedLatLngs.concat(latlngs);
+                });
+
+                if (orderedLatLngs.length < 2) {
+                    alertify.error('No se encontró una ruta válida en el KML.');
+                    return;
+                }
+                const finalCoords = getCoordsFromSimpleProgresiva(targetMeters, orderedLatLngs);
+                if (finalCoords) {
+                    const marker = L.marker([finalCoords.lat, finalCoords.lng]).addTo(drawnItems);
+                    marker.bindPopup(`(NC) Progresiva: ${progresivaInput.value}`).openPopup();
+                    map.setView([finalCoords.lat, finalCoords.lng], 16);
+                    alertify.success(`(No Calibrado) Marcador añadido en la progresiva ${progresivaInput.value}`);
+                }
                 return;
             }
 
-            const finalCoords = getCoordsFromProgresiva(targetMeters, orderedLatLngs);
+            // --- Lógica de Calibración ---
+            let targetTramoLayer = null;
+            let tramoStartMeters = 0;
+            let tramoEndMeters = 0;
+
+            for (const layer of sourceLayers) {
+                const tramoName = layer.feature.properties.name;
+                const calib = calibrationDataRef.current[tramoName];
+                if (calib && calib.start && calib.end) {
+                    const startM = progresivaToMeters(calib.start);
+                    const endM = progresivaToMeters(calib.end);
+                    if (targetMeters >= startM && targetMeters <= endM) {
+                        targetTramoLayer = layer;
+                        tramoStartMeters = startM;
+                        tramoEndMeters = endM;
+                        break;
+                    }
+                }
+            }
+
+            if (!targetTramoLayer) {
+                alertify.error('La progresiva ingresada no se encuentra dentro de los rangos calibrados.');
+                return;
+            }
+
+            const officialTramoLength = tramoEndMeters - tramoStartMeters;
+            const targetDistanceInTramo = targetMeters - tramoStartMeters;
+            const interpolationRatio = officialTramoLength === 0 ? 0 : targetDistanceInTramo / officialTramoLength;
+
+            const tramoLatLngs = targetTramoLayer.getLatLngs();
+            let geometricTramoLength = 0;
+            for (let i = 0; i < tramoLatLngs.length - 1; i++) {
+                geometricTramoLength += tramoLatLngs[i].distanceTo(tramoLatLngs[i + 1]);
+            }
+
+            const targetGeometricDistance = geometricTramoLength * interpolationRatio;
+
+            // Encontrar la coordenada en el tramo geométrico
+            let finalCoords = null;
+            let accumulatedDistance = 0;
+            for (let i = 0; i < tramoLatLngs.length - 1; i++) {
+                const p1 = tramoLatLngs[i];
+                const p2 = tramoLatLngs[i + 1];
+                const segmentLength = p1.distanceTo(p2);
+                if (accumulatedDistance + segmentLength >= targetGeometricDistance) {
+                    const distanceIntoSegment = targetGeometricDistance - accumulatedDistance;
+                    const ratio = segmentLength === 0 ? 0 : distanceIntoSegment / segmentLength;
+                    const lat = p1.lat + (p2.lat - p1.lat) * ratio;
+                    const lng = p1.lng + (p2.lng - p1.lng) * ratio;
+                    finalCoords = { lat, lng };
+                    break;
+                }
+                accumulatedDistance += segmentLength;
+            }
+
+            if (!finalCoords) { // If it's at the very end
+                finalCoords = tramoLatLngs[tramoLatLngs.length - 1];
+            }
 
             if (finalCoords) {
                 const marker = L.marker([finalCoords.lat, finalCoords.lng]).addTo(drawnItems);
                 marker.bindPopup(`Progresiva: ${progresivaInput.value}`).openPopup();
-                map.setView([finalCoords.lat, finalCoords.lng], 16); // Zoom in closer
-                alertify.success(`Marcador añadido en la progresiva ${progresivaInput.value}`);
+                map.setView([finalCoords.lat, finalCoords.lng], 17); // Zoom even closer
+                alertify.success(`(Calibrado) Marcador añadido en la progresiva ${progresivaInput.value}`);
             } else {
-                alertify.error('No se pudo calcular la ubicación. Verifique el KML y la progresiva.');
+                alertify.error('No se pudo calcular la ubicación calibrada.');
             }
         };
 
@@ -833,12 +896,17 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         deleteKmlButton.innerHTML = '🗑️';
         deleteKmlButton.title = 'Eliminar KML del Proyecto';
 
+        const calibrateButton = L.DomUtil.create('a', 'leaflet-control-custom-button');
+        calibrateButton.innerHTML = '⚙️';
+        calibrateButton.title = 'Calibrar Trazado';
+
         // Grupo 1: Medición, Dibujo, Actualización
         const group1Container = L.DomUtil.create('div', 'leaflet-bar');
         L.DomEvent.disableClickPropagation(group1Container);
         group1Container.appendChild(mainMeasureButton);
         group1Container.appendChild(mainDrawButton);
         group1Container.appendChild(updateInfoButton);
+        group1Container.appendChild(calibrateButton); // Add calibrate button
         const group1Controls = new L.Control({ position: 'topleft' });
         group1Controls.onAdd = function () { return group1Container; };
         group1Controls.addTo(map);
@@ -860,6 +928,17 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         group3Controls.onAdd = function () { return group3Container; };
         group3Controls.addTo(map);
 
+        // --- NEW: Calibration Modal ---
+        const calibrationModal = L.DomUtil.create('div', 'measure-modal', map.getContainer());
+        L.DomEvent.disableClickPropagation(calibrationModal);
+        const calibrationHeader = L.DomUtil.create('div', 'measure-modal-header', calibrationModal);
+        const calibrationCloseButton = L.DomUtil.create('span', 'measure-modal-close', calibrationHeader);
+        calibrationCloseButton.innerHTML = '&times;';
+        calibrationHeader.appendChild(document.createTextNode('Calibrar Progresivas por Tramo'));
+        const calibrationContent = L.DomUtil.create('div', 'measure-modal-content', calibrationModal);
+        calibrationCloseButton.onclick = () => { calibrationModal.style.display = 'none'; };
+
+
         // --- KML Persistence ---
         const projectId = 24; // As per user request
 
@@ -880,7 +959,24 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             }
         };
 
+        const loadInitialCalibrationData = async () => {
+            try {
+                const response = await axiosInstance.get(`/api/proyectos/${projectId}/calibracion`);
+                setCalibrationData(response.data);
+                calibrationDataRef.current = response.data;
+                if (Object.keys(response.data).length > 0) {
+                    alertify.message('Datos de calibración cargados automáticamente.');
+                }
+            } catch (error) {
+                if (error.response && error.response.status !== 404) {
+                    console.error('Error loading calibration data:', error);
+                    alertify.error('Error al cargar datos de calibración.');
+                }
+            }
+        };
+
         loadInitialKml();
+        loadInitialCalibrationData();
 
 
 
@@ -893,6 +989,103 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         downloadCloseButton.onclick = () => { downloadModal.style.display = 'none'; };
         mainUploadButton.onclick = () => { uploadModal.style.display = uploadModal.style.display === 'none' ? 'block' : 'none'; };
         uploadCloseButton.onclick = () => { uploadModal.style.display = 'none'; };
+
+        calibrateButton.onclick = () => {
+            const routeLayer = geoJsonLayerRef.current;
+            if (!routeLayer) {
+                alertify.error('Primero debe cargar un archivo KML.');
+                return;
+            }
+
+            const sourceLayers = routeLayer.getLayers().filter(l => l.feature?.properties?.name);
+            sourceLayers.sort((a, b) => {
+                const numA = parseInt(a.feature.properties.name.replace(/[^0-9]/g, ''), 10);
+                const numB = parseInt(b.feature.properties.name.replace(/[^0-9]/g, ''), 10);
+                return numA - numB;
+            });
+
+            if (sourceLayers.length === 0) {
+                alertify.error('El KML cargado no contiene tramos con la propiedad "name" (ej: "TRAMO 1").');
+                return;
+            }
+
+            let tableRows = '';
+            sourceLayers.forEach((layer, index) => {
+                const tramoName = layer.feature.properties.name;
+                const currentCalib = calibrationDataRef.current?.[tramoName] || { start: '', end: '' };
+                tableRows += `
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd;">${tramoName}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="calib-input" data-tramo="${tramoName}" data-type="start" value="${currentCalib.start}" placeholder="Ej: 0+000" style="width: 100%; box-sizing: border-box;"></td>
+                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="calib-input" data-tramo="${tramoName}" data-type="end" value="${currentCalib.end}" placeholder="Ej: 34+000" style="width: 100%; box-sizing: border-box;"></td>
+                    </tr>
+                `;
+            });
+
+            calibrationContent.innerHTML = `
+                <p>Ingrese la progresiva oficial de inicio y fin para cada tramo del KML.</p>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Tramo</th>
+                            <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Progresiva Inicio</th>
+                            <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Progresiva Fin</th>
+                        </tr>
+                    </thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+                <button id="saveCalibrationBtn" style="padding: 10px; width: 100%; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">
+                    Guardar Calibración
+                </button>
+                <button id="deleteCalibrationBtn" style="padding: 10px; width: 100%; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    Borrar Calibración
+                </button>
+            `;
+
+            calibrationModal.querySelector('#saveCalibrationBtn').onclick = async () => {
+                const inputs = calibrationModal.querySelectorAll('.calib-input');
+                const newCalibData = {};
+                inputs.forEach(input => {
+                    const tramo = input.dataset.tramo;
+                    const type = input.dataset.type;
+                    if (!newCalibData[tramo]) {
+                        newCalibData[tramo] = {};
+                    }
+                    newCalibData[tramo][type] = input.value;
+                });
+                try {
+                    await axiosInstance.post(`/api/proyectos/${projectId}/calibracion`, newCalibData);
+                    setCalibrationData(newCalibData);
+                    calibrationDataRef.current = newCalibData;
+                    calibrationModal.style.display = 'none';
+                    alertify.success('Datos de calibración guardados exitosamente en la base de datos.');
+                } catch (error) {
+                    console.error('Error saving calibration data:', error);
+                    alertify.error('Error al guardar datos de calibración: ' + (error.response?.data?.error || error.message));
+                }
+            };
+
+            calibrationModal.querySelector('#deleteCalibrationBtn').onclick = async () => {
+                alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar TODOS los datos de calibración para este proyecto?',
+                    async function () {
+                        try {
+                            await axiosInstance.delete(`/api/proyectos/${projectId}/calibracion`);
+                            setCalibrationData(null); // Clear local state
+                            calibrationDataRef.current = null;
+                            calibrationModal.style.display = 'none';
+                            alertify.success('Datos de calibración eliminados exitosamente.');
+                        } catch (error) {
+                            console.error('Error deleting calibration data:', error);
+                            alertify.error('Error al eliminar datos de calibración: ' + (error.response?.data?.error || error.message));
+                        }
+                    },
+                    function () { alertify.message('Eliminación cancelada.'); }
+                );
+            };
+
+
+            calibrationModal.style.display = 'block';
+        };
 
         deleteKmlButton.onclick = handleDeleteKml;
 
@@ -956,6 +1149,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         makeDraggable(drawModal, drawHeader);
         makeDraggable(downloadModal, downloadHeader);
         makeDraggable(uploadModal, uploadHeader);
+        makeDraggable(calibrationModal, calibrationHeader);
 
         // --- Manejadores de Eventos ---
         const getPolygonArea = (latLngs) => {

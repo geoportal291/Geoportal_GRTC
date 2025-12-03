@@ -16,7 +16,12 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
   const isTransposed = config?.transposed || false;
 
   // Generamos la clave de la sección (ej: "ensayo_de_compactacion_cbr") una sola vez
-  const sectionKey = (seccion.titulo || '').toLowerCase().replace(/ /g, '_').replace(/[^a-z0-9_]/g, '');
+  const sectionKey = (seccion.titulo || '')
+      .toLowerCase()
+      .normalize('NFD') // Normaliza para separar acentos de letras
+      .replace(/[\u0300-\u036f]/g, '') // Elimina los caracteres de acento
+      .replace(/ /g, '_') // Reemplaza espacios con guiones bajos
+      .replace(/[^a-z0-9_]/g, ''); // Limpia cualquier otro caracter no deseado
 
   if (!config) {
     return <div>Cargando configuración de la tabla...</div>;
