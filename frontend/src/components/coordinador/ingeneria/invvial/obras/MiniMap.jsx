@@ -70,12 +70,44 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
 
   const currentCenter = alcantarillaPosition || defaultCenter;
 
-  const alcantarillaIcon = new L.Icon({
-    iconUrl: '/imgs/alcantarilla_icon.png', // Ícono específico de alcantarilla
-    iconSize: [32, 32], // Ajustar tamaño si es necesario para el minimapa
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
-  });
+  // Function to get custom icon based on element type
+  const getCustomIcon = (elementType, elementData) => {
+    let iconUrl;
+    let popupText = '';
+    switch (elementType) {
+      case 'alcantarilla':
+        iconUrl = '/imgs/alcantarilla_icon.png';
+        popupText = `Alcantarilla: ${elementData.codigo || 'N/A'}`;
+        break;
+      case 'baden':
+        iconUrl = '/imgs/baden_icon.svg';
+        popupText = `Badén: ${elementData.codigo || 'N/A'}`;
+        break;
+      case 'puente':
+        iconUrl = '/imgs/puente_icon.svg';
+        popupText = `Puente: ${elementData.nombre || 'N/A'}`;
+        break;
+      case 'muro':
+        iconUrl = '/imgs/muro_icon.svg';
+        popupText = `Muro: ${elementData.clase || 'N/A'}`;
+        break;
+      default:
+        iconUrl = '/imgs/alcantarilla_icon.png'; // Default to alcantarilla icon
+        popupText = `Elemento: ${elementData.id || 'N/A'}`;
+        break;
+    }
+
+    return new L.Icon({
+      iconUrl: iconUrl,
+      iconSize: [32, 32], // Adjust size as necessary
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32],
+      popupText: popupText // Store popup text here for easy access
+    });
+  };
+
+  const currentIcon = alcantarilla ? getCustomIcon(alcantarilla.type, alcantarilla) : null;
+
 
   return (
     <div style={{ width: '100%', height: '100%', borderRadius: '8px', overflow: 'hidden' }}>
@@ -102,10 +134,10 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
         {geoJsonData && geoJsonData.features && (
           <GeoJSON data={geoJsonData} style={styleFunction} />
         )}
-        {alcantarillaPosition && (
-          <Marker position={alcantarillaPosition} icon={alcantarillaIcon}>
+        {alcantarillaPosition && currentIcon && (
+          <Marker position={alcantarillaPosition} icon={currentIcon}>
             <Popup>
-              Alcantarilla: {alcantarilla.codigo || 'N/A'}
+              {currentIcon.options.popupText}
             </Popup>
           </Marker>
         )}

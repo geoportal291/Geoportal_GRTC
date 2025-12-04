@@ -8,6 +8,7 @@ import ListaBadenesModal from './ListaBadenesModal';
 import ExportarMapaModal from './ExportarMapaModal';
 import axiosInstance from '../../../../../api/axios';
 import { saveAs } from 'file-saver';
+import ImagePreviewModal from './ImagePreviewModal';
 
 // Estructura de datos de ejemplo
 const tramoData = {
@@ -50,7 +51,7 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
             const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
             let start, end;
-            
+
             if (rangePart.includes('-')) {
                 const [startStr, endStr] = rangePart.split('-');
                 start = parseInt(startStr, 10);
@@ -258,6 +259,24 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
         }
     };
 
+    const handleNextImage = () => {
+        const currentIndex = badenImages.findIndex(img => img.url === previewImageUrl);
+        if (currentIndex !== -1 && currentIndex < badenImages.length - 1) {
+            setPreviewImageUrl(badenImages[currentIndex + 1].url);
+        }
+    };
+
+    const handlePrevImage = () => {
+        const currentIndex = badenImages.findIndex(img => img.url === previewImageUrl);
+        if (currentIndex > 0) {
+            setPreviewImageUrl(badenImages[currentIndex - 1].url);
+        }
+    };
+
+    const currentImageIndex = badenImages.findIndex(img => img.url === previewImageUrl);
+    const hasNext = currentImageIndex !== -1 && currentImageIndex < badenImages.length - 1;
+    const hasPrev = currentImageIndex > 0;
+
     return (
         <div className="alcantarillas-tab-wrapper" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', gap: '20px', flex: 1, minHeight: 0, height: '100%' }}>        {/* Columna del Mapa - Izquierda */}
@@ -320,7 +339,7 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                                         padding: '15px',
                                         border: 'none',
                                         backgroundColor: '#f8f9fa',
-                                        color: '#6c757d',
+                                        color: 'white',
                                         cursor: 'pointer',
                                         borderRadius: '8px',
                                         transition: 'all 0.2s ease',
@@ -450,35 +469,15 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
 
                 </div>
             </div>
-            {isPreviewModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 10002,
-                }}>
-                    <img src={previewImageUrl} alt="Preview" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
-                    <button onClick={() => setIsPreviewModalOpen(false)} style={{
-                        position: 'absolute',
-                        top: '20px',
-                        right: '20px',
-                        background: 'white',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: '40px',
-                        height: '40px',
-                        fontSize: '1.5rem',
-                        cursor: 'pointer',
-                        color: '#333',
-                    }}>&times;</button>
-                </div>
-            )}
+            <ImagePreviewModal
+                isOpen={isPreviewModalOpen}
+                onClose={() => setIsPreviewModalOpen(false)}
+                imageUrl={previewImageUrl}
+                onNext={handleNextImage}
+                onPrev={handlePrevImage}
+                hasNext={hasNext}
+                hasPrev={hasPrev}
+            />
             <ListaBadenesModal
                 show={showListModal}
                 onClose={() => setShowListModal(false)}

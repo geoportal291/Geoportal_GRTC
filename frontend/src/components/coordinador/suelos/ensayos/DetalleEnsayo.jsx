@@ -161,14 +161,22 @@ export default function DetalleEnsayo() {
     }
 
     try {
+      // --- FINAL SANITIZATION FIX ---
+      // Create a clean data object to pass to the calculator,
+      // removing any legacy or corrupted data structures from previous attempts.
+      const cleanFormData = {
+          general_fields: formData.general_fields || {},
+          tables: formData.tables || {}
+      };
+
       const dynamicConfig = calculationConfig;
 
       const calculationContext = {
-        formData: formData,
+        formData: cleanFormData, // Pass the clean data
         tableConfig: tableConfig
       };
 
-      console.log('[DEBUG] Pre-cálculo - Contexto:', calculationContext);
+      console.log('[DEBUG] Pre-cálculo - SANITIZED Context:', calculationContext);
 
       const resultadosCalculados = calcularResultados(dynamicConfig, calculationContext);
       setResultados(resultadosCalculados);

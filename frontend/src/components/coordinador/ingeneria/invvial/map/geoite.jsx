@@ -1520,6 +1520,20 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
                         marker.on('click', (e) => {
                             L.DomEvent.stop(e); // Keep this to prevent map click events
+
+                            const targetZoom = 18;
+                            const latLng = [alcantarilla.latitud, alcantarilla.longitud];
+
+                            // Proyectar a píxeles, restar offset en Y (mover centro arriba -> marcador baja), y desproyectar
+                            const point = map.project(latLng, targetZoom);
+                            const targetPoint = point.subtract([0, 150]); // 150px de offset hacia arriba
+                            const targetLatLng = map.unproject(targetPoint, targetZoom);
+
+                            map.flyTo(targetLatLng, targetZoom, {
+                                animate: true,
+                                duration: 1.5
+                            });
+
                             if (onAlcantarillaClick) {
                                 onAlcantarillaClick(alcantarilla);
                             }

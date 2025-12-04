@@ -5,13 +5,6 @@ const math = create(all);
 
 // --- Funciones de Utilidad (Helpers) ---
 
-/**
- * Obtiene de forma segura un valor de un objeto anidado utilizando una ruta de cadena.
- * @param {object} obj - El objeto del que se extraerán los datos.
- * @param {string} path - La ruta al valor (ej: 'data.prop.0.name').
- * @param {*} defaultValue - El valor a devolver si la ruta no existe.
- * @returns {*} El valor encontrado o el valor por defecto.
- */
 function get(obj, path, defaultValue = 0) {
   const travel = (regexp) =>
     String.prototype.split
@@ -22,27 +15,32 @@ function get(obj, path, defaultValue = 0) {
   return result === undefined || result === obj ? defaultValue : result;
 }
 
-/**
- * Establece de forma segura un valor en un objeto anidado utilizando una ruta de cadena.
- * Crea la ruta si no existe.
- * @param {object} obj - El objeto a modificar.
- * @param {string} path - La ruta donde se establecerá el valor.
- * @param {*} value - El valor a establecer.
- * @returns {object} El objeto modificado.
- */
+function get_nested_value(obj, path, defaultValue = 0) {
+    if (typeof path !== 'string') {
+        return defaultValue;
+    }
+    const keys = path.split('.');
+    let current = obj;
+    for (let i = 0; i < keys.length; i++) {
+        if (current === null || current === undefined) {
+            return defaultValue;
+        }
+        current = current[keys[i]];
+    }
+    return current === undefined || current === null ? defaultValue : current;
+}
+
+
 function set(obj, path, value) {
-  // Regex para separar la parte principal del path de la parte con corchetes
   const pathRegex = /([a-zA-Z0-9._]+)\[([^\]]+)\]/;
   const match = path.match(pathRegex);
 
   let keys;
   if (match) {
-    // Si hay corchetes, evaluamos la clave dentro de ellos
     const mainPath = match[1];
-    const dynamicKey = math.evaluate(match[2], obj); // El 'scope' es el mismo objeto
+    const dynamicKey = math.evaluate(match[2], obj);
     keys = [...mainPath.split('.'), dynamicKey];
   } else {
-    // Si no hay corchetes, funciona como antes
     keys = Array.isArray(path) ? path : path.split('.');
   }
   
@@ -51,7 +49,6 @@ function set(obj, path, value) {
     const key = keys[i];
     if (current[key] === undefined || current[key] === null) {
       const nextKey = keys[i + 1];
-      // Si la siguiente clave parece un número, creamos un array, si no un objeto
       const isNextKeyNumeric = !isNaN(parseInt(nextKey, 10));
       current[key] = isNextKeyNumeric ? [] : {};
     }
@@ -69,7 +66,6 @@ function buildPoints(rows, pasa_results) {
   }));
 }
 
-// Importar helpers en el scope de mathjs para que puedan ser usados en las fórmulas
 math.import({
   get,
   set,
@@ -77,59 +73,49 @@ math.import({
   isObject: (val) => typeof val === 'object' && val !== null,
   values: Object.values,
   buildPoints,
+  get_nested_value,
 }, {
   override: true
 });
 
 
-// --- Librería de Motores Genéricos ---
-
 const engineMap = {
-  /**
-   * Realiza interpolación lineal o log-lineal en un conjunto de puntos.
-   * @param {object} params - Parámetros del motor.
-   * @param {Array<object>} params.points - Array de puntos de datos (ej: [{x: 10, y: 20}, {x: 30, y: 40}]).
-   * @param {number} params.targetX - El valor de X para el cual se quiere interpolar Y.
-   * @param {string} params.xKey - El nombre de la propiedad que contiene el valor X en los puntos.
-   * @param {string} params.yKey - El nombre de la propiedad que contiene el valor Y en los puntos.
-   * @param {boolean} [params.logScaleX=false] - Indica si la escala X es logarítmica.
-   * @returns {number | null} El valor Y interpolado, o null si no se puede calcular.
-   */
-  interpolate: ({ points, targetX, xKey, yKey, logScaleX = false }) => {
+  interpolate: ({ points, targetX, xKey, yKey, logScaleY = false }) => {
     if (!points || !Array.isArray(points)) return null;
 
-    // Filtrar puntos inválidos antes de procesar
-    const validPoints = points.filter(p => p && typeof p[xKey] === 'number' && isFinite(p[xKey]));
+    const validPoints = points.filter(p => p && typeof p[xKey] === 'number' && isFinite(p[xKey]) && p.mm !== null && p.mm > 0);
 
     if (validPoints.length < 2) return null;
 
     const sortedPoints = [...validPoints].sort((a, b) => a[xKey] - b[xKey]);
-
+    
     let p1 = null, p2 = null;
-    for (let i = 0; i < sortedPoints.length - 1; i++) {
-        if (sortedPoints[i][xKey] <= targetX && sortedPoints[i+1][xKey] >= targetX) {
-            p1 = sortedPoints[i];
-            p2 = sortedPoints[i+1];
+
+    const reversedSortedPoints = [...sortedPoints].reverse();
+
+    for (let i = 0; i < reversedSortedPoints.length - 1; i++) {
+        if (reversedSortedPoints[i][xKey] >= targetX && reversedSortedPoints[i + 1][xKey] <= targetX) {
+            p1 = reversedSortedPoints[i + 1];
+            p2 = reversedSortedPoints[i];
             break;
         }
     }
 
-    if (!p1 || !p2) return null; // El targetX está fuera del rango de los puntos.
-    
-    if (p1[xKey] === p2[xKey]) return p1[yKey]; // Evitar división por cero.
+    if (!p1 || !p2) return null;
+    if (p1[xKey] === p2[xKey]) return p1[yKey];
 
     const x1 = p1[xKey];
     const y1 = p1[yKey];
     const x2 = p2[xKey];
     const y2 = p2[yKey];
-
-    if (logScaleX) {
-        if (x1 <= 0 || x2 <= 0 || targetX <= 0) return null; // Logaritmo no definido para <= 0
-        const logX1 = Math.log10(x1);
-        const logX2 = Math.log10(x2);
-        const logTargetX = Math.log10(targetX);
-        const factor = (logTargetX - logX1) / (logX2 - logX1);
-        return y1 + factor * (y2 - y1);
+    
+    if (logScaleY) {
+        if (y1 <= 0 || y2 <= 0) return null;
+        const logY1 = Math.log10(y1);
+        const logY2 = Math.log10(y2);
+        const factor = (targetX - x1) / (x2 - x1);
+        const interpolatedLogY = logY1 + factor * (logY2 - logY1);
+        return Math.pow(10, interpolatedLogY);
     } else {
         const factor = (targetX - x1) / (x2 - x1);
         return y1 + factor * (y2 - y1);
@@ -137,9 +123,6 @@ const engineMap = {
   },
 
   findMaxPoint: ({ points, xKey, yKey }) => {
-    console.log('[DEBUG findMaxPoint] Received points:', points);
-    
-    // Si es un objeto DenseMatrix de math.js, usa su array interno _data
     const dataPoints = points && points._data ? points._data : points;
 
     if (!dataPoints || !Array.isArray(dataPoints) || dataPoints.length === 0) {
@@ -153,13 +136,12 @@ const engineMap = {
       const currentDensity = get(point, yKey, -Infinity);
       const currentHumidity = get(point, xKey, null);
 
-      if (currentDensity > 0 && currentDensity > maxDensity) { // Asegurarse de que la densidad sea positiva
+      if (currentDensity > 0 && currentDensity > maxDensity) {
         maxDensity = currentDensity;
         optimalHumidity = currentHumidity;
       }
     }
     
-    // Si no se encontró ninguna densidad válida, devolver null
     if (maxDensity === -Infinity) {
       return { maxima_densidad_seca: null, humedad_optima: null };
     }
@@ -168,8 +150,6 @@ const engineMap = {
   },
 };
 
-
-// --- Intérprete Principal de Cálculos ---
 
 function _processSteps(steps, context) {
   for (const step of steps) {
@@ -180,11 +160,8 @@ function _processSteps(steps, context) {
       }
 
       switch (step.type) {
-        case 'comment': {
-          // Ignorar silenciosamente los comentarios
+        case 'comment':
           break;
-        }
-
         case 'expression': {
           const result = math.evaluate(step.expression, context);
           if (step.output) {
@@ -259,10 +236,8 @@ function _processSteps(steps, context) {
             for (const caseItem of switchConfig.cases) {
               let isMatch = false;
               try {
-                // Intenta evaluar una condición, ej. `value > 50` se convierte en `60 > 50`
                 isMatch = math.evaluate(value + ' ' + caseItem.case, context);
               } catch(e) {
-                // Si falla, es una comparación de igualdad.
                 isMatch = (value == caseItem.case);
               }
               
@@ -292,14 +267,8 @@ function _processSteps(steps, context) {
   }
 }
 
-
-/**
- * Ejecuta una secuencia de pasos de cálculo definidos en una configuración.
- * @param {object} calculationConfig - El objeto de configuración que define los cálculos.
- * @param {object} inputData - Un objeto que contiene todos los datos de entrada (ej: { formData, tableConfig }).
- * @returns {object} Un objeto con los resultados de los cálculos.
- */
 export function calcularResultados(calculationConfig, inputData) {
+  console.log("--- CALCULATOR VERSION 10.0 ---"); // DEBUG LINE
   if (!calculationConfig || !calculationConfig.steps) {
     console.error("Configuración de cálculo inválida o ausente.");
     return { error: "Configuración de cálculo inválida." };
@@ -315,7 +284,15 @@ export function calcularResultados(calculationConfig, inputData) {
   if (calculationConfig.vars) {
     for (const varName in calculationConfig.vars) {
       try {
-        const result = math.evaluate(calculationConfig.vars[varName], context);
+        const rawValue = calculationConfig.vars[varName];
+        let result;
+
+        if (typeof rawValue === 'number') {
+            result = rawValue;
+        } else {
+            result = math.evaluate(rawValue, context);
+        }
+
         set(context.vars, varName, result);
       } catch (error) {
         console.error(`Error inicializando la variable '${varName}':`, error);

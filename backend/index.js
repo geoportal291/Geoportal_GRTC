@@ -1378,7 +1378,7 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
                 original_filename = EXCLUDED.original_filename`,
             [projectId, excelUrl, entregableNum, userId, req.file.originalname]
         );
-        
+
         const finalMessage = `Archivo Excel procesado. ${processResultAlcantarillas.message}. ${processResultBadenes.message}. ${processResultPuentes.message}. ${processResultMuros.message}.`;
 
         // --- Audit Log ---

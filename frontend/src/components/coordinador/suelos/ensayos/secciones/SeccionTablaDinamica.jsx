@@ -55,8 +55,8 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
           else if (field.width === '25%') span = 1;
 
           // Generamos el nombre correcto para que se guarde en la BD
-          // Ej: ensayo_de_compactacion_cbr.fecha
-          const fieldName = `${sectionKey}.${field.key}`;
+          // Ahora construimos la ruta directamente en 'general_fields' para los campos generales
+          const fieldName = `general_fields.${field.key}`;
           
           return (
             <div key={field.key} style={{ gridColumn: `span ${span}` }}>
@@ -116,38 +116,30 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
     }
 
     if (finalType === 'input') {
+      // --- FINAL FIX V2 ---
+      // The tableKey is directly available in the received tableConfig prop.
+      const tableKey = tableConfig.key; // e.g., 'granulometria' from the log
+
+      const rowKey = isTransposed ? (colData?.id || colData?.key) : (rowData?.key || rowData?.id);
+      const columnKey = cellConfig.key;
+
       let fieldName;
-      if (finalInputConfig) {
-        const baseName = finalInputConfig.name;
-        const suffix = isTransposed ? colId : rowId;
-        // Forzar el anidamiento bajo la sectionKey para consistencia
-        fieldName = `${sectionKey}.${baseName}_${suffix}`;
+      if (!tableKey) {
+        console.error("SeccionTablaDinamica: 'key' de la tabla no está definido en el prop tableConfig.", tableConfig);
+        fieldName = `error.path.missing_table_key.${rowKey}.${columnKey}`;
       } else {
-        // Usamos la misma sectionKey que calculamos arriba
-        fieldName = `${sectionKey}.${rowId}.${cellKey}`;
+        // Construct the correct, consistent, nested path
+        // e.g., tables.granulometria.n4.retenido
+        fieldName = `tables.${tableKey}.${rowKey}.${columnKey}`;
       }
-
-      // --- FIX: Dual-path value retrieval ---
-      // First, try to get the value from the standard nested path.
-      const nestedValue = getNested(data, fieldName, undefined);
       
-      // As a fallback for imported data, construct and check a flat key (e.g., "retenido_n4").
-      // This is necessary because imported data has a different, flat structure.
-      const flatKey = `${cellKey}_${rowId}`;
-      const flatValue = getNested(data, flatKey, undefined);
-
-      // Prioritize the nested value, but use the flat value if the nested one isn't found.
-      // This allows the component to read the imported data. When the user edits the field,
-      // handleInputChange will save it to the nested path, which will then take precedence.
-      const finalValue = nestedValue !== undefined ? nestedValue : (flatValue !== undefined ? flatValue : '');
-
       return (
         <input
           type={'number'}
           step="0.01"
           className="form-control form-control-sm numeric-input"
           name={fieldName}
-          value={finalValue}
+          value={getNested(data, fieldName, '')}
           onChange={onInputChange}
         />
       );

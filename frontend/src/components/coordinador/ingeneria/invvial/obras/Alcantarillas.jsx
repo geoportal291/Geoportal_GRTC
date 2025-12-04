@@ -8,6 +8,8 @@ import ListaAlcantarillasModal from './ListaAlcantarillasModal';
 import ExportarMapaModal from './ExportarMapaModal';
 import axiosInstance from '../../../../../api/axios';
 import { saveAs } from 'file-saver';
+import ImagePreviewModal from './ImagePreviewModal';
+
 
 // Estructura de datos de ejemplo
 const tramoData = {
@@ -246,6 +248,24 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
     }
   };
 
+  const handleNextImage = () => {
+    const currentIndex = alcantarillaImages.findIndex(img => img.url === previewImageUrl);
+    if (currentIndex !== -1 && currentIndex < alcantarillaImages.length - 1) {
+      setPreviewImageUrl(alcantarillaImages[currentIndex + 1].url);
+    }
+  };
+
+  const handlePrevImage = () => {
+    const currentIndex = alcantarillaImages.findIndex(img => img.url === previewImageUrl);
+    if (currentIndex > 0) {
+      setPreviewImageUrl(alcantarillaImages[currentIndex - 1].url);
+    }
+  };
+
+  const currentImageIndex = alcantarillaImages.findIndex(img => img.url === previewImageUrl);
+  const hasNext = currentImageIndex !== -1 && currentImageIndex < alcantarillaImages.length - 1;
+  const hasPrev = currentImageIndex > 0;
+
   return (
     <div className="alcantarillas-tab-wrapper" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', gap: '20px', flex: 1, minHeight: 0, height: '100%' }}>        {/* Columna del Mapa - Izquierda */}
@@ -438,35 +458,15 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
 
         </div>
       </div>
-      {isPreviewModalOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10002,
-        }}>
-          <img src={previewImageUrl} alt="Preview" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
-          <button onClick={() => setIsPreviewModalOpen(false)} style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            background: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            width: '40px',
-            height: '40px',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            color: '#333',
-          }}>&times;</button>
-        </div>
-      )}
+      <ImagePreviewModal
+        isOpen={isPreviewModalOpen}
+        onClose={() => setIsPreviewModalOpen(false)}
+        imageUrl={previewImageUrl}
+        onNext={handleNextImage}
+        onPrev={handlePrevImage}
+        hasNext={hasNext}
+        hasPrev={hasPrev}
+      />
       <ListaAlcantarillasModal
         show={showListModal}
         onClose={() => setShowListModal(false)}

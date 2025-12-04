@@ -133,15 +133,15 @@ const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, grap
 
           {alcantarillasData && alcantarillasData.length > 0 ? (
             <div className="hide-scrollbar" style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
-              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0' }}>
-                <thead style={{ position: 'sticky', top: '0', backgroundColor: '#f8f8f8', zIndex: 1 }}>
+              <table className="invvial-table">
+                <thead>
                   <tr>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', color: '#333' }}>Código</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', color: '#333' }}>Tipo</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', color: '#333' }}>Diámetro/Lado</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', color: '#333' }}>Longitud</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', color: '#333' }}>Progresiva</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #e0e0e0', textAlign: 'center', color: '#333' }}>Estado</th>
+                    <th>Código</th>
+                    <th>Tipo</th>
+                    <th>Diámetro/Lado</th>
+                    <th>Longitud</th>
+                    <th>Progresiva</th>
+                    <th>Estado</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -150,13 +150,13 @@ const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, grap
                     const numB = parseInt(b.codigo.match(/\d+/)?.[0] || '0', 10);
                     return numA - numB;
                   }).map((element) => (
-                    <tr key={element.id_alcantarilla} className="alcantarilla-row" onClick={() => handleRowClick(element)} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                      <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>{element.codigo}</td>
-                      <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>{element.tipo}</td>
-                      <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>{element.diametro_lado}</td>
-                      <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>{element.longitud_alcantarilla}</td>
-                      <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>{element.progresiva}</td>
-                      <td style={{ padding: '12px', border: 'none', textAlign: 'center' }}>{element.estado}</td>
+                    <tr key={element.id_alcantarilla} className="alcantarilla-row" onClick={() => handleRowClick(element)}>
+                      <td>{element.codigo}</td>
+                      <td>{element.tipo}</td>
+                      <td>{element.diametro_lado}</td>
+                      <td>{element.longitud_alcantarilla}</td>
+                      <td>{element.progresiva}</td>
+                      <td>{element.estado}</td>
                     </tr>
                   ))}
                 </tbody>

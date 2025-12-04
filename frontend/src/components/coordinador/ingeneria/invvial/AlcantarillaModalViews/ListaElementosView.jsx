@@ -41,7 +41,7 @@ const ListaElementosView = ({
     return [...data].sort((a, b) => {
       const fieldA = a.codigo || a.progresiva || a.nombre || '';
       const fieldB = b.codigo || b.progresiva || b.nombre || '';
-      
+
       const numA = parseInt(String(fieldA).match(/\d+/)?.[0] || '0', 10);
       const numB = parseInt(String(fieldB).match(/\d+/)?.[0] || '0', 10);
 
@@ -61,11 +61,11 @@ const ListaElementosView = ({
         <button onClick={() => setModalViewMode('upload_excel')} className="modal-button-upload">Subir Excel</button>
         <button onClick={() => setModalViewMode('upload_graphics_excel')} className="modal-button-images">Subir Imágenes</button>
       </div>
-      
+
       <h3 style={{ marginBottom: '15px', color: '#555' }}>{config.title}</h3>
       {sortedData && sortedData.length > 0 ? (
         <div className="hide-scrollbar" style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
-          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0' }}>
+          <table className="invvial-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0' }}>
             <thead style={{ position: 'sticky', top: '0', backgroundColor: '#f8f8f8', zIndex: 1 }}>
               <tr>
                 {config.headers.map(header => <th key={header}>{header}</th>)}
