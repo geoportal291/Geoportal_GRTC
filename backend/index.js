@@ -39,6 +39,8 @@ const alcantarillasService = require('./services/alcantarillasService');
 const alcantarillasGraphicsService = require('./services/alcantarillasGraphicsService');
 const alcantarillasE1Service = require('./services/alcantarillasE1Service');
 const badenesService = require('./services/badenesService');
+const puentesService = require('./services/puentesService');
+const murosService = require('./services/murosService');
 
 console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
@@ -1353,19 +1355,18 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
             return res.status(400).json({ error: 'entregableNum es requerido.' });
         }
 
-        // El buffer del archivo ya está en req.file.buffer gracias a multer.memoryStorage
         const fileBuffer = req.file.buffer;
 
-        // Procesar el Excel y guardar las alcantarillas en la base de datos, pasando el buffer
+        // Procesar los 4 tipos de elementos
         const processResultAlcantarillas = await alcantarillasService.processExcelAndSaveAlcantarillas(fileBuffer, projectId, utmZone);
-
-        // Ahora, procesa el mismo archivo para los badenes
         const processResultBadenes = await badenesService.processExcelAndSaveBadenes(fileBuffer, projectId, utmZone);
+        const processResultPuentes = await puentesService.processExcelAndSavePuentes(fileBuffer, projectId, utmZone);
+        const processResultMuros = await murosService.processExcelAndSaveMuros(fileBuffer, projectId, utmZone);
 
-        // Si el procesamiento fue exitoso, subir el archivo a Vercel Blob
+        // Subir el archivo a Vercel Blob
         const excelUrl = await uploadAlcantarillasExcelToVercelBlob(fileBuffer, req.file.originalname, projectId);
 
-        // Guardar la URL del archivo Excel en la nueva tabla invvial_excels
+        // Guardar la URL en la tabla invvial_excels
         await db.query(
             `INSERT INTO invvial_excels (id_proyecto, excel_url, entregable_num, uploaded_by_user_id, original_filename)
              VALUES ($1, $2, $3, $4, $5)
@@ -1377,21 +1378,25 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
                 original_filename = EXCLUDED.original_filename`,
             [projectId, excelUrl, entregableNum, userId, req.file.originalname]
         );
+        
+        const finalMessage = `Archivo Excel procesado. ${processResultAlcantarillas.message}. ${processResultBadenes.message}. ${processResultPuentes.message}. ${processResultMuros.message}.`;
 
-        // --- Audit Log: Subida de Archivo Excel ---
+        // --- Audit Log ---
         await db.query(
             'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
-            [userId, 'Subida de Archivo Excel de Inventario Vial', `Archivo subido para proyecto ${projectId} por usuario ${userId}. URL: ${excelUrl}. ${processResultAlcantarillas.message}. ${processResultBadenes.message}`]
+            [userId, 'Subida de Archivo Excel de Inventario Vial', `Archivo subido para proyecto ${projectId}. URL: ${excelUrl}. Resultados: ${finalMessage}`]
         );
         // --- End Audit Log ---
 
         res.status(201).json({
             status: 'ok',
-            message: 'Archivo Excel procesado. ' + processResultAlcantarillas.message + ' ' + processResultBadenes.message,
+            message: finalMessage,
             excelUrl,
-            processResult: { // Manteniendo una estructura similar
+            processResult: {
                 alcantarillas: processResultAlcantarillas,
-                badenes: processResultBadenes
+                badenes: processResultBadenes,
+                puentes: processResultPuentes,
+                muros: processResultMuros
             },
             fileInfo: {
                 excel_url: excelUrl,
@@ -1400,7 +1405,7 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
         });
     } catch (error) {
         console.error('Error en la ruta /api/alcantarillas/upload-excel:', error);
-        res.status(500).json({ status: 'error', message: error.message || 'Error al subir el archivo Excel de alcantarillas.' });
+        res.status(500).json({ status: 'error', message: error.message || 'Error al subir el archivo Excel de inventario vial.' });
     }
 });
 
@@ -1694,7 +1699,7 @@ app.put('/api/badenes/:id', authenticateToken, async (req, res) => {
 app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, async (req, res) => {
     const { projectId } = req.params;
     const { entregableNum, tipos } = req.query; // Get entregableNum and tipos from query
-    const userId = req.user.id; 
+    const userId = req.user.id;
 
     const client = await db.connect();
 
@@ -1702,7 +1707,7 @@ app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, asyn
         if (!entregableNum) {
             return res.status(400).json({ error: 'entregableNum es requerido.' });
         }
-        
+
         const typesToDelete = tipos ? tipos.split(',') : [];
         if (typesToDelete.length === 0) {
             return res.status(400).json({ error: 'Debe especificar al menos un tipo de dato para eliminar (alcantarillas, badenes).' });
@@ -1735,6 +1740,14 @@ app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, asyn
         if (typesToDelete.includes('badenes')) {
             await client.query('DELETE FROM badenes WHERE id_proyecto = $1', [projectId]);
             deletedMessages.push('datos de badenes');
+        }
+        if (typesToDelete.includes('puentes')) {
+            await client.query('DELETE FROM puentes WHERE id_proyecto = $1', [projectId]);
+            deletedMessages.push('datos de puentes');
+        }
+        if (typesToDelete.includes('muros')) {
+            await client.query('DELETE FROM muros WHERE id_proyecto = $1', [projectId]);
+            deletedMessages.push('datos de muros');
         }
 
         // 4. Delete the entry from invvial_excels table
@@ -4207,6 +4220,123 @@ app.delete('/api/badenes/delete-excel/:projectId', authenticateToken, async (req
     } catch (error) {
         console.error('Error al eliminar datos de badenes:', error);
         res.status(500).json({ error: 'Error al eliminar datos de badenes.' });
+    }
+});
+
+
+// --------------------- PUENTES ---------------------
+app.get('/api/puentes/by-project/:projectId', authenticateToken, async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const puentes = await puentesService.getPuentesByProjectId(projectId);
+        res.json(puentes);
+    } catch (err) {
+        console.error('Error getting puentes:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/puentes/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
+    const { projectId, utmZone } = req.body;
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+    try {
+        const result = await puentesService.processExcelAndSavePuentes(req.file.buffer, projectId, utmZone);
+        res.json(result);
+    } catch (err) {
+        console.error('Error uploading puentes excel:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/puentes', authenticateToken, async (req, res) => {
+    try {
+        const newPuente = await puentesService.createPuente(req.body);
+        res.status(201).json(newPuente);
+    } catch (err) {
+        console.error('Error creating puente:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/puentes/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const updatedPuente = await puentesService.updatePuente(id, req.body);
+        res.json(updatedPuente);
+    } catch (err) {
+        console.error('Error updating puente:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/puentes/project/:projectId', authenticateToken, async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const result = await puentesService.deleteExcelAndPuentes(projectId);
+        res.json(result);
+    } catch (err) {
+        console.error('Error deleting puentes:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --------------------- MUROS ---------------------
+app.get('/api/muros/by-project/:projectId', authenticateToken, async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const muros = await murosService.getMurosByProjectId(projectId);
+        res.json(muros);
+    } catch (err) {
+        console.error('Error getting muros:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/muros/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
+    const { projectId, utmZone } = req.body;
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+    try {
+        const result = await murosService.processExcelAndSaveMuros(req.file.buffer, projectId, utmZone);
+        res.json(result);
+    } catch (err) {
+        console.error('Error uploading muros excel:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/muros', authenticateToken, async (req, res) => {
+    try {
+        const newMuro = await murosService.createMuro(req.body);
+        res.status(201).json(newMuro);
+    } catch (err) {
+        console.error('Error creating muro:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/muros/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const updatedMuro = await murosService.updateMuro(id, req.body);
+        res.json(updatedMuro);
+    } catch (err) {
+        console.error('Error updating muro:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/muros/project/:projectId', authenticateToken, async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const result = await murosService.deleteExcelAndMuros(projectId);
+        res.json(result);
+    } catch (err) {
+        console.error('Error deleting muros:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 

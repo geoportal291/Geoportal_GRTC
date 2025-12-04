@@ -10,12 +10,16 @@ import L from 'leaflet';
 import * as XLSX from 'xlsx';
 import Alcantarillas from './obras/Alcantarillas';
 import Badenes from './obras/Badenes'; // Import Badenes
+import Puentes from './obras/Puentes';
+import Muros from './obras/Muros';
 import withUpload from './obras/withUpload';
 import DataManagementModal from './DataManagementModal';
 import Swal from 'sweetalert2';
 
 const AlcantarillasWithUpload = withUpload(Alcantarillas);
 const BadenesWithUpload = withUpload(Badenes); // Create BadenesWithUpload
+const PuentesWithUpload = withUpload(Puentes);
+const MurosWithUpload = withUpload(Muros);
 
 
 const findClosestVertexIndex = (targetLatLng, routeCoords) => {
@@ -107,6 +111,8 @@ const Vialds = ({ isNavbarExpanded }) => {
   const [segmentedRoute, setSegmentedRoute] = useState([]);
   const [selectedAlcantarilla, setSelectedAlcantarilla] = useState(null);
   const [selectedBaden, setSelectedBaden] = useState(null);
+  const [selectedPuente, setSelectedPuente] = useState(null);
+  const [selectedMuro, setSelectedMuro] = useState(null);
 
   const [isLoadingData, setIsLoadingData] = useState(false);
 
@@ -116,7 +122,10 @@ const Vialds = ({ isNavbarExpanded }) => {
   const [modalMode, setModalMode] = useState('list'); // Default to list mode when modal opens
   const [alcantarillasData, setAlcantarillasData] = useState([]); // New state to store all alcantarillas
   const [badenesData, setBadenesData] = useState([]); // New state to store all badenes
+  const [puentesData, setPuentesData] = useState([]);
+  const [murosData, setMurosData] = useState([]);
   const [graphicsImages, setGraphicsImages] = useState([]); // NEW: State for graphics images
+  const [isSwitchingTab, setIsSwitchingTab] = useState(false); // NEW: State for tab switching
   const canUpload = user && (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'COORDINADOR');
 
   // 1. Define placeholder main route (moved outside useEffect)
@@ -262,6 +271,36 @@ const Vialds = ({ isNavbarExpanded }) => {
         }
       }
 
+      // Fetch Puentes
+      try {
+        const puentesRes = await axiosInstance.get(`/api/puentes/by-project/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setPuentesData(puentesRes.data.map(puente => ({
+          ...puente,
+          latitud: parseFloat(puente.latitud),
+          longitud: parseFloat(puente.longitud)
+        })));
+      } catch (error) {
+        console.error('Error fetching puentes data:', error);
+        setPuentesData([]);
+      }
+
+      // Fetch Muros
+      try {
+        const murosRes = await axiosInstance.get(`/api/muros/by-project/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setMurosData(murosRes.data.map(muro => ({
+          ...muro,
+          latitud: parseFloat(muro.latitud),
+          longitud: parseFloat(muro.longitud)
+        })));
+      } catch (error) {
+        console.error('Error fetching muros data:', error);
+        setMurosData([]);
+      }
+
       // Fetch Graphics
       try {
         const graphicsRes = await axiosInstance.get(`/api/alcantarillas/graphics/${projectId}`, {
@@ -301,8 +340,22 @@ const Vialds = ({ isNavbarExpanded }) => {
     }
     setIsLoadingData(true);
     const isBaden = activeObrasSubTab === 'BADENES';
-    const endpoint = isBaden ? '/api/badenes' : '/api/alcantarillas';
-    const idField = isBaden ? 'id_baden' : 'id_alcantarilla';
+    const isPuente = activeObrasSubTab === 'PUENTES';
+    const isMuro = activeObrasSubTab === 'MUROS DE CONTENCION';
+
+    let endpoint = '/api/alcantarillas';
+    let idField = 'id_alcantarilla';
+
+    if (isBaden) {
+      endpoint = '/api/badenes';
+      idField = 'id_baden';
+    } else if (isPuente) {
+      endpoint = '/api/puentes';
+      idField = 'id_puente';
+    } else if (isMuro) {
+      endpoint = '/api/muros';
+      idField = 'id_muro';
+    }
 
     try {
       let response;
@@ -413,10 +466,56 @@ const Vialds = ({ isNavbarExpanded }) => {
           )
         )}
         {activeObrasSubTab === 'PUENTES' && (
-          <div><h3>Contenido de PUENTES</h3></div>
+          vialHeaderOption.includes('entregable') ? (
+            <PuentesWithUpload
+              segmentedRoute={segmentedRoute}
+              canUpload={canUpload}
+              showModal={handleShowModal}
+              onEditElementSelect={handleEditElementSelect}
+              puentesData={puentesData}
+              graphicsImages={graphicsImages}
+              projectId={projectId}
+              selectedPuente={selectedPuente}
+              onPuenteSelect={setSelectedPuente}
+            />
+          ) : (
+            <Puentes
+              segmentedRoute={segmentedRoute}
+              onEditElementSelect={handleEditElementSelect}
+              puentesData={puentesData}
+              graphicsImages={graphicsImages}
+              projectId={projectId}
+              selectedPuente={selectedPuente}
+              onPuenteSelect={setSelectedPuente}
+              showModal={handleShowModal}
+            />
+          )
         )}
         {activeObrasSubTab === 'MUROS DE CONTENCION' && (
-          <div><h3>Contenido de MUROS DE CONTENCION</h3></div>
+          vialHeaderOption.includes('entregable') ? (
+            <MurosWithUpload
+              segmentedRoute={segmentedRoute}
+              canUpload={canUpload}
+              showModal={handleShowModal}
+              onEditElementSelect={handleEditElementSelect}
+              murosData={murosData}
+              graphicsImages={graphicsImages}
+              projectId={projectId}
+              selectedMuro={selectedMuro}
+              onMuroSelect={setSelectedMuro}
+            />
+          ) : (
+            <Muros
+              segmentedRoute={segmentedRoute}
+              onEditElementSelect={handleEditElementSelect}
+              murosData={murosData}
+              graphicsImages={graphicsImages}
+              projectId={projectId}
+              selectedMuro={selectedMuro}
+              onMuroSelect={setSelectedMuro}
+              showModal={handleShowModal}
+            />
+          )
         )}
       </>
     );
@@ -508,8 +607,12 @@ const Vialds = ({ isNavbarExpanded }) => {
                       options={obrasSubTabs}
                       activeOption={activeObrasSubTab}
                       onOptionSelect={(option) => {
-                        setActiveTab(tab);
-                        setActiveObrasSubTab(option);
+                        setIsSwitchingTab(true);
+                        setTimeout(() => {
+                          setActiveTab(tab);
+                          setActiveObrasSubTab(option);
+                          setTimeout(() => setIsSwitchingTab(false), 800);
+                        }, 50);
                       }}
                       isActive={activeTab === tab}
                     />
@@ -523,8 +626,12 @@ const Vialds = ({ isNavbarExpanded }) => {
                       options={señalizacionSubTabs}
                       activeOption={activeSeñalizacionSubTab}
                       onOptionSelect={(option) => {
-                        setActiveTab(tab);
-                        setActiveSeñalizacionSubTab(option);
+                        setIsSwitchingTab(true);
+                        setTimeout(() => {
+                          setActiveTab(tab);
+                          setActiveSeñalizacionSubTab(option);
+                          setTimeout(() => setIsSwitchingTab(false), 800);
+                        }, 50);
                       }}
                       isActive={activeTab === tab}
                     />
@@ -534,15 +641,27 @@ const Vialds = ({ isNavbarExpanded }) => {
                   <button
                     key={tab}
                     className={`invvial-tabs-button ${activeTab === tab ? 'active' : ''}`}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => {
+                      setIsSwitchingTab(true);
+                      setTimeout(() => {
+                        setActiveTab(tab);
+                        setTimeout(() => setIsSwitchingTab(false), 500);
+                      }, 50);
+                    }}
                   >
                     {tab}
                   </button>
                 );
               })}
             </div>
-            <div className="invvial-tab-content-container">
-              {renderTabContent(null, [])}
+            <div className="invvial-tab-content-container" style={{ position: 'relative', minHeight: '300px' }}>
+              {(isLoadingData || isSwitchingTab) && (
+                <div className="invvial-loading-overlay">
+                  <div className="loader-spinner-large"></div>
+                  <div className="invvial-loading-text">Cargando datos...</div>
+                </div>
+              )}
+              {!isLoadingData && !isSwitchingTab && renderTabContent(null, [])}
             </div>
           </>
         );
@@ -561,8 +680,12 @@ const Vialds = ({ isNavbarExpanded }) => {
                       options={obrasSubTabs}
                       activeOption={activeObrasSubTab}
                       onOptionSelect={(option) => {
-                        setActiveTab(tab);
-                        setActiveObrasSubTab(option);
+                        setIsSwitchingTab(true);
+                        setTimeout(() => {
+                          setActiveTab(tab);
+                          setActiveObrasSubTab(option);
+                          setTimeout(() => setIsSwitchingTab(false), 800);
+                        }, 50);
                       }}
                       isActive={activeTab === tab}
                     />
@@ -576,8 +699,12 @@ const Vialds = ({ isNavbarExpanded }) => {
                       options={señalizacionSubTabs}
                       activeOption={activeSeñalizacionSubTab}
                       onOptionSelect={(option) => {
-                        setActiveTab(tab);
-                        setActiveSeñalizacionSubTab(option);
+                        setIsSwitchingTab(true);
+                        setTimeout(() => {
+                          setActiveTab(tab);
+                          setActiveSeñalizacionSubTab(option);
+                          setTimeout(() => setIsSwitchingTab(false), 800);
+                        }, 50);
                       }}
                       isActive={activeTab === tab}
                     />
@@ -587,15 +714,27 @@ const Vialds = ({ isNavbarExpanded }) => {
                   <button
                     key={tab}
                     className={`invvial-tabs-button ${activeTab === tab ? 'active' : ''}`}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => {
+                      setIsSwitchingTab(true);
+                      setTimeout(() => {
+                        setActiveTab(tab);
+                        setTimeout(() => setIsSwitchingTab(false), 500);
+                      }, 50);
+                    }}
                   >
                     {tab}
                   </button>
                 );
               })}
             </div>
-            <div className="invvial-tab-content-container">
-              {renderTabContent(null, [])}
+            <div className="invvial-tab-content-container" style={{ position: 'relative', minHeight: '300px' }}>
+              {(isLoadingData || isSwitchingTab) && (
+                <div className="invvial-loading-overlay">
+                  <div className="loader-spinner-large"></div>
+                  <div className="invvial-loading-text">Cargando datos...</div>
+                </div>
+              )}
+              {!isLoadingData && !isSwitchingTab && renderTabContent(null, [])}
             </div>
           </>
         );
@@ -608,25 +747,28 @@ const Vialds = ({ isNavbarExpanded }) => {
 
     <div className="invvial-container">
 
-      {isLoadingData ? (
-
-        <div>Cargando datos de inventario vial...</div>
-
-      ) : (
-
-        renderContent()
-      )}
+      {renderContent()}
       <DataManagementModal
         show={showExcelPreviewModal}
         onClose={handleCloseModal}
-        listData={activeObrasSubTab === 'BADENES' ? badenesData : alcantarillasData} // Pass correct data
+        listData={(() => {
+          if (activeObrasSubTab === 'BADENES') return badenesData;
+          if (activeObrasSubTab === 'PUENTES') return puentesData;
+          if (activeObrasSubTab === 'MUROS DE CONTENCION') return murosData;
+          return alcantarillasData;
+        })()} // Pass correct data
         editData={selectedElementForEdit}
         mode={modalMode} // Pass the new modalMode state
         onSaveManualData={handleSaveManualAlcantarilla}
         onUploadExcelData={handleUploadExcelData} // Nueva prop para la carga de Excel
         projectId={projectId} // NEW: Pasar projectId al modal
         vialHeaderOption={vialHeaderOption} // NEW: Pasar vialHeaderOption al modal
-        type={activeObrasSubTab === 'BADENES' ? 'badenes' : 'alcantarillas'} // Pass type
+        type={(() => {
+          if (activeObrasSubTab === 'BADENES') return 'badenes';
+          if (activeObrasSubTab === 'PUENTES') return 'puentes';
+          if (activeObrasSubTab === 'MUROS DE CONTENCION') return 'muros';
+          return 'alcantarillas';
+        })()} // Pass type
         isNavbarExpanded={isNavbarExpanded}
       />
     </div>

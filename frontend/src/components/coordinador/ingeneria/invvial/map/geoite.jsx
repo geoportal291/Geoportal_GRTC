@@ -534,7 +534,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 if (isComponentMounted && tempGeoJsonLayer.getBounds().isValid()) {
                     map.fitBounds(tempGeoJsonLayer.getBounds());
                 }
-                if (showAlerts) alertify.success('KML cargado y dibujado en el mapa.');
+                // if (showAlerts) alertify.success('KML cargado y dibujado en el mapa.');
 
             } catch (error) {
                 alertify.error('No se pudo cargar el KML desde la URL.');
@@ -949,7 +949,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     const showAlerts = !window.hasShownInitialKmlAlert;
                     await loadKmlFromUrl(response.data.url, showAlerts);
                     if (showAlerts) {
-                        alertify.success('KML del proyecto cargado automáticamente.');
+                        // alertify.success('KML del proyecto cargado automáticamente.');
                         window.hasShownInitialKmlAlert = true;
                     }
                 }
@@ -965,7 +965,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 setCalibrationData(response.data);
                 calibrationDataRef.current = response.data;
                 if (Object.keys(response.data).length > 0) {
-                    alertify.message('Datos de calibración cargados automáticamente.');
+                    // alertify.message('Datos de calibración cargados automáticamente.');
                 }
             } catch (error) {
                 if (error.response && error.response.status !== 404) {
@@ -1456,6 +1456,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 let iconAnchor = [8, 16];
                 let popupAnchor = [0, -16];
 
+                // Default sizing for alcantarillas/badenes
                 if (zoom > 15) {
                     iconSize = [32, 32];
                     iconAnchor = [16, 32];
@@ -1466,11 +1467,32 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     popupAnchor = [0, -24];
                 }
 
+                // Custom sizing for Puentes and Muros (Larger)
+                if (type === 'puente' || type === 'muro') {
+                    if (zoom > 15) {
+                        iconSize = [48, 48]; // Significantly larger
+                        iconAnchor = [24, 48];
+                        popupAnchor = [0, -48];
+                    } else if (zoom > 13) {
+                        iconSize = [36, 36];
+                        iconAnchor = [18, 36];
+                        popupAnchor = [0, -36];
+                    } else {
+                        iconSize = [24, 24]; // Base size also larger
+                        iconAnchor = [12, 24];
+                        popupAnchor = [0, -24];
+                    }
+                }
+
                 let iconUrl = '';
                 if (type === 'alcantarilla') {
                     iconUrl = '/imgs/alcantarilla_icon.png';
                 } else if (type === 'baden') {
                     iconUrl = '/imgs/baden_icon.svg';
+                } else if (type === 'puente') {
+                    iconUrl = '/imgs/puente_icon.svg';
+                } else if (type === 'muro') {
+                    iconUrl = '/imgs/muro_icon.svg';
                 } else {
                     iconUrl = '/imgs/alcantarilla_icon.png'; // Default or error icon
                 }
@@ -1503,9 +1525,24 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                             }
                         });
 
-                        const popupContainerId = `popup-gallery-${alcantarilla.id_alcantarilla || alcantarilla.id_baden}`;
+                        const popupContainerId = `popup-gallery-${alcantarilla.id_alcantarilla || alcantarilla.id_baden || alcantarilla.id_puente || alcantarilla.id_muro}`;
+
+                        let typeLabel = 'Alcantarilla';
+                        let idValue = alcantarilla.codigo || alcantarilla.id_alcantarilla;
+
+                        if (alcantarilla.type === 'baden') {
+                            typeLabel = 'Badén';
+                            idValue = alcantarilla.codigo || alcantarilla.id_baden;
+                        } else if (alcantarilla.type === 'puente') {
+                            typeLabel = 'Puente';
+                            idValue = alcantarilla.nombre || alcantarilla.id_puente;
+                        } else if (alcantarilla.type === 'muro') {
+                            typeLabel = 'Muro';
+                            idValue = alcantarilla.id_muro;
+                        }
+
                         const popupContent = `
-                            <b>${alcantarilla.type === 'baden' ? 'Badén' : 'Alcantarilla'}:</b> ${alcantarilla.codigo || alcantarilla.id_alcantarilla || alcantarilla.id_baden}<br/>
+                            <b>${typeLabel}:</b> ${idValue}<br/>
                             <div id="${popupContainerId}"></div>
                         `;
 
@@ -1529,10 +1566,10 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                         });
 
                         alcantarillasLayer.addLayer(marker);
-                        markerRefMap.current[alcantarilla.id_alcantarilla || alcantarilla.id_baden] = marker;
+                        markerRefMap.current[alcantarilla.id_alcantarilla || alcantarilla.id_baden || alcantarilla.id_puente || alcantarilla.id_muro] = marker;
 
                     } else {
-                        console.warn(`${alcantarilla.type === 'baden' ? 'Badén' : 'Alcantarilla'} con ID ${alcantarilla.id_alcantarilla || alcantarilla.id_baden || 'N/A'} tiene coordenadas inválidas.`);
+                        console.warn(`Elemento con ID ${alcantarilla.id_alcantarilla || alcantarilla.id_baden || alcantarilla.id_puente || alcantarilla.id_muro || 'N/A'} tiene coordenadas inválidas.`);
                     }
                 });
             };

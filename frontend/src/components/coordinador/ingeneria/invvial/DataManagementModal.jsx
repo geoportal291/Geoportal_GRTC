@@ -5,11 +5,16 @@ import axiosInstance from '../../../../api/axios';
 import alertify from 'alertifyjs';
 
 // Import new sub-components
-import ListaAlcantarillasView from './AlcantarillaModalViews/ListaAlcantarillasView';
+import ListaElementosView from './AlcantarillaModalViews/ListaElementosView';
 import FormularioAlcantarillaView from './AlcantarillaModalViews/FormularioAlcantarillaView';
 import FormularioBadenView from './AlcantarillaModalViews/FormularioBadenView'; // Import Badenes Form
 import SubirExcelAlcantarillasView from './AlcantarillaModalViews/SubirExcelAlcantarillasView';
 import SubirImagenesAlcantarillasView from './AlcantarillaModalViews/SubirImagenesAlcantarillasView';
+
+
+
+
+
 
 const DataManagementModal = ({
   show,
@@ -318,8 +323,12 @@ const DataManagementModal = ({
       formData.append('entregableNum', entregableMatch[1]);
     }
     try {
-      // SIEMPRE usar el endpoint de alcantarillas para la subida global
-      const response = await axiosInstance.post(`/api/alcantarillas/upload-excel`, formData, {
+      let uploadEndpoint = '/api/alcantarillas/upload-excel';
+      if (type === 'badenes') uploadEndpoint = '/api/badenes/upload-excel';
+      if (type === 'puentes') uploadEndpoint = '/api/puentes/upload-excel';
+      if (type === 'muros') uploadEndpoint = '/api/muros/upload-excel';
+
+      const response = await axiosInstance.post(uploadEndpoint, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -546,6 +555,12 @@ const DataManagementModal = ({
             <label for="delete-badenes" style="display: block; margin: 5px 0;">
                 <input type="checkbox" id="delete-badenes" value="badenes" checked> Badenes
             </label>
+            <label for="delete-puentes" style="display: block; margin: 5px 0;">
+                <input type="checkbox" id="delete-puentes" value="puentes" checked> Puentes
+            </label>
+            <label for="delete-muros" style="display: block; margin: 5px 0;">
+                <input type="checkbox" id="delete-muros" value="muros" checked> Muros de Contención
+            </label>
             <p style="font-size: 0.8em; color: #888; margin-top: 15px;">Esta acción no se puede deshacer.</p>
         </div>
     `;
@@ -554,10 +569,14 @@ const DataManagementModal = ({
       async () => {
         const deleteAlcantarillas = document.getElementById('delete-alcantarillas').checked;
         const deleteBadenes = document.getElementById('delete-badenes').checked;
+        const deletePuentes = document.getElementById('delete-puentes').checked;
+        const deleteMuros = document.getElementById('delete-muros').checked;
         
         const typesToDelete = [];
         if (deleteAlcantarillas) typesToDelete.push('alcantarillas');
         if (deleteBadenes) typesToDelete.push('badenes');
+        if (deletePuentes) typesToDelete.push('puentes');
+        if (deleteMuros) typesToDelete.push('muros');
 
         if (typesToDelete.length === 0) {
             setUploadStatus({ message: 'No se seleccionó ningún tipo de dato para eliminar. Operación cancelada.', type: 'info' });
@@ -641,16 +660,23 @@ const DataManagementModal = ({
         }} onMouseOver={(e) => e.currentTarget.style.color = '#333'} onMouseOut={(e) => e.currentTarget.style.color = '#555'}>&times;</button>
 
         <h2 style={{ marginBottom: '20px', color: '#333', textAlign: 'center', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
-          {modalViewMode === 'edit' ? `Editar ${type === 'badenes' ? 'Badén' : 'Alcantarilla'}` : (modalViewMode === 'create' ? `Ingresar Nueva ${type === 'badenes' ? 'Badén' : 'Alcantarilla'}` : `Gestión de ${type === 'badenes' ? 'Badenes' : 'Alcantarillas'}`)}
+          {(() => {
+            const typeName = type === 'badenes' ? 'Badén' : (type === 'puentes' ? 'Puente' : (type === 'muros' ? 'Muro' : 'Alcantarilla'));
+            const typeNamePlural = type === 'badenes' ? 'Badenes' : (type === 'puentes' ? 'Puentes' : (type === 'muros' ? 'Muros' : 'Alcantarillas'));
+
+            if (modalViewMode === 'edit') return `Editar ${typeName}`;
+            if (modalViewMode === 'create') return `Ingresar Nueva ${typeName}`;
+            return `Gestión de ${typeNamePlural}`;
+          })()}
         </h2>
 
         {modalViewMode === 'list' && (
-          <ListaAlcantarillasView
-            allAlcantarillasData={allData}
+          <ListaElementosView
+            allData={allData}
             handleCreateNewClick={handleCreateNewClick}
             handleEditClick={handleEditClick}
             setModalViewMode={setModalViewMode}
-            setUploadStatus={setUploadStatus} // Not strictly needed here, but passed for consistency if sub-component changes
+            type={type} // Pass type to the generic view
           />
         )}
 
@@ -677,19 +703,19 @@ const DataManagementModal = ({
         )}
 
         {modalViewMode === 'upload_excel' && (
-            <SubirExcelAlcantarillasView
-              utmZone={utmZone}
-              setUtmZone={setUtmZone}
-              handleFileChange={handleFileChange}
-              handleProcessExcel={handleProcessExcel}
-              handleDeleteExcelData={handleDeleteExcelData}
-              uploadStatus={uploadStatus}
-              setModalViewMode={setModalViewMode}
-              setUploadStatus={setUploadStatus}
-              filesToUpload={filesToUpload}
-              existingExcelFile={excelFileInfo}
-              handleDownloadExcel={handleDownloadExcel}
-            />
+          <SubirExcelAlcantarillasView
+            utmZone={utmZone}
+            setUtmZone={setUtmZone}
+            handleFileChange={handleFileChange}
+            handleProcessExcel={handleProcessExcel}
+            handleDeleteExcelData={handleDeleteExcelData}
+            uploadStatus={uploadStatus}
+            setModalViewMode={setModalViewMode}
+            setUploadStatus={setUploadStatus}
+            filesToUpload={filesToUpload}
+            existingExcelFile={excelFileInfo}
+            handleDownloadExcel={handleDownloadExcel}
+          />
         )}
 
         {modalViewMode === 'upload_graphics_excel' && (
@@ -715,6 +741,8 @@ const DataManagementModal = ({
             setGraphicsImages={setGraphicsImages}
           />
         )}
+
+
 
         {isPreviewModalOpen && (
           <div style={{

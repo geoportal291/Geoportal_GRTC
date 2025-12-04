@@ -126,13 +126,28 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
         // Usamos la misma sectionKey que calculamos arriba
         fieldName = `${sectionKey}.${rowId}.${cellKey}`;
       }
+
+      // --- FIX: Dual-path value retrieval ---
+      // First, try to get the value from the standard nested path.
+      const nestedValue = getNested(data, fieldName, undefined);
+      
+      // As a fallback for imported data, construct and check a flat key (e.g., "retenido_n4").
+      // This is necessary because imported data has a different, flat structure.
+      const flatKey = `${cellKey}_${rowId}`;
+      const flatValue = getNested(data, flatKey, undefined);
+
+      // Prioritize the nested value, but use the flat value if the nested one isn't found.
+      // This allows the component to read the imported data. When the user edits the field,
+      // handleInputChange will save it to the nested path, which will then take precedence.
+      const finalValue = nestedValue !== undefined ? nestedValue : (flatValue !== undefined ? flatValue : '');
+
       return (
         <input
           type={'number'}
           step="0.01"
           className="form-control form-control-sm numeric-input"
           name={fieldName}
-          value={getNested(data, fieldName, '')}
+          value={finalValue}
           onChange={onInputChange}
         />
       );

@@ -88,7 +88,7 @@ export default function DetalleEnsayo() {
       try {
         setLoading(true);
         const headers = getAuthHeaders();
-        const response = await axios.get(`${API_URL}/api/ensayos/details/${ensayoId}`, { headers });
+        const response = await axios.get(`${API_URL}/api/ensayos/details/${ensayoId}?_=${new Date().getTime()}`, { headers });
         const data = response.data;
 
         if (!data) throw new Error('Ensayo no encontrado');

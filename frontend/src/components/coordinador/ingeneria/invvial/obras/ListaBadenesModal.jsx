@@ -45,14 +45,21 @@ const ListaBadenesModal = ({ show, onClose, badenesData, route, graphicsImages, 
 
         // Filter images based on the selected baden's photo panel code
         if (baden && baden.panel_fotografico_codigo && graphicsImages) {
-            const code = baden.panel_fotografico_codigo;
+            const code = String(baden.panel_fotografico_codigo); // Ensure code is a string
             const parts = code.split(' - ');
             const rangePart = parts[0];
             const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
-            const [startStr, endStr] = rangePart.split('-');
-            const start = parseInt(startStr, 10);
-            const end = parseInt(endStr, 10);
+            let start, end;
+
+            if (rangePart.includes('-')) {
+                const [startStr, endStr] = rangePart.split('-');
+                start = parseInt(startStr, 10);
+                end = parseInt(endStr, 10);
+            } else {
+                start = parseInt(rangePart, 10);
+                end = start; // Treat single number as a range of one
+            }
 
             if (!isNaN(start) && !isNaN(end)) {
                 const expectedNames = [];

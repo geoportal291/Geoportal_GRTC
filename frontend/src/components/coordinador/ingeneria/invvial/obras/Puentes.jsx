@@ -4,7 +4,7 @@ import { CSSTransition } from 'react-transition-group';
 import './Alcantarillas.css'; // Reusing CSS
 import Geoite from '../map/geoite';
 import '../map/geoite.css';
-import ListaBadenesModal from './ListaBadenesModal';
+import ListaPuentesModal from './ListaPuentesModal';
 import ExportarMapaModal from './ExportarMapaModal';
 import axiosInstance from '../../../../../api/axios';
 import { saveAs } from 'file-saver';
@@ -25,7 +25,7 @@ const tramoData = {
     }
 };
 
-const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, showModal }) => {
+const Puentes = ({ onEditElementSelect, puentesData, graphicsImages, canUpload, showModal }) => {
 
     const [highlightedTramoId, setHighlightedTramoId] = useState('TRAMO 1');
     const [kmlRoute, setKmlRoute] = useState([]); // Estado para la ruta del KML
@@ -33,9 +33,9 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
     const [isInfoVisible, setIsInfoVisible] = useState(true);
     const [isGeneralInfoVisible, setIsGeneralInfoVisible] = useState(true); // Nuevo estado para el panel de información general
     const [isElementVisible, setIsElementVisible] = useState({}); // Estado para el acordeón de cada elemento
-    const [selectedBaden, setSelectedBaden] = useState(null); // Nuevo estado para el baden seleccionado
-    const [badenImages, setBadenImages] = useState([]); // NEW: State for filtered images
-    const [badenesWithImages, setBadenesWithImages] = useState([]); // NEW: State to hold badenes with their images
+    const [selectedPuente, setSelectedPuente] = useState(null); // Nuevo estado para el puente seleccionado
+    const [puenteImages, setPuenteImages] = useState([]); // NEW: State for filtered images
+    const [puentesWithImages, setPuentesWithImages] = useState([]); // NEW: State to hold puentes with their images
     const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
     const [previewImageUrl, setPreviewImageUrl] = useState('');
     const [showListModal, setShowListModal] = useState(false);
@@ -43,14 +43,14 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
     const generalInfoRef = useRef(null); // Nueva referencia para el panel de información general
 
     useEffect(() => {
-        if (selectedBaden && selectedBaden.panel_fotografico_codigo && graphicsImages) {
-            const code = String(selectedBaden.panel_fotografico_codigo); // Ensure code is a string
+        if (selectedPuente && selectedPuente.panel_fotografico_codigo && graphicsImages) {
+            const code = String(selectedPuente.panel_fotografico_codigo); // Ensure code is a string
             const parts = code.split(' - ');
             const rangePart = parts[0];
             const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
             let start, end;
-            
+
             if (rangePart.includes('-')) {
                 const [startStr, endStr] = rangePart.split('-');
                 start = parseInt(startStr, 10);
@@ -70,19 +70,19 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                     const imgNameWithoutExt = img.index.split('.')[0];
                     return expectedNames.includes(imgNameWithoutExt);
                 });
-                setBadenImages(filtered);
+                setPuenteImages(filtered);
             } else {
-                setBadenImages([]);
+                setPuenteImages([]);
             }
         } else {
-            setBadenImages([]);
+            setPuenteImages([]);
         }
-    }, [selectedBaden, graphicsImages]);
+    }, [selectedPuente, graphicsImages]);
 
     useEffect(() => {
-        if (badenesData.length > 0 && graphicsImages.length > 0) {
-            const processedBadenes = badenesData.map(baden => {
-                const code = baden.panel_fotografico_codigo ? String(baden.panel_fotografico_codigo) : null;
+        if (puentesData.length > 0 && graphicsImages.length > 0) {
+            const processedPuentes = puentesData.map(puente => {
+                const code = puente.panel_fotografico_codigo ? String(puente.panel_fotografico_codigo) : null;
                 let imageUrls = [];
 
                 if (code) {
@@ -117,13 +117,13 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                         }
                     }
                 }
-                return { ...baden, imageUrls: imageUrls, type: 'baden' };
+                return { ...puente, imageUrls: imageUrls, type: 'puente' };
             });
-            setBadenesWithImages(processedBadenes);
+            setPuentesWithImages(processedPuentes);
         } else {
-            setBadenesWithImages(badenesData.map(baden => ({ ...baden, imageUrls: [], type: 'baden' })));
+            setPuentesWithImages(puentesData.map(puente => ({ ...puente, imageUrls: [], type: 'puente' })));
         }
-    }, [badenesData, graphicsImages]);
+    }, [puentesData, graphicsImages]);
 
     useEffect(() => {
         if (highlightedTramoId && tramoData[highlightedTramoId]) {
@@ -150,10 +150,10 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
         }));
     };
 
-    const [initialSelectedBaden, setInitialSelectedBaden] = useState(null); // Nuevo estado para pasar al modal
+    const [initialSelectedPuente, setInitialSelectedPuente] = useState(null); // Nuevo estado para pasar al modal
 
-    const handleBadenClick = useCallback((baden) => {
-        setSelectedBaden(baden);
+    const handlePuenteClick = useCallback((puente) => {
+        setSelectedPuente(puente);
         setIsInfoVisible(true); // Asegurarse de que el panel de información esté visible
         Swal.fire({
             toast: true,
@@ -161,14 +161,14 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
             showConfirmButton: false,
             timer: 3000,
             timerProgressBar: true,
-            title: 'Badén Seleccionado',
-            text: `Se seleccionó el badén: ${baden.codigo || baden.id_baden}`,
+            title: 'Puente Seleccionado',
+            text: `Se seleccionó el puente: ${puente.nombre || puente.id_puente}`,
             icon: 'success'
         });
     }, []);
 
-    const handleShowDetails = useCallback((baden) => {
-        setInitialSelectedBaden(baden);
+    const handleShowDetails = useCallback((puente) => {
+        setInitialSelectedPuente(puente);
         setShowListModal(true);
     }, []);
 
@@ -181,18 +181,18 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
             return;
         }
 
-        // 1. Convert selected items (Badenes) to GeoJSON Point features
+        // 1. Convert selected items (Puentes) to GeoJSON Point features
         const pointFeatures = selectedItems.map(item => {
             // Create HTML table for description
             const descriptionTable = `
                 <table border="1" style="border-collapse: collapse; width: 100%;">
-                    <tr><th style="background-color: #f2f2f2; padding: 5px;">Progresiva</th><td style="padding: 5px;">${item.prog_ini || '-'}</td></tr>
-                    <tr><th style="background-color: #f2f2f2; padding: 5px;">Código</th><td style="padding: 5px;">${item.codigo || item.id_baden}</td></tr>
+                    <tr><th style="background-color: #f2f2f2; padding: 5px;">Progresiva</th><td style="padding: 5px;">${item.progresiva || '-'}</td></tr>
+                    <tr><th style="background-color: #f2f2f2; padding: 5px;">Nombre</th><td style="padding: 5px;">${item.nombre || item.id_puente}</td></tr>
                     <tr><th style="background-color: #f2f2f2; padding: 5px;">Clase</th><td style="padding: 5px;">${item.clase || '-'}</td></tr>
                     <tr><th style="background-color: #f2f2f2; padding: 5px;">Tipo</th><td style="padding: 5px;">${item.tipo || '-'}</td></tr>
                     <tr><th style="background-color: #f2f2f2; padding: 5px;">Estado</th><td style="padding: 5px;">${item.estado || '-'}</td></tr>
-                    <tr><th style="background-color: #f2f2f2; padding: 5px;">Longitud</th><td style="padding: 5px;">${item.longitud_baden || '-'}</td></tr>
-                    <tr><th style="background-color: #f2f2f2; padding: 5px;">Diámetro/Sección</th><td style="padding: 5px;">${item.diametro_lado || '-'}</td></tr>
+                    <tr><th style="background-color: #f2f2f2; padding: 5px;">Longitud</th><td style="padding: 5px;">${item.longitud_puente || '-'}</td></tr>
+                    <tr><th style="background-color: #f2f2f2; padding: 5px;">Ancho</th><td style="padding: 5px;">${item.ancho || '-'}</td></tr>
                     <tr><th style="background-color: #f2f2f2; padding: 5px;">Coordenadas</th><td style="padding: 5px;">${item.latitud.toFixed(6)}, ${item.longitud.toFixed(6)}</td></tr>
                     <tr><th style="background-color: #f2f2f2; padding: 5px;">Observaciones</th><td style="padding: 5px;">${item.observaciones || '-'}</td></tr>
                 </table>
@@ -201,7 +201,7 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
             return {
                 type: 'Feature',
                 properties: {
-                    name: item.codigo || `Badén ${item.id_baden}`,
+                    name: item.nombre || `Puente ${item.id_puente}`,
                     description: descriptionTable, // Use HTML table for KML description
                     ...item // Keep raw properties for Shapefile attributes
                 },
@@ -246,7 +246,7 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
             });
 
             const extension = format === 'kml' ? 'kml' : 'zip';
-            saveAs(response.data, `badenes_export.${extension}`);
+            saveAs(response.data, `puentes_export.${extension}`);
 
             Swal.close();
             Swal.fire('Éxito', 'Exportación completada correctamente.', 'success');
@@ -262,7 +262,7 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
         <div className="alcantarillas-tab-wrapper" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', gap: '20px', flex: 1, minHeight: 0, height: '100%' }}>        {/* Columna del Mapa - Izquierda */}
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
-                    <Geoite onTramoSelect={handleTramoSelectFromMap} highlightedTramoId={highlightedTramoId} alcantarillasData={badenesWithImages} onAlcantarillaClick={handleBadenClick} selectedAlcantarilla={selectedBaden} onRouteLoaded={setKmlRoute} onShowDetails={handleShowDetails} />
+                    <Geoite onTramoSelect={handleTramoSelectFromMap} highlightedTramoId={highlightedTramoId} alcantarillasData={puentesWithImages} onAlcantarillaClick={handlePuenteClick} selectedAlcantarilla={selectedPuente} onRouteLoaded={setKmlRoute} onShowDetails={handleShowDetails} />
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                         {canUpload && (
                             <div onClick={() => { if (showModal) showModal(true); }} style={{ display: 'inline-block' }}>
@@ -270,7 +270,7 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                             </div>
                         )}
                         <div onClick={() => setShowListModal(true)} style={{ display: 'inline-block' }}>
-                            <button style={{ backgroundColor: '#007bff', color: 'white', padding: '3px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer', width: 'fit-content' }}>Mostrar Badenes</button>
+                            <button style={{ backgroundColor: '#007bff', color: 'white', padding: '3px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer', width: 'fit-content' }}>Mostrar Puentes</button>
                         </div>
                         <div onClick={() => setShowExportModal(true)} style={{ display: 'inline-block' }}>
                             <button style={{ backgroundColor: '#6c757d', color: 'white', padding: '3px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer', width: 'fit-content' }}>Exportar Mapa</button>
@@ -369,7 +369,7 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                     {/* Panel de InformaciÃ³n */}
                     <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px' }}>
                         <h3 onClick={() => setIsInfoVisible(!isInfoVisible)} style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>Información del Badén</span>
+                            <span>Información del Puente</span>
                             <i className={`fas fa-chevron-down accordion-icon ${isInfoVisible ? '' : 'collapsed'}`}></i>
                         </h3>
                         <CSSTransition
@@ -380,9 +380,9 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                             unmountOnExit
                         >
                             <div ref={infoRef}>
-                                {selectedBaden ? (
+                                {selectedPuente ? (
                                     <div>
-                                        <h4 style={{ marginTop: 0, marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>Detalles del Badén</h4>
+                                        <h4 style={{ marginTop: 0, marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>Detalles del Puente</h4>
                                         <div>
                                             <div style={{
                                                 border: '1px solid #e2e8f0',
@@ -392,18 +392,18 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                                                 overflow: 'hidden'
                                             }}>
                                                 <div style={{ padding: '12px' }}>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Progresiva:</strong> {selectedBaden.progresiva || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>N de badén:</strong> {selectedBaden.codigo || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Clase:</strong> {selectedBaden.clase || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Tipo:</strong> {selectedBaden.tipo || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Estado:</strong> {selectedBaden.estado || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Longitud:</strong> {selectedBaden.longitud_baden || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Diámetro / Sección:</strong> {selectedBaden.diametro_lado || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Coordenadas:</strong> {selectedBaden.latitud.toFixed(6)}, {selectedBaden.longitud.toFixed(6)}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Observaciones:</strong> {selectedBaden.observaciones || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Código de Panel Fotográfico:</strong> {selectedBaden.panel_fotografico_codigo || 'datos sin encontrar'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Progresiva:</strong> {selectedPuente.progresiva || 'datos sin encontrar'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Nombre:</strong> {selectedPuente.nombre || 'datos sin encontrar'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Clase:</strong> {selectedPuente.clase || 'datos sin encontrar'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Tipo:</strong> {selectedPuente.tipo || 'datos sin encontrar'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Estado:</strong> {selectedPuente.estado || 'datos sin encontrar'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Longitud:</strong> {selectedPuente.longitud_puente || 'datos sin encontrar'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Ancho:</strong> {selectedPuente.ancho || 'datos sin encontrar'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Coordenadas:</strong> {selectedPuente.latitud.toFixed(6)}, {selectedPuente.longitud.toFixed(6)}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Observaciones:</strong> {selectedPuente.observaciones || 'datos sin encontrar'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Código de Panel Fotográfico:</strong> {selectedPuente.panel_fotografico_codigo || 'datos sin encontrar'}</p>
                                                     <button
-                                                        onClick={() => handleEditElement(selectedBaden)}
+                                                        onClick={() => handleEditElement(selectedPuente)}
                                                         style={{
                                                             marginTop: '10px',
                                                             padding: '8px 12px',
@@ -420,11 +420,11 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                                                 </div>
                                             </div>
                                         </div>
-                                        {badenImages.length > 0 && (
+                                        {puenteImages.length > 0 && (
                                             <div style={{ marginTop: '20px' }}>
                                                 <h5 style={{ marginBottom: '10px' }}>Imágenes de Panel Fotográfico</h5>
                                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                                                    {badenImages.map(img => (
+                                                    {puenteImages.map(img => (
                                                         <div key={img.id} style={{ border: '1px solid #ddd', padding: '5px', borderRadius: '5px', textAlign: 'center' }}>
                                                             <img
                                                                 src={`${img.url}?v=${img.id}`}
@@ -440,7 +440,7 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                                         )}
                                     </div>
                                 ) : (
-                                    <p>Seleccione un badén en el mapa para ver sus detalles.</p>
+                                    <p>Seleccione un puente en el mapa para ver sus detalles.</p>
                                 )}
                             </div>
                         </CSSTransition>
@@ -479,23 +479,23 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                     }}>&times;</button>
                 </div>
             )}
-            <ListaBadenesModal
+            <ListaPuentesModal
                 show={showListModal}
                 onClose={() => setShowListModal(false)}
-                badenesData={badenesWithImages} // Usar badenesWithImages para pasar también las URLs de las imágenes
+                puentesData={puentesWithImages} // Usar puentesWithImages para pasar también las URLs de las imágenes
                 route={kmlRoute} // Pasar la ruta del KML al modal de lista
                 graphicsImages={graphicsImages} // Pasar la lista completa de imágenes gráficas
-                initialSelectedBaden={initialSelectedBaden} // Pasar el baden seleccionada inicialmente
+                initialSelectedPuente={initialSelectedPuente} // Pasar el puente seleccionada inicialmente
             />
             <ExportarMapaModal
                 show={showExportModal}
                 onClose={() => setShowExportModal(false)}
-                data={badenesData}
-                type="badenes"
+                data={puentesData}
+                type="puentes"
                 onExport={handleExport}
             />
         </div>
     );
 };
 
-export default Badenes;
+export default Puentes;

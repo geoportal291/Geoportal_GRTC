@@ -524,7 +524,6 @@ const getEnsayosByTramoId = async (tramoId) => {
 
 
 const exportEnsayosToExcelByTramo = async (tramoId) => {
-    console.info('[EXPORT TRAMO DEBUG] Entrando a exportEnsayosToExcelByTramo');
     try {
         const tramoResult = await db.query('SELECT id, nombre, codigo FROM progresivas WHERE id = $1', [tramoId]);
         if (tramoResult.rows.length === 0) throw new Error('Tramo no encontrado.');
@@ -552,6 +551,29 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
             { header: 'Progresiva', key: 'progresiva_formateada', width: 15 },
             { header: 'Estrato', key: 'estrato_orden', width: 10 }
         ];
+
+        const ExcelJS = require('exceljs');
+        const workbook = new ExcelJS.Workbook();
+        
+        const formatProgresivaForExport = (codigo) => {
+            if (!codigo || !codigo.includes('-')) return codigo;
+            const parts = codigo.split('-');
+            const numberPart = parts[1];
+            return `0+${numberPart}`;
+        };
+
+        const ensayosAgrupados = ensayosResult.rows.reduce((acc, ensayo) => {
+            const key = normalizeString(ensayo.config_key || ensayo.tipo_ensayo_descripcion);
+            if (!acc[key]) {
+                acc[key] = {
+                    ensayos: [],
+                    config: ensayo.config_export_excel,
+                    description: ensayo.tipo_ensayo_descripcion
+                };
+            }
+            acc[key].ensayos.push(ensayo);
+            return acc;
+        }, {});
 
         // START OF MODIFIED LOGIC TO HANDLE MULTIPLE SHEET CONFIGS
         for (const normalizedKey in ensayosAgrupados) {
@@ -637,7 +659,6 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
                         currentRowIndex += hasSubheaders ? 2 : 1;
 
                         grupo.ensayos.forEach(ensayo => {
-                            console.info(`[EXPORT TRAMO DEBUG] Procesando Ensayo ID: ${ensayo.id}. Datos Formulario:`, JSON.stringify(ensayo.datos_formulario, null, 2));
                             const newRow = worksheet.getRow(currentRowIndex++);
                             
                             headerKeys.forEach(({ key, col }) => {
@@ -728,7 +749,6 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
 };
 
 const exportEnsayosToExcelByTipo = async (tramoId, tipoEnsayoId) => {
-    console.info('[EXPORT DEBUG] Entrando a exportEnsayosToExcelByTipo');
     try {
         const tramoResult = await db.query('SELECT id, nombre, codigo FROM progresivas WHERE id = $1', [tramoId]);
         if (tramoResult.rows.length === 0) throw new Error('Tramo no encontrado.');
@@ -850,7 +870,6 @@ const exportEnsayosToExcelByTipo = async (tramoId, tipoEnsayoId) => {
                     currentRowIndex += hasSubheaders ? 2 : 1;
 
                                     ensayosResult.rows.forEach(ensayo => {
-                                        console.info(`[EXPORT DEBUG] Procesando Ensayo ID: ${ensayo.id}. Datos Formulario:`, JSON.stringify(ensayo.datos_formulario, null, 2));
                                         const newRow = worksheet.getRow(currentRowIndex++);
                                         
                                         headerKeys.forEach(({ key, col }) => {
@@ -960,26 +979,50 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
         let newEnsayoCounter = 0; // Contador para códigos únicos
 
         // --- Fase 0: Validación de Hojas y Cabeceras ---
-        const tipoEnsayoResult = await client.query('SELECT id, config_key, config_export_excel FROM tipo_ensayo');
-        const tipoEnsayoMap = new Map(tipoEnsayoResult.rows.map(row => {
-            const config = typeof row.config_export_excel === 'string' 
-                ? JSON.parse(row.config_export_excel || '{}') 
-                : (row.config_export_excel || {});
-            return [normalizeString(row.config_key), { id: row.id, config }];
-        }));
+        // 1. Build a map from every possible sheet name to its parent assay type info
+        const tipoEnsayoResult = await client.query('SELECT id, descripcion, config_key, config_export_excel FROM tipo_ensayo');
+        const sheetNameToAssayTypeMap = new Map();
 
-        const requiredHeaders = ['codigoensayo', 'progresiva', 'estrato'];
+        tipoEnsayoResult.rows.forEach(tipoEnsayo => {
+            if (!tipoEnsayo.config_export_excel) return;
+            
+            // Ensure config is an array to handle both single and multi-sheet configs
+            const configs = Array.isArray(tipoEnsayo.config_export_excel) 
+                ? tipoEnsayo.config_export_excel 
+                : [tipoEnsayo.config_export_excel];
+            
+            configs.forEach(config => {
+                if (config.sheetName) {
+                    const assayTypeInfo = {
+                        id: tipoEnsayo.id,
+                        config_key: tipoEnsayo.config_key,
+                        description: tipoEnsayo.descripcion,
+                        // Pass the specific config for this sheet, which contains the correct headers
+                        configForSheet: config 
+                    };
+                    sheetNameToAssayTypeMap.set(normalizeString(config.sheetName), assayTypeInfo);
+                }
+            });
+        });
+
+        const requiredHeaders = ['codigoensayo', 'fechadecreacion', 'progresiva', 'estrato'];
         const sheetsData = [];
 
+        // 2. Validate sheets from the uploaded workbook against the map
         for (const sheetName of workbook.SheetNames) {
             const normalizedSheetName = normalizeString(sheetName);
 
-            if (tipoEnsayoKey && normalizedSheetName !== tipoEnsayoKey) {
-                continue;
+            if (tipoEnsayoKey) {
+                // If importing a single type, only process sheets belonging to it
+                const tipoEnsayoInfo = sheetNameToAssayTypeMap.get(normalizedSheetName);
+                if (!tipoEnsayoInfo || normalizeString(tipoEnsayoInfo.config_key) !== tipoEnsayoKey) {
+                    continue;
+                }
             }
 
-            if (!tipoEnsayoMap.has(normalizedSheetName)) {
-                validationErrors.push({ sheet: sheetName, error: `La hoja '${sheetName}' no corresponde a un tipo de ensayo válido.` });
+            if (!sheetNameToAssayTypeMap.has(normalizedSheetName)) {
+                // This sheet is not defined in any assay's export config
+                validationErrors.push({ sheet: sheetName, error: `La hoja '${sheetName}' no corresponde a un tipo de ensayo válido o su configuración de exportación no está definida.` });
                 continue;
             }
 
@@ -987,8 +1030,9 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
             const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
             if (jsonData.length < 1) continue;
 
-            const tipoEnsayoInfo = tipoEnsayoMap.get(normalizedSheetName);
-            const config = tipoEnsayoInfo.config || {};
+            const tipoEnsayoInfo = sheetNameToAssayTypeMap.get(normalizedSheetName);
+            // The config is now specific to the sheet, passed from the map
+            const config = tipoEnsayoInfo.configForSheet || {};
             const hasSubheaders = config.tablas?.some(t => t.headers.some(h => h.subheaders));
 
             let headers, dataRows;
@@ -1004,9 +1048,11 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
 
             // Validate main headers (always in the first row)
             const mainHeaders = jsonData[0].map(h => normalizeHeader(h));
+            console.info(`[IMPORT DEBUG] Sheet: ${sheetName}, Normalized Main Headers: ${JSON.stringify(mainHeaders)}`);
             for (let i = 0; i < requiredHeaders.length; i++) {
                 if (mainHeaders[i] !== requiredHeaders[i]) {
-                    validationErrors.push({ sheet: sheetName, error: `La columna ${i + 1} debe ser '${requiredHeaders[i].toUpperCase()}' pero se encontró '${jsonData[0][i] || ''}'.` });
+                    // FIX: rowIndex is not defined in this scope. Provide a static row number for the header.
+                    validationErrors.push({ sheet: sheetName, row: 1, error: `La columna ${i + 1} debe ser '${requiredHeaders[i].toUpperCase()}' pero se encontró '${jsonData[0][i] || ''}'.` });
                 }
             }
 
@@ -1021,7 +1067,7 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
         const progresivasQuery = await client.query('SELECT id, codigo FROM progresivas WHERE parent_id = $1', [tramoId]);
         const progresivaDbMap = new Map(progresivasQuery.rows.map(p => [normalizeProgresivaForLookup(p.codigo), p.id]));
 
-        const estratosQuery = await client.query('SELECT id, orden, progresiva_id FROM progresiva_perfil_estratos WHERE progresiva_id = ANY($1::int[])', [progresivasQuery.rows.map(p => p.id)]);
+        const estratosQuery = await client.query("SELECT id, orden, parent_id AS progresiva_id FROM estratos WHERE parent_type = 'progresiva' AND parent_id = ANY($1::int[])", [progresivasQuery.rows.map(p => p.id)]);
         const estratoDbMap = new Map(estratosQuery.rows.map(e => [`${e.progresiva_id}-${e.orden}`, e.id]));
 
         const ensayosQuery = await client.query('SELECT id, codigo_ensayo FROM ensayos WHERE proyecto_id = $1', [proyectoId]);
@@ -1034,10 +1080,11 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
         let lastEstrato = null;
 
         for (const sheet of sheetsData) {
-            const config = sheet.tipoEnsayo.config || {};
+            const config = sheet.tipoEnsayo.configForSheet || {};
             const allConfigHeaders = config.tablas?.flatMap(t => t.headers.flatMap(h => h.subheaders ? h.subheaders : [h])) || config.headers || [];
             // Usar un array ordenado de claves en lugar de un mapa para manejar cabeceras duplicadas
             const keyOrder = allConfigHeaders.map(h => h.key);
+            console.info(`[IMPORT DEBUG] Sheet: ${sheet.sheetName}, Key Order: ${JSON.stringify(keyOrder)}`);
 
             for (const [rowIndex, row] of sheet.rows.entries()) {
                 const isRowEmpty = row.every(cell => cell === null || cell === undefined || String(cell).trim() === '');
@@ -1050,8 +1097,9 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
                 summary.ensayosAProcesar++;
                 
                 let codigoEnsayo = normalizeCode(row[0]);
-                let progresivaValue = row[1] ? String(row[1]) : lastProgresiva;
-                let estratoValue = row[2] ? String(row[2]) : lastEstrato;
+                // Corrected indices: [0]Code, [1]Date, [2]Progresiva, [3]Estrato
+                let progresivaValue = row[2] ? String(row[2]) : lastProgresiva;
+                let estratoValue = row[3] ? String(row[3]) : lastEstrato;
 
                 if (progresivaValue) lastProgresiva = progresivaValue;
                 if (estratoValue) lastEstrato = estratoValue;
@@ -1078,10 +1126,10 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
 
                 const datos_formulario = {};
                 row.forEach((cellValue, index) => {
-                    // Omitir las 3 primeras columnas estáticas (Código, Progresiva, Estrato)
-                    if (index < 3) return;
-                    // El índice de la celda menos 3 corresponde al índice en keyOrder
-                    const dataKey = keyOrder[index - 3];
+                    // Omitir las 4 primeras columnas estáticas (Código, Fecha, Progresiva, Estrato)
+                    if (index < 4) return;
+                    // El índice de la celda menos 4 corresponde al índice en keyOrder
+                    const dataKey = keyOrder[index - 4];
                     if (dataKey) {
                         datos_formulario[dataKey] = cellValue;
                     }
