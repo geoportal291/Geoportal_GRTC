@@ -15,19 +15,29 @@ function get(obj, path, defaultValue = 0) {
   return result === undefined || result === obj ? defaultValue : result;
 }
 
+/**
+ * ¡NUEVA FUNCIÓN! CON LOGS DE DEPURACIÓN DETALLADOS.
+ */
 function get_nested_value(obj, path, defaultValue = 0) {
-    if (typeof path !== 'string') {
+    if (typeof path !== 'string' || !path) {
+        console.warn(`[get_nested_value] Ruta inválida o vacía. Devolviendo valor por defecto.`);
         return defaultValue;
     }
     const keys = path.split('.');
     let current = obj;
     for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
         if (current === null || current === undefined) {
+            console.warn(`[get_nested_value] Fallo en la ruta en la clave '${key}'. El objeto padre es nulo o indefinido. Path completo: "${path}"`);
             return defaultValue;
         }
-        current = current[keys[i]];
+        current = current[key];
     }
-    return current === undefined || current === null ? defaultValue : current;
+    
+    if (current === undefined || current === null) {
+        return defaultValue;
+    }
+    return current;
 }
 
 
@@ -268,7 +278,6 @@ function _processSteps(steps, context) {
 }
 
 export function calcularResultados(calculationConfig, inputData) {
-  console.log("--- CALCULATOR VERSION 10.0 ---"); // DEBUG LINE
   if (!calculationConfig || !calculationConfig.steps) {
     console.error("Configuración de cálculo inválida o ausente.");
     return { error: "Configuración de cálculo inválida." };
@@ -302,8 +311,6 @@ export function calcularResultados(calculationConfig, inputData) {
   }
 
   _processSteps(calculationConfig.steps, context);
-
-  console.log('[DEBUG calcularResultados] Final results:', context.results);
 
   return context.results;
 }

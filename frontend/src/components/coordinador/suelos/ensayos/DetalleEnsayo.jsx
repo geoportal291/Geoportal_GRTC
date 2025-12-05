@@ -94,7 +94,45 @@ export default function DetalleEnsayo() {
         if (!data) throw new Error('Ensayo no encontrado');
 
         setEnsayoDetails(data);
-        setFormData(data.datos_ensayo || {});
+        let formDataObject = data.datos_ensayo || {};
+        
+        // 1. Parsear si es una cadena de texto
+        if (typeof formDataObject === 'string') {
+          try {
+            formDataObject = JSON.parse(formDataObject);
+          } catch (e) {
+            console.error("Error al parsear datos_ensayo:", e);
+            alertify.error("Error: El formato de los datos del ensayo es inválido.");
+            formDataObject = {};
+          }
+        }
+
+        // 2. Detectar si el objeto es plano (contiene claves con puntos) y transformar a anidado
+        const isFlat = Object.keys(formDataObject).some(k => k.includes('.'));
+        
+        if (isFlat) {
+          const nestedObject = {};
+          const set = (obj, path, value) => {
+            const keys = path.split('.');
+            let current = obj;
+            for (let i = 0; i < keys.length - 1; i++) {
+              if (current[keys[i]] === undefined || current[keys[i]] === null) {
+                current[keys[i]] = {};
+              }
+              current = current[keys[i]];
+            }
+            current[keys[keys.length - 1]] = value;
+          };
+        
+          for (const key in formDataObject) {
+            if (Object.prototype.hasOwnProperty.call(formDataObject, key)) {
+              set(nestedObject, key, formDataObject[key]);
+            }
+          }
+          formDataObject = nestedObject;
+        }
+
+        setFormData(formDataObject);
 
         if (data.parent_type === 'progresiva') {
             setInfoGeneral({
@@ -174,9 +212,7 @@ export default function DetalleEnsayo() {
       const calculationContext = {
         formData: cleanFormData, // Pass the clean data
         tableConfig: tableConfig
-      };
-
-      console.log('[DEBUG] Pre-cálculo - SANITIZED Context:', calculationContext);
+      };  
 
       const resultadosCalculados = calcularResultados(dynamicConfig, calculationContext);
       setResultados(resultadosCalculados);
@@ -190,7 +226,6 @@ export default function DetalleEnsayo() {
   // === ACTUALIZAR DATOS DEL FORMULARIO ===
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
-    console.log('[DEBUG] InputChange:', { name, value });
     const val = type === 'number' ? parseFloat(value) || 0 : value;
 
     const set = (obj, path, value) => {
@@ -231,22 +266,14 @@ export default function DetalleEnsayo() {
       }
 
       // --- ¡LA CORRECCIÓN FINAL ESTÁ AQUÍ! ---
-      // Antes de guardar, eliminamos el objeto anidado corrupto si existe.
-      // Esto rompe el bucle de corrupción de datos.
-      if (finalFormData.datos_ensayo) {
-        delete finalFormData.datos_ensayo;
-      }
-      // También eliminamos los restos de las claves con errores de tipeo
-      if (finalFormData.lmite_lquido) {
-        delete finalFormData.lmite_lquido;
-      }
-      if (finalFormData.lmite_plstico) {
-        delete finalFormData.lmite_plstico;
-      }
-      // ------------------------------------
+      // Limpiamos el formData para asegurar que solo guardamos la estructura correcta.
+      const cleanPayload = {
+        general_fields: finalFormData.general_fields || {},
+        tables: finalFormData.tables || {}
+      };
 
       const payload = {
-        datos_ensayo: finalFormData,
+        datos_ensayo: cleanPayload,
         nombre_ensayo: ensayoDetails?.nombre_ensayo,
         tipo_ensayo_id: tipoEnsayoId,
         estrato_id: ensayoDetails?.estrato_id

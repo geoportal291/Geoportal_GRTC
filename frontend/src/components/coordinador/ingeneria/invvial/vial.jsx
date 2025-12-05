@@ -430,6 +430,7 @@ const Vialds = ({ isNavbarExpanded }) => {
         {isAlcantarillasGeneral && (
           <Alcantarillas
             segmentedRoute={segmentedRoute}
+            canUpload={canUpload}
             onEditElementSelect={handleEditElementSelect}
             alcantarillasData={alcantarillasData}
             graphicsImages={graphicsImages}

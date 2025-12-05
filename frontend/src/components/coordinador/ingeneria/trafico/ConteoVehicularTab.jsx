@@ -43,7 +43,7 @@ const MapViewController = ({ cu104Route, setView, view }) => {
 };
 
 
-const ConteoVehicularTab = ({ 
+const ConteoVehicularTab = ({
   cu104Route,
   stationData,
   selectedStation,
@@ -123,10 +123,10 @@ const ConteoVehicularTab = ({
     alertify.confirm(
       'Eliminar Grupo de Imágenes',
       '¿Estás seguro de que quieres eliminar este grupo de imágenes?\nEsta acción eliminará todas las imágenes con la descripción "' + description + '" y fecha "' + formatDate(uploadDate) + '" para esta estación.',
-      async function() {
+      async function () {
         try {
           await axiosInstance.delete(`/api/trafico/delete-image-group`,
-           { data: { stationId, description, uploadDate } });
+            { data: { stationId, description, uploadDate } });
           refreshStationData();
           alertify.success('Grupo de imágenes eliminado con éxito.');
         } catch (error) {
@@ -134,7 +134,7 @@ const ConteoVehicularTab = ({
           alertify.error('Error al eliminar el grupo de imágenes.');
         }
       },
-      function() {
+      function () {
         alertify.error('Eliminación cancelada.');
       }
     );
@@ -144,10 +144,10 @@ const ConteoVehicularTab = ({
     alertify.confirm(
       'Eliminar Archivo',
       `¿Estás seguro de que quieres eliminar el archivo "${description || imageUrl.split('/').pop()}" subido el ${formatDate(uploadDate)}?`,
-      async function() {
+      async function () {
         try {
           await axiosInstance.delete(`/api/trafico/delete-image`,
-           { data: { stationId, imageUrl } });
+            { data: { stationId, imageUrl } });
           refreshStationData();
           alertify.success('Archivo eliminado con éxito.');
         } catch (error) {
@@ -155,7 +155,7 @@ const ConteoVehicularTab = ({
           alertify.error('Error al eliminar el archivo.');
         }
       },
-      function() {
+      function () {
         alertify.error('Eliminación cancelada.');
       }
     );
@@ -163,57 +163,57 @@ const ConteoVehicularTab = ({
 
   return (
     <div className="estacion-control-tab-wrapper">
-      <div style={{display: 'flex', minHeight: '600px', padding: '20px', gap: '20px', alignItems: 'stretch'}}>
+      <div style={{ display: 'flex', minHeight: '600px', padding: '20px', gap: '20px', alignItems: 'stretch' }}>
         {/* Mapa principal - a la izquierda */}
-        <div style={{flex: '3', display: 'flex', flexDirection: 'column'}}>
-          <div style={{height: '500px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden'}}>
+        <div style={{ flex: '3', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ height: '820px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
             <ErrorBoundary>
-              <MapContainer center={view.center} zoom={view.zoom} zoomControl={false} className="map-container-custom-controls" style={{height: '100%', width: '100%'}}>
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="&copy; OpenStreetMap contributors"
-              />
-              <MapViewController setView={setView} cu104Route={cu104Route} />
-              {showRoute && cu104Route && cu104Route.length > 0 && (
-                <Polyline
-                  positions={cu104Route.map(point => [point.lat, point.lng]).filter(p => p[0] !== undefined && p[1] !== undefined)}
-                  color="#e74c3c"
-                  weight={4}
-                  opacity={0.8}
+              <MapContainer center={view.center} zoom={view.zoom} zoomControl={false} className="map-container-custom-controls" style={{ height: '100%', width: '100%' }}>
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution="&copy; OpenStreetMap contributors"
                 />
-              )}
-               {showTraffic && Object.values(stationData).map((station) => {
-                // Add defensive check for station.info and its properties
-                if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined) {
-                  console.warn("Skipping marker for station due to missing lat/lng:", station);
-                  return null; // Don't render marker if lat or lng is missing
-                }
+                <MapViewController setView={setView} cu104Route={cu104Route} />
+                {showRoute && cu104Route && cu104Route.length > 0 && (
+                  <Polyline
+                    positions={cu104Route.map(point => [point.lat, point.lng]).filter(p => p[0] !== undefined && p[1] !== undefined)}
+                    color="#e74c3c"
+                    weight={4}
+                    opacity={0.8}
+                  />
+                )}
+                {showTraffic && Object.values(stationData).map((station) => {
+                  // Add defensive check for station.info and its properties
+                  if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined) {
+                    console.warn("Skipping marker for station due to missing lat/lng:", station);
+                    return null; // Don't render marker if lat or lng is missing
+                  }
 
-                const images = station.info.imagenes.filter(img => img.source_type === 'conteo_vehicular_image');
-                let randomImageUrl = null;
-                if (images && images.length > 0) {
-                  const randomIndex = Math.floor(Math.random() * images.length);
-                  randomImageUrl = images[randomIndex].image_url;
-                }
+                  const images = station.info.imagenes.filter(img => img.source_type === 'conteo_vehicular_image');
+                  let randomImageUrl = null;
+                  if (images && images.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * images.length);
+                    randomImageUrl = images[randomIndex].image_url;
+                  }
 
-                return (
-                  <Marker
-                    key={station.info.id}
-                    position={[station.info.lat, station.info.lng]}
-                    eventHandlers={{
-                      click: () => {
-                        handleStationSelect(station.info.id);
-                      },
-                      mouseover: (event) => {
-                        event.target.openPopup();
-                      },
-                      mouseout: (event) => {
-                        event.target.closePopup();
-                      },
-                    }}
-                    icon={divIcon({
-                      className: 'custom-station-icon',
-                      html: `<div style="
+                  return (
+                    <Marker
+                      key={station.info.id}
+                      position={[station.info.lat, station.info.lng]}
+                      eventHandlers={{
+                        click: () => {
+                          handleStationSelect(station.info.id);
+                        },
+                        mouseover: (event) => {
+                          event.target.openPopup();
+                        },
+                        mouseout: (event) => {
+                          event.target.closePopup();
+                        },
+                      }}
+                      icon={divIcon({
+                        className: 'custom-station-icon',
+                        html: `<div style="
                       background-color: #2ecc71;
                         border: 2px solid #27ae60;
                         border-radius: 50%;
@@ -227,39 +227,39 @@ const ConteoVehicularTab = ({
                         font-size: 12px;
                         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                       ">${station.info.id}</div>`,
-                      iconSize: [40, 40],
-                      iconAnchor: [20, 20],
-                      popupAnchor: [0, -20],
-                    })}
-                  >
-                                        <Popup>
-                      <div style={{ maxWidth: '250px', fontFamily: 'Arial, sans-serif' }}>
-                        <strong style={{ fontSize: '14px', color: '#333' }}>{station.info.nombre}</strong>
-                        {randomImageUrl && (
-                          <img 
-                            src={randomImageUrl} 
-                            alt={`Foto de ${station.info.nombre}`}
-                            style={{ 
-                              width: '100%', 
-                              height: '150px',
-                              objectFit: 'cover',
-                              marginTop: '8px', 
-                              borderRadius: '4px' 
-                            }} 
-                          />
-                        )}
-                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#555' }}>
-                          <strong>Ubicación:</strong> {station.info.ubicacion}
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 20],
+                        popupAnchor: [0, -20],
+                      })}
+                    >
+                      <Popup>
+                        <div style={{ maxWidth: '250px', fontFamily: 'Arial, sans-serif' }}>
+                          <strong style={{ fontSize: '14px', color: '#333' }}>{station.info.nombre}</strong>
+                          {randomImageUrl && (
+                            <img
+                              src={randomImageUrl}
+                              alt={`Foto de ${station.info.nombre}`}
+                              style={{
+                                width: '100%',
+                                height: '150px',
+                                objectFit: 'cover',
+                                marginTop: '8px',
+                                borderRadius: '4px'
+                              }}
+                            />
+                          )}
+                          <div style={{ marginTop: '8px', fontSize: '12px', color: '#555' }}>
+                            <strong>Ubicación:</strong> {station.info.ubicacion}
+                          </div>
                         </div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })} 
-            </MapContainer>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+              </MapContainer>
             </ErrorBoundary>
           </div>
-          <div style={{display: 'grid', gap: '20px', marginTop: '12px'}}>
+          <div style={{ display: 'grid', gap: '20px', marginTop: '12px' }}>
             <div className="stations-container-box" style={{ width: '100%' }}>
               <div className="stations-header">
                 <h3 className="stations-title">
@@ -376,10 +376,10 @@ const ConteoVehicularTab = ({
                   Leyenda
                 </h3>
                 <div className="legend-controls">
-                  <button className="legend-btn" onClick={() => {setShowRoute(true); setShowTraffic(true);}}>
+                  <button className="legend-btn" onClick={() => { setShowRoute(true); setShowTraffic(true); }}>
                     <i className="fas fa-eye"></i> Mostrar Todo
                   </button>
-                  <button className="legend-btn" onClick={() => {setShowRoute(false); setShowTraffic(false);}}>
+                  <button className="legend-btn" onClick={() => { setShowRoute(false); setShowTraffic(false); }}>
                     <i className="fas fa-eye-slash"></i> Ocultar Todo
                   </button>
                 </div>
@@ -402,7 +402,7 @@ const ConteoVehicularTab = ({
                   </div>
                   <div className="legend-items">
                     <div className="legend-item">
-                      <div className="legend-icon" style={{color: '#e74c3c'}}>
+                      <div className="legend-icon" style={{ color: '#e74c3c' }}>
                         <i className="fas fa-route"></i>
                       </div>
                       <span className="legend-label">Ruta CU-104</span>
@@ -434,7 +434,7 @@ const ConteoVehicularTab = ({
                   </div>
                   <div className="legend-items">
                     <div className="legend-item">
-                      <div className="legend-icon" style={{color: '#3498db'}}>
+                      <div className="legend-icon" style={{ color: '#3498db' }}>
                         <i className="fas fa-traffic-light"></i>
                       </div>
                       <span className="legend-label">Puntos de Control</span>
@@ -453,9 +453,9 @@ const ConteoVehicularTab = ({
             </div>
           </div>
         </div>
-        <div style={{flex: '0.8', display: 'flex', flexDirection: 'column', gap: '20px'}}>
-          <div style={{background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px'}}>
-            <h3 onClick={() => setIsStationDataVisible(!isStationDataVisible)} style={{margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px' }}>
+            <h3 onClick={() => setIsStationDataVisible(!isStationDataVisible)} style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Estación Datos</span>
               <i className={`fas fa-chevron-down accordion-icon ${isStationDataVisible ? '' : 'collapsed'}`}></i>
             </h3>
@@ -468,7 +468,7 @@ const ConteoVehicularTab = ({
             >
               <div ref={stationDataRef}>
                 {currentStationData && (
-                  <div style={{display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px'}}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px' }}>
                     <div>
                       <strong>Nombre:</strong> {currentStationData.info.nombre}
                     </div>
@@ -489,8 +489,8 @@ const ConteoVehicularTab = ({
               </div>
             </CSSTransition>
           </div>
-          <div style={{background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px'}}>
-            <h3 onClick={() => setIsPhotosVisible(!isPhotosVisible)} style={{margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px' }}>
+            <h3 onClick={() => setIsPhotosVisible(!isPhotosVisible)} style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Fotos y Gráficos</span>
               <i className={`fas fa-chevron-down accordion-icon ${isPhotosVisible ? '' : 'collapsed'}`}></i>
             </h3>
@@ -502,19 +502,19 @@ const ConteoVehicularTab = ({
               unmountOnExit
             >
               <div ref={photosRef}>
-                <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px'}}>
-                    {/* Agrupar imágenes por descripción y fecha */}
-                    {currentStationData && currentStationData.info && currentStationData.info.imagenes &&
-                      Object.values(currentStationData.info.imagenes.filter(image => image.source_type === 'conteo_vehicular_image').reduce((acc, image) => {
-                        const key = `${image.description || 'Sin descripción'}-${image.upload_date || 'Sin fecha'}`;
-                        if (!acc[key]) {
-                          acc[key] = { description: image.description, upload_date: image.upload_date, images: [] };
-                        }
-                        acc[key].images.push(image);
-                        return acc;
-                      }, {})).map((group, groupIndex) => (
-                        <div key={groupIndex} style={{ gridColumn: '1 / -1', marginBottom: '15px', border: '1px solid #eee', padding: '10px', borderRadius: '8px', backgroundColor: '#fdfdfd' }}>
-                          <h4 style={{ margin: '0 0 10px 0', color: '#34495e', fontSize: '1em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                  {/* Agrupar imágenes por descripción y fecha */}
+                  {currentStationData && currentStationData.info && currentStationData.info.imagenes &&
+                    Object.values(currentStationData.info.imagenes.filter(image => image.source_type === 'conteo_vehicular_image').reduce((acc, image) => {
+                      const key = `${image.description || 'Sin descripción'}-${image.upload_date || 'Sin fecha'}`;
+                      if (!acc[key]) {
+                        acc[key] = { description: image.description, upload_date: image.upload_date, images: [] };
+                      }
+                      acc[key].images.push(image);
+                      return acc;
+                    }, {})).map((group, groupIndex) => (
+                      <div key={groupIndex} style={{ gridColumn: '1 / -1', marginBottom: '15px', border: '1px solid #eee', padding: '10px', borderRadius: '8px', backgroundColor: '#fdfdfd' }}>
+                        <h4 style={{ margin: '0 0 10px 0', color: '#34495e', fontSize: '1em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span>
                             {group.description || 'Sin descripción'} ({group.upload_date ? (
                               (() => {
@@ -547,25 +547,25 @@ const ConteoVehicularTab = ({
                             Eliminar Grupo
                           </button>
                         </h4>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
-                            {group.images.map((image, imageIndex) => (
-                              <div key={imageIndex} style={{ position: 'relative', width: '100%', height: '100px', overflow: 'hidden', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer' }} onClick={() => openImageModal(image.image_url)}>
-                                <img src={image.image_url} alt={`Uploaded ${imageIndex}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              </div>
-                            ))}
-                          </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
+                          {group.images.map((image, imageIndex) => (
+                            <div key={imageIndex} style={{ position: 'relative', width: '100%', height: '100px', overflow: 'hidden', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer' }} onClick={() => openImageModal(image.image_url)}>
+                              <img src={image.image_url} alt={`Uploaded ${imageIndex}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                  </div>
-              
-                <div style={{marginTop: '15px', textAlign: 'center'}}>
-                  <small style={{color: '#666'}}>Galería de imágenes de la estación</small>
+                      </div>
+                    ))}
+                </div>
+
+                <div style={{ marginTop: '15px', textAlign: 'center' }}>
+                  <small style={{ color: '#666' }}>Galería de imágenes de la estación</small>
                 </div>
               </div>
             </CSSTransition>
           </div>
-          <div style={{background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px'}}>
-            <h3 onClick={() => setIsDataCollectionVisible(!isDataCollectionVisible)} style={{margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px' }}>
+            <h3 onClick={() => setIsDataCollectionVisible(!isDataCollectionVisible)} style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Fichas De Recoleccion De Data</span>
               <i className={`fas fa-chevron-down accordion-icon ${isDataCollectionVisible ? '' : 'collapsed'}`}></i>
             </h3>
@@ -586,7 +586,7 @@ const ConteoVehicularTab = ({
                             {file.description || 'Archivo sin descripción'} ({formatDate(file.upload_date)})
                           </p>
                           {file.image_url.match(/\.(jpeg|jpg|gif|png|webp|svg|bmp)$/i) ? (
-                            <div 
+                            <div
                               style={{ width: '100%', height: '180px', overflow: 'hidden', borderRadius: '4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
                               onClick={() => openImageModal(file.image_url)}
                             >
@@ -596,9 +596,9 @@ const ConteoVehicularTab = ({
                               </p>
                             </div>
                           ) : (
-                            <a 
-                              href={file.image_url} 
-                              target="_blank" 
+                            <a
+                              href={file.image_url}
+                              target="_blank"
                               rel="noopener noreferrer"
                               style={{ color: '#007bff', textDecoration: 'none' }}
                             >
@@ -640,7 +640,7 @@ const ConteoVehicularTab = ({
           </div>
         </div>
       </div>
-      <UploadTrafficDataModal 
+      <UploadTrafficDataModal
         isOpen={isModalOpen}
         onClose={closeUploadModal}
         entityId={stationIdToUpload}

@@ -26,11 +26,11 @@ import AmigoSecretoDashboard from './components/eventos/AmigoSecretoDashboard'; 
 import GestionarParticipantes from './components/eventos/GestionarParticipantes'; // NUEVO
 import VisualizacionAmigo from './components/eventos/visualizacionamigo.jsx'; // NUEVO
 // Coordinado
-import Proyectos from './components/coordinador/suelos/proyectos/proyectos';                                                         
-import GestorDeTramosActual from './components/coordinador/suelos/gestion_tramos/GestorDeTramosActual';                                   
-import RecoleccionDeDatosContainer from './components/coordinador/suelos/ui/RecoleccionDeDatosContainer';                     
-import Progresivas from './components/coordinador/suelos/gestion_tramos/Progresivas';                                                     
-import EnsayosSuelos from './components/coordinador/suelos/ensayos/ensayos';                                                       
+import Proyectos from './components/coordinador/suelos/proyectosv2/ProyectosV2';
+import GestorDeTramosActual from './components/coordinador/suelos/gestion_tramos/GestorDeTramosActual';
+import RecoleccionDeDatosContainer from './components/coordinador/suelos/ui/RecoleccionDeDatosContainer';
+import Progresivas from './components/coordinador/suelos/gestion_tramos/Progresivas';
+import EnsayosSuelos from './components/coordinador/suelos/ensayos/ensayos';
 import DetalleEnsayo from './components/coordinador/suelos/ensayos/DetalleEnsayo'; // NUEVO                                
 import VistaGeneralEnsayos from './components/coordinador/suelos/ensayos/VistaGeneralEnsayos'; // NUEVO
 import EnsayosContainer from './components/coordinador/suelos/ensayos/EnsayosContainer';
@@ -132,7 +132,7 @@ function AppContent() {
         }
         logAuditEvent('PAGE_VIEW', { path: location.pathname });
     }, [location.pathname]);
-    
+
     const handleCloseInitialViz = () => {
         setIsInitialViz(false);
         navigate('/coordinador/cordinadords'); // Navegar a la vista principal del coordinador
@@ -180,7 +180,7 @@ function AppContent() {
                 {/* Nuevo: Perfil del usuario */}
                 <Route path="/perfil" element={<RutaPrivada><Layout><Perfil /></Layout></RutaPrivada>} />
 
-                
+
 
                 {/* Especialista 
                 <Route path="/especialista/ambiental" element={<RutaPrivada><Layout><Ambiental /></Layout></RutaPrivada>} />
@@ -202,7 +202,7 @@ function AppContent() {
 
                 {/* Ensayos */}
                 <Route path="/ensayos" element={<RutaPrivada><Layout><Ensayos /></Layout></RutaPrivada>} />
-               
+
 
                 {/* Reportes */}
                 <Route path="/reportes" element={<RutaPrivada><Layout><Reportes /></Layout></RutaPrivada>} />

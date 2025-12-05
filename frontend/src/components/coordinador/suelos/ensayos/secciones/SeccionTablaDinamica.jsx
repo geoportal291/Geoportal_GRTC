@@ -72,15 +72,7 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
                   onChange={onInputChange}
                 >
                   <option value="">Seleccione...</option>
-                  {/* Opciones quemadas para visualización, luego se pueden hacer dinámicas */}
-                  {field.key.includes('molde') && (
-                    <>
-                      <option value="M-1">Molde M-1</option>
-                      <option value="M-2">Molde M-2</option>
-                      <option value="M-3">Molde M-3</option>
-                      <option value="2124">2124 (Volumen)</option>
-                    </>
-                  )}
+
                 </select>
               ) : (
                 <input
@@ -116,26 +108,41 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
     }
 
     if (finalType === 'input') {
-      // --- FINAL FIX V2 ---
-      // The tableKey is directly available in the received tableConfig prop.
-      const tableKey = tableConfig.key; // e.g., 'granulometria' from the log
+      const tableKey = config.key;
 
-      const rowKey = isTransposed ? (colData?.id || colData?.key) : (rowData?.key || rowData?.id);
-      const columnKey = cellConfig.key;
+      // Si no hay una clave de tabla definida en la configuración, no se puede continuar.
+      if (!tableKey) {
+        console.error("Error de Configuración: La tabla no tiene una 'key' definida en config_tabla.", config);
+        return <input disabled value="Error: Tabla sin 'key'" className="form-control form-control-sm" />;
+      }
 
       let fieldName;
-      if (!tableKey) {
-        console.error("SeccionTablaDinamica: 'key' de la tabla no está definido en el prop tableConfig.", tableConfig);
-        fieldName = `error.path.missing_table_key.${rowKey}.${columnKey}`;
-      } else {
-        // Construct the correct, consistent, nested path
-        // e.g., tables.granulometria.n4.retenido
-        fieldName = `tables.${tableKey}.${rowKey}.${columnKey}`;
-      }
+      const rowKey = rowData?.key || rowData?.id;
+      const colKey = cellConfig.key;
+      const sampleKeyForTransposed = colData?.id || colData?.key;
+
+      // Lógica para determinar el 'fieldName' correcto basado en la estructura de la tabla
+      if (isTransposed) {
+        // Tablas transpuestas (Límites): La muestra está en la columna, la propiedad en la fila.
+        const propertyName = finalInputConfig?.name || cellConfig.key;
+        fieldName = `tables.${tableKey}.${sampleKeyForTransposed}.${propertyName}`;
       
+      } else if (headers[0]?.key === 'label' && headers[0]?.type === 'static' && colKey !== 'label') {
+        // Tablas normales estilo Proctor/CBR: Las columnas (después de 'label') son las muestras.
+        // La fila es la propiedad.
+        // fieldName -> tables.datos_entrada.m1.peso_molde_suelo
+        fieldName = `tables.${tableKey}.${colKey}.${rowKey}`;
+      
+      } else {
+        // Tablas normales estilo Granulometría: La fila es la muestra (tamiz).
+        // La columna es la propiedad.
+        // fieldName -> tables.granulometria.n4.retenido
+        fieldName = `tables.${tableKey}.${rowKey}.${colKey}`;
+      }
+
       return (
         <input
-          type={'number'}
+          type={finalInputConfig?.type || 'number'}
           step="0.01"
           className="form-control form-control-sm numeric-input"
           name={fieldName}

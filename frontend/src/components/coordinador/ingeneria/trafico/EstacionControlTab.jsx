@@ -105,7 +105,7 @@ const EstacionControlTab = ({
     alertify.confirm(
       'Eliminar Grupo de Imágenes',
       '¿Estás seguro de que quieres eliminar este grupo de imágenes?\nEsta acción eliminará todas las imágenes con la descripción \"' + description + '\" y fecha \"' + uploadDate + '\" para esta estación.',
-      async function() {
+      async function () {
         try {
           await axiosInstance.delete(`/api/trafico/delete-image-group`, {
             data: { stationId, description, uploadDate }
@@ -117,7 +117,7 @@ const EstacionControlTab = ({
           alertify.error('Error al eliminar el grupo de imágenes.');
         }
       },
-      function() {
+      function () {
         alertify.error('Eliminación cancelada.');
       }
     );
@@ -125,51 +125,51 @@ const EstacionControlTab = ({
 
   return (
     <div className="estacion-control-tab-wrapper">
-      <div style={{display: 'flex', minHeight: '600px', padding: '20px', gap: '20px', alignItems: 'stretch'}}>
+      <div style={{ display: 'flex', minHeight: '600px', padding: '20px', gap: '20px', alignItems: 'stretch' }}>
         {/* Mapa principal - a la izquierda */}
-        <div style={{flex: '3', display: 'flex', flexDirection: 'column'}}>
-          <div style={{height: '500px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden'}}>
+        <div style={{ flex: '3', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ height: '820px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
             <ErrorBoundary>
-              <MapContainer center={view.center} zoom={view.zoom} zoomControl={false} className="map-container-custom-controls" style={{height: '100%', width: '100%'}}>
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="&copy; OpenStreetMap contributors"
-              />
-              <MapViewController setView={setView} cu104Route={cu104Route} />
-              {showRoute && (
-                <Polyline
-                  positions={cu104Route.map(point => [point.lat, point.lng])}
-                  color="#e74c3c"
-                  weight={4}
-                  opacity={0.8}
+              <MapContainer center={view.center} zoom={view.zoom} zoomControl={false} className="map-container-custom-controls" style={{ height: '100%', width: '100%' }}>
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution="&copy; OpenStreetMap contributors"
                 />
-              )}
-              {showTraffic && Object.values(stationData).map((station) => {
-                const images = station.info.imagenes.filter(img => img.source_type === 'estacion_control');
-                let randomImageUrl = null;
-                if (images && images.length > 0) {
-                  const randomIndex = Math.floor(Math.random() * images.length);
-                  randomImageUrl = images[randomIndex].image_url;
-                }
+                <MapViewController setView={setView} cu104Route={cu104Route} />
+                {showRoute && (
+                  <Polyline
+                    positions={cu104Route.map(point => [point.lat, point.lng])}
+                    color="#e74c3c"
+                    weight={4}
+                    opacity={0.8}
+                  />
+                )}
+                {showTraffic && Object.values(stationData).map((station) => {
+                  const images = station.info.imagenes.filter(img => img.source_type === 'estacion_control');
+                  let randomImageUrl = null;
+                  if (images && images.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * images.length);
+                    randomImageUrl = images[randomIndex].image_url;
+                  }
 
-                return (
-                  <Marker
-                    key={station.info.id}
-                    position={[station.info.lat, station.info.lng]}
-                    eventHandlers={{
-                      click: () => {
-                        handleStationSelect(station.info.id);
-                      },
-                      mouseover: (event) => {
-                        event.target.openPopup();
-                      },
-                      mouseout: (event) => {
-                        event.target.closePopup();
-                      },
-                    }}
-                    icon={divIcon({
-                      className: 'custom-station-icon',
-                      html: `<div style="
+                  return (
+                    <Marker
+                      key={station.info.id}
+                      position={[station.info.lat, station.info.lng]}
+                      eventHandlers={{
+                        click: () => {
+                          handleStationSelect(station.info.id);
+                        },
+                        mouseover: (event) => {
+                          event.target.openPopup();
+                        },
+                        mouseout: (event) => {
+                          event.target.closePopup();
+                        },
+                      }}
+                      icon={divIcon({
+                        className: 'custom-station-icon',
+                        html: `<div style="
                       background-color: ${selectedStation === station.info.id ? '#1abc9c' : '#2ecc71'};
                         border: ${selectedStation === station.info.id ? '4px solid #34495e' : '2px solid #27ae60'};
                         border-radius: 50%;
@@ -183,38 +183,38 @@ const EstacionControlTab = ({
                         font-size: ${selectedStation === station.info.id ? '14px' : '12px'};
                         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                       ">${station.info.id}</div>`,
-                      iconSize: selectedStation === station.info.id ? [50, 50] : [40, 40],
-                      iconAnchor: selectedStation === station.info.id ? [25, 25] : [20, 20],
-                      popupAnchor: selectedStation === station.info.id ? [0, -25] : [0, -20],
-                    })}
-                  >
-                                        <Popup>
-                      <div style={{ maxWidth: '250px', fontFamily: 'Arial, sans-serif' }}>
-                        <strong style={{ fontSize: '14px', color: '#333' }}>{station.info.nombre}</strong>
-                        {randomImageUrl && (
-                          <img 
-                            src={randomImageUrl} 
-                            alt={`Foto de ${station.info.nombre}`}
-                            style={{ 
-                              width: '100%', 
-                              height: '150px',
-                              objectFit: 'cover',
-                              marginTop: '8px', 
-                              borderRadius: '4px' 
-                            }} 
-                          />
-                        )}
-                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#555' }}>
-                          <strong>Ubicación:</strong> {station.info.ubicacion}
+                        iconSize: selectedStation === station.info.id ? [50, 50] : [40, 40],
+                        iconAnchor: selectedStation === station.info.id ? [25, 25] : [20, 20],
+                        popupAnchor: selectedStation === station.info.id ? [0, -25] : [0, -20],
+                      })}
+                    >
+                      <Popup>
+                        <div style={{ maxWidth: '250px', fontFamily: 'Arial, sans-serif' }}>
+                          <strong style={{ fontSize: '14px', color: '#333' }}>{station.info.nombre}</strong>
+                          {randomImageUrl && (
+                            <img
+                              src={randomImageUrl}
+                              alt={`Foto de ${station.info.nombre}`}
+                              style={{
+                                width: '100%',
+                                height: '150px',
+                                objectFit: 'cover',
+                                marginTop: '8px',
+                                borderRadius: '4px'
+                              }}
+                            />
+                          )}
+                          <div style={{ marginTop: '8px', fontSize: '12px', color: '#555' }}>
+                            <strong>Ubicación:</strong> {station.info.ubicacion}
+                          </div>
                         </div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
-            </MapContainer>
-     </ErrorBoundary>        </div>
-          <div style={{display: 'grid', gap: '20px', marginTop: '12px'}}>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+              </MapContainer>
+            </ErrorBoundary>        </div>
+          <div style={{ display: 'grid', gap: '20px', marginTop: '12px' }}>
             <div className="stations-container-box" style={{ width: '100%' }}>
               <div className="stations-header">
                 <h3 className="stations-title">
@@ -286,7 +286,7 @@ const EstacionControlTab = ({
                         });
                         const latestImage = sortedImages[0];
                         const fileName = latestImage.image_url.split('/').pop(); // Obtener el nombre del archivo
-                        
+
                         return (
                           <div
                             style={{
@@ -326,10 +326,10 @@ const EstacionControlTab = ({
                   Leyenda
                 </h3>
                 <div className="legend-controls">
-                  <button className="legend-btn" onClick={() => {setShowRoute(true); setShowTraffic(true);}}>
+                  <button className="legend-btn" onClick={() => { setShowRoute(true); setShowTraffic(true); }}>
                     <i className="fas fa-eye"></i> Mostrar Todo
                   </button>
-                  <button className="legend-btn" onClick={() => {setShowRoute(false); setShowTraffic(false);}}>
+                  <button className="legend-btn" onClick={() => { setShowRoute(false); setShowTraffic(false); }}>
                     <i className="fas fa-eye-slash"></i> Ocultar Todo
                   </button>
                 </div>
@@ -352,7 +352,7 @@ const EstacionControlTab = ({
                   </div>
                   <div className="legend-items">
                     <div className="legend-item">
-                      <div className="legend-icon" style={{color: '#e74c3c'}}>
+                      <div className="legend-icon" style={{ color: '#e74c3c' }}>
                         <i className="fas fa-route"></i>
                       </div>
                       <span className="legend-label">Ruta CU-104</span>
@@ -384,7 +384,7 @@ const EstacionControlTab = ({
                   </div>
                   <div className="legend-items">
                     <div className="legend-item">
-                      <div className="legend-icon" style={{color: '#3498db'}}>
+                      <div className="legend-icon" style={{ color: '#3498db' }}>
                         <i className="fas fa-traffic-light"></i>
                       </div>
                       <span className="legend-label">Puntos de Control</span>
@@ -403,9 +403,9 @@ const EstacionControlTab = ({
             </div>
           </div>
         </div>
-        <div style={{flex: '0.8', display: 'flex', flexDirection: 'column', gap: '20px'}}>
-          <div style={{background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px'}}>
-            <h3 onClick={() => setIsStationDataVisible(!isStationDataVisible)} style={{margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px' }}>
+            <h3 onClick={() => setIsStationDataVisible(!isStationDataVisible)} style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Estación Datos</span>
               <i className={`fas fa-chevron-down accordion-icon ${isStationDataVisible ? '' : 'collapsed'}`}></i>
             </h3>
@@ -418,7 +418,7 @@ const EstacionControlTab = ({
             >
               <div ref={stationDataRef}>
                 {currentStationData && (
-                  <div style={{display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px'}}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px' }}>
                     <div>
                       <strong>Nombre:</strong> {currentStationData.info.nombre}
                     </div>
@@ -439,8 +439,8 @@ const EstacionControlTab = ({
               </div>
             </CSSTransition>
           </div>
-          <div style={{background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px'}}>
-            <h3 onClick={() => setIsPhotosVisible(!isPhotosVisible)} style={{margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px' }}>
+            <h3 onClick={() => setIsPhotosVisible(!isPhotosVisible)} style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Fotos y Gráficos</span>
               <i className={`fas fa-chevron-down accordion-icon ${isPhotosVisible ? '' : 'collapsed'}`}></i>
             </h3>
@@ -452,19 +452,19 @@ const EstacionControlTab = ({
               unmountOnExit
             >
               <div ref={photosRef}>
-                <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px'}}>
-                    {/* Agrupar imágenes por descripción y fecha */}
-                    {currentStationData && currentStationData.info && currentStationData.info.imagenes &&
-                      Object.values(currentStationData.info.imagenes.filter(image => image.source_type === 'estacion_control').reduce((acc, image) => {
-                        const key = `${image.description || 'Sin descripción'}-${image.upload_date || 'Sin fecha'}`;
-                        if (!acc[key]) {
-                          acc[key] = { description: image.description, upload_date: image.upload_date, images: [] };
-                        }
-                        acc[key].images.push(image);
-                        return acc;
-                      }, {})).map((group, groupIndex) => (
-                        <div key={groupIndex} style={{ gridColumn: '1 / -1', marginBottom: '15px', border: '1px solid #eee', padding: '10px', borderRadius: '8px', backgroundColor: '#fdfdfd' }}>
-                          <h4 style={{ margin: '0 0 10px 0', color: '#34495e', fontSize: '1em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                  {/* Agrupar imágenes por descripción y fecha */}
+                  {currentStationData && currentStationData.info && currentStationData.info.imagenes &&
+                    Object.values(currentStationData.info.imagenes.filter(image => image.source_type === 'estacion_control').reduce((acc, image) => {
+                      const key = `${image.description || 'Sin descripción'}-${image.upload_date || 'Sin fecha'}`;
+                      if (!acc[key]) {
+                        acc[key] = { description: image.description, upload_date: image.upload_date, images: [] };
+                      }
+                      acc[key].images.push(image);
+                      return acc;
+                    }, {})).map((group, groupIndex) => (
+                      <div key={groupIndex} style={{ gridColumn: '1 / -1', marginBottom: '15px', border: '1px solid #eee', padding: '10px', borderRadius: '8px', backgroundColor: '#fdfdfd' }}>
+                        <h4 style={{ margin: '0 0 10px 0', color: '#34495e', fontSize: '1em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span>
                             {group.description || 'Sin descripción'} ({group.upload_date ? (
                               (() => {
@@ -497,26 +497,26 @@ const EstacionControlTab = ({
                             Eliminar Grupo
                           </button>
                         </h4>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
-                            {group.images.map((image, imageIndex) => (
-                              <div key={imageIndex} style={{ position: 'relative', width: '100%', height: '100px', overflow: 'hidden', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer' }} onClick={() => openImageModal(image.image_url)}>
-                                <img src={image.image_url} alt={`Uploaded ${imageIndex}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              </div>
-                            ))}
-                          </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
+                          {group.images.map((image, imageIndex) => (
+                            <div key={imageIndex} style={{ position: 'relative', width: '100%', height: '100px', overflow: 'hidden', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer' }} onClick={() => openImageModal(image.image_url)}>
+                              <img src={image.image_url} alt={`Uploaded ${imageIndex}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                  </div>
-              
-                <div style={{marginTop: '15px', textAlign: 'center'}}>
-                  <small style={{color: '#666'}}>Galería de imágenes de la estación</small>
+                      </div>
+                    ))}
+                </div>
+
+                <div style={{ marginTop: '15px', textAlign: 'center' }}>
+                  <small style={{ color: '#666' }}>Galería de imágenes de la estación</small>
                 </div>
               </div>
             </CSSTransition>
           </div>
         </div>
       </div>
-      <UploadModal 
+      <UploadModal
         isOpen={isModalOpen}
         onClose={closeUploadModal}
         entityId={stationIdToUpload}

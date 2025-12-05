@@ -106,7 +106,7 @@ const TramosHomogeneosTab = ({
     alertify.confirm(
       'Eliminar Grupo de Imágenes',
       '¿Estás seguro de que quieres eliminar este grupo de imágenes?',
-      async function() {
+      async function () {
         try {
           await axiosInstance.delete(`/api/trafico/delete-image-group`, {
             data: { stationId: sectionId, description, uploadDate }
@@ -118,7 +118,7 @@ const TramosHomogeneosTab = ({
           alertify.error('Error al eliminar el grupo de imágenes.');
         }
       },
-      function() {
+      function () {
         alertify.error('Eliminación cancelada.');
       }
     );
@@ -137,7 +137,7 @@ const TramosHomogeneosTab = ({
     setVisibility(Object.keys(sectionData).reduce((acc, tramoId) => ({ ...acc, [tramoId]: false }), {}));
     setShowTraffic(false);
   };
-  
+
   const colors = {
     'T-1': '#27ae60', // Verde
     'T-2': '#3498db', // Azul
@@ -146,66 +146,66 @@ const TramosHomogeneosTab = ({
 
   return (
     <div className="estacion-control-tab-wrapper">
-      <div style={{display: 'flex', minHeight: '600px', padding: '20px', gap: '20px', alignItems: 'stretch'}}>
-        <div style={{flex: '3', display: 'flex', flexDirection: 'column'}}>
-          <div style={{height: '500px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden'}}>
+      <div style={{ display: 'flex', minHeight: '600px', padding: '20px', gap: '20px', alignItems: 'stretch' }}>
+        <div style={{ flex: '3', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ height: '820px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
             <ErrorBoundary>
-              <MapContainer center={view.center} zoom={13} zoomControl={false} className="map-container-custom-controls" style={{height: '100%', width: '100%'}}>
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="&copy; OpenStreetMap contributors"
-              />
-              <MapViewController setView={setView} sectionData={sectionData} />
-              {Object.keys(sectionData).map(sectionId => {
-                const section = sectionData[sectionId];
-                const isSelected = selectedSection === sectionId;
+              <MapContainer center={view.center} zoom={13} zoomControl={false} className="map-container-custom-controls" style={{ height: '100%', width: '100%' }}>
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution="&copy; OpenStreetMap contributors"
+                />
+                <MapViewController setView={setView} sectionData={sectionData} />
+                {Object.keys(sectionData).map(sectionId => {
+                  const section = sectionData[sectionId];
+                  const isSelected = selectedSection === sectionId;
 
-                if (!visibility[sectionId] || !section.info.coordinates) {
-                  return null; 
-                }
+                  if (!visibility[sectionId] || !section.info.coordinates) {
+                    return null;
+                  }
 
-                return (
-                  <Polyline
-                    key={`${sectionId}-${isSelected}`}
-                    positions={section.info.coordinates}
-                    pathOptions={{
-                      color: isSelected ? '#00FFFF' : (colors[sectionId] || '#3388ff'),
-                      weight: 8,
-                    }}
-                    eventHandlers={{
-                      click: (e) => {
-                        handleSectionSelect(sectionId);
-                      },
-                      mouseover: (e) => {
-                        e.target.openPopup();
-                      },
-                      mouseout: (e) => {
-                        e.target.closePopup();
-                      },
-                    }}
-                  >
-                    <Popup>
-                      Tramo: {section.info.nombre}<br/>
-                      {section.info.imagenes && section.info.imagenes.filter(img => img.source_type === 'tramo').length > 0 && (() => {
-                        const filteredImages = section.info.imagenes.filter(img => img.source_type === 'tramo');
-                        const randomIndex = Math.floor(Math.random() * filteredImages.length);
-                        const randomImage = filteredImages[randomIndex];
-                        return (
-                          <div style={{ marginTop: '10px', textAlign: 'center' }}>
-                            <img src={randomImage.image_url} alt={randomImage.description || 'Imagen del tramo'} style={{ maxWidth: '150px', maxHeight: '100px', objectFit: 'cover', borderRadius: '4px' }} />
-                            <p style={{ fontSize: '0.8em', margin: '5px 0 0 0' }}>{randomImage.description || 'Imagen'}</p>
-                          </div>
-                        );
-                      })()}
-                      <p style={{ fontSize: '0.9em', margin: '5px 0 0 0' }}>Ubicación: {section.info.ubicacion}</p>
-                    </Popup>
-                  </Polyline>
-                );
-              })}
-            </MapContainer>
+                  return (
+                    <Polyline
+                      key={`${sectionId}-${isSelected}`}
+                      positions={section.info.coordinates}
+                      pathOptions={{
+                        color: isSelected ? '#00FFFF' : (colors[sectionId] || '#3388ff'),
+                        weight: 8,
+                      }}
+                      eventHandlers={{
+                        click: (e) => {
+                          handleSectionSelect(sectionId);
+                        },
+                        mouseover: (e) => {
+                          e.target.openPopup();
+                        },
+                        mouseout: (e) => {
+                          e.target.closePopup();
+                        },
+                      }}
+                    >
+                      <Popup>
+                        Tramo: {section.info.nombre}<br />
+                        {section.info.imagenes && section.info.imagenes.filter(img => img.source_type === 'tramo').length > 0 && (() => {
+                          const filteredImages = section.info.imagenes.filter(img => img.source_type === 'tramo');
+                          const randomIndex = Math.floor(Math.random() * filteredImages.length);
+                          const randomImage = filteredImages[randomIndex];
+                          return (
+                            <div style={{ marginTop: '10px', textAlign: 'center' }}>
+                              <img src={randomImage.image_url} alt={randomImage.description || 'Imagen del tramo'} style={{ maxWidth: '150px', maxHeight: '100px', objectFit: 'cover', borderRadius: '4px' }} />
+                              <p style={{ fontSize: '0.8em', margin: '5px 0 0 0' }}>{randomImage.description || 'Imagen'}</p>
+                            </div>
+                          );
+                        })()}
+                        <p style={{ fontSize: '0.9em', margin: '5px 0 0 0' }}>Ubicación: {section.info.ubicacion}</p>
+                      </Popup>
+                    </Polyline>
+                  );
+                })}
+              </MapContainer>
             </ErrorBoundary>
           </div>
-          <div style={{display: 'grid', gap: '20px', marginTop: '12px'}}>
+          <div style={{ display: 'grid', gap: '20px', marginTop: '12px' }}>
             <div className="stations-container-box" style={{ width: '100%' }}>
               <div className="stations-header">
                 <h3 className="stations-title">
@@ -334,7 +334,7 @@ const TramosHomogeneosTab = ({
                   <div className="legend-items">
                     {Object.keys(visibility).map(tramoId => (
                       <div className="legend-item" key={tramoId}>
-                        <div className="legend-icon" style={{color: colors[tramoId] || '#000000'}}>
+                        <div className="legend-icon" style={{ color: colors[tramoId] || '#000000' }}>
                           <i className="fas fa-route"></i>
                         </div>
                         <span className="legend-label">{sectionData[tramoId]?.info?.nombre}</span>
@@ -354,9 +354,9 @@ const TramosHomogeneosTab = ({
             </div>
           </div>
         </div>
-        <div style={{flex: '0.8', display: 'flex', flexDirection: 'column', gap: '20px'}}>
-          <div style={{background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px'}}>
-            <h3 onClick={() => setIsSectionDataVisible(!isSectionDataVisible)} style={{margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px' }}>
+            <h3 onClick={() => setIsSectionDataVisible(!isSectionDataVisible)} style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Tramo Datos</span>
               <i className={`fas fa-chevron-down accordion-icon ${isSectionDataVisible ? '' : 'collapsed'}`}></i>
             </h3>
@@ -369,7 +369,7 @@ const TramosHomogeneosTab = ({
             >
               <div ref={sectionDataRef}>
                 {currentSectionData && (
-                  <div style={{display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px'}}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px' }}>
                     <div>
                       <strong>Nombre:</strong> {currentSectionData.info.nombre}
                     </div>
@@ -404,8 +404,8 @@ const TramosHomogeneosTab = ({
               </div>
             </CSSTransition>
           </div>
-          <div style={{background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px'}}>
-            <h3 onClick={() => setIsPhotosVisible(!isPhotosVisible)} style={{margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px' }}>
+            <h3 onClick={() => setIsPhotosVisible(!isPhotosVisible)} style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Fotos y Gráficos</span>
               <i className={`fas fa-chevron-down accordion-icon ${isPhotosVisible ? '' : 'collapsed'}`}></i>
             </h3>
@@ -417,18 +417,18 @@ const TramosHomogeneosTab = ({
               unmountOnExit
             >
               <div ref={photosRef}>
-                <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px'}}>
-                    {currentSectionData && currentSectionData.info && currentSectionData.info.imagenes &&
-                      Object.values(currentSectionData.info.imagenes.filter(image => image.source_type === 'tramo').reduce((acc, image) => {
-                        const key = `${image.description || 'Sin descripción'}-${image.upload_date || 'Sin fecha'}`;
-                        if (!acc[key]) {
-                          acc[key] = { description: image.description, upload_date: image.upload_date, images: [] };
-                        }
-                        acc[key].images.push(image);
-                        return acc;
-                      }, {})).map((group, groupIndex) => (
-                        <div key={groupIndex} style={{ gridColumn: '1 / -1', marginBottom: '15px', border: '1px solid #eee', padding: '10px', borderRadius: '8px', backgroundColor: '#fdfdfd' }}>
-                          <h4 style={{ margin: '0 0 10px 0', color: '#34495e', fontSize: '1em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                  {currentSectionData && currentSectionData.info && currentSectionData.info.imagenes &&
+                    Object.values(currentSectionData.info.imagenes.filter(image => image.source_type === 'tramo').reduce((acc, image) => {
+                      const key = `${image.description || 'Sin descripción'}-${image.upload_date || 'Sin fecha'}`;
+                      if (!acc[key]) {
+                        acc[key] = { description: image.description, upload_date: image.upload_date, images: [] };
+                      }
+                      acc[key].images.push(image);
+                      return acc;
+                    }, {})).map((group, groupIndex) => (
+                      <div key={groupIndex} style={{ gridColumn: '1 / -1', marginBottom: '15px', border: '1px solid #eee', padding: '10px', borderRadius: '8px', backgroundColor: '#fdfdfd' }}>
+                        <h4 style={{ margin: '0 0 10px 0', color: '#34495e', fontSize: '1em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span>
                             {group.description || 'Sin descripción'} ({group.upload_date ? new Date(group.upload_date).toLocaleDateString() : 'Sin fecha'})
                           </span>
@@ -447,26 +447,26 @@ const TramosHomogeneosTab = ({
                             Eliminar Grupo
                           </button>
                         </h4>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
-                            {group.images.map((image, imageIndex) => (
-                              <div key={imageIndex} style={{ position: 'relative', width: '100%', height: '100px', overflow: 'hidden', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer' }} onClick={() => openImageModal(image.image_url)}>
-                                <img src={image.image_url} alt={`Uploaded ${imageIndex}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              </div>
-                            ))}
-                          </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
+                          {group.images.map((image, imageIndex) => (
+                            <div key={imageIndex} style={{ position: 'relative', width: '100%', height: '100px', overflow: 'hidden', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer' }} onClick={() => openImageModal(image.image_url)}>
+                              <img src={image.image_url} alt={`Uploaded ${imageIndex}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                  </div>
-              
-                <div style={{marginTop: '15px', textAlign: 'center'}}>
-                  <small style={{color: '#666'}}>Galería de imágenes del tramo</small>
+                      </div>
+                    ))}
+                </div>
+
+                <div style={{ marginTop: '15px', textAlign: 'center' }}>
+                  <small style={{ color: '#666' }}>Galería de imágenes del tramo</small>
                 </div>
               </div>
             </CSSTransition>
           </div>
         </div>
       </div>
-      <UploadModal 
+      <UploadModal
         isOpen={isModalOpen}
         onClose={closeUploadModal}
         entityId={sectionIdToUpload}

@@ -15,8 +15,8 @@ const CamposGenerales = ({ seccion, data, onInputChange }) => (
               step={field.step || 'any'}
               className="form-control form-control-sm"
               id={field.name}
-              name={field.name}
-              value={data[field.name] || ''}
+              name={`general_fields.${field.name}`} // FIX: Generar el nombre con la ruta anidada correcta
+              value={data.general_fields?.[field.name] || ''} // FIX: Leer el valor de la ruta anidada correcta
               onChange={onInputChange}
               required={field.required}
             />

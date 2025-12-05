@@ -10,166 +10,223 @@ const DetalleAlcantarillaView = ({ alcantarilla, images, route, onCloseDetail })
   const dataRef = useRef(null);
 
   const handleExportPDF = async () => {
-    // Create a temporary container for the PDF content
-    const pdfContainer = document.createElement('div');
-    pdfContainer.style.position = 'absolute';
-    pdfContainer.style.top = '-9999px';
-    pdfContainer.style.left = '0';
-    pdfContainer.style.width = '1000px'; // Fixed width for consistent rendering
-    pdfContainer.style.backgroundColor = '#ffffff';
-    pdfContainer.style.padding = '40px';
-    pdfContainer.style.display = 'flex';
-    pdfContainer.style.flexDirection = 'column';
-    pdfContainer.style.gap = '20px';
-    pdfContainer.style.fontFamily = 'Arial, sans-serif';
-    document.body.appendChild(pdfContainer);
-
-    // 1. Header
-    const header = document.createElement('h2');
-    header.innerText = `Alcantarilla: ${alcantarilla.codigo || alcantarilla.id_alcantarilla}`;
-    header.style.textAlign = 'center';
-    header.style.marginBottom = '10px';
-    header.style.color = '#333';
-    pdfContainer.appendChild(header);
-
-    // 2. Top Section: Data (Left) + Map (Right)
-    const topSection = document.createElement('div');
-    topSection.style.display = 'flex';
-    topSection.style.gap = '20px';
-    topSection.style.marginBottom = '20px';
-    pdfContainer.appendChild(topSection);
-
-    // Clone Data
-    if (dataRef.current) {
-      const dataClone = dataRef.current.cloneNode(true);
-      dataClone.style.flex = '1';
-      dataClone.style.height = 'auto';
-      dataClone.style.overflow = 'visible';
-      dataClone.style.border = '1px solid #ccc';
-      dataClone.style.padding = '15px';
-      dataClone.style.borderRadius = '8px';
-      topSection.appendChild(dataClone);
-    }
-
-    // Capture and Add Map
-    if (mapRef.current) {
-      try {
-        const mapCanvas = await html2canvas(mapRef.current, {
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          scale: 2
-        });
-        const mapImg = document.createElement('img');
-        mapImg.src = mapCanvas.toDataURL('image/png');
-        mapImg.style.flex = '1';
-        mapImg.style.width = '50%'; // Take up half width
-        mapImg.style.objectFit = 'contain';
-        mapImg.style.borderRadius = '8px';
-        mapImg.style.border = '1px solid #ccc';
-        topSection.appendChild(mapImg);
-      } catch (e) {
-        console.error("Error capturing map", e);
-      }
-    }
-
-    // 3. Images Section (Grid of all images)
-    if (images && images.length > 0) {
-      const imagesHeader = document.createElement('h3');
-      imagesHeader.innerText = 'Panel Fotográfico';
-      imagesHeader.style.marginTop = '20px';
-      imagesHeader.style.marginBottom = '10px';
-      imagesHeader.style.borderBottom = '1px solid #eee';
-      pdfContainer.appendChild(imagesHeader);
-
-      const imagesGrid = document.createElement('div');
-      imagesGrid.style.display = 'grid';
-      imagesGrid.style.gridTemplateColumns = 'repeat(2, 1fr)'; // 2 columns
-      imagesGrid.style.gap = '15px';
-      pdfContainer.appendChild(imagesGrid);
-
-      // Helper to load image
-      const loadImage = (src) => new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = src;
-      });
-
-      for (const imgData of images) {
-        const imgWrapper = document.createElement('div');
-        imgWrapper.style.display = 'flex';
-        imgWrapper.style.flexDirection = 'column';
-        imgWrapper.style.alignItems = 'center';
-        imgWrapper.style.border = '1px solid #eee';
-        imgWrapper.style.padding = '5px';
-        imgWrapper.style.borderRadius = '5px';
-
-        try {
-          // Preload image to ensure it renders
-          await loadImage(imgData.url);
-
-          const imgEl = document.createElement('img');
-          imgEl.src = imgData.url;
-          imgEl.style.width = '100%';
-          imgEl.style.height = '250px';
-          imgEl.style.objectFit = 'cover';
-          imgEl.style.borderRadius = '4px';
-          imgWrapper.appendChild(imgEl);
-
-          // Metadata
-          const metaDiv = document.createElement('div');
-          metaDiv.style.fontSize = '12px';
-          metaDiv.style.marginTop = '5px';
-          metaDiv.style.textAlign = 'center';
-          metaDiv.style.color = '#555';
-          metaDiv.innerHTML = `
-                    ${imgData.fecha ? `Fecha: ${imgData.fecha.split('T')[0]}<br>` : ''}
-                    ${imgData.hora ? `Hora: ${imgData.hora.split('T')[1].substring(0, 8)}<br>` : ''}
-                    ${imgData.latitud ? `Coords: ${imgData.latitud.toFixed(6)}, ${imgData.longitud.toFixed(6)}` : ''}
-                `;
-          imgWrapper.appendChild(metaDiv);
-
-          imagesGrid.appendChild(imgWrapper);
-        } catch (err) {
-          console.warn("Could not load image for PDF", imgData.url);
-        }
-      }
-    }
-
-    // 4. Generate PDF
+    let stagingContainer = null;
     try {
-      const canvas = await html2canvas(pdfContainer, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      });
-
-      const imgData = canvas.toDataURL('image/png');
+      // 1. Prepare PDF and Layout Variables
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
+        compress: true
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const headerHeight = 35; // mm
+      const topMargin = headerHeight + 5; // Start content below header
+      const bottomMargin = 10;
+      const contentWidth = pdfWidth - 20; // 10mm margin left/right
+      const xOffset = 10;
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      let cursorY = topMargin;
 
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      // 2. Load Header Image
+      // Using fetch is more reliable than creating an Image element for jsPDF sometimes
+      const headerResponse = await fetch('/imgs/encabezado_pdf.png');
+      const headerBlob = await headerResponse.blob();
+      const headerImgData = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(headerBlob);
+      });
 
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
+      // Helper function to add header to current page
+      const addHeader = () => {
+        pdf.addImage(headerImgData, 'PNG', 0, 0, pdfWidth, headerHeight);
+      };
+
+      // Add Header to first page
+      addHeader();
+
+      // Title
+      pdf.setFontSize(16);
+      pdf.setTextColor(0, 0, 0);
+      // Center title
+      pdf.text(`Alcantarilla: ${alcantarilla.codigo || alcantarilla.id_alcantarilla}`, pdfWidth / 2, cursorY, { align: 'center' });
+      cursorY += 10;
+
+      // 3. Create Staging Container (Off-screen)
+      // We use this to render components to HTML before capturing them
+      // 3. Create Staging Container (Off-screen)
+      // We use this to render components to HTML before capturing them
+      stagingContainer = document.createElement('div');
+      stagingContainer.style.position = 'absolute';
+      stagingContainer.style.top = '-9999px';
+      stagingContainer.style.left = '0';
+      stagingContainer.style.width = '1000px';
+      stagingContainer.style.fontFamily = 'Arial, sans-serif';
+      stagingContainer.style.backgroundColor = '#ffffff'; // Ensure white background
+      document.body.appendChild(stagingContainer);
+
+      // Helper to capture DOM element to Image Data
+      const captureElement = async (element) => {
+        const canvas = await html2canvas(element, {
+          scale: 2, // Better quality
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+        const imgData = canvas.toDataURL('image/jpeg', 0.8);
+        const imgProps = pdf.getImageProperties(imgData);
+        // Calculate height fitting within contentWidth
+        const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
+        return { imgData, imgHeight };
+      };
+
+      // --- PROCESS TOP SECTION (Data + Map) ---
+      const topSection = document.createElement('div');
+      topSection.style.display = 'flex';
+      topSection.style.gap = '20px';
+      topSection.style.padding = '10px';
+      // Basic styling matching original
+      stagingContainer.appendChild(topSection);
+
+      // Clone Data
+      if (dataRef.current) {
+        const dataClone = dataRef.current.cloneNode(true);
+        dataClone.style.flex = '1';
+        dataClone.style.border = '1px solid #ccc';
+        dataClone.style.padding = '15px';
+        dataClone.style.borderRadius = '8px';
+        dataClone.style.height = 'auto'; // Reset height
+        dataClone.style.overflow = 'visible'; // Ensure content is visible
+        topSection.appendChild(dataClone);
+      }
+
+      // Capture Map (from screen) and add as image
+      if (mapRef.current) {
+        try {
+          const mapCanvas = await html2canvas(mapRef.current, {
+            useCORS: true, allowTaint: true, scale: 2
+          });
+          const mapImg = document.createElement('img');
+          mapImg.src = mapCanvas.toDataURL('image/png');
+          mapImg.style.flex = '1';
+          mapImg.style.objectFit = 'contain';
+          mapImg.style.borderRadius = '8px';
+          mapImg.style.border = '1px solid #ccc';
+          mapImg.style.width = '50%';
+          topSection.appendChild(mapImg);
+        } catch (e) { console.error("Map capture error", e); }
+      }
+
+      // Capture Top Section
+      const { imgData: topImg, imgHeight: topHeight } = await captureElement(topSection);
+
+      // Add Top Section to PDF
+      pdf.addImage(topImg, 'JPEG', xOffset, cursorY, contentWidth, topHeight);
+      cursorY += topHeight + 10;
+
+      // Cleanup Top Section
+      stagingContainer.removeChild(topSection);
+
+      // --- PROCESS IMAGES SECTION ---
+      if (images && images.length > 0) {
+        // Section Title
+        const titleDiv = document.createElement('div');
+        titleDiv.innerHTML = '<h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px; margin: 0;">Panel Fotográfico</h3>';
+        titleDiv.style.padding = '10px';
+        stagingContainer.appendChild(titleDiv);
+
+        const { imgData: titleImg, imgHeight: titleHeight } = await captureElement(titleDiv);
+
+        // Check if title fits (unlikely to fail here but good to check)
+        if (cursorY + titleHeight > pdfHeight - bottomMargin) {
+          pdf.addPage();
+          addHeader();
+          cursorY = topMargin;
+        }
+        pdf.addImage(titleImg, 'JPEG', xOffset, cursorY, contentWidth, titleHeight);
+        cursorY += titleHeight + 5;
+        stagingContainer.removeChild(titleDiv);
+
+
+        // Helper to load image
+        const loadImage = (src) => new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = "Anonymous";
+          img.onload = () => resolve(img);
+          img.onerror = () => { console.warn("Failed to load img", src); resolve(null); };
+          img.src = src;
+        });
+
+        // Iterate images in pairs (Rows)
+        for (let i = 0; i < images.length; i += 2) {
+          const rowDiv = document.createElement('div');
+          rowDiv.style.display = 'grid';
+          rowDiv.style.gridTemplateColumns = '1fr 1fr';
+          rowDiv.style.gap = '15px';
+          rowDiv.style.padding = '5px 10px';
+          stagingContainer.appendChild(rowDiv);
+
+          // Process Image 1
+          const prepareImage = async (imgData) => {
+            if (!imgData) return null;
+            const img = await loadImage(imgData.url);
+            if (!img) return null;
+
+            const wrapper = document.createElement('div');
+            wrapper.style.border = '1px solid #eee';
+            wrapper.style.padding = '5px';
+            wrapper.style.borderRadius = '5px';
+            wrapper.style.display = 'flex';
+            wrapper.style.flexDirection = 'column';
+            wrapper.style.alignItems = 'center';
+
+            img.style.width = '100%';
+            img.style.height = '250px';
+            img.style.objectFit = 'cover';
+            wrapper.appendChild(img);
+
+            const meta = document.createElement('div');
+            meta.style.fontSize = '12px';
+            meta.style.marginTop = '5px';
+            meta.style.textAlign = 'center';
+            meta.style.color = '#555';
+            meta.innerHTML = `
+                    ${imgData.fecha ? `Fecha: ${imgData.fecha.split('T')[0]}<br>` : ''}
+                    ${imgData.hora ? `Hora: ${imgData.hora.split('T')[1].substring(0, 8)}<br>` : ''}
+                    ${imgData.latitud ? `Coords: ${imgData.latitud.toFixed(6)}, ${imgData.longitud.toFixed(6)}` : ''}
+                `;
+            wrapper.appendChild(meta);
+            return wrapper;
+          };
+
+          const wrapper1 = await prepareImage(images[i]);
+          if (wrapper1) rowDiv.appendChild(wrapper1);
+
+          if (i + 1 < images.length) {
+            const wrapper2 = await prepareImage(images[i + 1]);
+            if (wrapper2) rowDiv.appendChild(wrapper2);
+          }
+
+          // Capture Row
+          const { imgData: rowImg, imgHeight: rowHeight } = await captureElement(rowDiv);
+
+          // Check fit
+          if (cursorY + rowHeight > pdfHeight - bottomMargin) {
+            pdf.addPage();
+            addHeader();
+            cursorY = topMargin;
+          }
+
+          // Add Row
+          pdf.addImage(rowImg, 'JPEG', xOffset, cursorY, contentWidth, rowHeight);
+          cursorY += rowHeight + 5;
+
+          // Cleanup Row
+          stagingContainer.removeChild(rowDiv);
+        }
       }
 
       pdf.save(`Alcantarilla_${alcantarilla.codigo || alcantarilla.id_alcantarilla}.pdf`);
@@ -178,7 +235,9 @@ const DetalleAlcantarillaView = ({ alcantarilla, images, route, onCloseDetail })
       console.error('Error generating PDF:', error);
       alert('Error al exportar PDF');
     } finally {
-      document.body.removeChild(pdfContainer);
+      if (stagingContainer && stagingContainer.parentNode) {
+        stagingContainer.parentNode.removeChild(stagingContainer);
+      }
     }
   };
 

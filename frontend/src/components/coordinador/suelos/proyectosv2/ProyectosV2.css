@@ -1,0 +1,169 @@
+/* ProyectosV2.css - Blue Theme & Thinner Panel - V2 */
+
+/* Color Variables - Blue Theme */
+:root {
+    --primary: #0d47a1;
+    /* Dark Blue */
+    --secondary: #1976d2;
+    /* Medium Blue */
+    --accent: #42a5f5;
+    /* Light Blue */
+    --light: #cbeaff;
+    /* Very Light Blue */
+    --dark: #0d47a1;
+    /* Alias for primary */
+    --gray: #607d8b;
+    --light-gray: #e0e0e0;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --radius: 8px;
+    --info: #2196f3;
+    --danger: #f44336;
+    --header-background: #86c1e0;
+    /* New variable for header background color */
+}
+
+.gestor-proyectos-container {
+    padding: 20px;
+    margin-top: 50px;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: var(--radius);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    color: var(--primary);
+    border-bottom: 2px solid var(--light);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+fieldset {
+    border: 1px solid var(--light-gray);
+    border-radius: var(--radius);
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+legend {
+    color: var(--primary);
+    font-weight: bold;
+    padding: 0 10px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group label {
+    font-size: 0.9em;
+    color: var(--gray);
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 8px 12px;
+    border: 1px solid var(--light-gray);
+    border-radius: 4px;
+    font-size: 1em;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.btn-toggle-input,
+.btn-toggle-intervalo {
+    background: none;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8em;
+}
+
+.btn-toggle-input:hover,
+.btn-toggle-intervalo:hover {
+    background-color: var(--light);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--light-gray);
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.btn-outline {
+    background-color: transparent;
+    border: 1px solid var(--gray);
+    color: var(--gray);
+}
+
+.btn-outline:hover {
+    background-color: #f5f5f5;
+    color: var(--dark);
+}
+
+/* Extra styles for KML section */
+.file-info {
+    font-size: 0.85em;
+    color: var(--info);
+    margin-top: 5px;
+}
+
+.loading-text {
+    font-size: 0.85em;
+    color: var(--gray);
+    font-style: italic;
+}

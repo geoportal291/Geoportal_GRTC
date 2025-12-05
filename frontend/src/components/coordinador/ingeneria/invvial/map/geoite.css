@@ -1,184 +1,589 @@
-/* Styles for measure and draw modals */
-.measure-modal {
+body {
+    margin: 0;
+    background-color: #f4f7f6;
+    font-family: 'Segoe UI', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* --- 1. BARRA VERTICAL --- */
+.invvial-toolbar-container {
     position: absolute;
-    top: 50px;
-    left: 50px;
-    width: auto;
-    max-width: 300px; /* Added max-width */
-    background-color: white;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    z-index: 9999; /* Increased z-index */
-    display: none;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    top: 70px;
+    left: 0px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    /* Separación entre bloques */
 }
 
-.measure-modal-header {
-    padding: 8px;
-    background-color: #f7f7f7;
-    cursor: move;
-    border-bottom: 1px solid #ccc;
-    font-weight: bold;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
+.invvial-tool-group {
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* Bordes redondeados */
 }
 
-.measure-modal-close {
-    float: right;
-    cursor: pointer;
-    font-weight: bold;
-}
-
-.measure-modal-content {
-    padding: 10px;
-}
-
-.measure-modal-content .distance-display {
-    margin-top: 10px;
-    font-weight: bold;
-}
-
-/* Styles for custom buttons */
-.leaflet-control-custom-button {
-    background-color: white;
-    border: 2px solid #ccc;
-    border-radius: 4px;
-    width: 34px;
-    height: 34px;
-    line-height: 30px;
-    text-align: center;
-    font-size: 1.4em;
-    cursor: pointer;
-    font-weight: bold;
-    display: inline-block;
-}
-
-.leaflet-control-custom-button:hover {
-    background-color: #f4f4f4;
-}
-
-.leaflet-control-custom-button.active {
-    background-color: #007bff;
-    color: white;
-}
-
-/* Styles for form elements within modals */
-.measure-modal label {
-    display: inline-block;
-    width: 70px; /* Adjust as needed for alignment */
-    text-align: right;
-    margin-right: 5px;
-    font-weight: normal;
-}
-
-.measure-modal input[type="text"],
-.measure-modal select {
-    width: calc(100% - 80px); /* Adjust width considering label */
-    padding: 6px;
-    margin-bottom: 5px;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    box-sizing: border-box; /* Include padding and border in the element's total width and height */
-}
-
-.measure-modal input[type="text"].gms-input {
-    width: 50px; /* Smaller width for GMS fields */
-    text-align: center;
-    margin-right: 3px;
-}
-
-.measure-modal button {
-    background-color: #007bff;
-    color: white;
+.invvial-tool-btn {
+    width: 36px;
+    height: 36px;
+    background: white;
     border: none;
-    padding: 10px 20px;
-    border-radius: 5px;
+    border-bottom: 1px solid #eee;
     cursor: pointer;
-    font-size: 1em;
-    transition: background-color 0.2s;
-}
-
-.measure-modal button:hover {
-    background-color: #0056b3;
-}
-
-.measure-modal button#clearCoordsBtn {
-    background-color: #6c757d;
-}
-
-.measure-modal button#clearCoordsBtn:hover {
-    background-color: #5a6268;
-}
-
-.measure-modal h3, .measure-modal h4 {
-    color: #333;
-    margin-top: 0;
-    margin-bottom: 10px;
-    text-align: center;
-}
-
-.measure-modal div {
-    margin-bottom: 8px;
-}
-
-.measure-modal .input-group {
+    color: #666;
+    font-size: 16px;
     display: flex;
     align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.invvial-tool-btn:last-child {
+    border-bottom: none;
+}
+
+.invvial-tool-btn:hover {
+    background-color: #f9f9f9;
+    color: #333;
+}
+
+/* Estado Activo: Se pone azul cuando su menú está abierto */
+.invvial-tool-btn.active {
+    background-color: #eef6ff;
+    color: #0056b3;
+    border-left: 3px solid #0056b3;
+    /* Borde azul a la izquierda */
+    padding-right: 3px;
+    /* Compensar el borde para centrar icono */
+}
+
+
+/* --- 2. TARJETAS FLOTANTES (CORREGIDO) --- */
+.invvial-flyout-card {
+    /* IMPORTANTE: Fixed para que ignore cualquier contenedor padre y use coordenadas de pantalla */
+    position: fixed;
+    width: 280px;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e0e0e0;
+    display: none;
+    z-index: 2000;
+    /* Siempre encima de todo */
+    animation: invvial-fadeInRight 0.2s ease-out;
+    --arrow-top: 16px;
+    /* Valor por defecto */
+}
+
+/* La flechita que apunta hacia la izquierda al botón - POSICIÓN DINÁMICA */
+.invvial-flyout-card::before {
+    content: "";
+    position: absolute;
+    top: var(--arrow-top);
+    /* Posición dinámica calculada por JavaScript */
+    left: -8px;
+    /* Posicionada en el lado izquierdo del modal */
+    width: 14px;
+    height: 14px;
+    background: inherit;
+    /* Hereda el color del header o body */
+    transform: rotate(45deg);
+    border-left: 1px solid rgba(0, 0, 0, 0.1);
+    /* Sombra sutil borde */
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    z-index: -1;
+    /* Detrás del contenido */
+}
+
+@keyframes invvial-fadeInRight {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Headers de Colores */
+.invvial-card-header {
+    padding: 12px 15px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Color específico para la flecha según el header */
+/* Azul */
+.invvial-header-blue {
+    background-color: #004080;
+}
+
+.invvial-card-blue::before {
+    background-color: #004080;
+    border-left: 1px solid #003366;
+    border-bottom: 1px solid #003366;
+}
+
+/* Naranja */
+.invvial-header-orange {
+    background-color: #e67e22;
+}
+
+.invvial-card-orange::before {
+    background-color: #e67e22;
+    border-left: 1px solid #d35400;
+    border-bottom: 1px solid #d35400;
+}
+
+/* Morado */
+.invvial-header-purple {
+    background-color: #6c5ce7;
+}
+
+.invvial-card-purple::before {
+    background-color: #6c5ce7;
+    border-left: 1px solid #5b4bc4;
+    border-bottom: 1px solid #5b4bc4;
+}
+
+.invvial-card-body {
+    padding: 15px;
+    font-size: 14px;
+}
+
+/* Elementos UI dentro del menú */
+.invvial-ui-row {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.invvial-btn-block {
+    width: 100%;
+    padding: 8px;
+    background: #f1f1f1;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
     margin-bottom: 5px;
+    color: #444;
 }
 
-.measure-modal .input-group label {
-    flex-shrink: 0;
-    width: 70px;
-    text-align: right;
-    margin-right: 5px;
+.invvial-btn-block:hover {
+    background: #e2e2e2;
 }
 
-.measure-modal .input-group input,
-.measure-modal .input-group select {
-    flex-grow: 1;
-    margin-left: 0; /* Override inline style */
+.invvial-input-flex {
+    display: flex;
+    gap: 0;
 }
 
-.measure-modal .button-group {
-    margin-top: 20px;
-    text-align: center;
+.invvial-input-flex input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    outline: none;
 }
 
-/* New styles for measure points and labels */
-.measure-point-icon {
-    font-size: 12px;
-    color: blue;
-    font-weight: bold;
-    text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+.invvial-input-flex button {
+    padding: 8px 15px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
 }
 
-.measure-label {
-    background-color: rgba(255, 255, 255, 0.8);
-    border: 1px solid #333;
-    padding: 2px 5px;
-    border-radius: 3px;
-    font-size: 10px;
-    white-space: nowrap;
-}
-
-
-/* Custom styles for Leaflet popup */
+/* --- Estilos para Popups de Alcantarillas/Badenes/Puentes/Muros --- */
 .leaflet-popup-content-wrapper {
-    border-radius: 12px;
-    background: #fff;
+    min-width: 200px !important;
+    max-width: 240px !important;
+    border-radius: 8px !important;
 }
 
 .leaflet-popup-content {
-    width: 220px !important;
+    margin: 12px !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    min-width: 180px !important;
+}
+
+/* Imagen del popup */
+.invvial-popup-image {
+    width: 100% !important;
+    max-width: 220px !important;
+    height: auto !important;
+    min-height: 140px !important;
+    max-height: 160px !important;
+    object-fit: cover !important;
+    border-radius: 5px !important;
+    margin-top: 6px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Botones del popup */
+.leaflet-popup-content button {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+.leaflet-popup-content button:hover {
+    opacity: 0.9 !important;
+    transform: translateY(-1px) !important;
+}
+
+.leaflet-popup-content button:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* Contador de imágenes */
+.leaflet-popup-content span {
+    font-size: 11px !important;
+    color: #666 !important;
+}
+
+/* Título del popup más visible */
+.leaflet-popup-content b {
+    font-size: 14px !important;
+    color: #333 !important;
+    display: block !important;
+    margin-bottom: 6px !important;
+}
+
+/* --- Estilos para Formularios de Modales --- */
+.invvial-card-body {
+    padding: 12px;
+    overflow: hidden;
+}
+
+.invvial-card-body * {
+    box-sizing: border-box;
+}
+
+.invvial-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.invvial-input-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2c3e50;
+    min-width: 85px;
     margin: 0;
-    padding: 10px;
 }
 
-.popup-image {
-    width: 200px;
-    height: auto;
-    display: block;
-    margin: 0 auto;
+/* Selects mejorados */
+.invvial-form-select,
+.invvial-input-group select {
+    flex: 1;
+    padding: 7px 28px 7px 10px;
+    border: 2px solid #dce4ec;
+    border-radius: 5px;
+    font-size: 12px;
+    color: #2c3e50;
+    background-color: #ffffff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
 }
 
+.invvial-form-select:hover,
+.invvial-input-group select:hover {
+    border-color: #3498db;
+    background-color: #f8fbff;
+}
+
+.invvial-form-select:focus,
+.invvial-input-group select:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+    background-color: #ffffff;
+}
+
+/* Inputs mejorados */
+.invvial-form-input,
+.invvial-input-flex input {
+    flex: 1;
+    padding: 7px 10px;
+    border: 2px solid #dce4ec;
+    border-radius: 5px;
+    outline: none;
+    font-size: 12px;
+    color: #2c3e50;
+    background-color: #ffffff;
+    transition: all 0.3s ease;
+}
+
+.invvial-form-input:hover,
+.invvial-input-flex input:hover {
+    border-color: #3498db;
+    background-color: #f8fbff;
+}
+
+.invvial-form-input:focus,
+.invvial-input-flex input:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+    background-color: #ffffff;
+}
+
+.invvial-form-input::placeholder,
+.invvial-input-flex input::placeholder {
+    color: #95a5a6;
+    font-size: 11px;
+}
+
+.invvial-input-flex {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    max-width: 100%;
+}
+
+.invvial-input-flex input {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.invvial-gms-input {
+    max-width: 60px;
+    text-align: center;
+}
+
+/* Botones primarios (azul) */
+.invvial-btn-primary {
+    flex: 1;
+    padding: 9px 14px;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    border: none;
+    border-radius: 5px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+}
+
+.invvial-btn-primary:hover {
+    background: linear-gradient(135deg, #2980b9 0%, #21618c 100%);
+    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
+    transform: translateY(-1px);
+}
+
+.invvial-btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+}
+
+/* Botones secundarios (gris) */
+.invvial-btn-secondary {
+    flex: 1;
+    padding: 9px 14px;
+    background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+    border: none;
+    border-radius: 5px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(127, 140, 141, 0.3);
+}
+
+.invvial-btn-secondary:hover {
+    background: linear-gradient(135deg, #7f8c8d 0%, #6c7a7b 100%);
+    box-shadow: 0 4px 8px rgba(127, 140, 141, 0.4);
+    transform: translateY(-1px);
+}
+
+.invvial-btn-secondary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(127, 140, 141, 0.3);
+}
+
+/* Botones genéricos (mantener compatibilidad) */
+.invvial-btn-block {
+    width: 100%;
+    padding: 8px 12px;
+    background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-bottom: 6px;
+    color: #495057;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.invvial-btn-block:hover {
+    background: linear-gradient(to bottom, #e9ecef, #dee2e6);
+    border-color: #adb5bd;
+}
+
+.invvial-btn-block:active {
+    background: #dee2e6;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Separadores visuales */
+.invvial-card-body>div {
+    padding-bottom: 4px;
+}
+
+#invvial-coordinateInputSection {
+    border-top: 1px solid #e9ecef;
+    padding-top: 12px;
+    margin-top: 8px;
+}
+
+/* --- Estilos para Tabla de Calibración --- */
+.invvial-card-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+    font-size: 11px;
+}
+
+.invvial-card-body table thead {
+    background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+}
+
+.invvial-card-body table th {
+    padding: 8px 6px;
+    border: 1px solid #dee2e6;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    font-size: 11px;
+}
+
+.invvial-card-body table td {
+    padding: 6px;
+    border: 1px solid #dee2e6;
+    font-size: 11px;
+    color: #495057;
+}
+
+.invvial-card-body table td:first-child {
+    font-weight: 500;
+    background-color: #f8f9fa;
+}
+
+/* Inputs dentro de la tabla */
+.invvial-card-body table input.invvial-calib-input {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 11px;
+    outline: none;
+    transition: all 0.2s;
+    background-color: #ffffff;
+}
+
+.invvial-card-body table input.invvial-calib-input:hover {
+    border-color: #3498db;
+    background-color: #f8fbff;
+}
+
+.invvial-card-body table input.invvial-calib-input:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.15);
+}
+
+.invvial-card-body table input.invvial-calib-input::placeholder {
+    color: #adb5bd;
+    font-size: 10px;
+}
+
+/* Texto descriptivo */
+.invvial-card-body p {
+    font-size: 11px;
+    color: #6c757d;
+    margin: 0 0 10px 0;
+    line-height: 1.4;
+}
+
+/* Botones mejorados para calibración */
+#invvial-saveCalibrationBtn,
+#invvial-deleteCalibrationBtn {
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 6px;
+}
+
+#invvial-saveCalibrationBtn {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+#invvial-saveCalibrationBtn:hover {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+    transform: translateY(-1px);
+}
+
+#invvial-deleteCalibrationBtn {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+#invvial-deleteCalibrationBtn:hover {
+    background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Ancho de columnas de la tabla */
+.invvial-card-body table th:first-child,
+.invvial-card-body table td:first-child {
+    width: 80px;
+    min-width: 80px;
+    white-space: nowrap;
+}

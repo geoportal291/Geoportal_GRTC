@@ -71,45 +71,34 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         Object.assign(coordContainer.style, { backgroundColor: 'rgba(0, 0, 0, 0.7)', color: 'white', padding: '5px 10px', borderRadius: '5px', fontSize: '12px', fontFamily: 'monospace', display: 'none' });
 
         // --- Lógica del Modal de Mediciones ---
-        const measureModal = L.DomUtil.create('div', 'measure-modal', map.getContainer());
+        const measureModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-blue', map.getContainer());
+        measureModal.id = "invvial-menu-medir";
         L.DomEvent.disableClickPropagation(measureModal);
-        const measureHeader = L.DomUtil.create('div', 'measure-modal-header', measureModal);
-        const measureCloseButton = L.DomUtil.create('span', 'measure-modal-close', measureHeader);
-        measureCloseButton.innerHTML = '&times;';
-        measureHeader.appendChild(document.createTextNode('Mediciones'));
-        const measureContent = L.DomUtil.create('div', 'measure-modal-content', measureModal);
-        const measureButtonContainer = L.DomUtil.create('div', '', measureContent);
 
-        const distanceButton = L.DomUtil.create('a', 'leaflet-control-custom-button leaflet-control-distance-button', measureButtonContainer);
-        distanceButton.innerHTML = '↔';
-        distanceButton.title = 'Medir distancia';
-
-        const areaButton = L.DomUtil.create('a', 'leaflet-control-custom-button', measureButtonContainer);
-        areaButton.innerHTML = '⬟';
-        areaButton.title = 'Calcular área de polígono';
-        areaButton.style.marginLeft = '5px';
-
-        const clearButton = L.DomUtil.create('a', 'leaflet-control-custom-button', measureButtonContainer);
-        clearButton.innerHTML = '🗑️';
-        clearButton.title = 'Limpiar medición';
-        clearButton.style.marginLeft = '5px';
-
-        const distanceDisplay = L.DomUtil.create('div', 'distance-display', measureContent);
-        distanceDisplay.innerHTML = 'Seleccione una herramienta.';
-
-        // --- NEW: Lógica para Ubicar Progresiva ---
-        const progresivaContainer = L.DomUtil.create('div', 'progresiva-container', measureContent);
-        progresivaContainer.innerHTML = `
-            <hr style="margin: 15px 0;">
-            <div class="input-group">
-                <label for="progresivaInput" style="font-weight: bold; margin-bottom: 5px;">Ubicar Progresiva:</label>
-                <input type="text" id="progresivaInput" placeholder="Ej: 4+780" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
+        measureModal.innerHTML = `
+            <div class="invvial-card-header invvial-header-blue">
+                <span>Mediciones</span>
+                <i class="fas fa-times" style="cursor:pointer"></i>
             </div>
-            <button id="ubicarProgresivaBtn" style="padding: 10px; width: 100%; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px;">
-                Ubicar Punto
-            </button>
+            <div class="invvial-card-body">
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <button class="invvial-btn-block" id="invvial-distanceButton"><i class="fas fa-ruler"></i> Distancia</button>
+                    <button class="invvial-btn-block" id="invvial-areaButton"><i class="fas fa-draw-polygon"></i> Área</button>
+                    <button class="invvial-btn-block" id="invvial-clearMeasureButton"><i class="fas fa-trash"></i> Limpiar</button>
+                </div>
+                <div id="invvial-distanceDisplay" style="margin-bottom: 10px; font-weight: bold;">Seleccione una herramienta.</div>
+                <label style="font-size:12px; font-weight:bold; color:#666;">Ubicar Progresiva:</label>
+                <div class="invvial-input-flex">
+                    <input type="text" id="invvial-progresivaInput" placeholder="Km 4+780">
+                    <button id="invvial-ubicarProgresivaBtn">Ir</button>
+                </div>
+            </div>
         `;
 
+        const distanceDisplay = measureModal.querySelector('#invvial-distanceDisplay');
+
+
+        // --- Lógica para Ubicar Progresiva ---
         // Función para convertir progresiva (ej. "4+780" o "KM 4+780") a metros
         const progresivaToMeters = (progresiva) => {
             if (!progresiva || typeof progresiva !== 'string') return NaN;
@@ -150,7 +139,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         };
 
         const handleUbicarProgresiva = () => {
-            const progresivaInput = document.getElementById('progresivaInput');
+            const progresivaInput = document.getElementById('invvial-progresivaInput');
             const targetMeters = progresivaToMeters(progresivaInput.value);
 
             if (isNaN(targetMeters)) {
@@ -271,121 +260,90 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             }
         };
 
-        const ubicarProgresivaBtn = progresivaContainer.querySelector('#ubicarProgresivaBtn');
-        ubicarProgresivaBtn.onclick = handleUbicarProgresiva;
+        measureModal.querySelector('#invvial-ubicarProgresivaBtn').onclick = handleUbicarProgresiva;
 
 
         // --- Lógica del Modal de Dibujo ---
-        const drawModal = L.DomUtil.create('div', 'measure-modal', map.getContainer());
-        drawModal.style.width = '400px'; // Ancho del modal de dibujo
-        // drawModal.style.left = '95px'; // Posición inicial para que no se solape
+        const drawModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-orange', map.getContainer());
+        drawModal.id = "invvial-menu-dibujo";
+        drawModal.style.width = '340px'; // Reducido para que no se salga del mapa
         L.DomEvent.disableClickPropagation(drawModal);
-        const drawHeader = L.DomUtil.create('div', 'measure-modal-header', drawModal);
-        const drawCloseButton = L.DomUtil.create('span', 'measure-modal-close', drawHeader);
-        drawCloseButton.innerHTML = '&times;';
-        drawHeader.appendChild(document.createTextNode('Dibujar'));
-        const drawContent = L.DomUtil.create('div', 'measure-modal-content', drawModal);
-        drawContent.innerHTML = `
-            <div class="measure-modal-content">
-                <h3>Opciones de Dibujo</h3>
-                <div class="input-group">
-                    <label for="inputTypeSelect">Tipo de Entrada:</label>
-                    <select id="inputTypeSelect">
+
+        drawModal.innerHTML = `
+            <div class="invvial-card-header invvial-header-orange">
+                <span>Herramientas de Dibujo</span>
+                <i class="fas fa-times" style="cursor:pointer"></i>
+            </div>
+            <div class="invvial-card-body">
+                <div class="invvial-input-group">
+                    <label for="invvial-inputTypeSelect">Tipo de Entrada:</label>
+                    <select id="invvial-inputTypeSelect" class="invvial-form-select">
                         <option value="coordinates">Coordenadas</option>
                         <option value="kml">KML</option>
                     </select>
                 </div>
 
-                <div id="coordinateInputSection"> 
-                    <div>
-                        <h4>Ingresar Coordenadas</h4>
-                        <div class="input-group">
-                            <label for="projectionSelect">Proyección:</label>
-                            <select id="projectionSelect">
-                                <option value="geographic">GEOGRÁFICAS</option>
-                                <option value="utm" selected>UTM</option>
-                            </select>
-                        </div>
-                        <div class="input-group" id="utmZoneGroup" style="display: none;">
-                            <label for="utmZoneSelect">Zona:</label>
-                            <select id="utmZoneSelect">
-                                <option value="17">ZONA17</option>
-                                <option value="18" selected>ZONA18</option>
-                                <option value="19">ZONA19</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label for="geometryTypeSelect">Tipo de Geometría:</label>
-                        <select id="geometryTypeSelect">
-                            <option value="point">PUNTO</option>
+                <div id="invvial-coordinateInputSection"> 
+                    <div class="invvial-input-group">
+                        <label for="invvial-projectionSelect">Proyección:</label>
+                        <select id="invvial-projectionSelect" class="invvial-form-select">
+                            <option value="geographic">Geográficas</option>
+                            <option value="utm" selected>UTM</option>
                         </select>
                     </div>
-                    <div id="geographicCoordInputs"> 
-                        <div class="input-group">
-                            <label for="coordFormatSelect">Formato:</label>
-                            <select id="coordFormatSelect">
-                                <option value="decimal">DECIMAL</option>
-                                <option value="degrees">GRADOS (GMS)</option>
+                    <div class="invvial-input-group" id="invvial-utmZoneGroup" style="display: none;">
+                        <label for="invvial-utmZoneSelect">Zona:</label>
+                        <select id="invvial-utmZoneSelect" class="invvial-form-select">
+                            <option value="17">ZONA 17</option>
+                            <option value="18" selected>ZONA 18</option>
+                            <option value="19">ZONA 19</option>
+                        </select>
+                    </div>
+                    <div id="invvial-geographicCoordInputs"> 
+                        <div class="invvial-input-group">
+                             <label for="invvial-coordFormatSelect">Formato:</label>
+                             <select id="invvial-coordFormatSelect" class="invvial-form-select">
+                                <option value="decimal">Decimal</option>
+                                <option value="degrees">Grados (GMS)</option>
                             </select>
                         </div>
-
-                        <div id="decimalInputs">
-                            <div class="input-group">
-                                <label for="lonDecimal">Longitud:</label><input type="text" id="lonDecimal"/>
-                            </div>
-                            <div class="input-group">
-                                <label for="latDecimal">Latitud:</label><input type="text" id="latDecimal"/>
-                            </div>
+                        <div id="invvial-decimalInputs">
+                           <div class="invvial-input-flex"><input type="text" id="invvial-lonDecimal" class="invvial-form-input" placeholder="Longitud"/><input type="text" id="invvial-latDecimal" class="invvial-form-input" placeholder="Latitud"/></div>
                         </div>
-
-                        <div id="degreesInputs" style="display: none;">
-                            <div class="input-group">
-                                <label for="lonDeg">Longitud:</label>
-                                <input type="text" id="lonDeg" placeholder="G" class="gms-input"/>
-                                <input type="text" id="lonMin" placeholder="M" class="gms-input"/>
-                                <input type="text" id="lonSec" placeholder="S" class="gms-input"/>
+                        <div id="invvial-degreesInputs" style="display: none;">
+                            <div class="invvial-input-flex">
+                                <input type="text" id="invvial-lonDeg" placeholder="G" class="invvial-gms-input"/>
+                                <input type="text" id="invvial-lonMin" placeholder="M" class="invvial-gms-input"/>
+                                <input type="text" id="invvial-lonSec" placeholder="S" class="invvial-gms-input"/>
                             </div>
-                            <div class="input-group">
-                                <label for="latDeg">Latitud:</label>
-                                <input type="text" id="latDeg" placeholder="G" class="gms-input"/>
-                                <input type="text" id="latMin" placeholder="M" class="gms-input"/>
-                                <input type="text" id="latSec" placeholder="S" class="gms-input"/>
+                             <div class="invvial-input-flex">
+                                <input type="text" id="invvial-latDeg" placeholder="G" class="invvial-gms-input"/>
+                                <input type="text" id="invvial-latMin" placeholder="M" class="invvial-gms-input"/>
+                                <input type="text" id="invvial-latSec" placeholder="S" class="invvial-gms-input"/>
                             </div>
                         </div>
                     </div>
-
-                    <div id="utmCoordInputs" style="display: none;">
-                        <div class="input-group">
-                            <label for="utmX">Latitud:</label><input type="text" id="utmX"/>
-                        </div>
-                        <div class="input-group">
-                            <label for="utmY">Longitud:  </label><input type="text" id="utmY"/>
-                        </div>
+                    <div id="invvial-utmCoordInputs" style="display: none;">
+                        <div class="invvial-input-flex"><input type="text" id="invvial-utmX" class="invvial-form-input" placeholder="Latitud"/><input type="text" id="invvial-utmY" class="invvial-form-input" placeholder="Longitud"/></div>
                     </div>
                 </div> 
 
-                <div id="kmlInputs" style="display: none; margin-top: 20px;">
-                    <h4>Ingresar KML</h4>
-                    <input type="file" id="kmlFileInput" accept=".kml" style="margin-bottom: 10px;"/>
-                    <button id="processKmlBtn">PROCESAR KML</button>
+                <div id="invvial-kmlInputs" style="display: none; margin-top: 10px;">
+                    <input type="file" id="invvial-kmlFileInput" accept=".kml" class="invvial-btn-block"/>
+                    <button id="invvial-processKmlBtn" class="invvial-btn-primary">PROCESAR KML</button>
                 </div>
-
-                <div class="button-group">
-                    <button id="drawPointBtn">DIBUJAR</button>
-                    <button id="clearCoordsBtn">LIMPIAR</button>
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button id="invvial-drawPointBtn" class="invvial-btn-primary">DIBUJAR</button>
+                    <button id="invvial-clearCoordsBtn" class="invvial-btn-secondary">LIMPIAR</button>
                 </div>
             </div>
         `;
 
         // --- Lógica del Modal de Descarga ---
-        const downloadModal = L.DomUtil.create('div', 'measure-modal', map.getContainer());
+        const downloadModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-purple', map.getContainer());
+        downloadModal.id = 'invvial-menu-kml-descarga';
         L.DomEvent.disableClickPropagation(downloadModal);
-        const downloadHeader = L.DomUtil.create('div', 'measure-modal-header', downloadModal);
-        const downloadCloseButton = L.DomUtil.create('span', 'measure-modal-close', downloadHeader);
-        downloadCloseButton.innerHTML = '&times;';
-        downloadHeader.appendChild(document.createTextNode('Descargar Datos'));
-        const downloadContent = L.DomUtil.create('div', 'measure-modal-content', downloadModal);
+
 
         const handleExportKML = async () => {
             const geoJsonDrawn = drawnItems.toGeoJSON();
@@ -441,34 +399,26 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             }
         };
 
-        downloadContent.innerHTML = `
-          <p style="margin-top: 0; margin-bottom: 10px;">Exportar todas las geometrías dibujadas en el mapa.</p>
-          <button id="exportKmlBtn" style="padding: 10px; width: 100%; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">
-            Descargar como KML
-          </button>
-          <button id="exportShpBtn" style="padding: 10px; width: 100%; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
-            Descargar como Shapefile (ZIP)
-          </button>
+        downloadModal.innerHTML = `
+          <div class="invvial-card-header invvial-header-purple">
+              <span>Descargar Datos</span>
+              <i class="fas fa-times" style="cursor:pointer"></i>
+          </div>
+          <div class="invvial-card-body">
+              <p style="margin-top: 0; margin-bottom: 10px;">Exportar todas las geometrías dibujadas en el mapa.</p>
+              <button id="invvial-exportKmlBtn" class="invvial-btn-block"><i class="fas fa-file-code"></i> Descargar como KML</button>
+              <button id="invvial-exportShpBtn" class="invvial-btn-block"><i class="fas fa-file-archive"></i> Descargar como Shapefile (ZIP)</button>
+          </div>
         `;
 
-        const exportKmlBtn = downloadContent.querySelector('#exportKmlBtn');
-        if (exportKmlBtn) {
-            exportKmlBtn.onclick = handleExportKML;
-        }
+        downloadModal.querySelector('#invvial-exportKmlBtn').onclick = handleExportKML;
+        downloadModal.querySelector('#invvial-exportShpBtn').onclick = handleExportShapefile;
 
-        const exportShpBtn = downloadContent.querySelector('#exportShpBtn');
-        if (exportShpBtn) {
-            exportShpBtn.onclick = handleExportShapefile;
-        }
 
-        // --- NEW: Lógica del Modal de Subida ---
-        const uploadModal = L.DomUtil.create('div', 'measure-modal', map.getContainer());
+        // --- Lógica del Modal de Subida ---
+        const uploadModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-purple', map.getContainer());
+        uploadModal.id = 'invvial-menu-kml-carga';
         L.DomEvent.disableClickPropagation(uploadModal);
-        const uploadHeader = L.DomUtil.create('div', 'measure-modal-header', uploadModal);
-        const uploadCloseButton = L.DomUtil.create('span', 'measure-modal-close', uploadHeader);
-        uploadCloseButton.innerHTML = '&times;';
-        uploadHeader.appendChild(document.createTextNode('Subir KML'));
-        const uploadContent = L.DomUtil.create('div', 'measure-modal-content', uploadModal);
 
         const loadKmlFromUrl = async (url, showAlerts = true) => {
             try {
@@ -534,7 +484,6 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 if (isComponentMounted && tempGeoJsonLayer.getBounds().isValid()) {
                     map.fitBounds(tempGeoJsonLayer.getBounds());
                 }
-                // if (showAlerts) alertify.success('KML cargado y dibujado en el mapa.');
 
             } catch (error) {
                 alertify.error('No se pudo cargar el KML desde la URL.');
@@ -542,7 +491,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         };
 
         const handleKmlUpload = async () => {
-            const kmlUploadInput = uploadContent.querySelector('#kmlUploadInput');
+            const kmlUploadInput = uploadModal.querySelector('#kmlUploadInput');
             const file = kmlUploadInput.files[0];
 
             if (!file) {
@@ -583,46 +532,26 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             }
         };
 
-        const handleDeleteKml = async () => {
-            alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar el KML de este proyecto? Esta acción no se puede deshacer.',
-                async function () { // On OK - Make this async
-                    try {
-                        alertify.message('Eliminando KML...');
-                        // Await the delete request
-                        await axiosInstance.delete(`/api/proyectos/${projectId}/kml`);
-
-                        // Clear all KML-related layers from the map
-                        drawnItems.clearLayers();
-
-                        alertify.success('El KML ha sido eliminado del proyecto.');
-                    } catch (error) {
-                        console.error("Error deleting KML:", error);
-                        // Show specific error if available, otherwise a generic one
-                        const errorMessage = error.response?.data?.error || 'No se pudo eliminar el KML.';
-                        alertify.error(errorMessage);
-                    }
-                },
-                function () { // On Cancel
-                    alertify.error('Eliminación cancelada.');
-                }
-            );
-        }; uploadContent.innerHTML = `
-            <p style="margin-top: 0; margin-bottom: 10px;">Seleccione un archivo KML para guardarlo y mostrarlo en el mapa.</p>
-            <input type="file" id="kmlUploadInput" accept=".kml" style="margin-bottom: 10px; width: 100%;"/>
-            <button id="uploadKmlBtn" style="padding: 10px; width: 100%; background-color: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                Subir y Mostrar KML
-            </button>
+        uploadModal.innerHTML = `
+            <div class="invvial-card-header invvial-header-purple">
+                <span>Gestión de Archivos KML</span>
+                <i class="fas fa-times" style="cursor:pointer"></i>
+            </div>
+            <div class="invvial-card-body">
+                <label for="invvial-kmlUploadInput" class="invvial-btn-block" style="text-align: center; display: block;"><i class="fas fa-upload"></i> Cargar KML</label>
+                <input type="file" id="invvial-kmlUploadInput" accept=".kml" style="display: none;"/>
+                <button id="invvial-uploadKmlBtn" class="invvial-btn-block" style="margin-top: 5px;">Subir y Mostrar KML</button>
+            </div>
         `;
 
-        const uploadKmlBtn = uploadContent.querySelector('#uploadKmlBtn');
-        if (uploadKmlBtn) {
-            uploadKmlBtn.onclick = handleKmlUpload;
-        }
+        uploadModal.querySelector('#invvial-uploadKmlBtn').onclick = handleKmlUpload;
+        uploadModal.querySelector('#invvial-kmlUploadInput').onchange = handleKmlUpload;
+
 
         // Lógica para mostrar/ocultar campos de coordenadas según el formato
-        const coordFormatSelect = document.getElementById('coordFormatSelect');
-        const decimalInputs = document.getElementById('decimalInputs');
-        const degreesInputs = document.getElementById('degreesInputs');
+        const coordFormatSelect = document.getElementById('invvial-coordFormatSelect');
+        const decimalInputs = document.getElementById('invvial-decimalInputs');
+        const degreesInputs = document.getElementById('invvial-degreesInputs');
 
         const updateCoordInputsVisibility = () => {
             if (coordFormatSelect.value === 'decimal') {
@@ -638,10 +567,10 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         updateCoordInputsVisibility(); // Llamar al inicio para establecer el estado inicial
 
         // --- NUEVA Lógica para mostrar/ocultar campos según la proyección ---
-        const projectionSelect = document.getElementById('projectionSelect');
-        const utmZoneGroup = document.getElementById('utmZoneGroup');
-        const geographicCoordInputs = document.getElementById('geographicCoordInputs');
-        const utmCoordInputs = document.getElementById('utmCoordInputs');
+        const projectionSelect = document.getElementById('invvial-projectionSelect');
+        const utmZoneGroup = document.getElementById('invvial-utmZoneGroup');
+        const geographicCoordInputs = document.getElementById('invvial-geographicCoordInputs');
+        const utmCoordInputs = document.getElementById('invvial-utmCoordInputs');
 
         const updateProjectionInputsVisibility = () => {
             if (projectionSelect.value === 'utm') {
@@ -660,9 +589,9 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         updateProjectionInputsVisibility(); // Llamar al inicio para establecer el estado inicial
 
         // --- NUEVA Lógica para mostrar/ocultar secciones según el Tipo de Entrada ---
-        const inputTypeSelect = document.getElementById('inputTypeSelect');
-        const coordinateInputSection = document.getElementById('coordinateInputSection');
-        const kmlInputs = document.getElementById('kmlInputs');
+        const inputTypeSelect = document.getElementById('invvial-inputTypeSelect');
+        const coordinateInputSection = document.getElementById('invvial-coordinateInputSection');
+        const kmlInputs = document.getElementById('invvial-kmlInputs');
 
         const updateInputTypeVisibility = () => {
             if (inputTypeSelect.value === 'coordinates') {
@@ -680,8 +609,8 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         updateInputTypeVisibility(); // Llamar al inicio para establecer el estado inicial
 
         // --- Lógica para procesar KML ---
-        const kmlFileInput = document.getElementById('kmlFileInput');
-        const processKmlBtn = document.getElementById('processKmlBtn');
+        const kmlFileInput = document.getElementById('invvial-kmlFileInput');
+        const processKmlBtn = document.getElementById('invvial-processKmlBtn');
 
         processKmlBtn.onclick = () => {
             const file = kmlFileInput.files[0];
@@ -715,7 +644,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     }
 
                     alertify.success('Archivo KML procesado y características añadidas al mapa.');
-                    drawModal.style.display = 'none'; // Close modal after processing
+                    closeAll();
                 } catch (error) {
                     alertify.error('Ocurrió un error al procesar el archivo KML.');
                 }
@@ -727,24 +656,24 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         };
 
         // Obtener referencias a los botones
-        const drawPointBtn = document.getElementById('drawPointBtn');
-        const clearCoordsBtn = document.getElementById('clearCoordsBtn');
+        const drawPointBtn = document.getElementById('invvial-drawPointBtn');
+        const clearCoordsBtn = document.getElementById('invvial-clearCoordsBtn');
 
         // Función para limpiar los campos de coordenadas
         const clearCoords = () => {
             // Campos decimales
-            document.getElementById('lonDecimal').value = '';
-            document.getElementById('latDecimal').value = '';
+            document.getElementById('invvial-lonDecimal').value = '';
+            document.getElementById('invvial-latDecimal').value = '';
             // Campos grados
-            document.getElementById('lonDeg').value = '';
-            document.getElementById('lonMin').value = '';
-            document.getElementById('lonSec').value = '';
-            document.getElementById('latDeg').value = '';
-            document.getElementById('latMin').value = '';
-            document.getElementById('latSec').value = '';
+            document.getElementById('invvial-lonDeg').value = '';
+            document.getElementById('invvial-lonMin').value = '';
+            document.getElementById('invvial-lonSec').value = '';
+            document.getElementById('invvial-latDeg').value = '';
+            document.getElementById('invvial-latMin').value = '';
+            document.getElementById('invvial-latSec').value = '';
             // Campos UTM
-            document.getElementById('utmX').value = '';
-            document.getElementById('utmY').value = '';
+            document.getElementById('invvial-utmX').value = '';
+            document.getElementById('invvial-utmY').value = '';
         };
 
         // Asignar evento al botón de limpiar
@@ -758,22 +687,22 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         // Función para dibujar el punto
         const drawPoint = () => {
             let finalLat, finalLon;
-            const projectionType = document.getElementById('projectionSelect').value;
+            const projectionType = document.getElementById('invvial-projectionSelect').value;
 
             if (projectionType === 'geographic') {
                 let lat, lon;
-                const coordFormat = document.getElementById('coordFormatSelect').value;
+                const coordFormat = document.getElementById('invvial-coordFormatSelect').value;
 
                 if (coordFormat === 'decimal') {
-                    lon = parseFloat(document.getElementById('lonDecimal').value);
-                    lat = parseFloat(document.getElementById('latDecimal').value);
+                    lon = parseFloat(document.getElementById('invvial-lonDecimal').value);
+                    lat = parseFloat(document.getElementById('invvial-latDecimal').value);
                 } else { // grados (DMS)
-                    const lonDeg = document.getElementById('lonDeg').value;
-                    const lonMin = document.getElementById('lonMin').value;
-                    const lonSec = document.getElementById('lonSec').value;
-                    const latDeg = document.getElementById('latDeg').value;
-                    const latMin = document.getElementById('latMin').value;
-                    const latSec = document.getElementById('latSec').value;
+                    const lonDeg = document.getElementById('invvial-lonDeg').value;
+                    const lonMin = document.getElementById('invvial-lonMin').value;
+                    const lonSec = document.getElementById('invvial-lonSec').value;
+                    const latDeg = document.getElementById('invvial-latDeg').value;
+                    const latMin = document.getElementById('invvial-latMin').value;
+                    const latSec = document.getElementById('invvial-latSec').value;
 
                     lon = dmsToDecimal(lonDeg, lonMin, lonSec);
                     lat = dmsToDecimal(latDeg, latMin, latSec);
@@ -787,28 +716,15 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 finalLon = lon;
 
             } else { // utm
-                const utmX = parseFloat(document.getElementById('utmX').value);
-                const utmY = parseFloat(document.getElementById('utmY').value);
-                const utmZone = parseInt(document.getElementById('utmZoneSelect').value);
+                const utmX = parseFloat(document.getElementById('invvial-utmX').value);
+                const utmY = parseFloat(document.getElementById('invvial-utmY').value);
+                const utmZone = parseInt(document.getElementById('invvial-utmZoneSelect').value);
 
                 if (isNaN(utmX) || isNaN(utmY) || isNaN(utmZone)) {
                     alertify.error('Por favor, ingrese coordenadas UTM válidas y seleccione una zona.');
                     return;
                 }
-
-                // Determine hemisphere for UTM conversion (assuming Southern Hemisphere for Peru)
-                // For a more robust solution, you might need to infer hemisphere from Y coordinate or provide an explicit input.
-                // Given the context of Peru (mostly Southern Hemisphere), we'll assume 'S' for now.
-                // However, UTM zones can span both hemispheres. A more accurate approach would be to
-                // ask the user for hemisphere or infer it from the Y coordinate range.
-                // For simplicity, let's assume Southern Hemisphere for the given zones (17S, 18S, 19S).
-                // The `utm` library's `toLatLon` function requires a zone letter.
-                // For Southern Hemisphere, it's 'S'. For Northern, it's 'N'.
-                // Since the zones are 17, 18, 19, which are typically in the Southern Hemisphere for Peru,
-                // we'll use 'S'. If the user provides coordinates that fall into the Northern Hemisphere
-                // for these zones, the conversion might be incorrect.
-                const utmZoneLetter = 'M'; // Assuming Southern Hemisphere band letter for Peru's latitude range
-
+                const utmZoneLetter = 'M';
                 try {
                     const converted = toLatLon(utmX, utmY, utmZone, utmZoneLetter);
                     finalLat = converted.latitude;
@@ -822,125 +738,117 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
             const marker = L.marker([finalLat, finalLon]).addTo(drawnItems);
             map.setView([finalLat, finalLon], map.getZoom()); // Centrar el mapa en el nuevo punto
-            drawModal.style.display = 'none'; // Opcional: cerrar modal después de dibujar
+            closeAll();
             clearCoords(); // Limpiar campos después de dibujar
         };
 
         // Asignar evento al botón de dibujar
         drawPointBtn.onclick = drawPoint;
 
-        // --- Función para validar entrada numérica ---
         const addNumericInputValidation = (inputId) => {
-            const input = document.getElementById(inputId);
+            const input = document.getElementById('invvial-' + inputId);
             if (input) {
                 input.addEventListener('input', (e) => {
                     let value = e.target.value;
-                    // Eliminar CUALQUIER caracter que no sea un dígito, un punto o un signo menos
-                    // Esto removerá las comas directamente, como en "767,733" -> "767733"
                     value = value.replace(/[^-0-9.]/g, '');
-
-                    // Asegura que el signo negativo solo esté al principio
-                    // Si hay múltiples signos negativos, o uno en medio, elimina los extras y mantiene el inicial
                     const negativeCount = (value.match(/-/g) || []).length;
                     if (negativeCount > 0) {
                         const firstChar = value.charAt(0);
-                        value = value.replace(/-/g, ''); // Remove all hyphens
+                        value = value.replace(/-/g, '');
                         if (firstChar === '-') {
-                            value = '-' + value; // Add back if it was at the start
+                            value = '-' + value;
                         }
                     }
-
-                    // Asegura que solo haya un punto decimal
                     const parts = value.split('.');
                     if (parts.length > 2) {
                         value = parts[0] + '.' + parts.slice(1).join('');
                     }
-
                     e.target.value = value;
                 });
             }
         };
 
-        // --- Asignar validación a los campos de coordenadas ---
         addNumericInputValidation('lonDecimal');
         addNumericInputValidation('latDecimal');
         addNumericInputValidation('utmX');
         addNumericInputValidation('utmY');
 
+        const toolbarContainer = L.DomUtil.create('div', 'invvial-toolbar-container');
+        toolbarContainer.innerHTML = `
+            <div class="invvial-tool-group">
+                <button class="invvial-tool-btn" data-menu="invvial-menu-medir"><i class="fas fa-ruler-combined"></i></button>
+                <button class="invvial-tool-btn" data-menu="invvial-menu-dibujo"><i class="fas fa-pencil-alt" style="color: #e67e22;"></i></button>
+                <button class="invvial-tool-btn" data-menu="invvial-menu-kml-carga"><i class="fas fa-upload" style="color: #6c5ce7;"></i></button>
+                <button class="invvial-tool-btn" data-menu="invvial-menu-kml-descarga"><i class="fas fa-download" style="color: #6c5ce7;"></i></button>
+                <button class="invvial-tool-btn" data-menu="invvial-menu-calibrar"><i class="fas fa-cog"></i></button>
+            </div>
+            <div class="invvial-tool-group">
+                <button class="invvial-tool-btn" id="invvial-updateInfo"><i class="fas fa-save"></i></button>
+                <button class="invvial-tool-btn" id="invvial-deleteKml"><i class="fas fa-trash-alt"></i></button>
+            </div>
+        `;
 
+        const toolbarControl = new L.Control({ position: 'topleft' });
+        toolbarControl.onAdd = () => toolbarContainer;
+        toolbarControl.addTo(map);
 
-        // --- Contenedores de Controles Personalizados (topleft) ---
+        L.DomEvent.disableClickPropagation(toolbarContainer);
 
-        // Botones individuales
-        const mainMeasureButton = L.DomUtil.create('a', 'leaflet-control-custom-button');
-        mainMeasureButton.innerHTML = '📏';
-        mainMeasureButton.title = 'Abrir Mediciones';
+        const closeAll = () => {
+            document.querySelectorAll('.invvial-flyout-card').forEach(m => m.style.display = 'none');
+            document.querySelectorAll('.invvial-tool-btn').forEach(b => b.classList.remove('active'));
+        };
 
-        const mainDrawButton = L.DomUtil.create('a', 'leaflet-control-custom-button');
-        mainDrawButton.innerHTML = '✏️';
-        mainDrawButton.title = 'Abrir Herramientas de Dibujo';
+        const toggleMenu = (menuId, btnElement) => {
+            const menu = document.getElementById(menuId);
+            if (!menu) return;
+            const isVisible = menu.style.display === 'block';
 
-        const mainUploadButton = L.DomUtil.create('a', 'leaflet-control-custom-button');
-        mainUploadButton.innerHTML = '⬆️';
-        mainUploadButton.title = 'Subir KML';
+            closeAll();
 
-        const mainDownloadButton = L.DomUtil.create('a', 'leaflet-control-custom-button');
-        mainDownloadButton.innerHTML = '⬇️';
-        mainDownloadButton.title = 'Descargar Datos';
+            if (!isVisible) {
+                const rect = btnElement.getBoundingClientRect();
+                // Posicionar a la derecha del botón
+                menu.style.left = (rect.right + 15) + 'px';
+                // Posicionar desde arriba (180px desde el top)
+                menu.style.top = '180px';
+                menu.style.bottom = 'auto'; // Resetear bottom
 
-        const updateInfoButton = L.DomUtil.create('a', 'leaflet-control-custom-button');
-        updateInfoButton.innerHTML = '💾';
-        updateInfoButton.title = 'Actualizar Información';
+                // Calcular la posición de la flecha para que apunte al botón
+                const modalTop = 180; // Debe coincidir con menu.style.top
+                const arrowTop = rect.top - modalTop + (rect.height / 2) - 7; // Centrar en el botón
+                menu.style.setProperty('--arrow-top', `${arrowTop}px`);
 
-        const deleteKmlButton = L.DomUtil.create('a', 'leaflet-control-custom-button');
-        deleteKmlButton.innerHTML = '🗑️';
-        deleteKmlButton.title = 'Eliminar KML del Proyecto';
+                menu.style.display = 'block';
+                btnElement.classList.add('active');
+            }
+        };
 
-        const calibrateButton = L.DomUtil.create('a', 'leaflet-control-custom-button');
-        calibrateButton.innerHTML = '⚙️';
-        calibrateButton.title = 'Calibrar Trazado';
+        toolbarContainer.querySelectorAll('.invvial-tool-btn[data-menu]').forEach(btn => {
+            btn.onclick = () => toggleMenu(btn.dataset.menu, btn);
+        });
 
-        // Grupo 1: Medición, Dibujo, Actualización
-        const group1Container = L.DomUtil.create('div', 'leaflet-bar');
-        L.DomEvent.disableClickPropagation(group1Container);
-        group1Container.appendChild(mainMeasureButton);
-        group1Container.appendChild(mainDrawButton);
-        group1Container.appendChild(updateInfoButton);
-        group1Container.appendChild(calibrateButton); // Add calibrate button
-        const group1Controls = new L.Control({ position: 'topleft' });
-        group1Controls.onAdd = function () { return group1Container; };
-        group1Controls.addTo(map);
+        const calibrateButton = toolbarContainer.querySelector('[data-menu="invvial-menu-calibrar"]');
 
-        // Grupo 2: Subir KML
-        const group2Container = L.DomUtil.create('div', 'leaflet-bar');
-        L.DomEvent.disableClickPropagation(group2Container);
-        group2Container.appendChild(mainUploadButton);
-        const group2Controls = new L.Control({ position: 'topleft' });
-        group2Controls.onAdd = function () { return group2Container; };
-        group2Controls.addTo(map);
+        const deleteKmlButton = toolbarContainer.querySelector('#invvial-deleteKml');
 
-        // Grupo 3: Descargar y Eliminar
-        const group3Container = L.DomUtil.create('div', 'leaflet-bar');
-        L.DomEvent.disableClickPropagation(group3Container);
-        group3Container.appendChild(mainDownloadButton);
-        group3Container.appendChild(deleteKmlButton);
-        const group3Controls = new L.Control({ position: 'topleft' });
-        group3Controls.onAdd = function () { return group3Container; };
-        group3Controls.addTo(map);
+        const updateInfoButton = toolbarContainer.querySelector('#invvial-updateInfo');
+
 
         // --- NEW: Calibration Modal ---
-        const calibrationModal = L.DomUtil.create('div', 'measure-modal', map.getContainer());
+        const calibrationModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-blue', map.getContainer());
+        calibrationModal.id = "invvial-menu-calibrar";
         L.DomEvent.disableClickPropagation(calibrationModal);
-        const calibrationHeader = L.DomUtil.create('div', 'measure-modal-header', calibrationModal);
-        const calibrationCloseButton = L.DomUtil.create('span', 'measure-modal-close', calibrationHeader);
-        calibrationCloseButton.innerHTML = '&times;';
-        calibrationHeader.appendChild(document.createTextNode('Calibrar Progresivas por Tramo'));
-        const calibrationContent = L.DomUtil.create('div', 'measure-modal-content', calibrationModal);
-        calibrationCloseButton.onclick = () => { calibrationModal.style.display = 'none'; };
+
+        const calibrationHeader = L.DomUtil.create('div', 'invvial-card-header invvial-header-blue', calibrationModal);
+        calibrationHeader.innerHTML = '<span>Calibrar Progresivas por Tramo</span><i class="fas fa-times" style="cursor:pointer"></i>';
+        calibrationHeader.querySelector('.fa-times').onclick = closeAll;
+
+        const calibrationContent = L.DomUtil.create('div', 'invvial-card-body', calibrationModal);
 
 
         // --- KML Persistence ---
-        const projectId = 24; // As per user request
+        const projectId = 24;
 
         const loadInitialKml = async () => {
             try {
@@ -949,13 +857,12 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     const showAlerts = !window.hasShownInitialKmlAlert;
                     await loadKmlFromUrl(response.data.url, showAlerts);
                     if (showAlerts) {
-                        // alertify.success('KML del proyecto cargado automáticamente.');
                         window.hasShownInitialKmlAlert = true;
                     }
                 }
             } catch (error) {
                 if (error.response && error.response.status !== 404) {
-                } // 404 is a normal case (no KML set), so we ignore it.
+                }
             }
         };
 
@@ -964,9 +871,6 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 const response = await axiosInstance.get(`/api/proyectos/${projectId}/calibracion`);
                 setCalibrationData(response.data);
                 calibrationDataRef.current = response.data;
-                if (Object.keys(response.data).length > 0) {
-                    // alertify.message('Datos de calibración cargados automáticamente.');
-                }
             } catch (error) {
                 if (error.response && error.response.status !== 404) {
                     console.error('Error loading calibration data:', error);
@@ -978,19 +882,8 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         loadInitialKml();
         loadInitialCalibrationData();
 
-
-
-        // --- Lógica de visibilidad de modales ---
-        mainMeasureButton.onclick = () => { measureModal.style.display = measureModal.style.display === 'none' ? 'block' : 'none'; };
-        measureCloseButton.onclick = () => { measureModal.style.display = 'none'; };
-        mainDrawButton.onclick = () => { drawModal.style.display = drawModal.style.display === 'none' ? 'block' : 'none'; };
-        drawCloseButton.onclick = () => { drawModal.style.display = 'none'; };
-        mainDownloadButton.onclick = () => { downloadModal.style.display = downloadModal.style.display === 'none' ? 'block' : 'none'; };
-        downloadCloseButton.onclick = () => { downloadModal.style.display = 'none'; };
-        mainUploadButton.onclick = () => { uploadModal.style.display = uploadModal.style.display === 'none' ? 'block' : 'none'; };
-        uploadCloseButton.onclick = () => { uploadModal.style.display = 'none'; };
-
         calibrateButton.onclick = () => {
+            toggleMenu('menu-calibrar', calibrateButton);
             const routeLayer = geoJsonLayerRef.current;
             if (!routeLayer) {
                 alertify.error('Primero debe cargar un archivo KML.');
@@ -1016,8 +909,8 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 tableRows += `
                     <tr>
                         <td style="padding: 8px; border: 1px solid #ddd;">${tramoName}</td>
-                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="calib-input" data-tramo="${tramoName}" data-type="start" value="${currentCalib.start}" placeholder="Ej: 0+000" style="width: 100%; box-sizing: border-box;"></td>
-                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="calib-input" data-tramo="${tramoName}" data-type="end" value="${currentCalib.end}" placeholder="Ej: 34+000" style="width: 100%; box-sizing: border-box;"></td>
+                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="calib-input btn-block" data-tramo="${tramoName}" data-type="start" value="${currentCalib.start}" placeholder="Ej: 0+000"></td>
+                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="calib-input btn-block" data-tramo="${tramoName}" data-type="end" value="${currentCalib.end}" placeholder="Ej: 34+000"></td>
                     </tr>
                 `;
             });
@@ -1028,18 +921,14 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     <thead>
                         <tr>
                             <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Tramo</th>
-                            <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Progresiva Inicio</th>
-                            <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Progresiva Fin</th>
+                            <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Inicio</th>
+                            <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Fin</th>
                         </tr>
                     </thead>
                     <tbody>${tableRows}</tbody>
                 </table>
-                <button id="saveCalibrationBtn" style="padding: 10px; width: 100%; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">
-                    Guardar Calibración
-                </button>
-                <button id="deleteCalibrationBtn" style="padding: 10px; width: 100%; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                    Borrar Calibración
-                </button>
+                <button id="saveCalibrationBtn" class="btn-block">Guardar Calibración</button>
+                <button id="deleteCalibrationBtn" class="btn-block" style="background-color: #dc3545; color: white; margin-top:5px;">Borrar Calibración</button>
             `;
 
             calibrationModal.querySelector('#saveCalibrationBtn').onclick = async () => {
@@ -1057,7 +946,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     await axiosInstance.post(`/api/proyectos/${projectId}/calibracion`, newCalibData);
                     setCalibrationData(newCalibData);
                     calibrationDataRef.current = newCalibData;
-                    calibrationModal.style.display = 'none';
+                    closeAll();
                     alertify.success('Datos de calibración guardados exitosamente en la base de datos.');
                 } catch (error) {
                     console.error('Error saving calibration data:', error);
@@ -1072,7 +961,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                             await axiosInstance.delete(`/api/proyectos/${projectId}/calibracion`);
                             setCalibrationData(null); // Clear local state
                             calibrationDataRef.current = null;
-                            calibrationModal.style.display = 'none';
+                            closeAll();
                             alertify.success('Datos de calibración eliminados exitosamente.');
                         } catch (error) {
                             console.error('Error deleting calibration data:', error);
@@ -1082,9 +971,26 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     function () { alertify.message('Eliminación cancelada.'); }
                 );
             };
+        };
 
-
-            calibrationModal.style.display = 'block';
+        const handleDeleteKml = async () => {
+            alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar el KML de este proyecto? Esta acción no se puede deshacer.',
+                async function () {
+                    try {
+                        alertify.message('Eliminando KML...');
+                        await axiosInstance.delete(`/api/proyectos/${projectId}/kml`);
+                        drawnItems.clearLayers();
+                        alertify.success('El KML ha sido eliminado del proyecto.');
+                    } catch (error) {
+                        console.error("Error deleting KML:", error);
+                        const errorMessage = error.response?.data?.error || 'No se pudo eliminar el KML.';
+                        alertify.error(errorMessage);
+                    }
+                },
+                function () {
+                    alertify.error('Eliminación cancelada.');
+                }
+            );
         };
 
         deleteKmlButton.onclick = handleDeleteKml;
@@ -1097,8 +1003,6 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 alertify.warning('No hay nuevos puntos para guardar.');
                 return;
             }
-
-            // FIXME: This needs to be obtained from the current project context
             const id_proyecto = 1;
 
             const puntosParaGuardar = points.map(feature => ({
@@ -1111,14 +1015,8 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
             try {
                 alertify.message('Guardando puntos en la base de datos...');
-
-                // This endpoint needs to be created in your backend.
-                // It should accept an array of points.
                 const response = await axiosInstance.post('/api/puntos-mapa/bulk', { puntos: puntosParaGuardar });
-
                 alertify.success(`${response.data.count} puntos guardados correctamente.`);
-
-                // Remove saved points from the map to avoid re-saving
                 const layersToRemove = [];
                 drawnItems.eachLayer(layer => {
                     if (layer instanceof L.Marker) {
@@ -1136,20 +1034,6 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
         updateInfoButton.onclick = handleUpdateInfo;
 
-        // --- Lógica para hacer modales arrastrables ---
-        const makeDraggable = (modal, header) => {
-            let dragging = false, offset = [0, 0];
-            header.onmousedown = (e) => {
-                dragging = true; offset = [modal.offsetLeft - e.clientX, modal.offsetTop - e.clientY];
-                document.onmousemove = (e) => { if (dragging) { modal.style.left = (e.clientX + offset[0]) + 'px'; modal.style.top = (e.clientY + offset[1]) + 'px'; } };
-                document.onmouseup = () => { dragging = false; document.onmousemove = document.onmouseup = null; };
-            };
-        };
-        makeDraggable(measureModal, measureHeader);
-        makeDraggable(drawModal, drawHeader);
-        makeDraggable(downloadModal, downloadHeader);
-        makeDraggable(uploadModal, uploadHeader);
-        makeDraggable(calibrationModal, calibrationHeader);
 
         // --- Manejadores de Eventos ---
         const getPolygonArea = (latLngs) => {
@@ -1169,7 +1053,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             distanceDisplay.innerHTML = 'Seleccione una herramienta.';
         };
 
-        clearButton.onclick = clearMeasurement;
+        measureModal.querySelector('#invvial-clearMeasureButton').onclick = clearMeasurement;
 
         const handleCoordsMouseMove = (e) => {
             if (isDrawing || isMeasuring) {
@@ -1180,12 +1064,8 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             const lat = e.latlng.lat;
             const lon = e.latlng.lng;
             const zoom = map.getZoom();
-
-            // Cálculo aproximado de escala (metros por pixel * factor para convertir a escala 1:x)
             const metersPerPixel = 156543.03 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
-            const scale = Math.round(metersPerPixel * 3779.52); // 1 metro = 3779.52 pulgadas
-
-            // Coordenadas UTM
+            const scale = Math.round(metersPerPixel * 3779.52);
             const utmCoords = fromLatLon(lat, lon);
 
             coordContainer.innerHTML = `
@@ -1204,8 +1084,6 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         const handleDrawStart = (e) => {
             isDrawing = true;
             coordContainer.style.display = 'none';
-            // Desactivar otros botones
-            L.DomUtil.removeClass(areaButton, 'active');
         };
         const handleDrawStop = () => { isDrawing = false; };
 
@@ -1230,31 +1108,23 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             }
         };
 
-        distanceButton.onclick = () => {
+        measureModal.querySelector('#invvial-distanceButton').onclick = () => {
             isMeasuring = !isMeasuring;
-            if (areaDrawer) { areaDrawer.disable(); areaDrawer = null; L.DomUtil.removeClass(areaButton, 'active'); }
+            if (areaDrawer) { areaDrawer.disable(); areaDrawer = null; }
             clearMeasurement();
             if (isMeasuring) {
-                L.DomUtil.addClass(distanceButton, 'active'); map.getContainer().style.cursor = 'crosshair';
+                map.getContainer().style.cursor = 'crosshair';
                 distanceDisplay.innerHTML = 'Haga clic para añadir puntos.';
                 map.on('mousemove', handleMeasureMouseMove);
             } else {
-                L.DomUtil.removeClass(distanceButton, 'active'); map.getContainer().style.cursor = '';
+                map.getContainer().style.cursor = '';
                 map.off('mousemove', handleMeasureMouseMove);
             }
         };
 
-        const startDrawer = (drawer) => {
-            if (currentDrawer) {
-                currentDrawer.disable();
-            }
-            currentDrawer = drawer;
-            currentDrawer.enable();
-        };
-
-        areaButton.onclick = () => {
-            if (isMeasuring) { distanceButton.click(); } // Desactivar medición de distancia
-            L.DomUtil.addClass(areaButton, 'active');
+        measureModal.querySelector('#invvial-areaButton').onclick = () => {
+            if (isMeasuring) { isMeasuring = false; map.getContainer().style.cursor = ''; map.off('mousemove', handleMeasureMouseMove); }
+            clearMeasurement();
             areaDrawer = new L.Draw.Polygon(map, { showArea: false, allowIntersection: false, shapeOptions: { color: '#007bff' } });
             areaDrawer.enable();
         };
@@ -1275,7 +1145,6 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 }
                 distanceDisplay.innerHTML = `Distancia: ${(totalDistance / 1000).toFixed(3)} km`;
 
-                // Add label for segment distance
                 const segmentDistanceKm = (segmentDistance / 1000);
                 if (segmentDistanceKm > 0) {
                     L.marker(segment.getCenter(), {
@@ -1296,7 +1165,6 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 rubberBandLine = null;
             }
             isMeasuring = false;
-            L.DomUtil.removeClass(distanceButton, 'active');
             map.getContainer().style.cursor = '';
             map.off('mousemove', handleMeasureMouseMove);
 
@@ -1305,7 +1173,6 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         const handleDrawCreated = (e) => {
             const layer = e.layer;
 
-            // Si es el polígono de medición de área, calcula y muestra el popup
             if (areaDrawer && e.layerType === 'polygon') {
                 const area = getPolygonArea(layer.getLatLngs()[0]);
                 const areaHa = (area / 10000).toFixed(2);
@@ -1316,16 +1183,45 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
             drawnItems.addLayer(layer);
 
-            // Resetear estados
-            L.DomUtil.removeClass(areaButton, 'active');
             if (areaDrawer) {
                 areaDrawer = null;
             }
             if (currentDrawer) {
                 currentDrawer = null;
             }
-            drawModal.style.display = 'none'; // Opcional: cerrar modal de dibujo al terminar
+            closeAll();
         };
+
+        // Create an array of modals for easy iteration
+        const modals = [measureModal, drawModal, downloadModal, uploadModal, calibrationModal];
+
+        // Add 'X' click logic to close all modals
+        modals.forEach(modal => {
+            const closeIcon = modal.querySelector('.fa-times');
+            if (closeIcon) {
+                closeIcon.style.cursor = 'pointer'; // Ensure pointer cursor
+                closeIcon.onclick = (e) => {
+                    e.stopPropagation(); // Prevent bubbling just in case
+                    closeAll();
+                };
+            }
+        });
+
+        const handleDocumentClick = (e) => {
+            // Check if the click is outside all modals and not on a toolbar button
+            const clickedInsideModal = modals.some(modal => modal.contains(e.target));
+            const clickedOnToolbarBtn = e.target.closest('.invvial-tool-btn');
+
+            if (!clickedInsideModal && !clickedOnToolbarBtn) {
+                closeAll();
+            }
+        };
+
+        // Attach global click listener. useCapture = true to catch it early if needed, or false.
+        // Usually bubbling phase (false) is fine, but we need to match how stopPropagation is used elsewhere.
+        // We'll attach to document.body or document
+        document.addEventListener('click', handleDocumentClick);
+
 
         // --- Adjuntar y Limpiar Listeners ---
         map.on('mousemove', handleCoordsMouseMove).on('mouseout', handleCoordsMouseOut);
@@ -1335,6 +1231,9 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
         return () => {
             isComponentMounted = false;
+            // Remove global click listener
+            document.removeEventListener('click', handleDocumentClick);
+
             if (map) {
                 map.isInitialized = false;
             }
@@ -1344,14 +1243,13 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             map.off('click', handleMapClick).off('dblclick', handleMapDoubleClick);
             map.off('mousemove', handleMeasureMouseMove);
             coordControl.remove();
-            group1Controls.remove();
-            group2Controls.remove();
-            group3Controls.remove();
-            // map.removeControl(drawControl);
-            if (map.getContainer().contains(measureModal)) { map.getContainer().removeChild(measureModal); }
-            if (map.getContainer().contains(drawModal)) { map.getContainer().removeChild(drawModal); }
-            if (map.getContainer().contains(downloadModal)) { map.getContainer().removeChild(downloadModal); }
-            if (map.getContainer().contains(uploadModal)) { map.getContainer().removeChild(uploadModal); }
+            toolbarControl.remove();
+
+            [measureModal, drawModal, downloadModal, uploadModal, calibrationModal].forEach(modal => {
+                if (map.getContainer().contains(modal)) {
+                    map.getContainer().removeChild(modal);
+                }
+            });
         };
     }, [map]);
 
@@ -1624,8 +1522,8 @@ const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantaril
         <div style={{ height: '500px', width: '100%', minHeight: 0 }}>
             <MapContainer center={center} zoom={6} style={{ height: '100%', width: '100%' }}>
                 <LayersControl position="topright">
-                    <LayersControl.BaseLayer checked name="Estándar"> <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' /> </LayersControl.BaseLayer>
-                    <LayersControl.BaseLayer name="Topográfico"> <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' /> </LayersControl.BaseLayer>
+                    <LayersControl.BaseLayer name="Estándar"> <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' /> </LayersControl.BaseLayer>
+                    <LayersControl.BaseLayer checked name="Topográfico"> <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' /> </LayersControl.BaseLayer>
                     <LayersControl.BaseLayer name="Satélite"> <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' /> </LayersControl.BaseLayer>
                 </LayersControl>
                 <MapLogic initialRoute={null} onTramoSelect={onTramoSelect} highlightedTramoId={highlightedTramoId} alcantarillasData={alcantarillasData} onAlcantarillaClick={onAlcantarillaClick} onRouteLoaded={onRouteLoaded} onShowDetails={onShowDetails} />
