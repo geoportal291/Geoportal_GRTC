@@ -40,3 +40,6 @@ CREATE TABLE IF NOT EXISTS hitos_kilometricos (
     panel_fotografico_codigo VARCHAR(255),
     id_proyecto INTEGER REFERENCES proyectos(id)
 );
+ALTER TABLE alcantarillas ADD COLUMN entregable VARCHAR(255);
+ALTER TABLE senales_preventivas ADD COLUMN entregable VARCHAR(255);
+ALTER TABLE hitos_kilometricos ADD COLUMN entregable VARCHAR(255);

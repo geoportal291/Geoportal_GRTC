@@ -1461,7 +1461,8 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
 
                                 // Borrar la clave original plana para no dejar basura, 
                                 // salvo que la clave original sea parte de la ruta (raro)
-                                if (excelKey !== targetPath.split('.')[0]) {
+                                const rootPath = Array.isArray(targetPath) ? null : targetPath.split('.')[0];
+                                if (excelKey !== rootPath) {
                                     delete datos_formulario[excelKey];
                                 }
                             } else {

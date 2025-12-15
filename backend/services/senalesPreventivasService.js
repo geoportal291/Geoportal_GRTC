@@ -101,7 +101,8 @@ const createSenal = async (req, res) => {
     const {
         codigo, progresiva, lado, tipo, clasificacion, material,
         latitud, longitud, altitud, condicion, observaciones,
-        panel_fotografico_codigo, project_id
+        latitud, longitud, altitud, condicion, observaciones,
+        panel_fotografico_codigo, project_id, entregable
     } = req.body;
 
     try {
@@ -109,12 +110,12 @@ const createSenal = async (req, res) => {
             `INSERT INTO senales_preventivas 
             (codigo, progresiva, lado, tipo, clasificacion, material, 
             latitud, longitud, altitud, observaciones, 
-            panel_fotografico_codigo, id_proyecto) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+            panel_fotografico_codigo, id_proyecto, entregable) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
             RETURNING *`,
             [codigo, progresiva, lado, tipo, clasificacion, material,
                 latitud, longitud, altitud, observaciones,
-                panel_fotografico_codigo, project_id]
+                panel_fotografico_codigo, project_id, entregable]
         );
         res.json(result.rows[0]);
     } catch (error) {
@@ -198,7 +199,11 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         latitud: -1,
         longitud: -1,
         altitud: -1,
-        foto: -1
+        latitud: -1,
+        longitud: -1,
+        altitud: -1,
+        foto: -1,
+        entregable: -1
     };
 
     for (let i = 0; i < Math.min(20, rawData.length); i++) {
@@ -236,6 +241,8 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
 
             colMap.foto = row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto')))
                 !== -1 ? row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto'))) : progIdx + 7;
+            colMap.entregable = row.findIndex(c => typeof c === 'string' && (c.toUpperCase().includes('ENTREGABLE')))
+                !== -1 ? row.findIndex(c => typeof c === 'string' && (c.toUpperCase().includes('ENTREGABLE'))) : progIdx + 8; // Assuming Entregable is after Foto
             break;
         }
     }
@@ -253,7 +260,9 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         colMap.latitud = 7;
         colMap.longitud = 8;
         colMap.altitud = 9;
+        colMap.altitud = 9;
         colMap.foto = 10;
+        colMap.entregable = 12; // Fallback M
     }
 
     console.log('DEBUG: Column Map:', JSON.stringify(colMap));
@@ -291,7 +300,10 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
             let coord1 = row[colMap.latitud];
             let coord2 = row[colMap.longitud];
             let altitudVal = row[colMap.altitud];
+            let coord2 = row[colMap.longitud];
+            let altitudVal = row[colMap.altitud];
             const panel_fotografico_codigo = row[colMap.foto];
+            const entregable = row[colMap.entregable];
 
             // Normalize Altitud
             if (typeof altitudVal === 'string') {
@@ -374,11 +386,11 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
                 `INSERT INTO senales_preventivas 
                 (codigo, progresiva, lado, tipo, clasificacion, material, 
                 latitud, longitud, altitud, observaciones, 
-                panel_fotografico_codigo, id_proyecto) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                panel_fotografico_codigo, id_proyecto, entregable) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
                 [codigo, progresivaStr, lado, tipo, clasificacion, material,
                     latitud || null, longitud || null, altitudVal, null,
-                    panel_fotografico_codigo, projectId]
+                    panel_fotografico_codigo, projectId, entregable]
             );
             insertedCount++;
         }

@@ -100,7 +100,7 @@ const createHito = async (req, res) => {
     const {
         codigo, progresiva, lado, tipo, clasificacion, material,
         latitud, longitud, altitud, observaciones,
-        panel_fotografico_codigo, project_id
+        panel_fotografico_codigo, project_id, entregable
     } = req.body;
 
     try {
@@ -108,12 +108,12 @@ const createHito = async (req, res) => {
             `INSERT INTO hitos_kilometricos 
             (codigo, progresiva, lado, tipo, clasificacion, material, 
             latitud, longitud, altitud, observaciones, 
-            panel_fotografico_codigo, id_proyecto) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+            panel_fotografico_codigo, id_proyecto, entregable) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
             RETURNING *`,
             [codigo, progresiva, lado, tipo, clasificacion, material,
                 latitud, longitud, altitud, observaciones,
-                panel_fotografico_codigo, project_id]
+                panel_fotografico_codigo, project_id, entregable]
         );
         res.json(result.rows[0]);
     } catch (error) {
@@ -190,7 +190,9 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         latitud: -1,
         longitud: -1,
         altitud: -1,
-        foto: -1
+        altitud: -1,
+        foto: -1,
+        entregable: -1
     };
 
     for (let i = 0; i < Math.min(20, rawData.length); i++) {
@@ -210,6 +212,7 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
             colMap.longitud = row.findIndex(c => typeof c === 'string' && (c.includes('Longitud') || c.includes('LONGITUD'))) !== -1 ? row.findIndex(c => typeof c === 'string' && (c.includes('Longitud') || c.includes('LONGITUD'))) : progIdx + 5;
             colMap.altitud = row.findIndex(c => typeof c === 'string' && (c.includes('Altitud') || c.includes('ALTITUD'))) !== -1 ? row.findIndex(c => typeof c === 'string' && (c.includes('Altitud') || c.includes('ALTITUD'))) : progIdx + 6;
             colMap.foto = row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto'))) !== -1 ? row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto'))) : progIdx + 7;
+            colMap.entregable = row.findIndex(c => typeof c === 'string' && (c.toUpperCase().includes('ENTREGABLE'))) !== -1 ? row.findIndex(c => typeof c === 'string' && (c.toUpperCase().includes('ENTREGABLE'))) : progIdx + 8;
             break;
         }
     }
@@ -225,7 +228,9 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         colMap.latitud = 7;
         colMap.longitud = 8;
         colMap.altitud = 9;
+        colMap.altitud = 9;
         colMap.foto = 10;
+        colMap.entregable = 12; // Fallback to M
     }
 
     console.log('DEBUG: Hitos Column Map:', JSON.stringify(colMap));
@@ -264,7 +269,9 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
             let coord1 = row[colMap.latitud];
             let coord2 = row[colMap.longitud];
             let altitudVal = row[colMap.altitud];
+            let altitudVal = row[colMap.altitud];
             const panel_fotografico_codigo = row[colMap.foto];
+            const entregable = row[colMap.entregable];
 
             if (typeof altitudVal === 'string') {
                 altitudVal = parseFloat(altitudVal.replace(/,/g, ''));
@@ -343,11 +350,11 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
                 `INSERT INTO hitos_kilometricos 
                 (codigo, progresiva, lado, tipo, clasificacion, material, 
                 latitud, longitud, altitud, observaciones, 
-                panel_fotografico_codigo, id_proyecto) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                panel_fotografico_codigo, id_proyecto, entregable) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
                 [codigo, progresivaStr, lado, tipo, clasificacion, material,
                     latitud || null, longitud || null, altitudVal, null,
-                    panel_fotografico_codigo, projectId]
+                    panel_fotografico_codigo, projectId, entregable]
             );
             insertedCount++;
         }
@@ -390,7 +397,7 @@ const updateHito = async (req, res) => {
     const { id } = req.params;
     const {
         codigo, progresiva, lado, tipo, clasificacion, material,
-        latitud, longitud, altitud, observaciones, panel_fotografico_codigo
+        latitud, longitud, altitud, observaciones, panel_fotografico_codigo, entregable
     } = req.body;
 
     try {
@@ -398,10 +405,10 @@ const updateHito = async (req, res) => {
             `UPDATE hitos_kilometricos
              SET codigo = $1, progresiva = $2, lado = $3, tipo = $4, clasificacion = $5, 
                  material = $6, latitud = $7, longitud = $8, altitud = $9, observaciones = $10, 
-                 panel_fotografico_codigo = $11
-             WHERE id_hito_kilometrico = $12 RETURNING *`,
+                 panel_fotografico_codigo = $11, entregable = $12
+             WHERE id_hito_kilometrico = $13 RETURNING *`,
             [codigo, progresiva, lado, tipo, clasificacion, material,
-                latitud, longitud, altitud, observaciones, panel_fotografico_codigo, id]
+                latitud, longitud, altitud, observaciones, panel_fotografico_codigo, entregable, id]
         );
         res.json(result.rows[0]);
     } catch (e) {
