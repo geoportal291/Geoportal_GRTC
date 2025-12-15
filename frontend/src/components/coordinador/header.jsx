@@ -85,30 +85,7 @@ export default function Header({ sidebarCollapsed, onTrafficOptionChange, onVial
             )}
             {pageTitle === "Inventario Vial" && (
               <div className="traffic-options">
-                <button
-                  className={`traffic-option ${activeVialOption === 'resumen general' ? 'active' : ''}`}
-                  onClick={() => handleVialOptionClick('resumen general')}
-                >
-                  Resumen General
-                </button>
-                <button
-                  className={`traffic-option ${activeVialOption === '1er entregable' ? 'active' : ''}`}
-                  onClick={() => handleVialOptionClick('1er entregable')}
-                >
-                  1er Entregable
-                </button>
-                <button
-                  className={`traffic-option ${activeVialOption === '2do entregable' ? 'active' : ''}`}
-                  onClick={() => handleVialOptionClick('2do entregable')}
-                >
-                  2do Entregable
-                </button>
-                <button
-                  className={`traffic-option ${activeVialOption === '3er entregable' ? 'active' : ''}`}
-                  onClick={() => handleVialOptionClick('3er entregable')}
-                >
-                  3er Entregable
-                </button>
+                {/* Options removed as per user request */}
               </div>
             )}
           </div>

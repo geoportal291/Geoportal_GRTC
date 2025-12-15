@@ -26,6 +26,42 @@ const viewConfig = {
     fields: ['progresiva', 'clase', 'lado', 'longitud_muro', 'alto', 'estado'],
     keyField: 'id_muro',
   },
+  'estructuras-existentes': {
+    title: 'Estructuras Existentes',
+    headers: ['Entregable', 'Prog. Inicio', 'Prog. Fin', 'Ancho (m)', 'Observaciones', 'Acciones'],
+    fields: ['entregable', 'progresiva_inicio', 'progresiva_final', 'ancho_calzada', 'observaciones'],
+    keyField: 'id_estructura',
+  },
+  canteras: {
+    title: 'Canteras y Fuentes de Agua',
+    headers: ['Tipo', 'Progresiva', 'Panel', 'Lado', 'Propietario', 'Acciones'],
+    fields: ['type_label', 'progresiva', 'panel_fotografico', 'lado', 'propietario'],
+    keyField: 'id', // Needs unique ID handling, logic might need adjustment if IDs clash
+  },
+  interferencias: {
+    title: 'Interferencias Eléctricas',
+    headers: ['Progresiva', 'Tipo', 'Material', 'Tensión', 'Lado', 'Acciones'],
+    fields: ['progresiva', 'tipo_interferencia', 'material', 'tension', 'lado'],
+    keyField: 'id',
+  },
+  senales_informativas: {
+    title: 'Señales Informativas',
+    headers: ['Código', 'Progresiva', 'Tipo', 'Clasificación', 'Lado', 'Material', 'Estado', 'Acciones'],
+    fields: ['codigo', 'progresiva', 'tipo', 'clasificacion', 'lado', 'material', 'estado'],
+    keyField: 'id',
+  },
+  senales_preventivas: {
+    title: 'Señales Preventivas',
+    headers: ['Código', 'Progresiva', 'Tipo', 'Clasificación', 'Lado', 'Material', 'Acciones'],
+    fields: ['codigo', 'progresiva', 'tipo', 'clasificacion', 'lado', 'material'],
+    keyField: 'id_senal_preventiva',
+  },
+  hitos_kilometricos: {
+    title: 'Hitos Kilométricos',
+    headers: ['Código', 'Progresiva', 'Tipo', 'Clasificación', 'Lado', 'Material', 'Acciones'],
+    fields: ['codigo', 'progresiva', 'tipo', 'clasificacion', 'lado', 'material'],
+    keyField: 'id_hito_kilometrico',
+  },
 };
 
 const ListaElementosView = ({
@@ -74,7 +110,18 @@ const ListaElementosView = ({
             <tbody>
               {sortedData.map((element) => (
                 <tr key={element[config.keyField]} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  {config.fields.map(field => <td key={field}>{element[field]}</td>)}
+                  {config.fields.map(field => {
+                    let val = element[field];
+                    if (field.includes('progresiva') && val !== null && val !== undefined) {
+                      const num = Number(val);
+                      if (!isNaN(num)) {
+                        const km = Math.floor(num / 1000);
+                        const m = Math.round(num % 1000);
+                        val = `${km}+${m.toString().padStart(3, '0')}`;
+                      }
+                    }
+                    return <td key={field}>{val}</td>;
+                  })}
                   <td>
                     <button onClick={() => handleEditClick(element)} className="modal-button-edit">Editar</button>
                   </td>

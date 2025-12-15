@@ -9,27 +9,34 @@
 /* Fila para los paneles de información superior */
 .info-panels-row {
     display: flex;
-    flex-wrap: wrap; /* Permite que los paneles pasen a la siguiente línea en pantallas pequeñas */
-    gap: 20px; /* Espacio entre los paneles */
+    flex-wrap: wrap;
+    /* Permite que los paneles pasen a la siguiente línea en pantallas pequeñas */
+    gap: 20px;
+    /* Espacio entre los paneles */
     width: 100%;
 }
 
-.info-panels-row > .col-md-6 {
-    flex: 1 1 calc(50% - 20px); /* Cada panel ocupa cerca del 50% del espacio, ajustado por el gap */
-    min-width: 300px; /* Ancho mínimo antes de que se envuelvan */
+.info-panels-row>.col-md-6 {
+    flex: 1 1 calc(50% - 20px);
+    /* Cada panel ocupa cerca del 50% del espacio, ajustado por el gap */
+    min-width: 300px;
+    /* Ancho mínimo antes de que se envuelvan */
 }
 
 
 .ensayo-header-actions {
     display: flex;
     align-items: center;
-    gap: 2rem; /* Aumentado el gap */
+    gap: 2rem;
+    /* Aumentado el gap */
     margin-bottom: 1.5rem;
 }
 
 .ensayo-header-actions .btn {
-    margin: 0 !important; /* Eliminar márgenes que puedan estar pegando los botones */
-    flex-shrink: 0; /* Evitar que los botones se encojan */
+    margin: 0 !important;
+    /* Eliminar márgenes que puedan estar pegando los botones */
+    flex-shrink: 0;
+    /* Evitar que los botones se encojan */
 }
 
 .header h4 {
@@ -45,39 +52,107 @@
 .card {
     border: none;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    border-radius: 12px; /* Borde más redondeado */
-    overflow: hidden; /* Asegura que el contenido respete los bordes */
+    border-radius: 12px;
+    /* Borde más redondeado */
+    overflow: hidden;
+    /* Asegura que el contenido respete los bordes */
 }
 
 .card-header {
-    background-color: #54a0ca; /* Color solicitado */
-    color: #fff; /* Texto blanco para contraste */
+    background-color: #54a0ca;
+    /* Color solicitado */
+    color: #fff;
+    /* Texto blanco para contraste */
     border-bottom: 1px solid #e0e0e0;
     font-weight: 600;
-    padding: 1rem 1.25rem; /* Más padding vertical */
-    display: flex; /* Centrado vertical */
-    align-items: center; /* Centrado vertical */
+    padding: 1rem 1.25rem;
+    /* Más padding vertical */
+    display: flex;
+    /* Centrado vertical */
+    align-items: center;
+    /* Centrado vertical */
 }
 
 .card-header .nav-tabs {
-    display: flex; /* Asegura que los elementos se alineen en fila */
-    flex-wrap: nowrap; /* Evita que las pestañas se envuelvan a la siguiente línea */
-    margin-bottom: -0.25rem; /* Ajustado al nuevo padding del header */
+    display: flex;
+    /* Asegura que los elementos se alineen en fila */
+    flex-wrap: nowrap;
+    /* Evita que las pestañas se envuelvan a la siguiente línea */
+    margin-bottom: -0.25rem;
+    /* Ajustado al nuevo padding del header */
 }
 
-.nav-tabs .nav-link {
+/* Estilos específicos para las pestañas del encabezado (Fondo azul) */
+.card-header .nav-tabs .nav-link {
     border: none;
-    color: rgba(255, 255, 255, 0.8); /* Texto más claro para fondo azul */
+    color: rgba(255, 255, 255, 0.8);
     font-weight: 500;
     padding: 1rem 1.25rem;
 }
 
-.nav-tabs .nav-link.active {
-    background-color: #fff; /* Fondo blanco */
-    color: #347fa7;      /* Texto azul */
-    border-bottom: none; /* Sin borde inferior */
-    border-radius: 50px; /* Forma de píldora */
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Sombra sutil */
+.card-header .nav-tabs .nav-link.active {
+    background-color: #fff;
+    color: #347fa7;
+    border-bottom: none;
+    border-radius: 50px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilos para las pestañas internas del formulario (Personalizadas) */
+.ensayo-tab-container {
+    width: 100%;
+}
+
+.ensayo-nav-tabs {
+    border-bottom: 2px solid #dee2e6;
+    display: flex;
+    /* Asegura horizontalidad */
+    flex-wrap: wrap;
+    margin-bottom: 0;
+    gap: 5px;
+    padding-left: 0;
+    list-style: none;
+}
+
+.ensayo-nav-tabs .ensayo-nav-item {
+    margin-bottom: -2px;
+}
+
+.ensayo-nav-tabs .ensayo-nav-link {
+    display: block;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #6c757d;
+    /* Texto oscuro por defecto */
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1rem;
+    text-decoration: none;
+}
+
+.ensayo-nav-tabs .ensayo-nav-link:hover {
+    color: #495057;
+    border-bottom-color: #adb5bd;
+}
+
+.ensayo-nav-tabs .ensayo-nav-link.active {
+    color: #347fa7;
+    background-color: transparent;
+    border-bottom: 2px solid #347fa7;
+    /* Indicador activo inferior */
+    font-weight: 600;
+}
+
+.ensayo-tab-content {
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-top: none;
+    padding: 1.5rem;
+    width: 100%;
+    min-height: 100px;
+    overflow: visible;
 }
 
 .card-body {
@@ -87,23 +162,36 @@
 
 .table-responsive {
     margin-top: 1rem;
-    width: 100%; /* Asegurar que el contenedor de la tabla ocupe todo el ancho */
+    width: 100%;
+    /* Asegurar que el contenedor de la tabla ocupe todo el ancho */
 }
 
 .table {
-    border-radius: 8px; /* Bordes redondeados para la tabla */
-    overflow: hidden;   /* Asegura que el contenido respete los bordes redondeados */
+    border-radius: 8px;
+    /* Bordes redondeados para la tabla */
+    overflow: hidden;
+    /* Asegura que el contenido respete los bordes redondeados */
+    background-color: #fff;
+    /* Fondo blanco explícito */
+    margin-bottom: 0;
 }
 
 .table thead {
-    background-color: #54a0ca; /* Color solicitado */
+    background-color: #54a0ca;
+    /* Color solicitado */
     color: #fff;
-    border: 1px solid #4a8fb2; /* Borde para el thead */
+    border: 1px solid #4a8fb2;
+    /* Borde para el thead */
 }
 
-.table th, .table td {
+.table th,
+.table td {
     vertical-align: middle;
-    border: 1px solid #a0a0a0; /* Líneas más visibles para las celdas */
+    border: 1px solid #a0a0a0;
+    /* Líneas más visibles para las celdas */
+    color: #333;
+    /* Texto oscuro explícito */
+    background-clip: padding-box;
 }
 
 .btn-primary {
@@ -155,18 +243,21 @@ canvas {
 
 /* --- Estilos para la animación de pestañas deslizantes --- */
 .tab-content-container {
-    overflow: hidden; /* Oculta los paneles que no están en vista */
+    overflow: hidden;
+    /* Oculta los paneles que no están en vista */
 }
 
 .tab-content-slider {
     display: flex;
-    transition: transform 0.4s ease-in-out; /* La animación de deslizamiento */
+    transition: transform 0.4s ease-in-out;
+    /* La animación de deslizamiento */
 }
 
 .tab-panel {
     width: 100%;
     flex-shrink: 0;
-    padding: 0 2px; /* Pequeño padding para evitar cortes en los bordes */
+    padding: 0 2px;
+    /* Pequeño padding para evitar cortes en los bordes */
 }
 
 /* --- NUEVOS ESTILOS PARA LAYOUT DINÁMICO DE FORMULARIO --- */
@@ -175,7 +266,8 @@ canvas {
     display: flex;
     flex-wrap: wrap;
     width: 100%;
-    gap: 1rem; /* Espacio entre items */
+    gap: 1rem;
+    /* Espacio entre items */
     margin-bottom: 1rem;
 }
 
@@ -185,71 +277,85 @@ canvas {
 
 /* --- Estilos para las pestañas del formulario --- */
 .form-tabs-container .nav-tabs {
-  border-bottom: 1px solid #dee2e6;
-  display: flex; /* Asegura que los nav-item estén en una línea */
-  margin-bottom: 0; /* Elimina el margen inferior predeterminado para un mejor control del espaciado */
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    /* Asegura que los nav-item estén en una línea */
+    margin-bottom: 0;
+    /* Elimina el margen inferior predeterminado para un mejor control del espaciado */
 }
 
 .form-tabs-container .nav-item {
-  margin-bottom: -1px; /* Para que el borde de la pestaña activa se superponga con el borde inferior del nav-tabs */
+    margin-bottom: -1px;
+    /* Para que el borde de la pestaña activa se superponga con el borde inferior del nav-tabs */
 }
 
 .form-tabs-container .nav-link {
-  color: #6c757d;
-  background-color: transparent;
-  border: 1px solid transparent; /* Bordes transparentes para simular que no hay */
-  border-bottom-color: transparent; /* Solo el borde inferior para el efecto de la línea */
-  border-radius: 0;
-  padding: 0.5rem 1rem; /* Ajuste del padding para el espaciado */
-  transition: all .15s ease-in-out; /* Transición suave para los cambios de estado */
+    color: #6c757d;
+    background-color: transparent;
+    border: 1px solid transparent;
+    /* Bordes transparentes para simular que no hay */
+    border-bottom-color: transparent;
+    /* Solo el borde inferior para el efecto de la línea */
+    border-radius: 0;
+    padding: 0.5rem 1rem;
+    /* Ajuste del padding para el espaciado */
+    transition: all .15s ease-in-out;
+    /* Transición suave para los cambios de estado */
 }
 
 .form-tabs-container .nav-link:hover {
-  color: #495057; /* Un poco más oscuro al pasar el ratón */
-  border-color: #e9ecef #e9ecef #dee2e6; /* Borde superior, lateral y el inferior ligeramente distinto */
+    color: #495057;
+    /* Un poco más oscuro al pasar el ratón */
+    border-color: #e9ecef #e9ecef #dee2e6;
+    /* Borde superior, lateral y el inferior ligeramente distinto */
 }
 
 .form-tabs-container .nav-link.active {
-  color: #347fa7; /* Color del texto de la pestaña activa */
-  background-color: #fff; /* Fondo blanco para la pestaña activa */
-  border-color: #dee2e6 #dee2e6 #347fa7; /* Borde superior, lateral y la línea azul en la parte inferior */
-  border-bottom-color: #347fa7; /* ¡La línea azul! */
-  font-weight: 600; /* Texto más prominente */
+    color: #347fa7;
+    /* Color del texto de la pestaña activa */
+    background-color: #fff;
+    /* Fondo blanco para la pestaña activa */
+    border-color: #dee2e6 #dee2e6 #347fa7;
+    /* Borde superior, lateral y la línea azul en la parte inferior */
+    border-bottom-color: #347fa7;
+    /* ¡La línea azul! */
+    font-weight: 600;
+    /* Texto más prominente */
 }
 
 
 /* --- ESTILOS PARA CAMPOS GENERALES (PESAJE, ETC) --- */
 
 .campos-generales-container {
-  width: 100%;
-  /* No necesita margen inferior, el gap del grupo se encarga */
+    width: 100%;
+    /* No necesita margen inferior, el gap del grupo se encarga */
 }
 
 /* Ocultar el título de la sección para un look más limpio */
 .campos-generales-container .campos-generales-header {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #dee2e6;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #dee2e6;
 }
 
 /* Grid para los campos individuales */
 .campos-generales-grid {
-  display: flex;
-  flex-wrap: wrap; 
-  gap: 1.5rem; 
-  width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    width: 100%;
 }
 
 /* Cada campo dentro del grid */
 .campo-general-item {
-  flex: 1 1 calc(33.333% - 1.5rem); 
-  min-width: 200px; 
+    flex: 1 1 calc(33.333% - 1.5rem);
+    min-width: 200px;
 }
 
 .campo-general-item .form-group {
-  margin-bottom: 0 !important;
+    margin-bottom: 0 !important;
 }
 
 .campo-general-item label {
@@ -269,5 +375,3 @@ canvas {
     width: 100%;
 
 }
-
-

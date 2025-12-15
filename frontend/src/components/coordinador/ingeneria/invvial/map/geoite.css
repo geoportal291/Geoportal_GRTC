@@ -80,6 +80,11 @@ body {
     /* Valor por defecto */
 }
 
+/* Modal de Calibración más ancho */
+#invvial-menu-calibrar {
+    width: 350px !important;
+}
+
 /* La flechita que apunta hacia la izquierda al botón - POSICIÓN DINÁMICA */
 .invvial-flyout-card::before {
     content: "";

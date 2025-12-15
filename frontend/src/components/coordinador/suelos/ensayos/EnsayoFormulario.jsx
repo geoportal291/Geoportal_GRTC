@@ -1,117 +1,111 @@
 import React, { useState } from 'react';
-
-// --- Sub-componentes de Sección --- //
 import FormularioSimple from './secciones/CamposGenerales.jsx';
 import SeccionTablaDinamica from './secciones/SeccionTablaDinamica.jsx';
 
-// --- Mapa de Componentes --- //
-const componentMap = {
-  'CamposGenerales': FormularioSimple,
-  'SeccionTablaDinamica': SeccionTablaDinamica,
-};
-
-// --- Componente Principal con Lógica de Pestañas --- //
 const EnsayoFormulario = ({ data, onInputChange, resultados, tableConfig }) => {
   const [activeTab, setActiveTab] = useState(0);
 
-  if (!tableConfig || (Object.keys(tableConfig).length === 0)) {
+  // Si no hay tableConfig, no se puede renderizar nada.
+  if (!tableConfig || Object.keys(tableConfig).length === 0) {
     return <div>Cargando configuración del formulario...</div>;
   }
 
-  // Extraer campos generales y tablas de la configuración
-  const generalFieldsSection = tableConfig.general_fields ? {
-    key: 'general_fields',
-    ...tableConfig.general_fields,
-    componente_key: 'CamposGenerales'
-  } : null;
+  // Estructura nueva: Múltiples tablas y campos generales separados
+  const camposGenerales = tableConfig.general_fields || [];
+  const tablas = Array.isArray(tableConfig.tables) ? tableConfig.tables : [];
 
-  // Lógica simplificada: asume que las tablas siempre están bajo la clave "tables"
-  const tableSections = tableConfig.tables ? Object.keys(tableConfig.tables).map(key => ({
-    key,
-    ...tableConfig.tables[key],
-    componente_key: 'SeccionTablaDinamica'
-  })) : [];
-  
-  const hasMultipleTables = tableSections.length > 2;
+  // Estructura antigua (legacy): una sola tabla y campos en el nivel superior
+  const legacyCampos = tableConfig.fields || [];
+  const legacyHayTabla = tableConfig.headers && tableConfig.rows;
 
-  // --- Funciones de Renderizado --- //
-
-  const renderSingleSection = (section, isTabContent = false) => {
-    const ComponenteDinamico = componentMap[section.componente_key];
-    
-    if (!ComponenteDinamico) {
-      return <div key={section.key}>Error: Componente no encontrado para {section.componente_key}</div>;
-    }
-
-    // El estilo dinámico solo se aplica si no estamos en modo Pestaña
-    const style = isTabContent ? {} : {
-      flexBasis: section.layout?.width || '100%',
-      maxWidth: section.layout?.width || '100%',
-    };
-
-    let componentProps = {};
-    if (section.componente_key === 'CamposGenerales') {
-      componentProps = {
-        seccion: { titulo: section.title, campos: section.fields.map(f => ({ ...f, name: f.key })) },
-        data, onInputChange,
-      };
-    } else { // SeccionTablaDinamica
-      componentProps = {
-        seccion: { id: section.key, titulo: section.title, componente_key: section.componente_key },
-        data, onInputChange, resultados, tableConfig: section,
-      };
-    }
-
+  // Si estamos en la nueva estructura
+  if (tableConfig.general_fields || tableConfig.tables) {
     return (
-      <div key={section.key} style={style} className="dynamic-section-item">
-        <ComponenteDinamico {...componentProps} />
+      <div className="ensayo-formulario-container">
+        {/* 1. Renderizar la sección de campos generales si existen */}
+        {camposGenerales.length > 0 && (
+          <FormularioSimple
+            key="general-fields-section"
+            seccion={{ titulo: 'Datos Generales', campos: camposGenerales }}
+            data={data}
+            onInputChange={onInputChange}
+          />
+        )}
+
+        {/* 2. Lógica para renderizar tablas (con o sin pestañas) */}
+        {tablas.length > 1 ? (
+          // Múltiples tablas: renderizar con pestañas
+          // Múltiples tablas: renderizar con pestañas
+          <div className="ensayo-tab-container mt-4">
+            <ul className="ensayo-nav-tabs">
+              {tablas.map((tabla, index) => (
+                <li className="ensayo-nav-item" key={tabla.key}>
+                  <button
+                    className={`ensayo-nav-link ${activeTab === index ? 'active' : ''}`}
+                    onClick={(e) => { e.preventDefault(); setActiveTab(index); }}
+                  >
+                    {tabla.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="ensayo-tab-content p-3 border border-top-0">
+              {/* Contenido de las pestañas con renderizado directo */}
+              {tablas.map((tabla, index) => (
+                <div
+                  key={tabla.key}
+                  className={activeTab === index ? 'ensayo-tab-pane active' : 'ensayo-tab-pane'}
+                  style={{ display: activeTab === index ? 'block' : 'none' }}
+                >
+                  <SeccionTablaDinamica
+                    seccion={{ id: tabla.key, titulo: '' }} // El título ya está en la pestaña
+                    data={data}
+                    onInputChange={onInputChange}
+                    resultados={resultados}
+                    tableConfig={tabla}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          // Una o ninguna tabla: renderizar directamente
+          tablas.map((tabla) => (
+            <SeccionTablaDinamica
+              key={tabla.key}
+              seccion={{ id: tabla.key, titulo: tabla.title }}
+              data={data}
+              onInputChange={onInputChange}
+              resultados={resultados}
+              tableConfig={tabla}
+            />
+          ))
+        )}
       </div>
     );
-  };
-  
-  const renderColumnLayout = () => {
-    const allSections = generalFieldsSection ? [generalFieldsSection, ...tableSections] : tableSections;
-    const groupedSections = allSections.reduce((acc, section) => {
-      const groupKey = section.layout?.group || `group_${section.key}`;
-      if (!acc[groupKey]) acc[groupKey] = [];
-      acc[groupKey].push(section);
-      return acc;
-    }, {});
+  }
 
-    return Object.keys(groupedSections).map(groupKey => (
-      <div key={groupKey} className="dynamic-section-group">
-        {groupedSections[groupKey].map(section => renderSingleSection(section, false))}
-      </div>
-    ));
-  };
-  
-  const renderTabLayout = () => (
-    <>
-      {generalFieldsSection && renderSingleSection(generalFieldsSection, true)}
-      <div className="form-tabs-container">
-        <ul className="nav nav-tabs">
-          {tableSections.map((table, index) => (
-            <li className="nav-item" key={table.key}>
-              <button
-                className={`nav-link ${activeTab === index ? 'active' : ''}`}
-                onClick={() => setActiveTab(index)}
-              >
-                {table.title || table.key}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="form-tab-content mt-3">
-        {renderSingleSection(tableSections[activeTab], true)}
-      </div>
-    </>
-  );
-
-  // --- Renderizado Principal --- //
+  // Si estamos en la estructura antigua (para retrocompatibilidad con Granulometría)
   return (
     <div>
-      {hasMultipleTables ? renderTabLayout() : renderColumnLayout()}
+      {legacyCampos.length > 0 && (
+        <FormularioSimple
+          key="general-fields-section"
+          seccion={{ titulo: 'Datos Generales', campos: legacyCampos }}
+          data={data}
+          onInputChange={onInputChange}
+        />
+      )}
+      {legacyHayTabla && (
+        <SeccionTablaDinamica
+          key={tableConfig.key || 'main-table-section'}
+          seccion={{ id: tableConfig.key, titulo: tableConfig.title }}
+          data={data}
+          onInputChange={onInputChange}
+          resultados={resultados}
+          tableConfig={tableConfig}
+        />
+      )}
     </div>
   );
 };

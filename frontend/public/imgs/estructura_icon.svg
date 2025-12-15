@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Base shadow -->
+  <ellipse cx="32" cy="58" rx="20" ry="4" fill="rgba(0,0,0,0.3)" />
+  
+  <!-- Main Structure Body (Concrete Grey/Green mix) -->
+  <path d="M8 54 L 12 20 L 52 20 L 56 54 Z" fill="#4CAF50" stroke="#2E7D32" stroke-width="2"/>
+  
+  <!-- Arch/Opening -->
+  <path d="M20 54 Q 32 30 44 54" fill="#333" stroke="#2E7D32" stroke-width="2"/>
+  
+  <!-- Top Cap/Roadway -->
+  <rect x="6" y="14" width="52" height="8" rx="2" fill="#81C784" stroke="#2E7D32" stroke-width="2"/>
+  
+  <!-- Details/texture -->
+  <line x1="16" y1="20" x2="16" y2="44" stroke="#2E7D32" stroke-width="1" opacity="0.5"/>
+  <line x1="48" y1="20" x2="48" y2="44" stroke="#2E7D32" stroke-width="1" opacity="0.5"/>
+</svg>

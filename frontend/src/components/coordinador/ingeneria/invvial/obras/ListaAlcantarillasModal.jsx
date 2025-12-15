@@ -146,8 +146,10 @@ const ListaAlcantarillasModal = ({ show, onClose, alcantarillasData, route, grap
                 </thead>
                 <tbody>
                   {alcantarillasData.sort((a, b) => {
-                    const numA = parseInt(a.codigo.match(/\d+/)?.[0] || '0', 10);
-                    const numB = parseInt(b.codigo.match(/\d+/)?.[0] || '0', 10);
+                    const codeA = a.codigo || '';
+                    const codeB = b.codigo || '';
+                    const numA = parseInt(codeA.match(/\d+/)?.[0] || '0', 10);
+                    const numB = parseInt(codeB.match(/\d+/)?.[0] || '0', 10);
                     return numA - numB;
                   }).map((element) => (
                     <tr key={element.id_alcantarilla} className="alcantarilla-row" onClick={() => handleRowClick(element)}>

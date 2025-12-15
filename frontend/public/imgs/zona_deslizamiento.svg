@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<!-- Background circle or shield - Optional, keeping it simple as a focused icon -->
+<path fill="#e74c3c" d="M256 0L32 96l32 320 192 96 192-96 32-320L256 0z"/>
+<!-- Falling rocks graphic in white -->
+<path fill="#ffffff" d="M368 288l-64-64-48 48 32 32-32 32 48 48 64-64z M160 160l64 64 48-48-32-32 32-32-48-48-64 64z M224 352l-32 32 32 32 48-48-16-16-32 0z"/>
+<!-- Simplified Representation of a slope with rocks -->
+<path fill="#ffffff" d="M100 400 L412 400 L256 120 Z" opacity="0.3"/>
+<path fill="#ecf0f1" d="M180 250 L140 300 L220 300 Z" />
+<path fill="#ecf0f1" d="M250 180 L210 230 L290 230 Z" />
+<path fill="#bdc3c7" d="M220 320 L180 370 L260 370 Z" />
+</svg>

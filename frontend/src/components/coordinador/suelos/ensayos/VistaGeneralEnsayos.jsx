@@ -118,24 +118,24 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const [currentTargetType, setCurrentTargetType] = useState(null);
   const [isResultsModalOpen, setResultsModalOpen] = useState(false);
   const [selectedAssayForResults, setSelectedAssayForResults] = useState(null);
-  
+
   const [tramosList, setTramosList] = useState([]);
 
   const fetchTramosList = useCallback(async () => {
     setLoading(true);
     try {
-        const headers = getAuthHeaders();
-        const url = selectedProjectId
-            ? `${API_URL}/progresivas?selectedProjectId=${selectedProjectId}`
-            : `${API_URL}/progresivas`;
-        const res = await axios.get(url, { headers });
-        setTramosList(res.data);
+      const headers = getAuthHeaders();
+      const url = selectedProjectId
+        ? `${API_URL}/progresivas?selectedProjectId=${selectedProjectId}`
+        : `${API_URL}/progresivas`;
+      const res = await axios.get(url, { headers });
+      setTramosList(res.data);
     } catch (err) {
-        if (err.message !== 'Token no proporcionado') {
-            alertify.error('No se pudieron cargar los tramos.');
-        }
+      if (err.message !== 'Token no proporcionado') {
+        alertify.error('No se pudieron cargar los tramos.');
+      }
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   }, [API_URL, getAuthHeaders, selectedProjectId]);
 
@@ -198,7 +198,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     } else {
       // Only fetch the list if it hasn't been fetched yet
       if (tramosList.length === 0) {
-          fetchTramosList();
+        fetchTramosList();
       }
     }
   }, [tramoId, fetchEnsayos, fetchTramosList, setLastTramoId, tramosList.length]);
@@ -212,7 +212,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     }
   }, [tramoId, loading, tramosList, navigate]);
 
-    const handleShowResults = (e, ensayo) => {
+  const handleShowResults = (e, ensayo) => {
     e.stopPropagation();
     setSelectedAssayForResults(ensayo);
     setResultsModalOpen(true);
@@ -234,23 +234,23 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const handleBulkDelete = useCallback(() => {
     const idsToDelete = Array.from(selectedEnsayos);
     alertify.confirm(
-        'Confirmar Eliminación Múltiple',
-        `¿Estás seguro de que quieres eliminar ${idsToDelete.length} ensayos seleccionados? Esta acción no se puede deshacer.`,
-        async () => {
-            try {
-                const headers = getAuthHeaders();
-                await axios.post(`${API_URL}/api/ensayos/bulk-delete`, { ids: idsToDelete }, { headers });
-                alertify.success(`${idsToDelete.length} ensayos eliminados correctamente.`);
-                setSelectedEnsayos(new Set());
-                fetchEnsayos();
-            } catch (err) {
-                console.error('Error en la eliminación múltiple:', err);
-                alertify.error(err.response?.data?.error || 'Error al eliminar los ensayos.');
-            }
-        },
-        () => {
-            alertify.error('Eliminación cancelada.');
+      'Confirmar Eliminación Múltiple',
+      `¿Estás seguro de que quieres eliminar ${idsToDelete.length} ensayos seleccionados? Esta acción no se puede deshacer.`,
+      async () => {
+        try {
+          const headers = getAuthHeaders();
+          await axios.post(`${API_URL}/api/ensayos/bulk-delete`, { ids: idsToDelete }, { headers });
+          alertify.success(`${idsToDelete.length} ensayos eliminados correctamente.`);
+          setSelectedEnsayos(new Set());
+          fetchEnsayos();
+        } catch (err) {
+          console.error('Error en la eliminación múltiple:', err);
+          alertify.error(err.response?.data?.error || 'Error al eliminar los ensayos.');
         }
+      },
+      () => {
+        alertify.error('Eliminación cancelada.');
+      }
     );
   }, [selectedEnsayos, API_URL, getAuthHeaders, fetchEnsayos]);
 
@@ -303,7 +303,8 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
 
   const executeImport = useCallback(async (file, isSimulation) => {
     const allEnsayos = Object.values(ensayosAgrupados).flatMap(g => g.ensayos);
-    const proyectoId = allEnsayos.length > 0 ? allEnsayos[0].proyecto_id : null;
+    // Prioritize ID from tramo metadata, then selectedProject context, then existing assays
+    const proyectoId = tramo?.proyecto_id || selectedProjectId || (allEnsayos.length > 0 ? allEnsayos[0].proyecto_id : null);
     if (!proyectoId) {
       alertify.error("No se pudo determinar el proyecto.");
       throw new Error("Proyecto no determinado.");
@@ -318,9 +319,9 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
 
     try {
       const headers = getAuthHeaders();
-      const response = await axios.post(url, formData, { 
-        headers: { ...headers, 'Content-Type': 'multipart/form-data' }, 
-        params 
+      const response = await axios.post(url, formData, {
+        headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+        params
       });
       return response.data;
     } catch (err) {
@@ -348,7 +349,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
         alertify.warning('No se encontraron ensayos nuevos ni para actualizar en la hoja correspondiente del archivo.');
         setImportModalOpen(false);
       }
-    } catch {}
+    } catch { }
   }, [executeImport]);
 
   const handleConfirmImport = useCallback(async () => {
@@ -361,7 +362,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       setImportSummary(null);
       setCurrentTargetType(null);
       fetchEnsayos();
-    } catch {}
+    } catch { }
   }, [executeImport, fileToImport, fetchEnsayos]);
 
   if (loading) {
@@ -418,9 +419,9 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
         loading={importing}
       />
       {isResultsModalOpen && (
-        <ResultadosBrevesModal 
-          ensayo={selectedAssayForResults} 
-          onClose={() => setResultsModalOpen(false)} 
+        <ResultadosBrevesModal
+          ensayo={selectedAssayForResults}
+          onClose={() => setResultsModalOpen(false)}
         />
       )}
       <div className="vista-general-ensayos-container">
@@ -455,31 +456,31 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
           {Object.keys(ensayosAgrupados).length > 0 ? (
             Object.entries(ensayosAgrupados).map(([key, grupo]) => {
               return (
-              <div className="card-ensayo-tipo" key={key}>
-                <div className="card-header">
-                  <h2>{grupo.descripcion}</h2>
-                  <div className="header-actions">
-                    <button onClick={() => openImportModal(grupo.configKey)} className="btn btn-primary btn-sm btn-expandable">
-                      <i className="fas fa-file-import"></i>
-                      <span className="btn-text">Importar</span>
-                    </button>
-                    <button onClick={() => handleSpecificExport(grupo.tipoEnsayoId, grupo.descripcion)} className="btn btn-success btn-sm btn-expandable">
-                      <i className="fas fa-file-excel"></i>
-                      <span className="btn-text">Exportar</span>
-                    </button>
-                    <span className="ensayo-count-badge">{grupo.ensayos.length} Ensayos</span>
+                <div className="card-ensayo-tipo" key={key}>
+                  <div className="card-header">
+                    <h2>{grupo.descripcion}</h2>
+                    <div className="header-actions">
+                      <button onClick={() => openImportModal(grupo.configKey)} className="btn btn-primary btn-sm btn-expandable">
+                        <i className="fas fa-file-import"></i>
+                        <span className="btn-text">Importar</span>
+                      </button>
+                      <button onClick={() => handleSpecificExport(grupo.tipoEnsayoId, grupo.descripcion)} className="btn btn-success btn-sm btn-expandable">
+                        <i className="fas fa-file-excel"></i>
+                        <span className="btn-text">Exportar</span>
+                      </button>
+                      <span className="ensayo-count-badge">{grupo.ensayos.length} Ensayos</span>
+                    </div>
                   </div>
-                </div>
-                <div className="card-content">
-                  {grupo.ensayos.length > 0 ? (
-                    grupo.ensayos.map(ensayo => (
-                        <div 
-                        className="mini-card-ensayo"
-                        key={ensayo.id}
-                        onClick={() => navigate(`/coordinador/suelos/ensayos/${ensayo.id}`)}
-                      >
-                        
-                        <div className="mini-card-info-main">
+                  <div className="card-content">
+                    {grupo.ensayos.length > 0 ? (
+                      grupo.ensayos.map(ensayo => (
+                        <div
+                          className="mini-card-ensayo"
+                          key={ensayo.id}
+                          onClick={() => navigate(`/coordinador/suelos/ensayos/${ensayo.id}`)}
+                        >
+
+                          <div className="mini-card-info-main">
                             <div className="mini-card-title">
                               <i className="fas fa-vial"></i>
                               <span>{ensayo.nombre_ensayo || ensayo.codigo_ensayo}</span>
@@ -490,8 +491,8 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                               <span><i className="fas fa-map-marker-alt"></i> {ensayo.progresiva_descripcion || 'N/A'}</span>
                             </div>
                             <div className="mini-card-actions">
-                              <button 
-                                className="btn-results" 
+                              <button
+                                className="btn-results"
                                 title="Ver Resultados Breves"
                                 onClick={(e) => handleShowResults(e, ensayo)}
                               >
@@ -501,14 +502,14 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                             <div className="mini-card-action-indicator">
                               <i className="fas fa-chevron-right"></i>
                             </div>
+                          </div>
                         </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="no-ensayos-message">No hay ensayos de este tipo para este tramo.</p>
-                  )}
+                      ))
+                    ) : (
+                      <p className="no-ensayos-message">No hay ensayos de este tipo para este tramo.</p>
+                    )}
+                  </div>
                 </div>
-              </div>
               );
             })
           ) : (

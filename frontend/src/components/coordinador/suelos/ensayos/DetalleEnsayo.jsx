@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Chart, registerables } from 'chart.js';
 import alertify from 'alertifyjs';
 import './ensayos.css';
-import './VistaGeneralEnsayos.css'; // Importar estilos para botones
+import './VistaGeneralEnsayos.css';
 import EnsayoFormulario from './EnsayoFormulario.jsx';
 import VisorResultados from './secciones/VisorResultados.jsx';
 import VisorGraficos from './secciones/VisorGraficos.jsx';
@@ -18,22 +18,23 @@ export default function DetalleEnsayo() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Configuraciones
   const [formConfig, setFormConfig] = useState(null);
   const [resultsConfig, setResultsConfig] = useState(null);
   const [tableConfig, setTableConfig] = useState(null);
   const [calculationConfig, setCalculationConfig] = useState(null);
   const [graficosConfig, setGraficosConfig] = useState(null);
+  
+  // ESTADOS SEPARADOS: uno para la entrada del usuario, otro para los cálculos.
   const [formData, setFormData] = useState({});
-  const [infoGeneral, setInfoGeneral] = useState({});
-  const [tipoEnsayoId, setTipoEnsayoId] = useState(null);
-  const [ensayoDetails, setEnsayoDetails] = useState(null);
-
   const [resultados, setResultados] = useState({});
+  
+  const [infoGeneral, setInfoGeneral] = useState({});
+  const [ensayoDetails, setEnsayoDetails] = useState(null);
   const [activeTab, setActiveTab] = useState('formulario');
 
   const API_URL = process.env.REACT_APP_API_BASE ?? '';
-
-  // === FUNCIONES AUXILIARES ===
 
   const getAuthHeaders = useCallback(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
@@ -48,23 +49,10 @@ export default function DetalleEnsayo() {
 
   const handleVolver = () => {
     const { parent_type, tramo_id, progresiva_id, cantera_id, estrato_id } = ensayoDetails || {};
-
     if (parent_type === 'progresiva' && tramo_id && progresiva_id && estrato_id) {
-      navigate('/coordinador/recoleccion-datos/gestor-tramos', {
-        state: {
-          tramoId: tramo_id,
-          progresivaId: progresiva_id,
-          estratoId: estrato_id
-        }
-      });
+      navigate('/coordinador/recoleccion-datos/gestor-tramos', { state: { tramoId: tramo_id, progresivaId: progresiva_id, estratoId: estrato_id } });
     } else if (parent_type === 'cantera' && tramo_id && cantera_id && estrato_id) {
-      navigate('/coordinador/recoleccion-datos/gestor-canteras', {
-        state: {
-          tramoId: tramo_id,
-          canteraId: cantera_id,
-          estratoId: estrato_id
-        }
-      });
+      navigate('/coordinador/recoleccion-datos/gestor-canteras', { state: { tramoId: tramo_id, canteraId: cantera_id, estratoId: estrato_id } });
     } else {
       navigate('/coordinador/recoleccion-datos');
     }
@@ -76,7 +64,6 @@ export default function DetalleEnsayo() {
     }
   };
 
-  // === CARGA DE DATOS DEL ENSAYO ===
   useEffect(() => {
     const fetchEnsayoAndConfig = async () => {
       if (!ensayoId) {
@@ -84,75 +71,30 @@ export default function DetalleEnsayo() {
         setLoading(false);
         return;
       }
-
       try {
         setLoading(true);
         const headers = getAuthHeaders();
         const response = await axios.get(`${API_URL}/api/ensayos/details/${ensayoId}?_=${new Date().getTime()}`, { headers });
         const data = response.data;
-
         if (!data) throw new Error('Ensayo no encontrado');
 
         setEnsayoDetails(data);
         let formDataObject = data.datos_ensayo || {};
-        
-        // 1. Parsear si es una cadena de texto
         if (typeof formDataObject === 'string') {
           try {
             formDataObject = JSON.parse(formDataObject);
           } catch (e) {
-            console.error("Error al parsear datos_ensayo:", e);
-            alertify.error("Error: El formato de los datos del ensayo es inválido.");
             formDataObject = {};
           }
         }
-
-        // 2. Detectar si el objeto es plano (contiene claves con puntos) y transformar a anidado
-        const isFlat = Object.keys(formDataObject).some(k => k.includes('.'));
-        
-        if (isFlat) {
-          const nestedObject = {};
-          const set = (obj, path, value) => {
-            const keys = path.split('.');
-            let current = obj;
-            for (let i = 0; i < keys.length - 1; i++) {
-              if (current[keys[i]] === undefined || current[keys[i]] === null) {
-                current[keys[i]] = {};
-              }
-              current = current[keys[i]];
-            }
-            current[keys[keys.length - 1]] = value;
-          };
-        
-          for (const key in formDataObject) {
-            if (Object.prototype.hasOwnProperty.call(formDataObject, key)) {
-              set(nestedObject, key, formDataObject[key]);
-            }
-          }
-          formDataObject = nestedObject;
-        }
-
         setFormData(formDataObject);
 
         if (data.parent_type === 'progresiva') {
-            setInfoGeneral({
-                proyecto: data.proyecto_nombre || 'N/A',
-                tramo: data.tramo_nombre || 'N/A',
-                progresiva: data.progresiva_codigo || 'N/A',
-                estrato: data.estrato_orden !== undefined ? `${data.estrato_orden}` : 'N/A',
-            });
+          setInfoGeneral({ proyecto: data.proyecto_nombre, tramo: data.tramo_nombre, progresiva: data.progresiva_codigo, estrato: data.estrato_orden });
         } else if (data.parent_type === 'cantera') {
-            setInfoGeneral({
-                proyecto: data.proyecto_nombre || 'N/A',
-                tramo: data.tramo_nombre || 'N/A',
-                cantera: data.cantera_codigo || 'N/A',
-                estrato: data.estrato_orden !== undefined ? `${data.estrato_orden}` : 'N/A',
-            });
+          setInfoGeneral({ proyecto: data.proyecto_nombre, tramo: data.tramo_nombre, cantera: data.cantera_codigo, estrato: data.estrato_orden });
         }
         
-        setTipoEnsayoId(data.tipo_ensayo);
-
-        // Cargar configuración del tipo de ensayo
         if (data.tipo_ensayo) {
           const configRes = await axios.get(`${API_URL}/api/config/ensayo-tipos/${data.tipo_ensayo}`, { headers });
           const cfg = configRes.data;
@@ -162,74 +104,42 @@ export default function DetalleEnsayo() {
           setCalculationConfig(cfg.calculationConfig);
           setGraficosConfig(cfg.graficosConfig);
         }
-
       } catch (err) {
-        console.error('Error al cargar ensayo:', err);
-        alertify.error('No se pudo cargar el ensayo.');
         setError('Error al cargar los datos del ensayo.');
       } finally {
         setLoading(false);
       }
     };
-
     fetchEnsayoAndConfig();
   }, [ensayoId, API_URL, getAuthHeaders]);
 
-  // === TRANSFORMADORES DE DATOS ===
-  const transformers = useMemo(() => ({
-    anidar_por_prefijo: (formData, params) => {
-      const { prefix, target_key } = params;
-      const transformed = { ...formData, [target_key]: {} };
-      for (const key in formData) {
-        if (key.startsWith(prefix)) {
-          const newKey = key.substring(prefix.length);
-          transformed[target_key][newKey] = formData[key];
-        }
-      }
-      return transformed;
-    }
-  }), []);
-
-  // === CÁLCULO AUTOMÁTICO DE RESULTADOS ===
+  // === CÁLCULO AUTOMÁTICO DE RESULTADOS (LÓGICA CORRECTA Y FINAL) ===
   useEffect(() => {
-    // Pre-validation: Do not run calculations if configs are missing or if formData is null/empty.
-    if (!tableConfig || !calculationConfig || !formData || Object.keys(formData).length === 0) {
-      setResultados({}); // Reset results if there's nothing to calculate
+    if (!calculationConfig || !formData || Object.keys(formData).length === 0) {
+      setResultados({});
       return;
     }
 
     try {
-      // --- FINAL SANITIZATION FIX ---
-      // Create a clean data object to pass to the calculator,
-      // removing any legacy or corrupted data structures from previous attempts.
-      const cleanFormData = {
-          general_fields: formData.general_fields || {},
-          tables: formData.tables || {}
-      };
+      // El motor recibe el formData del usuario y devuelve solo los resultados.
+      const resultadosCalculados = calcularResultados(calculationConfig, formData);
 
-      const dynamicConfig = calculationConfig;
-
-      const calculationContext = {
-        formData: cleanFormData, // Pass the clean data
-        tableConfig: tableConfig
-      };  
-
-      const resultadosCalculados = calcularResultados(dynamicConfig, calculationContext);
+      // Se actualiza el estado de resultados, SIN TOCAR formData. Esto rompe el bucle.
       setResultados(resultadosCalculados);
+
     } catch (err) {
       console.error('Error en el cálculo automático:', err);
-      // Set an error state in the results to give feedback to the user
-      setResultados({ error: 'Error en el cálculo. Verifique los datos de entrada.' });
+      setResultados({ error: "Error en el cálculo." });
     }
-  }, [formData, tableConfig, calculationConfig]);
+    // El cálculo se re-ejecuta solo si el usuario cambia los datos de entrada (formData).
+  }, [formData, calculationConfig]);
 
-  // === ACTUALIZAR DATOS DEL FORMULARIO ===
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
     const val = type === 'number' ? parseFloat(value) || 0 : value;
 
     const set = (obj, path, value) => {
-      const keys = Array.isArray(path) ? path : path.split('.');
+      const keys = path.split('.');
       let current = obj;
       for (let i = 0; i < keys.length - 1; i++) {
         if (current[keys[i]] === undefined || current[keys[i]] === null) {
@@ -242,84 +152,74 @@ export default function DetalleEnsayo() {
     };
 
     setFormData(prev => {
-        const newState = JSON.parse(JSON.stringify(prev)); // Copia profunda para evitar mutación
+        const newState = JSON.parse(JSON.stringify(prev));
         set(newState, name, val);
         return newState;
     });
   };
 
-  // === GUARDAR ENSAYO ===
+  // === GUARDAR ENSAYO (LÓGICA CORREGIDA) ===
   const handleSaveEnsayo = async () => {
     try {
       setLoading(true);
       const headers = getAuthHeaders();
 
-      const { error: calcError, ...validResults } = resultados;
-      const finalFormData = JSON.parse(JSON.stringify(formData));
-
-      for (const key in validResults) {
-        if (finalFormData[key] instanceof Object && validResults[key] instanceof Object) {
-          finalFormData[key] = { ...finalFormData[key], ...validResults[key] };
-        } else {
-          finalFormData[key] = validResults[key];
+      // Usar una librería de merge profundo para una combinación inmutable y segura.
+      // O hacerla manualmente de forma correcta:
+      const deepMerge = (target, source) => {
+        const output = { ...target };
+        if (target && typeof target === 'object' && source && typeof source === 'object') {
+          Object.keys(source).forEach(key => {
+            if (source[key] && typeof source[key] === 'object') {
+              if (!(key in target))
+                Object.assign(output, { [key]: source[key] });
+              else
+                output[key] = deepMerge(target[key], source[key]);
+            } else {
+              Object.assign(output, { [key]: source[key] });
+            }
+          });
         }
-      }
-
-      // --- ¡LA CORRECCIÓN FINAL ESTÁ AQUÍ! ---
-      // Limpiamos el formData para asegurar que solo guardamos la estructura correcta.
-      const cleanPayload = {
-        general_fields: finalFormData.general_fields || {},
-        tables: finalFormData.tables || {}
+        return output;
       };
 
+      const datos_ensayo = deepMerge(formData, resultados);
+      
       const payload = {
-        datos_ensayo: cleanPayload,
+        datos_ensayo: datos_ensayo,
+        estrato_id: ensayoDetails?.estrato_id,
         nombre_ensayo: ensayoDetails?.nombre_ensayo,
-        tipo_ensayo_id: tipoEnsayoId,
-        estrato_id: ensayoDetails?.estrato_id
+        tipo_ensayo_id: ensayoDetails?.tipo_ensayo
       };
 
       await axios.put(`${API_URL}/api/ensayos/full-assay/${ensayoId}`, payload, { headers });
       alertify.success('Ensayo actualizado correctamente.');
     } catch (err) {
-      console.error('Error al guardar el ensayo:', err);
-      alertify.error('Error al guardar el ensayo.');
+      console.error("Error al guardar el ensayo:", err);
+      alertify.error('Error al guardar el ensayo. Revisa la consola para más detalles.');
     } finally {
       setLoading(false);
     }
   };
 
-  const getTabIndex = (tab) => (tab === 'resultados' ? 1 : tab === 'graficos' ? 2 : 0);
 
   const formatProgresiva = (codigo) => {
     if (!codigo) return 'N/A';
     const code = codigo.includes('-') ? codigo.split('-')[1] : codigo;
-    if (code.length < 3) return code;
-    const km = code.slice(0, -3);
-    const m = code.slice(-3);
-    return `${km}+${m}`;
+    return code.length < 3 ? code : `${code.slice(0, -3)}+${code.slice(-3)}`;
   };
-
-  // === INTERFAZ ===
+  
   if (loading) return <div>Cargando ensayo...</div>;
-  if (error)
-    return (
-      <div className="ensayos-layout-container error-container">
-        <h3><i className="fas fa-exclamation-triangle"></i> Error</h3>
-        <p>{error}</p>
-        <button onClick={handleVolver} className="btn btn-primary">Volver</button>
-      </div>
-    );
+  if (error) return (
+    <div className="ensayos-layout-container error-container">
+      <h3><i className="fas fa-exclamation-triangle"></i> Error</h3>
+      <p>{error}</p>
+      <button onClick={handleVolver} className="btn btn-primary">Volver</button>
+    </div>
+  );
 
   return (
     <div className="detalle-ensayo-container">
-      {loading && (
-        <div className="loading-overlay">
-          <div className="loading-spinner"></div>
-          <p>Cargando ensayo...</p>
-        </div>
-      )}
-
       <div className="ensayo-header-actions">
         <button onClick={handleVolver} className="btn btn-secondary btn-expandable">
           <i className="fas fa-arrow-left"></i>
@@ -337,8 +237,8 @@ export default function DetalleEnsayo() {
           <div className="card h-100">
             <div className="card-header"><i className="fas fa-info-circle me-1"></i> Información General</div>
             <div className="card-body">
-              <p><strong>Proyecto:</strong> {infoGeneral.proyecto}</p>
-              <p><strong>Tramo:</strong> {infoGeneral.tramo}</p>
+              <p><strong>Proyecto:</strong> {infoGeneral.proyecto || 'N/A'}</p>
+              <p><strong>Tramo:</strong> {infoGeneral.tramo || 'N/A'}</p>
             </div>
           </div>
         </div>
@@ -356,9 +256,7 @@ export default function DetalleEnsayo() {
                   <p><strong>Cantera:</strong> {infoGeneral.cantera}</p>
                   <p><strong>Estrato:</strong> {infoGeneral.estrato}</p>
                 </>
-              ) : (
-                <p>Ubicación no disponible</p>
-              )}
+              ) : <p>Ubicación no disponible</p>}
             </div>
           </div>
         </div>
@@ -372,19 +270,16 @@ export default function DetalleEnsayo() {
             <li className="nav-item"><button className={`nav-link ${activeTab === 'graficos' ? 'active' : ''}`} onClick={() => setActiveTab('graficos')}>Gráficos</button></li>
           </ul>
         </div>
-
         <div className="card-body">
           <div className="tab-content-container">
-            <div className="tab-content-slider" style={{ transform: `translateX(-${getTabIndex(activeTab) * 100}%)` }}>
+            <div className="tab-content-slider" style={{ transform: `translateX(-${activeTab === 'resultados' ? 100 : activeTab === 'graficos' ? 200 : 0}%)` }}>
               <div className="tab-panel">
                 {formConfig && (
                   <EnsayoFormulario
                     data={formData}
                     onInputChange={handleInputChange}
                     resultados={resultados}
-                    formConfig={{
-                      secciones: (formConfig?.secciones || []).filter(s => s.componente_key !== 'VisorGraficos')
-                    }}
+                    formConfig={formConfig} // Pasamos el formConfig original
                     tableConfig={tableConfig}
                   />
                 )}

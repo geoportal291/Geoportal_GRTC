@@ -104,15 +104,15 @@ const importarConEnsayos = async ({ parentProgresiva, generatedChildren, estrato
                     if (selectedEstratosSet.has(estratoKey)) {
                         // Crear ensayo de Granulometría
                         await ensayosService.createBaseEnsayo({
-                            estrato_id: newEstratoId, 
-                            tipo_ensayo_id: idGranulometria, 
-                            nombre_ensayo: 'Granulometría (Auto)' 
+                            estrato_id: newEstratoId,
+                            tipo_ensayo_id: idGranulometria,
+                            nombre_ensayo: 'Granulometría (Auto)'
                         }, client);
                         // Crear ensayo de Límites
                         await ensayosService.createBaseEnsayo({
-                            estrato_id: newEstratoId, 
-                            tipo_ensayo_id: idLimites, 
-                            nombre_ensayo: 'Límites (Auto)' 
+                            estrato_id: newEstratoId,
+                            tipo_ensayo_id: idLimites,
+                            nombre_ensayo: 'Límites (Auto)'
                         }, client);
                     }
                 }
@@ -228,7 +228,6 @@ const createBulkProgresivas = async (parentProgresiva, generatedChildren) => {
             ]);
         }
 
-        console.log(`DEBUG (Backend): Finished inserting ${generatedChildren.length} children for parent ${parentId}.`);
         await client.query('COMMIT');
         return { status: 'ok', message: 'Progresivas creadas correctamente', progresivaId: parentId };
 
@@ -436,7 +435,7 @@ const getAllSubProgresivas = async (req, res) => {
             WHERE p.parent_id = $1
             ORDER BY p.id ASC
         `, [Number(id)]);
-        
+
         const progresivas = progresivasResult.rows;
         if (progresivas.length === 0) {
             return res.json([]);
@@ -591,7 +590,7 @@ const bulkDeleteProgresivas = async (ids) => {
 
         // 3. Find all 'estrato' IDs related to these progresivas
         const estratosToDelete = await client.query(
-            'SELECT id FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = ANY($1::int[])', 
+            'SELECT id FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = ANY($1::int[])',
             [allProgresivaIds]
         );
         const estratoIds = estratosToDelete.rows.map(r => r.id);
@@ -637,7 +636,7 @@ const bulkDeleteProgresivas = async (ids) => {
 
         // 8. Finally, delete the parent progresivas (tramos)
         const result = await client.query('DELETE FROM progresivas WHERE id = ANY($1::int[])', [ids]);
-        
+
         await client.query('COMMIT');
         return result.rowCount;
     } catch (err) {
@@ -652,9 +651,8 @@ const bulkDeleteProgresivas = async (ids) => {
 };
 
 const updateProgresiva = async (id, progresivaData) => {
-    console.log(`[DEBUG] updateProgresiva: Recibiendo id: ${id}, progresivaData:`, JSON.stringify(progresivaData, null, 2));
 
-    const { 
+    const {
         nombre, descripcion, estado, coordenada_este, coordenada_norte, linea, longitud_total, tipo_via, intervalo_manual, proyecto_id,
         kml_trazado_id, // <-- AÑADIDO
         generatedChildren
@@ -667,12 +665,6 @@ const updateProgresiva = async (id, progresivaData) => {
     const client = await db.connect();
     try {
         await client.query('BEGIN');
-        console.log('[DEBUG] updateProgresiva: Transacción iniciada.');
-
-        // --- Actualizar progresiva principal ---
-        console.log('[DEBUG] updateProgresiva: Valores para UPDATE progresivas:', {
-            nombre, descripcion, estado, coordenada_este, coordenada_norte, linea, longitud_total, tipo_via, intervalo_manual, proyecto_id, kml_trazado_id, id
-        });
 
         const updateResult = await client.query(`
             UPDATE progresivas SET
@@ -694,10 +686,6 @@ const updateProgresiva = async (id, progresivaData) => {
             tipo_via, intervalo_manual, proyecto_id, kml_trazado_id, id
         ]);
 
-        console.log('[DEBUG] updateProgresiva: Progresiva principal actualizada. Filas afectadas:', updateResult.rowCount);
-
-        // --- Actualización selectiva de hijos y estratos ---
-        console.log('[DEBUG] updateProgresiva: Iniciando actualización selectiva de hijos y estratos...');
 
         // 1. Obtener progresivas hijas existentes
         const existingChildrenResult = await client.query(`
@@ -722,15 +710,11 @@ const updateProgresiva = async (id, progresivaData) => {
 
         // 3. Recorrer los children del frontend
         for (const prog of generatedChildren) {
-            console.log('[DEBUG] updateProgresiva: Procesando generatedChild:', JSON.stringify(prog, null, 2));
-
             const childId = prog.id;
             const isExistingChild = existingChildrenMap.has(childId);
             let currentChildDbId;
 
             if (isExistingChild) {
-                // --- Actualizar progresiva hija existente ---
-                console.log(`[DEBUG] updateProgresiva: Actualizando progresiva hija existente con ID: ${childId}`);
                 await client.query(`
                     UPDATE progresivas SET
                         nombre = $1,
@@ -760,8 +744,6 @@ const updateProgresiva = async (id, progresivaData) => {
                 childrenToKeepIds.add(childId);
 
             } else {
-                // --- Insertar nueva progresiva hija ---
-                console.log(`[DEBUG] updateProgresiva: Insertando nueva progresiva hija: ${prog.codigo}`);
                 const childInsertResult = await client.query(`
                     INSERT INTO progresivas
                     (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, lado)
@@ -787,7 +769,7 @@ const updateProgresiva = async (id, progresivaData) => {
 
             // --- Estratos ---
             if (prog.estratos_perfil && prog.estratos_perfil.length > 0) {
-                console.log(`[DEBUG] updateProgresiva: Procesando estratos para el hijo ${currentChildDbId}...`);
+
 
                 const existingEstratosResult = await client.query(`
                     SELECT id, nombre, descripcion, cota_inicial, cota_final, orden
@@ -812,8 +794,6 @@ const updateProgresiva = async (id, progresivaData) => {
                     }
 
                     if (isExistingEstrato) {
-                        // --- Actualizar estrato existente ---
-                        console.log(`[DEBUG] updateProgresiva: Actualizando estrato existente con ID: ${estratoId}`);
                         await client.query(`
                             UPDATE estratos SET
                                 nombre = $1, descripcion = $2, cota_inicial = $3, cota_final = $4, orden = $5
@@ -828,8 +808,6 @@ const updateProgresiva = async (id, progresivaData) => {
                         ]);
                         estratosToKeepIds.add(estratoId);
                     } else {
-                        // --- Insertar nuevo estrato ---
-                        console.log(`[DEBUG] updateProgresiva: Insertando nuevo estrato para progresiva ${currentChildDbId}`);
                         const newEstratoResult = await client.query(`
                             INSERT INTO estratos (parent_type, parent_id, nombre, descripcion, cota_inicial, cota_final, orden)
                             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
@@ -849,13 +827,12 @@ const updateProgresiva = async (id, progresivaData) => {
                 // --- Eliminar estratos obsoletos ---
                 for (const existingEstrato of existingEstratos) {
                     if (!estratosToKeepIds.has(existingEstrato.id)) {
-                        console.log(`[DEBUG] updateProgresiva: Eliminando estrato obsoleto con ID: ${existingEstrato.id}`);
                         await client.query('DELETE FROM estratos WHERE id = $1', [existingEstrato.id]);
                     }
                 }
 
             } else {
-                console.log(`[DEBUG] updateProgresiva: No hay estratos nuevos para el hijo ${currentChildDbId}. Eliminando todos los existentes.`);
+                await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1', [currentChildDbId]);
                 await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1', [currentChildDbId]);
             }
         } // 🔹 Cierre del for (generatedChildren)
@@ -863,17 +840,13 @@ const updateProgresiva = async (id, progresivaData) => {
         // --- Eliminar progresivas hijas que ya no existen ---
         for (const existingChild of existingChildren) {
             if (!childrenToKeepIds.has(existingChild.id)) {
-                console.log(`[DEBUG] updateProgresiva: Eliminando progresiva hija obsoleta con ID: ${existingChild.id}`);
                 await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1', [existingChild.id]);
                 await client.query('DELETE FROM progresivas WHERE id = $1', [existingChild.id]);
             }
         }
 
-        console.log('[DEBUG] updateProgresiva: Finalizada actualización selectiva de hijos y estratos.');
-
         // --- Confirmar transacción ---
         await client.query('COMMIT');
-        console.log('[DEBUG] updateProgresiva: Transacción confirmada.');
 
         return { status: 'ok', message: 'Progresiva actualizada correctamente' };
 
@@ -888,7 +861,7 @@ const updateProgresiva = async (id, progresivaData) => {
 
 
 const updateChildProgresiva = async (id, progresivaData) => {
-    const { 
+    const {
         nombre, descripcion, estado, coordenada_este, coordenada_norte, estratos_perfil, linea, lado
     } = progresivaData;
 
@@ -973,7 +946,7 @@ const getProgresivaPage = async (progresivaId, itemsPerPage = 10) => {
 
         if (result.rows.length === 0) {
             // If not found, it might be a parent progresiva or an error
-            return { page: 1 }; 
+            return { page: 1 };
         }
 
         const rank = result.rows[0].rn;
@@ -1187,8 +1160,8 @@ const uploadKmlToProgresiva = async (progresivaId, file, userId) => {
 };
 
 const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, generatedChildren, estratosSeleccionados, tiposEnsayoIds }) => {
-    console.log(`[DEBUG] Entering updateAndImportConEnsayos for progresivaId: ${progresivaId}`);
-    
+
+
     if (!generatedChildren || !Array.isArray(generatedChildren) || generatedChildren.length === 0) {
         throw new Error("Se requieren sub-progresivas generadas (generatedChildren) para la importación y el array no puede estar vacío.");
     }
@@ -1196,20 +1169,16 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
     const client = await db.connect();
     try {
         await client.query('BEGIN');
-        console.log('[DEBUG] Transaction started.');
 
         // 1. Delete old children and strata
-        console.log('[DEBUG] Deleting old children and strata...');
         const existingChildren = await client.query('SELECT id FROM progresivas WHERE parent_id = $1', [progresivaId]);
         const existingChildIds = existingChildren.rows.map(row => row.id);
         if (existingChildIds.length > 0) {
             await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = ANY($1::int[])', [existingChildIds]);
             await client.query('DELETE FROM progresivas WHERE parent_id = $1', [progresivaId]);
         }
-        console.log(`[DEBUG] Deleted ${existingChildIds.length} old children.`);
 
         // 2. Update parent progresiva
-        console.log('[DEBUG] Updating parent progresiva...');
         const {
             nombre, descripcion, estado, linea,
             longitud_total, tipo_via, intervalo_manual, coordenada_este, coordenada_norte,
@@ -1229,10 +1198,8 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
                 progresiva_inicial = $10, progresiva_final = $11, kml_trazado_id = $12
             WHERE id = $13
         `, [nombre, descripcion, estado, lineaIntParent, longitud_total, tipo_via, intervalo_manual, coordenada_este, coordenada_norte, progresiva_inicial_parent, progresiva_final_parent, kml_trazado_id, progresivaId]);
-        console.log('[DEBUG] Parent progresiva updated.');
 
         // 3. Insert new children, strata, and assays
-        console.log('[DEBUG] Inserting new children, strata, and assays...');
         const selectedEstratosSet = new Set(estratosSeleccionados || []);
 
         for (const prog of generatedChildren) {
@@ -1258,7 +1225,7 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
                     const prof_ini = parseFloat(estrato.profundidad_inicial);
                     const prof_fin = parseFloat(estrato.profundidad_final);
                     if (isNaN(prof_ini) || isNaN(prof_fin)) {
-                         throw { type: 'ExcelDataValidationError', message: `Profundidad inválida en progresiva ${prog.nombre}` };
+                        throw { type: 'ExcelDataValidationError', message: `Profundidad inválida en progresiva ${prog.nombre}` };
                     }
                     const estratoResult = await client.query(`
                         INSERT INTO estratos (parent_type, parent_id, nombre, descripcion, cota_inicial, cota_final, orden)
@@ -1272,11 +1239,11 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
                     // DYNAMIC ASSAY CREATION
                     if (selectedEstratosSet.has(estratoKey) && tiposEnsayoIds && tiposEnsayoIds.length > 0) {
                         for (const tipoEnsayoId of tiposEnsayoIds) {
-                            await ensayosService.createBaseEnsayo({ 
-                                estrato_id: newEstratoId, 
-                                tipo_ensayo_id: tipoEnsayoId, 
+                            await ensayosService.createBaseEnsayo({
+                                estrato_id: newEstratoId,
+                                tipo_ensayo_id: tipoEnsayoId,
                                 // El nombre se puede mejorar o hacer dinámico si es necesario
-                                nombre_ensayo: 'Ensayo (Auto)' 
+                                nombre_ensayo: 'Ensayo (Auto)'
                             }, client);
                         }
                     }
@@ -1285,7 +1252,6 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
         }
 
         await client.query('COMMIT');
-        console.log('[DEBUG] Transaction committed.');
         return { status: 'ok', message: 'Tramo actualizado e importado correctamente', progresivaId: progresivaId };
 
     } catch (err) {

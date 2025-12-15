@@ -1,4 +1,6 @@
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M16 2 L2 28 L30 28 Z" fill="white" stroke="red" stroke-width="3"/>
-  <path d="M8 20 C12 12, 20 12, 24 20" stroke="black" stroke-width="3" fill="none"/>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Red Warning Triangle -->
+  <path d="M32 4 L6 58 L58 58 Z" fill="white" stroke="#ff0000" stroke-width="5" stroke-linejoin="round"/>
+  <!-- Black Hump/Dip Symbol -->
+  <path d="M16 45 Q 32 15 48 45" fill="none" stroke="black" stroke-width="5" stroke-linecap="round"/>
 </svg>

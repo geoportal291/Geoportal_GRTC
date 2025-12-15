@@ -10,11 +10,10 @@ import FormularioAlcantarillaView from './AlcantarillaModalViews/FormularioAlcan
 import FormularioBadenView from './AlcantarillaModalViews/FormularioBadenView'; // Import Badenes Form
 import SubirExcelAlcantarillasView from './AlcantarillaModalViews/SubirExcelAlcantarillasView';
 import SubirImagenesAlcantarillasView from './AlcantarillaModalViews/SubirImagenesAlcantarillasView';
-
-
-
-
-
+import FormularioZonaCriticaView from './AlcantarillaModalViews/FormularioZonaCriticaView'; // Import Zonas Criticas Form
+import FormularioInterferenciaView from './AlcantarillaModalViews/FormularioInterferenciaView'; // Import Interferencias Form
+import FormularioSenalInformativaView from './AlcantarillaModalViews/FormularioSenalInformativaView';
+import FormularioHitoKilometricoView from './AlcantarillaModalViews/FormularioHitoKilometricoView';
 
 const DataManagementModal = ({
   show,
@@ -50,6 +49,17 @@ const DataManagementModal = ({
     caracteristicas: '',
     clase: '',
     panel_fotografico_codigo: '',
+    // Zonas Criticas
+    id_zona_critica: '',
+    lado: '',
+    longitud_zona: '',
+    clase_dano: '',
+    condicion: '',
+    entregable: '',
+    // Interferencias
+    tipo_interferencia: '',
+    tension: '',
+    // Common properties that might duplicate but harmless
   };
 
   const modalRef = useRef();
@@ -327,6 +337,15 @@ const DataManagementModal = ({
       if (type === 'badenes') uploadEndpoint = '/api/badenes/upload-excel';
       if (type === 'puentes') uploadEndpoint = '/api/puentes/upload-excel';
       if (type === 'muros') uploadEndpoint = '/api/muros/upload-excel';
+      if (type === 'canteras') uploadEndpoint = '/api/canteras-fuentes/upload-excel';
+
+      if (type === 'zonas-criticas') uploadEndpoint = '/api/zonas-criticas/upload-excel';
+      if (type === 'estructuras-existentes') uploadEndpoint = '/api/estructuras-existentes/upload-excel';
+      if (type === 'interferencias') uploadEndpoint = '/api/interferencias/upload-excel';
+      if (type === 'senales_informativas') uploadEndpoint = '/api/senales-informativas/upload-excel';
+      if (type === 'senales_preventivas') uploadEndpoint = '/api/senales-preventivas/upload-excel';
+      if (type === 'hitos_kilometricos') uploadEndpoint = '/api/hitos-kilometricos/upload-excel';
+
 
       const response = await axiosInstance.post(uploadEndpoint, formData, {
         headers: {
@@ -561,6 +580,15 @@ const DataManagementModal = ({
             <label for="delete-muros" style="display: block; margin: 5px 0;">
                 <input type="checkbox" id="delete-muros" value="muros" checked> Muros de Contención
             </label>
+            <label for="delete-canterasfuentes" style="display: block; margin: 5px 0;">
+                <input type="checkbox" id="delete-canterasfuentes" value="canterasfuentes" checked> Canteras y Fuentes
+            </label>
+            <label for="delete-zonascriticas" style="display: block; margin: 5px 0;">
+                <input type="checkbox" id="delete-zonascriticas" value="zonascriticas" checked> Zonas Críticas
+            </label>
+            <label for="delete-estructuras" style="display: block; margin: 5px 0;">
+                <input type="checkbox" id="delete-estructuras" value="estructuras" checked> Estructuras Existentes
+            </label>
             <p style="font-size: 0.8em; color: #888; margin-top: 15px;">Esta acción no se puede deshacer.</p>
         </div>
     `;
@@ -571,37 +599,54 @@ const DataManagementModal = ({
         const deleteBadenes = document.getElementById('delete-badenes').checked;
         const deletePuentes = document.getElementById('delete-puentes').checked;
         const deleteMuros = document.getElementById('delete-muros').checked;
-        
+        const deleteCanterasFuentes = document.getElementById('delete-canterasfuentes').checked;
+        const deleteZonasCriticas = document.getElementById('delete-zonascriticas')?.checked;
+        const deleteEstructuras = document.getElementById('delete-estructuras')?.checked;
+
         const typesToDelete = [];
         if (deleteAlcantarillas) typesToDelete.push('alcantarillas');
         if (deleteBadenes) typesToDelete.push('badenes');
         if (deletePuentes) typesToDelete.push('puentes');
         if (deleteMuros) typesToDelete.push('muros');
+        if (deleteCanterasFuentes) typesToDelete.push('canterasfuentes');
+        if (deleteZonasCriticas) typesToDelete.push('zonascriticas');
+        // Do NOT push 'estructuras' to typesToDelete if we handle it separately, OR ensure backend ignores it?
+        // Better to handle separately below.
 
-        if (typesToDelete.length === 0) {
-            setUploadStatus({ message: 'No se seleccionó ningún tipo de dato para eliminar. Operación cancelada.', type: 'info' });
-            return;
+        if (typesToDelete.length === 0 && !deleteEstructuras) {
+          setUploadStatus({ message: 'No se seleccionó ningún tipo de dato para eliminar. Operación cancelada.', type: 'info' });
+          return;
         }
 
         setUploadStatus({ message: 'Eliminando archivo Excel y datos seleccionados...', type: 'info' });
         try {
           const entregableMatch = vialHeaderOption.match(/(\d+)/);
           const entregableNum = entregableMatch ? entregableMatch[1] : '';
-          
-          const response = await axiosInstance.delete(`/api/alcantarillas/delete-excel/${projectId}?entregableNum=${entregableNum}&tipos=${typesToDelete.join(',')}`);
-          
-          setUploadStatus({ message: response.data.message, type: 'success' });
+
+          // Handle Estructuras delete separately
+          if (deleteEstructuras) {
+            await axiosInstance.delete(`/api/estructuras-existentes/project/${projectId}`);
+          }
+
+          if (typesToDelete.length > 0) {
+            const response = await axiosInstance.delete(`/api/alcantarillas/delete-excel/${projectId}?entregableNum=${entregableNum}&tipos=${typesToDelete.join(',')}`);
+            setUploadStatus({ message: response.data.message || 'Datos eliminados.', type: 'success' });
+          } else {
+            setUploadStatus({ message: 'Datos de estructuras eliminados.', type: 'success' });
+          }
+
+
           fetchExcelInfo();
           if (onUploadExcelData) {
             onUploadExcelData();
           }
           setFilesToUpload(null);
         } catch (error) {
-            if (error.response && error.response.status === 403) {
-                alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
-            } else {
-                setUploadStatus({ message: 'Error al eliminar el archivo Excel y los datos: ' + (error.response?.data?.message || error.message), type: 'error' });
-            }
+          if (error.response && error.response.status === 403) {
+            alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
+          } else {
+            setUploadStatus({ message: 'Error al eliminar el archivo Excel y los datos: ' + (error.response?.data?.message || error.message), type: 'error' });
+          }
         }
       },
       () => {
@@ -611,6 +656,52 @@ const DataManagementModal = ({
   };
 
   const submitButtonText = modalViewMode === 'edit' ? 'Actualizar Alcantarilla' : 'Guardar Alcantarilla';
+
+  const getModalTitle = () => {
+    if (modalViewMode === 'create') return 'Crear Nuevo Elemento';
+    if (modalViewMode === 'edit') return 'Editar Elemento';
+    if (modalViewMode === 'upload') {
+      if (type === 'badenes') return 'Gestión de Badenes (Excel)';
+      if (type === 'zonas-criticas') return 'Gestión de Zonas Críticas (Excel)';
+      if (type === 'est_existentes') return 'Gestión de Estructuras Existentes (Excel)';
+      if (type === 'interferencias') return 'Gestión de Interferencias (Excel)';
+      if (type === 'interferencias') return 'Gestión de Interferencias (Excel)';
+      if (type === 'senales_informativas') return 'Gestión de Señales Informativas (Excel)';
+      if (type === 'senales_preventivas') return 'Gestión de Señales Preventivas (Excel)';
+      if (type === 'upload_excel') return 'Gestión de Excel'; // Fallback or specific check
+      return 'Gestión de Alcantarillas (Excel)';
+    }
+    // Fix: check for modalViewMode being 'upload_excel' explicitly if setModalViewMode sets it so.
+    // Actually setModalViewMode sets 'upload', 'upload_excel' or 'upload_graphics_excel'.
+    // Checking previous logic: onUploadExcel calls setModalViewMode('upload').
+    // BUT in ListaElementosView it sets 'upload_excel'. Consistency check needed.
+    // In DataManagementModal.jsx lines 757 it checks modalViewMode === 'upload_excel'.
+    // So 'upload' might be legacy or from main 'upload' button if it exists.
+    // Let's support both or fix the mode.
+
+    if (modalViewMode === 'upload' || modalViewMode === 'upload_excel') {
+      if (type === 'badenes') return 'Gestión de Badenes (Excel)';
+      if (type === 'zonas-criticas') return 'Gestión de Zonas Críticas (Excel)';
+      if (type === 'est_existentes') return 'Gestión de Estructuras Existentes (Excel)';
+      if (type === 'interferencias') return 'Gestión de Interferencias (Excel)';
+      if (type === 'interferencias') return 'Gestión de Interferencias (Excel)';
+      if (type === 'senales_informativas') return 'Gestión de Señales Informativas (Excel)';
+      if (type === 'senales_preventivas') return 'Gestión de Señales Preventivas (Excel)';
+      if (type === 'hitos_kilometricos') return 'Gestión de Hitos Kilométricos (Excel)';
+      return 'Gestión de Alcantarillas (Excel)';
+    }
+
+    if (modalViewMode === 'upload_images' || modalViewMode === 'upload_graphics_excel') return 'Gestión de Imágenes';
+
+    return type === 'badenes' ? 'Gestión de Badenes' :
+      type === 'zonas-criticas' ? 'Gestión de Zonas Críticas' :
+        type === 'est_existentes' ? 'Gestión de Estructuras Existentes' :
+          type === 'interferencias' ? 'Gestión de Interferencias' :
+            type === 'senales_informativas' ? 'Gestión de Señales Informativas' :
+              type === 'senales_preventivas' ? 'Gestión de Señales Preventivas' :
+                type === 'hitos_kilometricos' ? 'Gestión de Hitos Kilométricos' :
+                  'Gestión de Alcantarillas';
+  };
 
   if (!show) {
     return null;
@@ -659,120 +750,144 @@ const DataManagementModal = ({
           transition: 'color 0.2s ease'
         }} onMouseOver={(e) => e.currentTarget.style.color = '#333'} onMouseOut={(e) => e.currentTarget.style.color = '#555'}>&times;</button>
 
-        <h2 style={{ marginBottom: '20px', color: '#333', textAlign: 'center', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
-          {(() => {
-            const typeName = type === 'badenes' ? 'Badén' : (type === 'puentes' ? 'Puente' : (type === 'muros' ? 'Muro' : 'Alcantarilla'));
-            const typeNamePlural = type === 'badenes' ? 'Badenes' : (type === 'puentes' ? 'Puentes' : (type === 'muros' ? 'Muros' : 'Alcantarillas'));
+        <div className="alcantarilla-modal-header" style={{ marginBottom: '20px', color: '#333', textAlign: 'center', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
+          <h2>{getModalTitle()}</h2>
+        </div>
 
-            if (modalViewMode === 'edit') return `Editar ${typeName}`;
-            if (modalViewMode === 'create') return `Ingresar Nueva ${typeName}`;
-            return `Gestión de ${typeNamePlural}`;
-          })()}
-        </h2>
-
-        {modalViewMode === 'list' && (
-          <ListaElementosView
-            allData={allData}
-            handleCreateNewClick={handleCreateNewClick}
-            handleEditClick={handleEditClick}
-            setModalViewMode={setModalViewMode}
-            type={type} // Pass type to the generic view
-          />
-        )}
-
-        {(modalViewMode === 'create' || modalViewMode === 'edit') && (
-          type === 'badenes' ? (
-            <FormularioBadenView
-              formData={formData}
-              handleChange={handleChange}
-              handleSubmit={handleSubmit}
-              modalViewMode={modalViewMode}
-              setModalViewMode={setModalViewMode}
-              submitButtonText={submitButtonText}
+        <div className="alcantarilla-modal-body">
+          {modalViewMode === 'list' && (
+            <ListaElementosView
+              allData={allData} // Changed from 'data' to 'allData'
+              handleCreateNewClick={handleCreateNewClick} // Changed from 'onCreate'
+              handleEditClick={handleEditClick} // Changed from 'onEdit'
+              // onDelete={handleDeleteClick} // This was not in the original code, so not adding it.
+              setModalViewMode={setModalViewMode} // Changed from 'onUploadExcel' and 'onUploadImages'
+              type={type} // Pass type to the generic view
+            // canUpload={true} // Not in original code
+            // isNavbarExpanded={isNavbarExpanded} // Not in original code
             />
-          ) : (
-            <FormularioAlcantarillaView
-              formData={formData}
-              handleChange={handleChange}
-              handleSubmit={handleSubmit}
-              modalViewMode={modalViewMode}
+          )}
+
+          {(modalViewMode === 'create' || modalViewMode === 'edit') && (
+            type === 'badenes' ? (
+              <FormularioBadenView
+                formData={formData}
+                handleChange={handleChange}
+                handleSubmit={handleSubmit}
+                modalViewMode={modalViewMode}
+                setModalViewMode={setModalViewMode}
+                submitButtonText={submitButtonText}
+              />
+            ) : type === 'zonas-criticas' ? (
+              <FormularioZonaCriticaView
+                formData={formData}
+                handleChange={handleChange}
+                handleSubmit={handleSubmit}
+                modalViewMode={modalViewMode}
+                setModalViewMode={setModalViewMode}
+                submitButtonText={submitButtonText}
+              />
+            ) : type === 'interferencias' ? (
+              <FormularioInterferenciaView
+                formData={formData}
+                handleInputChange={handleChange}
+              />
+            ) : type === 'senales_informativas' ? (
+              <FormularioSenalInformativaView
+                formData={formData}
+                handleInputChange={handleChange}
+              />
+            ) : type === 'hitos_kilometricos' ? (
+              <FormularioHitoKilometricoView
+                formData={formData}
+                handleInputChange={handleChange}
+                onSubmit={handleSubmit}
+                onCancel={() => setModalViewMode('list')}
+              />
+            ) : (
+              <FormularioAlcantarillaView
+                formData={formData}
+                handleChange={handleChange}
+                handleSubmit={handleSubmit}
+                modalViewMode={modalViewMode}
+                setModalViewMode={setModalViewMode}
+                submitButtonText={submitButtonText}
+              />
+            )
+          )}
+
+          {modalViewMode === 'upload_excel' && (
+            <SubirExcelAlcantarillasView
+              utmZone={utmZone}
+              setUtmZone={setUtmZone}
+              handleFileChange={handleFileChange}
+              handleProcessExcel={handleProcessExcel}
+              handleDeleteExcelData={handleDeleteExcelData}
+              uploadStatus={uploadStatus}
               setModalViewMode={setModalViewMode}
-              submitButtonText={submitButtonText}
+              setUploadStatus={setUploadStatus}
+              filesToUpload={filesToUpload}
+              existingExcelFile={excelFileInfo}
+              handleDownloadExcel={handleDownloadExcel}
             />
-          )
-        )}
+          )}
 
-        {modalViewMode === 'upload_excel' && (
-          <SubirExcelAlcantarillasView
-            utmZone={utmZone}
-            setUtmZone={setUtmZone}
-            handleFileChange={handleFileChange}
-            handleProcessExcel={handleProcessExcel}
-            handleDeleteExcelData={handleDeleteExcelData}
-            uploadStatus={uploadStatus}
-            setModalViewMode={setModalViewMode}
-            setUploadStatus={setUploadStatus}
-            filesToUpload={filesToUpload}
-            existingExcelFile={excelFileInfo}
-            handleDownloadExcel={handleDownloadExcel}
-          />
-        )}
-
-        {modalViewMode === 'upload_graphics_excel' && (
-          <SubirImagenesAlcantarillasView
-            filesToUpload={filesToUpload}
-            isUploading={isUploading}
-            pollingJobId={pollingJobId}
-            handleFileChange={handleFileChange}
-            handleImageUploadProcess={handleImageUploadProcess}
-            handleDeleteAllGraphicImages={handleDeleteAllGraphicImages}
-            uploadStatus={uploadStatus}
-            uploadProgress={uploadProgress}
-            etr={etr}
-            formatEtr={formatEtr}
-            graphicsImages={graphicsImages}
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            handleDeleteGraphicImage={handleDeleteGraphicImage}
-            setPreviewImageUrl={setPreviewImageUrl}
-            setIsPreviewModalOpen={setIsPreviewModalOpen}
-            setModalViewMode={setModalViewMode}
-            setUploadStatus={setUploadStatus}
-            setGraphicsImages={setGraphicsImages}
-          />
-        )}
+          {modalViewMode === 'upload_graphics_excel' && (
+            <SubirImagenesAlcantarillasView
+              filesToUpload={filesToUpload}
+              isUploading={isUploading}
+              pollingJobId={pollingJobId}
+              handleFileChange={handleFileChange}
+              handleImageUploadProcess={handleImageUploadProcess}
+              handleDeleteAllGraphicImages={handleDeleteAllGraphicImages}
+              uploadStatus={uploadStatus}
+              uploadProgress={uploadProgress}
+              etr={etr}
+              formatEtr={formatEtr}
+              graphicsImages={graphicsImages}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              handleDeleteGraphicImage={handleDeleteGraphicImage}
+              setPreviewImageUrl={setPreviewImageUrl}
+              setIsPreviewModalOpen={setIsPreviewModalOpen}
+              setModalViewMode={setModalViewMode}
+              setUploadStatus={setUploadStatus}
+              setGraphicsImages={setGraphicsImages}
+            />
+          )}
 
 
 
-        {isPreviewModalOpen && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10002,
-          }}>
-            <img src={previewImageUrl} alt="Preview" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
-            <button onClick={() => setIsPreviewModalOpen(false)} style={{
-              position: 'absolute',
-              top: '20px',
-              right: '20px',
-              background: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              width: '40px',
-              height: '40px',
-              fontSize: '1.5rem',
-              cursor: 'pointer',
-              color: '#333',
-            }}>&times;</button>
-          </div>
-        )}
+          {isPreviewModalOpen && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10002,
+            }}>
+              <img src={previewImageUrl} alt="Preview" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
+              <button onClick={() => setIsPreviewModalOpen(false)} style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                fontSize: '1.5rem',
+                cursor: 'pointer',
+                color: '#333',
+              }}>&times;</button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

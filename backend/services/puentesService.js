@@ -117,7 +117,7 @@ const puentesService = {
                     }
                 }
             });
-            console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
+            // console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
 
             // 3. Get calibration data for the project
             const calibrationRes = await db.query(
@@ -128,7 +128,7 @@ const puentesService = {
                 acc[cal.nombre_tramo.toUpperCase().trim()] = cal;
                 return acc;
             }, {});
-            console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
+            // console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
 
             // 4. Process Excel
             const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
@@ -151,7 +151,7 @@ const puentesService = {
                 const claseCell = row[4]; // Column E
 
                 if (typeof claseCell === 'string' && claseCell.toLowerCase().includes('puente')) {
-                    console.log(`DEBUG: 'Puente' encontrado en fila ${i + 1}, Columna E: "${claseCell}"`);
+                    // console.log(`DEBUG: 'Puente' encontrado en fila ${i + 1}, Columna E: "${claseCell}"`);
 
                     const progresivaStr = row[2]; // Column C
                     if (!progresivaStr) {
@@ -281,7 +281,7 @@ const puentesService = {
                         latitud: latitud,
                         longitud: longitud
                     };
-                    console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, puente);
+                    // console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, puente);
 
                     puentesData.push(puente);
                 }

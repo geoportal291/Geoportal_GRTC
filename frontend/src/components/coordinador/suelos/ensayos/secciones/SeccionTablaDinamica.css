@@ -5,8 +5,9 @@
     /* Por ejemplo, podemos definir un borde o una sombra si queremos diferenciarlo. */
     border: 1px solid #e9ecef;
     border-radius: 8px;
-    overflow: hidden; /* Asegura que la tabla interior respete los bordes redondeados */
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    overflow: hidden;
+    /* Asegura que la tabla interior respete los bordes redondeados */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .table-responsive .info-section-header {
@@ -19,5 +20,22 @@
 }
 
 .table-responsive .table {
-    margin-bottom: 0; /* Bootstrap añade un margen, lo removemos porque el contenedor ya lo maneja */
+    margin-bottom: 0;
+    /* Bootstrap añade un margen, lo removemos porque el contenedor ya lo maneja */
+}
+
+/* Estilos para los campos dinámicos de cabecera (fields) */
+.dynamic-section-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 15px;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.dynamic-section-item {
+    /* El ancho se controla inline vía style (field.width) */
+    box-sizing: border-box;
+    padding-right: 5px;
 }

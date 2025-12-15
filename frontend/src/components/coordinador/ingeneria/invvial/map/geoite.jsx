@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import ReactDOM from 'react-dom';
+import ReactDOM, { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { MapContainer, TileLayer, LayersControl, useMap, Polyline, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -9,6 +9,7 @@ import 'leaflet-draw';
 import { fromLatLon, toLatLon } from 'utm';
 import { kml } from '@tmcw/togeojson';
 import { DOMParser } from 'xmldom';
+import * as turf from '@turf/turf';
 import alertify from 'alertifyjs'; // Add this line
 import './geoite.css';
 import axiosInstance from '../../../../../api/axios';
@@ -16,12 +17,18 @@ import { saveAs } from 'file-saver';
 
 
 // Este componente encapsula TODA la lógica imperativa para no causar re-renders.
-const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails }) => {
+const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails, graphicsImages }) => {
     const map = useMap();
     const geoJsonLayerRef = React.useRef(null);
     const alcantarillasLayerRef = React.useRef(new L.FeatureGroup()); // FeatureGroup para alcantarillas
     const [calibrationData, setCalibrationData] = useState(null); // NEW: State for calibration
     const calibrationDataRef = useRef(null); // NEW: Ref to avoid stale closures
+    const [activePopup, setActivePopup] = useState(null);
+    const popupContainer = React.useMemo(() => {
+        const div = document.createElement('div');
+        div.className = "leaflet-popup-content-wrapper-react";
+        return div;
+    }, []);
 
     useEffect(() => {
         if (!map) return;
@@ -153,6 +160,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 return;
             }
 
+            // Filtrar capas que tienen la propiedad "name" (tramos)
             const sourceLayers = routeLayer.getLayers().filter(l => l.getLatLngs && l.feature?.properties?.name);
             if (sourceLayers.length === 0) {
                 alertify.error('El KML cargado no contiene tramos con la propiedad "name" requerida (ej: "TRAMO 1").');
@@ -883,7 +891,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         loadInitialCalibrationData();
 
         calibrateButton.onclick = () => {
-            toggleMenu('menu-calibrar', calibrateButton);
+            toggleMenu('invvial-menu-calibrar', calibrateButton);
             const routeLayer = geoJsonLayerRef.current;
             if (!routeLayer) {
                 alertify.error('Primero debe cargar un archivo KML.');
@@ -909,8 +917,8 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 tableRows += `
                     <tr>
                         <td style="padding: 8px; border: 1px solid #ddd;">${tramoName}</td>
-                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="calib-input btn-block" data-tramo="${tramoName}" data-type="start" value="${currentCalib.start}" placeholder="Ej: 0+000"></td>
-                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="calib-input btn-block" data-tramo="${tramoName}" data-type="end" value="${currentCalib.end}" placeholder="Ej: 34+000"></td>
+                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="invvial-calib-input" data-tramo="${tramoName}" data-type="start" value="${currentCalib.start}" placeholder="Ej: 0+000"></td>
+                        <td style="padding: 8px; border: 1px solid #ddd;"><input type="text" class="invvial-calib-input" data-tramo="${tramoName}" data-type="end" value="${currentCalib.end}" placeholder="Ej: 34+000"></td>
                     </tr>
                 `;
             });
@@ -927,12 +935,12 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     </thead>
                     <tbody>${tableRows}</tbody>
                 </table>
-                <button id="saveCalibrationBtn" class="btn-block">Guardar Calibración</button>
-                <button id="deleteCalibrationBtn" class="btn-block" style="background-color: #dc3545; color: white; margin-top:5px;">Borrar Calibración</button>
+                <button id="invvial-saveCalibrationBtn" class="invvial-btn-block" style="background-color: #28a745; color: white;">Guardar Calibración</button>
+                <button id="invvial-deleteCalibrationBtn" class="invvial-btn-block" style="background-color: #dc3545; color: white; margin-top:5px;">Borrar Calibración</button>
             `;
 
-            calibrationModal.querySelector('#saveCalibrationBtn').onclick = async () => {
-                const inputs = calibrationModal.querySelectorAll('.calib-input');
+            calibrationModal.querySelector('#invvial-saveCalibrationBtn').onclick = async () => {
+                const inputs = calibrationModal.querySelectorAll('.invvial-calib-input');
                 const newCalibData = {};
                 inputs.forEach(input => {
                     const tramo = input.dataset.tramo;
@@ -954,7 +962,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 }
             };
 
-            calibrationModal.querySelector('#deleteCalibrationBtn').onclick = async () => {
+            calibrationModal.querySelector('#invvial-deleteCalibrationBtn').onclick = async () => {
                 alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar TODOS los datos de calibración para este proyecto?',
                     async function () {
                         try {
@@ -1228,6 +1236,8 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         map.on(L.Draw.Event.CREATED, handleDrawCreated);
         map.on(L.Draw.Event.DRAWSTART, handleDrawStart).on(L.Draw.Event.DRAWSTOP, handleDrawStop);
         map.on('click', handleMapClick).on('dblclick', handleMapDoubleClick);
+        map.on('zoomstart', () => map.closePopup()); // Close popup on zoom start
+        map.on('click', () => map.closePopup());     // ensure click anywhere on map closes popup
 
         return () => {
             isComponentMounted = false;
@@ -1246,8 +1256,9 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             toolbarControl.remove();
 
             [measureModal, drawModal, downloadModal, uploadModal, calibrationModal].forEach(modal => {
-                if (map.getContainer().contains(modal)) {
-                    map.getContainer().removeChild(modal);
+                // Safely remove modal from its parent if it exists
+                if (modal && modal.parentNode) {
+                    modal.parentNode.removeChild(modal);
                 }
             });
         };
@@ -1272,12 +1283,21 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
     }, [highlightedTramoId, map]); // Dependency on highlightedTramoId
 
     // Componente React para la galería de imágenes del popup
-    const ImageGallery = ({ imageUrls, onShowDetails }) => {
+    const ImageGallery = ({ imageProp, onShowDetails }) => {
         const [currentIndex, setCurrentIndex] = useState(0);
 
-        if (!imageUrls || imageUrls.length === 0) {
+        // Normalize the input to always be an array of objects with a `url` property
+        const images = (imageProp || []).map(item => {
+            if (typeof item === 'string') {
+                return { url: item }; // Convert string to object
+            }
+            return item; // It's already an object
+        }).filter(item => item && item.url); // Ensure we only have valid items
+
+        if (images.length === 0) {
             return (
                 <div style={{ marginTop: '5px', textAlign: 'center' }}>
+                    <p style={{ margin: '5px 0', fontSize: '12px', color: '#666' }}>No hay imágenes.</p>
                     <button
                         onClick={onShowDetails}
                         style={{
@@ -1303,20 +1323,20 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         };
 
         const goToNext = () => {
-            setCurrentIndex(prevIndex => (prevIndex < imageUrls.length - 1 ? prevIndex + 1 : prevIndex));
+            setCurrentIndex(prevIndex => (prevIndex < images.length - 1 ? prevIndex + 1 : prevIndex));
         };
 
         return (
             <div style={{ marginTop: '5px', textAlign: 'center' }}>
                 <img
-                    src={imageUrls[currentIndex]}
-                    alt="Alcantarilla"
+                    src={images[currentIndex].url}
+                    alt="Elemento del mapa"
                     className="popup-image"
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '5px' }}>
                     <button onClick={goToPrevious} disabled={currentIndex === 0}>Anterior</button>
-                    <span>{`${currentIndex + 1} de ${imageUrls.length}`}</span>
-                    <button onClick={goToNext} disabled={currentIndex === imageUrls.length - 1}>Siguiente</button>
+                    <span>{`${currentIndex + 1} de ${images.length}`}</span>
+                    <button onClick={goToNext} disabled={currentIndex === images.length - 1}>Siguiente</button>
                 </div>
 
                 <button
@@ -1342,6 +1362,162 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
     const markerRefMap = React.useRef({});
     const popupRoots = React.useRef({});
 
+    const getIcon = React.useCallback((zoom, type, subtype = '', elementData = null) => {
+        let iconSize = [24, 24]; // Increased base size
+        let iconAnchor = [12, 24];
+        let popupAnchor = [0, -24];
+
+        // Default sizing for alcantarillas/badenes
+        if (zoom > 15) {
+            iconSize = [42, 42]; // Was 32x32
+            iconAnchor = [21, 42];
+            popupAnchor = [0, -42];
+        } else if (zoom > 13) {
+            iconSize = [32, 32]; // Was 24x24
+            iconAnchor = [16, 32];
+            popupAnchor = [0, -32];
+        }
+
+        // Custom sizing for Puentes and Muros (Larger)
+        if (type === 'puente' || type === 'muro') {
+            if (zoom > 15) {
+                iconSize = [64, 64]; // Was 48x48
+                iconAnchor = [32, 64];
+                popupAnchor = [0, -64];
+            } else if (zoom > 13) {
+                iconSize = [48, 48]; // Was 36x36
+                iconAnchor = [24, 48];
+                popupAnchor = [0, -48];
+            } else {
+                iconSize = [32, 32]; // Was 24x24
+                iconAnchor = [16, 32];
+                popupAnchor = [0, -32];
+            }
+        }
+
+        // Custom sizing for Canteras and Fuentes (Vertical Pin aspect ratio ~ 0.72)
+        if (type === 'cantera' || type === 'fuente') {
+            if (zoom > 15) {
+                iconSize = [46, 64]; // Was 32x44 -> significantly larger
+                iconAnchor = [23, 64];
+                popupAnchor = [0, -64];
+            } else if (zoom > 13) {
+                iconSize = [34, 47]; // Was 24x33
+                iconAnchor = [17, 47];
+                popupAnchor = [0, -47];
+            } else {
+                iconSize = [22, 30]; // Was 16x22
+                iconAnchor = [11, 30];
+                popupAnchor = [0, -30];
+            }
+        }
+
+
+        if (type === 'zona_critica') {
+            if (zoom > 15) {
+                iconSize = [40, 40];
+                iconAnchor = [20, 40];
+                popupAnchor = [0, -40];
+            } else {
+                iconSize = [28, 28];
+                iconAnchor = [14, 28];
+                popupAnchor = [0, -28];
+            }
+        }
+
+        let iconUrl = '';
+        if (type === 'alcantarilla') {
+            iconUrl = '/imgs/alcantarilla_icon.png';
+        } else if (type === 'baden') {
+            iconUrl = '/imgs/baden_icon.svg';
+        } else if (type === 'puente') {
+            iconUrl = '/imgs/puente_icon.svg';
+        } else if (type === 'muro') {
+            iconUrl = '/imgs/muro_icon.svg';
+        } else if (type === 'cantera') {
+            iconUrl = '/imgs/cantera_icon.svg';
+        } else if (type === 'fuente') {
+            iconUrl = '/imgs/fuente_icon.svg';
+        } else if (type === 'hitos_kilometricos') {
+            // ... existing hitos logic ...
+            const size = Math.max(20, zoom * 2.5);
+            const iconSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 40" width="${size}" height="${size}" style="filter: drop-shadow(3px 3px 2px rgba(0,0,0,0.4));">
+                <defs>
+                    <linearGradient id="postGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style="stop-color:#e0e0e0;stop-opacity:1" />
+                        <stop offset="50%" style="stop-color:#ffffff;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#d0d0d0;stop-opacity:1" />
+                    </linearGradient>
+                    <linearGradient id="capGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style="stop-color:#404040;stop-opacity:1" />
+                        <stop offset="50%" style="stop-color:#000000;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#303030;stop-opacity:1" />
+                    </linearGradient>
+                </defs>
+                <ellipse cx="15" cy="38" rx="10" ry="2" fill="rgba(0,0,0,0.3)" />
+                <path d="M5 10 L 5 36 Q 15 40 25 36 L 25 10 Z" fill="url(#postGradient)" stroke="#999" stroke-width="0.5"/>
+                <path d="M5 10 L 5 6 Q 15 2 25 6 L 25 10 Q 15 14 5 10 Z" fill="url(#capGradient)" stroke="none"/>
+                <ellipse cx="15" cy="6" rx="10" ry="2" fill="#555" />
+                <rect x="8" y="15" width="14" height="14" rx="2" fill="#fff" stroke="#ccc" stroke-width="0.5" />
+                <text x="15" y="25" font-size="10" text-anchor="middle" font-weight="900" fill="#000" font-family="Arial Black, Arial, sans-serif">K</text>
+            </svg>
+            `;
+            return L.divIcon({
+                className: 'custom-icon',
+                html: iconSvg,
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size],
+                popupAnchor: [0, -size]
+            });
+        }
+        else if (type === 'senales_informativas') {
+            iconUrl = '/imgs/senal_informativa_icon.svg';
+        } else if (type === 'senales_preventivas') {
+            iconUrl = '/imgs/senal_preventiva_icon.svg';
+        } else if (type === 'zona_critica') {
+            const t = (subtype || '').toUpperCase();
+            if (t.includes('DESPRENDIMIENTO') || t.includes('TALUD') || t.includes('DESLIZAMIENTO')) {
+                iconUrl = '/imgs/zona_deslizamiento.svg';
+            } else if (t.includes('AHUELLAMIENTO')) {
+                iconUrl = '/imgs/ahuellamiento.svg';
+            } else {
+                iconUrl = '/imgs/zona_critica.svg';
+            }
+        } else if (type === 'interferencia_electrica' || (typeof subtype === 'string' && subtype.toLowerCase().includes('poste'))) {
+            iconUrl = '/imgs/interferencia_icon.svg';
+        } else if (type === 'estructura_existente') {
+            iconUrl = '/imgs/estructura_icon.svg';
+            // Custom sizing for structures if needed, reusing standard for now
+            if (zoom > 15) {
+                iconSize = [42, 42];
+                iconAnchor = [21, 42];
+                popupAnchor = [0, -42];
+            } else {
+                iconSize = [32, 32];
+                iconAnchor = [16, 32];
+                popupAnchor = [0, -32];
+            }
+
+        } else {
+            // Fallback/Default
+            // Check if it might be an estructura by properties?
+            if (elementData && elementData.progresiva_inicio) {
+                // Estructuras usually have progresiva_inicio
+                iconUrl = '/imgs/estructura_icon.svg';
+            } else {
+                iconUrl = '/imgs/alcantarilla_icon.png';
+            }
+        }
+
+        return L.icon({
+            iconUrl: iconUrl,
+            iconSize: iconSize,
+            iconAnchor: iconAnchor,
+            popupAnchor: popupAnchor
+        });
+    }, []);
+
     // Efecto para RENDERIZAR los marcadores de alcantarillas
     React.useEffect(() => {
         try {
@@ -1349,59 +1525,16 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
             const alcantarillasLayer = alcantarillasLayerRef.current;
 
-            const getIcon = (zoom, type) => {
-                let iconSize = [16, 16];
-                let iconAnchor = [8, 16];
-                let popupAnchor = [0, -16];
-
-                // Default sizing for alcantarillas/badenes
-                if (zoom > 15) {
-                    iconSize = [32, 32];
-                    iconAnchor = [16, 32];
-                    popupAnchor = [0, -32];
-                } else if (zoom > 13) {
-                    iconSize = [24, 24];
-                    iconAnchor = [12, 24];
-                    popupAnchor = [0, -24];
-                }
-
-                // Custom sizing for Puentes and Muros (Larger)
-                if (type === 'puente' || type === 'muro') {
-                    if (zoom > 15) {
-                        iconSize = [48, 48]; // Significantly larger
-                        iconAnchor = [24, 48];
-                        popupAnchor = [0, -48];
-                    } else if (zoom > 13) {
-                        iconSize = [36, 36];
-                        iconAnchor = [18, 36];
-                        popupAnchor = [0, -36];
-                    } else {
-                        iconSize = [24, 24]; // Base size also larger
-                        iconAnchor = [12, 24];
-                        popupAnchor = [0, -24];
-                    }
-                }
-
-                let iconUrl = '';
-                if (type === 'alcantarilla') {
-                    iconUrl = '/imgs/alcantarilla_icon.png';
-                } else if (type === 'baden') {
-                    iconUrl = '/imgs/baden_icon.svg';
-                } else if (type === 'puente') {
-                    iconUrl = '/imgs/puente_icon.svg';
-                } else if (type === 'muro') {
-                    iconUrl = '/imgs/muro_icon.svg';
-                } else {
-                    iconUrl = '/imgs/alcantarilla_icon.png'; // Default or error icon
-                }
-
-                return L.icon({
-                    iconUrl: iconUrl,
-                    iconSize: iconSize,
-                    iconAnchor: iconAnchor,
-                    popupAnchor: popupAnchor
-                });
+            const formatProgresiva = (value) => {
+                if (value === null || value === undefined) return '';
+                const num = Number(value);
+                if (isNaN(num)) return value;
+                const km = Math.floor(num / 1000);
+                const m = Math.round(num % 1000);
+                return `${km}+${m.toString().padStart(3, '0')}`;
             };
+
+
 
             const renderMarkers = () => {
                 alcantarillasLayer.clearLayers();
@@ -1412,7 +1545,13 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     if (typeof alcantarilla.latitud === 'number' && !isNaN(alcantarilla.latitud) &&
                         typeof alcantarilla.longitud === 'number' && !isNaN(alcantarilla.longitud)) {
 
-                        const icon = getIcon(zoom, alcantarilla.type); // Moved inside the loop and passing type
+                        // Normalize type for robust comparison
+                        const normalizedType = String(alcantarilla.type || '').trim();
+                        // DEBUG: Check what is actually being passed
+                        if (normalizedType !== 'alcantarilla' && normalizedType !== 'baden') {
+                            console.log('Rendering marker type:', normalizedType);
+                        }
+                        const icon = getIcon(zoom, normalizedType, alcantarilla.tipo, alcantarilla);
 
                         const marker = L.marker([alcantarilla.latitud, alcantarilla.longitud], { icon: icon });
 
@@ -1437,51 +1576,264 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                             }
                         });
 
-                        const popupContainerId = `popup-gallery-${alcantarilla.id_alcantarilla || alcantarilla.id_baden || alcantarilla.id_puente || alcantarilla.id_muro}`;
+                        // Use a robust, unique ID for the popup container
+                        const popupContainerId = `popup-gallery-${alcantarilla.type}-${alcantarilla.id || alcantarilla.id_alcantarilla || alcantarilla.id_baden || alcantarilla.id_puente || alcantarilla.id_muro}`;
 
-                        let typeLabel = 'Alcantarilla';
-                        let idValue = alcantarilla.codigo || alcantarilla.id_alcantarilla;
+                        let typeLabel = 'Elemento';
+                        let idValue = alcantarilla.id;
 
-                        if (alcantarilla.type === 'baden') {
-                            typeLabel = 'Badén';
-                            idValue = alcantarilla.codigo || alcantarilla.id_baden;
-                        } else if (alcantarilla.type === 'puente') {
-                            typeLabel = 'Puente';
-                            idValue = alcantarilla.nombre || alcantarilla.id_puente;
-                        } else if (alcantarilla.type === 'muro') {
-                            typeLabel = 'Muro';
-                            idValue = alcantarilla.id_muro;
-                        }
-
-                        const popupContent = `
-                            <b>${typeLabel}:</b> ${idValue}<br/>
-                            <div id="${popupContainerId}"></div>
-                        `;
-
-                        marker.bindPopup(popupContent);
+                        // Bind the shared container to the marker
+                        marker.bindPopup(popupContainer, {
+                            maxWidth: 300,
+                            minWidth: 200
+                        });
 
                         marker.on('popupopen', () => {
-                            const container = document.getElementById(popupContainerId);
-                            if (container) {
-                                const root = createRoot(container);
-                                popupRoots.current[popupContainerId] = root;
-                                root.render(<ImageGallery imageUrls={alcantarilla.imageUrls} onShowDetails={() => onShowDetails(alcantarilla)} />);
+                            // Calculate display values
+                            let typeLabel = 'Elemento';
+                            let idValue = alcantarilla.id;
+                            let elementImages = alcantarilla.images || alcantarilla.imageUrls || [];
+
+                            if (alcantarilla.type === 'alcantarilla') {
+                                typeLabel = 'Alcantarilla';
+                                idValue = alcantarilla.codigo || alcantarilla.id_alcantarilla;
+                            } else if (alcantarilla.type === 'baden') {
+                                typeLabel = 'Badén';
+                                idValue = alcantarilla.codigo || alcantarilla.id_baden;
+                            } else if (alcantarilla.type === 'puente') {
+                                typeLabel = 'Puente';
+                                idValue = alcantarilla.nombre || alcantarilla.id_puente;
+                            } else if (alcantarilla.type === 'muro') {
+                                typeLabel = 'Muro';
+                                idValue = alcantarilla.id_muro;
+                            } else if (alcantarilla.type === 'cantera') {
+                                typeLabel = 'Cantera';
+                                idValue = alcantarilla.item_number ? `${alcantarilla.item_number}` : (alcantarilla.progresiva || alcantarilla.id);
+                            } else if (alcantarilla.type === 'fuente') {
+                                typeLabel = 'Fuente de Agua';
+                                idValue = alcantarilla.item_number ? `${alcantarilla.item_number}` : (alcantarilla.progresiva || alcantarilla.id);
+                            } else if (alcantarilla.type === 'zona_critica') {
+                                typeLabel = alcantarilla.tipo || 'Zona Crítica';
+                                idValue = alcantarilla.codigo || alcantarilla.id_zona_critica;
+                                if (alcantarilla.numero_seguimiento) {
+                                    idValue += ` (Seg: ${alcantarilla.numero_seguimiento})`;
+                                }
+                            } else if (alcantarilla.type === 'interferencia_electrica') {
+                                typeLabel = 'Interferencia Eléctrica';
+                                idValue = alcantarilla.tipo_interferencia || alcantarilla.id;
+                            } else if (alcantarilla.type === 'senales_informativas' || alcantarilla.type === 'senales_preventivas' || alcantarilla.type === 'hitos_kilometricos') {
+                                if (alcantarilla.type === 'hitos_kilometricos') {
+                                    typeLabel = 'Hito Kilométrico';
+                                    idValue = `${alcantarilla.codigo} (Prog: ${alcantarilla.progresiva || 'S/D'})`;
+                                } else {
+                                    typeLabel = alcantarilla.type === 'senales_preventivas' ? 'Señal Preventiva' : 'Señal Informativa';
+                                    idValue = alcantarilla.codigo;
+                                }
+
+                                // Lookup images for signals and hitos
+                                if (graphicsImages && alcantarilla.panel_fotografico_codigo) {
+                                    const code = String(alcantarilla.panel_fotografico_codigo).trim();
+                                    elementImages = graphicsImages.filter(img => {
+                                        const imgCode = String(img.panel_fotografico_codigo || '').trim();
+                                        const imgIndex = img.index ? String(img.index).trim() : '';
+
+                                        // Extract filename from URL (e.g., "http://.../360.jpg" -> "360")
+                                        let urlFileName = '';
+                                        if (img.url) {
+                                            const parts = img.url.split('/');
+                                            const fileNameWithExt = parts[parts.length - 1];
+                                            urlFileName = fileNameWithExt.split('.')[0]; // Remove extension
+                                        }
+
+                                        // Use strict equality for all checks
+                                        return imgCode === code || imgIndex === code || urlFileName === code;
+                                    });
+                                }
                             }
+
+                            setActivePopup({
+                                ...alcantarilla,
+                                typeLabel,
+                                idValue,
+                                images: elementImages
+                            });
                         });
 
                         marker.on('popupclose', () => {
-                            const root = popupRoots.current[popupContainerId];
-                            if (root) {
-                                root.unmount();
-                                delete popupRoots.current[popupContainerId];
-                            }
+                            setActivePopup(null);
                         });
 
                         alcantarillasLayer.addLayer(marker);
-                        markerRefMap.current[alcantarilla.id_alcantarilla || alcantarilla.id_baden || alcantarilla.id_puente || alcantarilla.id_muro] = marker;
+                        // Use a robust key for the marker ref map
+                        // Use a robust key for the marker ref map
+                        const markerKey = alcantarilla.uniqueId || alcantarilla.id_alcantarilla || alcantarilla.id_baden || alcantarilla.id_puente || alcantarilla.id_muro || alcantarilla.id_zona_critica || alcantarilla.id_estructura;
+                        if (markerKey) {
+                            markerRefMap.current[markerKey] = marker;
+                        }
+
+                    } else if (alcantarilla.type === 'estructura_existente') {
+                        // --- LOGICA ESTRUCTURA EXISTENTE (Segmento) ---
+
+                        // 1. Validar coordenadas de Inicio y Fin
+                        const hasStart = typeof alcantarilla.latitud_inicio === 'number';
+                        const hasEnd = typeof alcantarilla.latitud_final === 'number';
+
+                        if (hasStart && hasEnd) {
+                            // --- A. Dibujar Línea Simplificada (Performance Fix) ---
+                            // NOTA: Se ha deshabilitado el cálculo de turf.lineSlice aquí por problemas de rendimiento masivo.
+                            // Solo dibujaremos lineas rectas en el mapa general. El detalle real se ve en el MiniMap del popup/detalle.
+
+                            const polyline = L.polyline([
+                                [alcantarilla.latitud_inicio, alcantarilla.longitud_inicio],
+                                [alcantarilla.latitud_final, alcantarilla.longitud_final]
+                            ], { color: '#FFFF00', weight: 6, dashArray: '10, 10' }).addTo(alcantarillasLayer);
+
+                            // Bind popup if needed
+                            // polyline.bindPopup(...) - ya tenemos marcadores de inicio/fin con popups.
+                            // Si queremos popup en la linea:
+                            polyline.bindPopup(`<b>Tramo Estructura:</b> ${formatProgresiva(alcantarilla.progresiva_inicio)} - ${formatProgresiva(alcantarilla.progresiva_final)}`);
+
+
+                            /* LOGICA COMENTADA POR PERFORMANCE
+                            const routeLayer = geoJsonLayerRef.current;
+                            let slicedGeoJSON = null;
+
+                             if (routeLayer) {
+                                // Buscar en las capas del KML cuál contiene estos puntos (o está más cerca)
+                                // Para simplificar, iteramos y buscamos el tramo donde encajen mejor o simplemente el primero que funcione??
+                                // Mejor estrategia: Usar turf.lineSlice en cada LineString del KML y ver cuál tiene sentido?
+                                // O simplemente calcular la distancia de los puntos a la linea.
+
+                                const startPt = turf.point([alcantarilla.longitud_inicio, alcantarilla.latitud_inicio]);
+                                const endPt = turf.point([alcantarilla.longitud_final, alcantarilla.latitud_final]);
+
+                                routeLayer.eachLayer((layer) => {
+                                    if (slicedGeoJSON) return; // Ya encontramos uno
+
+                                    if (layer.feature && (layer.feature.geometry.type === 'LineString' || layer.feature.geometry.type === 'MultiLineString')) {
+                                        try {
+                                            // Convert Leaflet latlngs to Turf LineString
+                                            // layer.toGeoJSON() da el feature geojson
+                                            const lineGeoJson = layer.toGeoJSON();
+
+                                            // Verificar si los puntos estan cerca de esta linea (opcional, por ahora slicing directo)
+                                            // Nota: lineSlice recorta entre el punto inicial y final proyectados en la linea.
+                                            // Si la linea es incorrecta (otro tramo), el resultado podría ser extraño o valido geometricamente pero erroneo.
+                                            // Asumimos que los puntos caen "sobre" la linea correcta debido al calculo del backend.
+
+                                            // Calcular distancias minimas para confirmar que es el tramo correcto?
+                                            // Por performance, vamos a intentar slicear. 
+
+                                            const sliced = turf.lineSlice(startPt, endPt, lineGeoJson);
+                                            if (sliced) {
+                                                // Validar longitud? Si es demasiado largo quizas equivocamos de tramo? 
+                                                // Ojo: Si los puntos estan en tramos diferentes esto falahara.
+                                                // Asumimos mismo tramo.
+
+                                                // Check if points are actually close to this line?
+                                                const d1 = turf.pointToLineDistance(startPt, lineGeoJson);
+                                                const d2 = turf.pointToLineDistance(endPt, lineGeoJson);
+
+                                                if (d1 < 0.1 && d2 < 0.1) { // 100 metros tolerancia? (turf default units kilometers?) yes km. 0.1km = 100m.
+                                                    slicedGeoJSON = sliced;
+                                                }
+                                            }
+                                        } catch (err) {
+                                            console.warn('Error slicing line for structure:', err);
+                                        }
+                                    }
+                                });
+                            }
+
+                            // Dibujar la linea (Slice o Recta Fallback)
+                            if (slicedGeoJSON) {
+                                const sliceLayer = L.geoJSON(slicedGeoJSON, {
+                                    style: { color: '#FFFF00', weight: 6, opacity: 0.9 } // Amarillo brillante
+                                }).addTo(alcantarillasLayer);
+                                sliceLayer.bindPopup(`<b>Tramo Estructura:</b> ${formatProgresiva(alcantarilla.progresiva_inicio)} - ${formatProgresiva(alcantarilla.progresiva_final)}`);
+                            } else {
+                                // Fallback: Linea Recta
+                                const polyline = L.polyline([
+                                    [alcantarilla.latitud_inicio, alcantarilla.longitud_inicio],
+                                    [alcantarilla.latitud_final, alcantarilla.longitud_final]
+                                ], { color: '#FFFF00', weight: 6, dashArray: '10, 10' }).addTo(alcantarillasLayer);
+                                polyline.bindPopup(`<b>Tramo Estructura:</b> ${formatProgresiva(alcantarilla.progresiva_inicio)} - ${formatProgresiva(alcantarilla.progresiva_final)}`);
+                            }
+                            */
+
+
+                            // --- B. Dibujar Marcadores Inicio/Fin ---
+                            // --- B. Dibujar Marcadores Inicio/Fin ---
+                            const createMarker = (lat, lon, label, isStart) => {
+                                // Start: Triángulo Verde, End: Cuadrado Rojo
+                                const html = isStart
+                                    ? `<div style="width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 20px solid #00FF00; filter: drop-shadow(0px 0px 2px black);"></div>`
+                                    : `<div style="background-color:#FF0000; width:16px; height:16px; border:2px solid white; box-shadow: 0 0 4px black;"></div>`;
+
+                                const icon = L.divIcon({
+                                    className: 'custom-div-icon',
+                                    html: html,
+                                    iconSize: [20, 20],
+                                    iconAnchor: [10, 10]
+                                });
+                                const m = L.marker([lat, lon], { icon: icon, zIndexOffset: 1000 }).addTo(alcantarillasLayer);
+
+                                // USAR POPUP REACTIVO (CON CARRUSEL)
+                                // Bind del container compartido
+                                m.bindPopup(popupContainer, { minWidth: 200, maxWidth: 300 });
+
+                                m.on('popupopen', () => {
+                                    // Construct the popup data object
+                                    const popupData = {
+                                        ...alcantarilla,
+                                        typeLabel: 'Estructura Existente',
+                                        idValue: `${formatProgresiva(alcantarilla.progresiva_inicio)} - ${formatProgresiva(alcantarilla.progresiva_final)}`, // Combined range for clarity
+                                        images: alcantarilla.images || alcantarilla.imageUrls || [] // Ensure images are passed
+                                    };
+                                    setActivePopup(popupData);
+                                });
+
+                                m.on('popupclose', () => {
+                                    setActivePopup(null);
+                                });
+
+                                // Restore click functionality for "zoom" or selection in parent
+                                m.on('click', (e) => {
+                                    L.DomEvent.stop(e); // Prevent map click (which closes popups)
+                                    if (onAlcantarillaClick) {
+                                        onAlcantarillaClick(alcantarilla);
+                                    }
+                                });
+
+                                return m;
+                            };
+
+                            // Store ref for zooming (using the first marker - start)
+                            // We can store the start marker as the reference for the structure
+                            // Access the start marker via the createMarker return value (we'll capture the first one)
+                            // But createMarker is void in my previous valid code, wait, I made it return m in the LAST edit.
+
+                            // Re-structure to be clean:
+                            const mStart = createMarker(alcantarilla.latitud_inicio, alcantarilla.longitud_inicio, "Inicio Estructura", true);
+                            // createMarker(alcantarilla.latitud_final, alcantarilla.longitud_final, "Fin Estructura", false); // DISABLED by user request to avoid overlap
+
+                            // Add click handler to polyline as well to be safe?
+                            // polyline.on('click', ...) if we want line clicks to work.
+
+                            // Store ref for zooming
+                            const structureKey = alcantarilla.id_estructura || alcantarilla.id;
+                            if (structureKey && mStart) {
+                                markerRefMap.current[structureKey] = mStart;
+                            }
+                        }
 
                     } else {
-                        console.warn(`Elemento con ID ${alcantarilla.id_alcantarilla || alcantarilla.id_baden || alcantarilla.id_puente || alcantarilla.id_muro || 'N/A'} tiene coordenadas inválidas.`);
+                        // Fallback for unknown types or catch-all
+                        const elementId = alcantarilla.id || alcantarilla.id_alcantarilla || alcantarilla.id_baden || alcantarilla.id_puente || alcantarilla.id_muro || 'N/A';
+                        // Only warn if it's not one of the handled types above
+                        if (!['alcantarilla', 'baden', 'puente', 'muro', 'cantera', 'fuente', 'zona_critica'].includes(alcantarilla.type)) {
+                            console.warn(`Tipo de elemento desconocido o coordenadas inválidas: ${elementId}`);
+                        }
                     }
                 });
             };
@@ -1508,13 +1860,46 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         } catch (error) {
             console.error('ERROR: Uncaught error in alcantarillas useEffect:', error);
         }
-    }, [alcantarillasData, map, onShowDetails]);
+    }, [alcantarillasData, map, onShowDetails, graphicsImages]);
+
+    // NEW: Zoom to highlighted element
+    useEffect(() => {
+        if (highlightedTramoId && map && markerRefMap.current[highlightedTramoId]) {
+            const marker = markerRefMap.current[highlightedTramoId];
+            const targetLatLng = marker.getLatLng();
+            const targetZoom = 18;
+
+            // Calcular nuevo centro para que el punto aparezca más abajo (desplazar centro hacia arriba)
+            // Convertir LatLng a Pixels, restar offset en Y, convertir de nuevo
+            const targetPoint = map.project(targetLatLng, targetZoom);
+            const mapSize = map.getSize();
+            const offset = mapSize.y * 0.25; // Desplazar 25% de la altura hacia arriba (el punto baja)
+
+            const newCenterPoint = targetPoint.subtract([0, offset]);
+            const newCenterLatLng = map.unproject(newCenterPoint, targetZoom);
+
+            map.flyTo(newCenterLatLng, targetZoom, {
+                animate: true,
+                duration: 1.5
+            });
+            // Optional: Open popup
+            marker.openPopup();
+        }
+    }, [highlightedTramoId, map]);
 
 
-    return null;
+    return createPortal(
+        activePopup ? (
+            <div>
+                <b>{activePopup.typeLabel}:</b> {activePopup.idValue}<br />
+                <ImageGallery imageProp={activePopup.images} onShowDetails={() => onShowDetails(activePopup)} />
+            </div>
+        ) : null,
+        popupContainer
+    );
 };
 
-const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails }) => {
+const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails, graphicsImages }) => {
     // Coordenadas para centrar el mapa en Perú, ya que no hay ruta inicial
     const center = [-12, -75];
 
@@ -1526,7 +1911,16 @@ const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantaril
                     <LayersControl.BaseLayer checked name="Topográfico"> <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' /> </LayersControl.BaseLayer>
                     <LayersControl.BaseLayer name="Satélite"> <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' /> </LayersControl.BaseLayer>
                 </LayersControl>
-                <MapLogic initialRoute={null} onTramoSelect={onTramoSelect} highlightedTramoId={highlightedTramoId} alcantarillasData={alcantarillasData} onAlcantarillaClick={onAlcantarillaClick} onRouteLoaded={onRouteLoaded} onShowDetails={onShowDetails} />
+                <MapLogic
+                    initialRoute={null}
+                    onTramoSelect={onTramoSelect}
+                    highlightedTramoId={highlightedTramoId}
+                    alcantarillasData={alcantarillasData}
+                    onAlcantarillaClick={onAlcantarillaClick}
+                    onRouteLoaded={onRouteLoaded}
+                    onShowDetails={onShowDetails}
+                    graphicsImages={graphicsImages}
+                />
             </MapContainer>
         </div>
     );

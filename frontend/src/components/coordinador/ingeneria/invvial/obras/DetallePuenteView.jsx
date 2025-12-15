@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import Swal from 'sweetalert2';
 import ImageCarousel from './ImageCarousel';
 import MiniMap from './MiniMap';
 
@@ -12,6 +13,46 @@ const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail 
     const handleExportPDF = async () => {
         let stagingContainer = null;
         try {
+            // Initial Progress Setup
+            let currentProgress = 0;
+            const updateProgress = (progress, message) => {
+                currentProgress = progress;
+                const progressBar = document.getElementById('swal-progress-bar');
+                const progressText = document.getElementById('swal-progress-text');
+                if (progressBar) {
+                    progressBar.style.width = `${progress}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = `${Math.round(progress)}% - ${message}`;
+                }
+            };
+
+            Swal.fire({
+                title: 'Generando PDF',
+                html: `
+                    <div style="width: 100%; background-color: #f1f1f1; border-radius: 5px; margin-bottom: 10px;">
+                        <div id="swal-progress-bar" style="width: 0%; height: 20px; background-color: #4caf50; border-radius: 5px; transition: width 0.3s;"></div>
+                    </div>
+                    <div id="swal-progress-text" style="font-family: Arial, sans-serif; font-size: 14px; color: #555;">0% - Iniciando...</div>
+                `,
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // Calculate total steps roughly
+            const totalImageRows = images ? Math.ceil(images.length / 2) : 0;
+            const totalSteps = 2 + totalImageRows; // Base steps + image rows
+            let completedSteps = 0;
+
+            const incrementStep = (message) => {
+                completedSteps++;
+                const percentage = Math.min(95, (completedSteps / totalSteps) * 100);
+                updateProgress(percentage, message);
+            };
+
             // 1. Prepare PDF and Layout Variables
             const pdf = new jsPDF({
                 orientation: 'portrait',
@@ -31,6 +72,7 @@ const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail 
             let cursorY = topMargin;
 
             // 2. Load Header Image
+            updateProgress(5, 'Cargando recursos...');
             const headerResponse = await fetch('/imgs/encabezado_pdf.png');
             const headerBlob = await headerResponse.blob();
             const headerImgData = await new Promise((resolve) => {
@@ -50,9 +92,12 @@ const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail 
             // Title
             pdf.setFontSize(16);
             pdf.setTextColor(0, 0, 0);
+            const titleId = puente.nombre || puente.id_puente;
             // Center title
-            pdf.text(`Puente: ${puente.nombre || puente.id_puente}`, pdfWidth / 2, cursorY, { align: 'center' });
+            pdf.text(`Puente: ${titleId}`, pdfWidth / 2, cursorY, { align: 'center' });
             cursorY += 10;
+
+            updateProgress(10, 'Preparando estructura...');
 
             // 3. Create Staging Container (Off-screen)
             stagingContainer = document.createElement('div');
@@ -80,6 +125,7 @@ const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail 
             };
 
             // --- PROCESS TOP SECTION (Data + Map) ---
+            updateProgress(15, 'Procesando mapa y datos...');
             const topSection = document.createElement('div');
             topSection.style.display = 'flex';
             topSection.style.gap = '20px';
@@ -126,8 +172,12 @@ const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail 
             // Cleanup Top Section
             stagingContainer.removeChild(topSection);
 
+            incrementStep('Datos principales completados');
+
             // --- PROCESS IMAGES SECTION ---
             if (images && images.length > 0) {
+                updateProgress(30, 'Iniciando panel fotográfico...');
+
                 // Section Title
                 const titleDiv = document.createElement('div');
                 titleDiv.innerHTML = '<h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px; margin: 0;">Panel Fotográfico</h3>';
@@ -156,8 +206,17 @@ const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail 
                     img.src = src;
                 });
 
+                let imageStepStart = 30;
+                let imageStepRange = 65;
+
                 // Iterate images in pairs (Rows)
                 for (let i = 0; i < images.length; i += 2) {
+                    const currentRowIndex = i / 2;
+                    const progressIncrement = (imageStepRange / totalImageRows);
+                    const currentPercent = imageStepStart + (currentRowIndex * progressIncrement);
+
+                    updateProgress(currentPercent, `Procesando imágenes (${i + 1}/${images.length})...`);
+
                     const rowDiv = document.createElement('div');
                     rowDiv.style.display = 'grid';
                     rowDiv.style.gridTemplateColumns = '1fr 1fr';
@@ -168,7 +227,10 @@ const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail 
                     // Process Image 1
                     const prepareImage = async (imgData) => {
                         if (!imgData) return null;
-                        const img = await loadImage(imgData.url);
+                        const src = typeof imgData === 'string' ? imgData : imgData.url;
+                        if (!src) return null;
+
+                        const img = await loadImage(src);
                         if (!img) return null;
 
                         const wrapper = document.createElement('div');
@@ -184,17 +246,20 @@ const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail 
                         img.style.objectFit = 'cover';
                         wrapper.appendChild(img);
 
-                        const meta = document.createElement('div');
-                        meta.style.fontSize = '12px';
-                        meta.style.marginTop = '5px';
-                        meta.style.textAlign = 'center';
-                        meta.style.color = '#555';
-                        meta.innerHTML = `
-                    ${imgData.fecha ? `Fecha: ${imgData.fecha.split('T')[0]}<br>` : ''}
-                    ${imgData.hora ? `Hora: ${imgData.hora.split('T')[1].substring(0, 8)}<br>` : ''}
-                    ${imgData.latitud ? `Coords: ${imgData.latitud.toFixed(6)}, ${imgData.longitud.toFixed(6)}` : ''}
-                `;
-                        wrapper.appendChild(meta);
+                        // Should add metadata if available in object
+                        if (typeof imgData !== 'string') {
+                            const meta = document.createElement('div');
+                            meta.style.fontSize = '12px';
+                            meta.style.marginTop = '5px';
+                            meta.style.textAlign = 'center';
+                            meta.style.color = '#555';
+                            meta.innerHTML = `
+                             ${imgData.fecha ? `Fecha: ${imgData.fecha.split('T')[0]}<br>` : ''}
+                             ${imgData.hora ? `Hora: ${imgData.hora.split('T')[1].substring(0, 8)}<br>` : ''}
+                             ${imgData.latitud ? `Coords: ${imgData.latitud.toFixed(6)}, ${imgData.longitud.toFixed(6)}` : ''}
+                         `;
+                            wrapper.appendChild(meta);
+                        }
                         return wrapper;
                     };
 
@@ -225,11 +290,28 @@ const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail 
                 }
             }
 
-            pdf.save(`Puente_${puente.nombre || puente.id_puente}.pdf`);
+            updateProgress(100, 'Finalizando PDF...');
+            await new Promise(r => setTimeout(r, 500));
+
+            pdf.save(`Puente_${titleId}.pdf`);
+
+            Swal.close(); // Close loading on success
+            Swal.fire({
+                icon: 'success',
+                title: 'Exportación Exitosa',
+                text: 'El archivo PDF se ha generado correctamente.',
+                timer: 2000,
+                showConfirmButton: false
+            });
 
         } catch (error) {
             console.error('Error generating PDF:', error);
-            alert('Error al exportar PDF');
+            Swal.close();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Hubo un problema al generar el PDF. Por favor intente nuevamente.',
+            });
         } finally {
             if (stagingContainer && stagingContainer.parentNode) {
                 stagingContainer.parentNode.removeChild(stagingContainer);

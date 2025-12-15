@@ -1,6 +1,35 @@
 const db = require('../conexion');
 const XLSX = require('xlsx');
 
+// --- Helper Functions for Data Structure ---
+const setNestedProperty = (obj, path, value) => {
+    if (!path) return;
+    const keys = path.split('.');
+    let current = obj;
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        if (i === keys.length - 1) {
+            current[key] = value;
+        } else {
+            if (!current[key] || typeof current[key] !== 'object') {
+                current[key] = {};
+            }
+            current = current[key];
+        }
+    }
+};
+
+const deepMerge = (target, source) => {
+    for (const key in source) {
+        if (source[key] instanceof Object && key in target) {
+            Object.assign(source[key], deepMerge(target[key], source[key]));
+        }
+    }
+    Object.assign(target || {}, source);
+    return target;
+};
+// -------------------------------------------
+
 
 
 // Helper para generar códigos únicos
@@ -117,9 +146,9 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
         // --- CORRECCIÓN CLAVE AQUÍ ---
         // Extraemos 'datos_ensayo' explícitamente del payload que manda el frontend
         // y lo renombramos a 'datos_formulario' para que coincida con la variable de la consulta SQL.
-        const { 
-            nombre_ensayo, 
-            tipo_ensayo_id, 
+        const {
+            nombre_ensayo,
+            tipo_ensayo_id,
             estrato_id,
             datos_ensayo: datos_formulario // <--- ESTA ES LA LÍNEA CORREGIDA
         } = assayData;
@@ -278,7 +307,15 @@ const getTipoEnsayos = async () => {
 };
 
 const createBaseEnsayo = async (baseEnsayoData, existingClient = null) => {
-    const { estrato_id, tipo_ensayo_id, nombre_ensayo, cantera_id } = baseEnsayoData;
+    const { estrato_id, tipo_ensayo_id, nombre_ensayo, cantera_id, identificador, proyecto_id: fallbackProyectoId } = baseEnsayoData;
+
+    // DEBUG: Trace identificador in createBaseEnsayo
+    if (identificador) {
+        console.log(`[createBaseEnsayo] Received identificador: '${identificador}' for insert.`);
+    } else {
+        console.log('[createBaseEnsayo] WARNING: Identificador is null/undefined.');
+    }
+
     const client = existingClient || await db.connect(); // Use existing client or get a new one
     let needsTransaction = !existingClient; // Only manage transaction if no existing client
 
@@ -312,7 +349,7 @@ const createBaseEnsayo = async (baseEnsayoData, existingClient = null) => {
         let progresiva_codigo = null;
         let tramo_codigo = null;
         let proyecto_codigo = null;
-        let proyecto_id = null;
+        let proyecto_id = fallbackProyectoId || null;
         let cantera_nombre = null; // Usaremos el nombre de la cantera para el código
 
         if (parent_type === 'progresiva') {
@@ -361,7 +398,7 @@ const createBaseEnsayo = async (baseEnsayoData, existingClient = null) => {
 
         // 3. Construct the final codigo_ensayo
         const formatCodePart = (code, length) => String(code).padStart(length, '0');
-        
+
         const proyectoCodePart = proyecto_codigo || 'CU';
         let tramoCodePartFormatted;
         let progresivaCodePartFormatted;
@@ -388,7 +425,7 @@ const createBaseEnsayo = async (baseEnsayoData, existingClient = null) => {
             if (canteraInfoResult.rows.length === 0) {
                 throw new Error(`Cantera con ID ${cantera_id} no encontrada para generar el código.`);
             }
-            
+
             const { cantera_codigo, tramo_codigo: tramo_codigo_cantera, proyecto_codigo: proyecto_codigo_cantera, proyecto_id: proyecto_id_cantera } = canteraInfoResult.rows[0];
             proyecto_codigo = proyecto_codigo_cantera;
             proyecto_id = proyecto_id_cantera;
@@ -407,32 +444,42 @@ const createBaseEnsayo = async (baseEnsayoData, existingClient = null) => {
 
         const finalCodigoEnsayo = `${proyectoCodePart}${tramoCodePartFormatted}${managerTypeCode || ''}${progresivaCodePartFormatted}${estratoCodePart}${tipoEnsayoCodePart}${ensayoCorrelativoPart}`;
 
+        // DEBUG: Log calculated parts if project determination fails
+        if (!proyecto_id) {
+            console.error('[createBaseEnsayo] ERROR: proyecto_id is null/undefined during coding generation.', {
+                estrato_id, tipo_ensayo_id, parent_type, parent_id,
+                progresivaInfoResult: typeof progresivaInfoResult !== 'undefined' ? progresivaInfoResult.rows : 'N/A',
+                baseEnsayoData
+            });
+        }
+
+
         // 4. Perform a single INSERT with all data
         const insertQuery = `
             INSERT INTO ensayos (
                 estrato_id, tipo_ensayo, nombre_ensayo, fecha, estado, 
-                datos_formulario, proyecto_id, codigo_ensayo, correlativo_tipo_ensayo
+                datos_formulario, proyecto_id, codigo_ensayo, correlativo_tipo_ensayo, identificador
             )
-            VALUES ($1, $2, $3, CURRENT_DATE, $4, $5, $6, $7, $8) 
-            RETURNING id, codigo_ensayo, fecha;
+            VALUES ($1, $2, $3, CURRENT_DATE, $4, $5, $6, $7, $8, $9) 
+            RETURNING id, codigo_ensayo, fecha, identificador;
         `;
         const values = [
-            estrato_id, 
-            tipo_ensayo_id, 
-            nombre_ensayo, 
-            'pendiente', 
-            '{}', 
-            proyecto_id, 
-            finalCodigoEnsayo, 
-            nextCorrelativo
+            estrato_id,
+            tipo_ensayo_id,
+            nombre_ensayo,
+            'pendiente',
+            '{}',
+            proyecto_id,
+            finalCodigoEnsayo,
+            nextCorrelativo,
+            identificador || null
         ];
-        
+
         const result = await client.query(insertQuery, values);
-        
-        console.log('[DEBUG] Ensayo creado en backend. Fila devuelta por la DB:', result.rows[0]);
+
 
         if (needsTransaction) await client.query('COMMIT');
-        
+
         return result.rows[0]; // Returns { id, codigo_ensayo }
 
     } catch (err) {
@@ -514,7 +561,6 @@ const getEnsayosByTramoId = async (tramoId) => {
             ORDER BY te.descripcion, e.fecha DESC
         `, [tramoId]);
 
-        console.log('[DEBUG] Datos de ensayos por tramoId:', JSON.stringify(result.rows, null, 2)); // Add debug log
         return result.rows;
     } catch (err) {
         console.error('Error al obtener ensayos por tramoId en service:', err);
@@ -549,12 +595,13 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
             { header: 'CÓDIGO ENSAYO', key: 'codigo_ensayo', width: 20 },
             { header: 'Fecha de Creación', key: 'fecha', width: 15 },
             { header: 'Progresiva', key: 'progresiva_formateada', width: 15 },
-            { header: 'Estrato', key: 'estrato_orden', width: 10 }
+            { header: 'Estrato', key: 'estrato_orden', width: 10 },
+            { header: 'Identificador', key: 'identificador_manual', width: 15 }
         ];
 
         const ExcelJS = require('exceljs');
         const workbook = new ExcelJS.Workbook();
-        
+
         const formatProgresivaForExport = (codigo) => {
             if (!codigo || !codigo.includes('-')) return codigo;
             const parts = codigo.split('-');
@@ -660,7 +707,7 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
 
                         grupo.ensayos.forEach(ensayo => {
                             const newRow = worksheet.getRow(currentRowIndex++);
-                            
+
                             headerKeys.forEach(({ key, col }) => {
                                 let value;
                                 if (key === 'progresiva_formateada') {
@@ -669,7 +716,7 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
                                     const dataPath = key.replace(/^datos_formulario\./, '');
                                     // Directamente usamos ensayo.datos_formulario en lugar de transformedData
                                     value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo.datos_formulario);
-                                    
+
                                     // Fallback al objeto ensayo para claves como 'codigo_ensayo'
                                     if (value === undefined) {
                                         value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
@@ -680,7 +727,7 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
                         });
                         currentRowIndex++;
                     });
-                } 
+                }
                 else if (config.headers && Array.isArray(config.headers)) {
                     // Simplified logic for single-table export (kept as is)
                     let currentRowIndex = 1;
@@ -705,6 +752,8 @@ const exportEnsayosToExcelByTramo = async (tramoId) => {
                             let value;
                             if (key === 'progresiva_formateada') {
                                 value = formatProgresivaForExport(ensayo.progresiva_codigo);
+                            } else if (key === 'identificador_manual') {
+                                value = ensayo.codigo_ensayo; // Pre-fill with Code
                             } else {
                                 const dataPath = key.replace(/^datos_formulario\./, '');
                                 value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo.datos_formulario);
@@ -765,11 +814,19 @@ const exportEnsayosToExcelByTipo = async (tramoId, tipoEnsayoId) => {
             ORDER BY e.fecha DESC
         `, [tramoId, tipoEnsayoId]);
 
-        if (ensayosResult.rows.length === 0) {
-            throw new Error('No se encontraron ensayos de este tipo para exportar.');
-        }
+        let config_export_excel, tipo_ensayo_descripcion;
 
-        const { config_export_excel, tipo_ensayo_descripcion } = ensayosResult.rows[0];
+        if (ensayosResult.rows.length === 0) {
+            // Si no hay ensayos, buscamos la configuración directamente del tipo de ensayo para generar la plantilla vacía
+            const tipoEnsayoResult = await db.query('SELECT descripcion, config_export_excel FROM tipo_ensayo WHERE id = $1', [tipoEnsayoId]);
+            if (tipoEnsayoResult.rows.length === 0) throw new Error('Tipo de ensayo no encontrado.');
+
+            config_export_excel = tipoEnsayoResult.rows[0].config_export_excel;
+            tipo_ensayo_descripcion = tipoEnsayoResult.rows[0].descripcion;
+        } else {
+            config_export_excel = ensayosResult.rows[0].config_export_excel;
+            tipo_ensayo_descripcion = ensayosResult.rows[0].tipo_ensayo_descripcion;
+        }
 
         const ExcelJS = require('exceljs');
         const workbook = new ExcelJS.Workbook();
@@ -780,12 +837,13 @@ const exportEnsayosToExcelByTipo = async (tramoId, tipoEnsayoId) => {
             const numberPart = parts[1];
             return `0+${numberPart}`;
         };
-        
+
         const staticHeaders = [
             { header: 'CÓDIGO ENSAYO', key: 'codigo_ensayo', width: 20 },
             { header: 'Fecha de Creación', key: 'fecha', width: 15 },
             { header: 'Progresiva', key: 'progresiva_formateada', width: 15 },
-            { header: 'Estrato', key: 'estrato_orden', width: 10 }
+            { header: 'Estrato', key: 'estrato_orden', width: 10 },
+            { header: 'Identificador', key: 'identificador', width: 15 }
         ];
 
         const mainTitleStyle = {
@@ -869,46 +927,46 @@ const exportEnsayosToExcelByTipo = async (tramoId, tipoEnsayoId) => {
 
                     currentRowIndex += hasSubheaders ? 2 : 1;
 
-                                    ensayosResult.rows.forEach(ensayo => {
-                                        const newRow = worksheet.getRow(currentRowIndex++);
-                                        
-                                        headerKeys.forEach(({ key, col }) => {
-                                            let value;
-                                            if (key === 'progresiva_formateada') {
-                                                value = formatProgresivaForExport(ensayo.progresiva_codigo);
-                                            } else {
-                                                const dataPath = key.replace(/^datos_formulario\./, '');
-                                                value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo.datos_formulario);
-                                                if (value === undefined) {
-                                                    value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
-                                                }
-                                            }
-                                            newRow.getCell(col).value = value !== undefined && value !== null ? value : '';
-                                        });
-                                    });                    currentRowIndex++;
-                });
-            } 
+                    ensayosResult.rows.forEach(ensayo => {
+                        const newRow = worksheet.getRow(currentRowIndex++);
 
-                worksheet.columns.forEach((column, idx) => {
-                    // Check if this column corresponds to a static header with an explicit width
-                    // ExcelJS column.number is 1-indexed, idx is 0-indexed
-                    if (idx < staticHeaders.length) {
-                        const staticHeader = staticHeaders[idx];
-                        if (staticHeader.width) {
-                            column.width = staticHeader.width;
-                            return; // Skip dynamic calculation if fixed width is set
-                        }
+                        headerKeys.forEach(({ key, col }) => {
+                            let value;
+                            if (key === 'progresiva_formateada') {
+                                value = formatProgresivaForExport(ensayo.progresiva_codigo);
+                            } else {
+                                const dataPath = key.replace(/^datos_formulario\./, '');
+                                value = dataPath.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo.datos_formulario);
+                                if (value === undefined) {
+                                    value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), ensayo);
+                                }
+                            }
+                            newRow.getCell(col).value = value !== undefined && value !== null ? value : '';
+                        });
+                    }); currentRowIndex++;
+                });
+            }
+
+            worksheet.columns.forEach((column, idx) => {
+                // Check if this column corresponds to a static header with an explicit width
+                // ExcelJS column.number is 1-indexed, idx is 0-indexed
+                if (idx < staticHeaders.length) {
+                    const staticHeader = staticHeaders[idx];
+                    if (staticHeader.width) {
+                        column.width = staticHeader.width;
+                        return; // Skip dynamic calculation if fixed width is set
                     }
+                }
 
-                    let maxLength = 0;
-                    column.eachCell({ includeEmpty: true }, cell => {
-                        const length = cell.value ? String(cell.value).length : 10;
-                        if (length > maxLength) {
-                            maxLength = length;
-                        }
-                    });
-                    column.width = Math.min(50, Math.max(12, maxLength + 2));
+                let maxLength = 0;
+                column.eachCell({ includeEmpty: true }, cell => {
+                    const length = cell.value ? String(cell.value).length : 10;
+                    if (length > maxLength) {
+                        maxLength = length;
+                    }
                 });
+                column.width = Math.min(50, Math.max(12, maxLength + 2));
+            });
         });
         // --- FIN DE LA LÓGICA CORREGIDA ---
 
@@ -935,11 +993,11 @@ const updateBaseEnsayo = async (ensayoId, { nombre_ensayo, estado }) => {
         `;
         const values = [nombre_ensayo, estado, ensayoId];
         const result = await db.query(query, values);
-        
+
         if (result.rowCount === 0) {
             throw new Error('No se encontró el ensayo para actualizar.');
         }
-        
+
         return result.rows[0];
     } catch (err) {
         console.error('Error al actualizar ensayo base en service:', err);
@@ -963,14 +1021,56 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
             if (!str) return '';
             return String(str).trim(); // Simple trim for now, can add toLowerCase if needed
         };
-        
+
+        const parseExcelDate = (excelDate) => {
+            if (!excelDate) return null;
+            // Si es número (serial excel)
+            if (typeof excelDate === 'number') {
+                // Excel base date: Dec 30 1899
+                // Javascript base date: Jan 1 1970
+                // Difference: 25569 days
+                // Sumamos 12h (43200000ms) para caer a mediodía y evitar errores de redondeo al día anterior
+                const date = new Date(Math.round((excelDate - 25569) * 86400 * 1000) + 43200000);
+                return isNaN(date.getTime()) ? null : date;
+            }
+            // Si es string, intentar parsear
+            const date = new Date(excelDate);
+            return isNaN(date.getTime()) ? null : date;
+        };
+
         const normalizeProgresivaForLookup = (input) => {
-            if (typeof input !== 'string' && typeof input !== 'number') return '';
-            let str = String(input);
-            const lastPlus = str.lastIndexOf('+');
-            const lastMinus = str.lastIndexOf('-');
-            const separatorIndex = Math.max(lastPlus, lastMinus);
-            return separatorIndex !== -1 ? str.substring(separatorIndex + 1) : str;
+            if (input === null || input === undefined) return null;
+            // Limpieza básica: quitar 'km', 'KM', 'Km' y espacios
+            let str = String(input).replace(/km/ig, '').trim().replace(/\s+/g, '');
+
+            // Intentar detectar separador + o -
+            // Usamos split en lugar de regex estricto para tolerar decimales
+            let parts = [];
+            if (str.includes('+')) {
+                parts = str.split('+');
+            } else if (str.includes('-')) {
+                parts = str.split('-'); // Cuidado con negativos al inicio, pero progresivas suelen ser positivas
+            }
+
+            if (parts.length === 2 && parts[0] !== '' && parts[1] !== '') {
+                const km = parseFloat(parts[0]);
+                const m = parseFloat(parts[1]);
+                // Si ambos lados son números válidos
+                if (!isNaN(km) && !isNaN(m)) {
+                    // Retornamos metros totales.
+                    // Usamos Math.round(X * 100) / 100 para manejar hasta 2 decimales de precision si existen
+                    return Math.round((km * 1000 + m) * 100) / 100;
+                }
+            }
+
+            // Si no hubo separador, o falló el parseo, intentar parsear directo como número (metros totales)
+            const val = parseFloat(str);
+            if (!isNaN(val)) {
+                return Math.round(val * 100) / 100;
+            }
+
+            // Fallback: retornar string limpia por si acaso hay match exacto de texto (raro si usamos logica numerica)
+            return null;
         };
 
         const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
@@ -980,17 +1080,19 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
 
         // --- Fase 0: Validación de Hojas y Cabeceras ---
         // 1. Build a map from every possible sheet name to its parent assay type info
-        const tipoEnsayoResult = await client.query('SELECT id, descripcion, config_key, config_export_excel FROM tipo_ensayo');
+        const tipoEnsayoResult = await client.query('SELECT id, descripcion, config_key, config_export_excel, config_importacion FROM tipo_ensayo');
         const sheetNameToAssayTypeMap = new Map();
 
         tipoEnsayoResult.rows.forEach(tipoEnsayo => {
             if (!tipoEnsayo.config_export_excel) return;
-            
+
             // Ensure config is an array to handle both single and multi-sheet configs
-            const configs = Array.isArray(tipoEnsayo.config_export_excel) 
-                ? tipoEnsayo.config_export_excel 
+            const configs = Array.isArray(tipoEnsayo.config_export_excel)
+                ? tipoEnsayo.config_export_excel
                 : [tipoEnsayo.config_export_excel];
-            
+
+            const importConfig = tipoEnsayo.config_importacion || {};
+
             configs.forEach(config => {
                 if (config.sheetName) {
                     const assayTypeInfo = {
@@ -998,53 +1100,121 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
                         config_key: tipoEnsayo.config_key,
                         description: tipoEnsayo.descripcion,
                         // Pass the specific config for this sheet, which contains the correct headers
-                        configForSheet: config 
+                        configForSheet: config,
+                        importConfig: importConfig
                     };
-                    sheetNameToAssayTypeMap.set(normalizeString(config.sheetName), assayTypeInfo);
+                    const normName = normalizeString(config.sheetName);
+                    if (!sheetNameToAssayTypeMap.has(normName)) {
+                        sheetNameToAssayTypeMap.set(normName, []);
+                    }
+                    sheetNameToAssayTypeMap.get(normName).push(assayTypeInfo);
                 }
             });
-        });
+        }
+        );
+
+        console.log('[IMPORT DEBUG] Mapped Sheets from DB Config:', Array.from(sheetNameToAssayTypeMap.keys()));
 
         const requiredHeaders = ['codigoensayo', 'fechadecreacion', 'progresiva', 'estrato'];
         const sheetsData = [];
+        const pendingEnsayoMap = new Map(); // Track pending inserts for merging across sheets
 
         // 2. Validate sheets from the uploaded workbook against the map
         for (const sheetName of workbook.SheetNames) {
             const normalizedSheetName = normalizeString(sheetName);
+            let candidates = sheetNameToAssayTypeMap.get(normalizedSheetName);
 
-            if (tipoEnsayoKey) {
-                // If importing a single type, only process sheets belonging to it
-                const tipoEnsayoInfo = sheetNameToAssayTypeMap.get(normalizedSheetName);
-                if (!tipoEnsayoInfo || normalizeString(tipoEnsayoInfo.config_key) !== tipoEnsayoKey) {
-                    continue;
-                }
-            }
-
-            if (!sheetNameToAssayTypeMap.has(normalizedSheetName)) {
+            if (!candidates) {
                 // This sheet is not defined in any assay's export config
                 validationErrors.push({ sheet: sheetName, error: `La hoja '${sheetName}' no corresponde a un tipo de ensayo válido o su configuración de exportación no está definida.` });
                 continue;
+            }
+
+            // Filter by specific type if requested (e.g. from specific import button)
+            if (tipoEnsayoKey) {
+                // frontend sends "key:id" sometimes, we need to extract just the key or handle it
+                let cleanKey = tipoEnsayoKey;
+                if (tipoEnsayoKey.includes(':')) {
+                    cleanKey = tipoEnsayoKey.split(':')[0];
+                }
+                candidates = candidates.filter(c => normalizeString(c.config_key) === normalizeString(cleanKey));
+                if (candidates.length === 0) continue; // Skip sheets not belonging to the requested type
             }
 
             const worksheet = workbook.Sheets[sheetName];
             const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
             if (jsonData.length < 1) continue;
 
-            const tipoEnsayoInfo = sheetNameToAssayTypeMap.get(normalizedSheetName);
+            // --- SMART TYPE SELECTION LOGIC ---
+            // Issue: 'Humedad Natural' might map to both 'Límites' (ID 2) and 'Contenido Humedad' (ID 5).
+            // We need to pick the one that matches the PENDING assay if possible.
+            // We peek at the first data row to finding the 'Codigo'.
+            let selectedTypeInfo = candidates[0]; // Default to first match
+
+            if (candidates.length > 1) {
+                // Try to find a code in the first data row
+                // We know structure is [Header, (Subheader?), Data...]
+                // Let's guess where data starts based on first candidate's config
+                const config0 = candidates[0].configForSheet || {};
+                const hasSub0 = config0.tablas?.some(t => t.headers.some(h => h.subheaders));
+                const dataRowIndex = hasSub0 ? 2 : 1;
+                // Note: This is an approximation. If candidates have different structures, this might be flaky, 
+                // but typically Code is always Col 0.
+
+                if (jsonData.length > dataRowIndex) {
+                    const firstRow = jsonData[dataRowIndex];
+                    if (firstRow && firstRow[0]) {
+                        const potentialCode = normalizeCode(firstRow[0]);
+                        // Check if this code is already pending
+                        const pending = pendingEnsayoMap.get(potentialCode);
+                        if (pending) {
+                            // If pending assay exists, check if its type is in our candidates list
+                            const match = candidates.find(c => c.id === pending.tipo_ensayo_id);
+                            if (match) {
+                                console.log(`[IMPORT SMART SELECT] Sheet '${sheetName}' (Code ${potentialCode}) matches pending assay type '${match.description}' (ID ${match.id}). Using it.`);
+                                selectedTypeInfo = match;
+                            }
+                        }
+                    }
+                }
+            }
+
+            const tipoEnsayoInfo = selectedTypeInfo;
+            // ----------------------------------
+
             // The config is now specific to the sheet, passed from the map
             const config = tipoEnsayoInfo.configForSheet || {};
             const hasSubheaders = config.tablas?.some(t => t.headers.some(h => h.subheaders));
 
             let headers, dataRows;
 
+            // Función auxiliar para desambiguar headers repetidos (ej: "0.64 mm", "0.64 mm") -> ("0.64 mm", "0.64 mm_1")
+            const makeHeadersUnique = (headerRow) => {
+                const counts = {};
+                return headerRow.map(h => {
+                    const normalized = normalizeHeader(h);
+                    if (!normalized) return normalized;
+
+                    if (counts[normalized] === undefined) {
+                        counts[normalized] = 0;
+                        return normalized;
+                    } else {
+                        counts[normalized]++;
+                        return `${normalized}_${counts[normalized]}`; // ej: titulo_1
+                    }
+                });
+            };
+
             if (hasSubheaders) {
                 if (jsonData.length < 2) continue; // Skip if there aren't enough rows for complex headers
-                headers = jsonData[1].map(h => normalizeHeader(h));
+                headers = makeHeadersUnique(jsonData[1]);
                 dataRows = jsonData.slice(2);
             } else {
-                headers = jsonData[0].map(h => normalizeHeader(h));
+                headers = makeHeadersUnique(jsonData[0]);
                 dataRows = jsonData.slice(1);
             }
+
+            console.log(`[IMPORT DEBUG] Headers Procesados y Unicos:`, JSON.stringify(headers));
 
             // Validate main headers (always in the first row)
             const mainHeaders = jsonData[0].map(h => normalizeHeader(h));
@@ -1056,7 +1226,18 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
                 }
             }
 
-            sheetsData.push({ sheetName, headers, rows: dataRows, tipoEnsayo: tipoEnsayoInfo });
+            sheetsData.push({
+                sheetName,
+                headers,
+                rows: dataRows,
+                tipoEnsayo: {
+                    id: tipoEnsayoInfo.id,
+                    descripcion: tipoEnsayoInfo.description,
+                    config_key: tipoEnsayoInfo.config_key,
+                    importConfig: tipoEnsayoInfo.importConfig
+                },
+                config // Pass config for later use
+            });
         }
 
         if (validationErrors.length > 0) {
@@ -1064,14 +1245,52 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
         }
 
         // --- Fase A: Búsqueda Masiva de Datos ---
-        const progresivasQuery = await client.query('SELECT id, codigo FROM progresivas WHERE parent_id = $1', [tramoId]);
-        const progresivaDbMap = new Map(progresivasQuery.rows.map(p => [normalizeProgresivaForLookup(p.codigo), p.id]));
+        // 1. Obtener datos del Tramo Padre para calculo de offset (por si acaso, aunque intentaremos usar progresiva_inicial)
+        const tramoResult = await client.query('SELECT codigo FROM progresivas WHERE id = $1', [tramoId]);
+        let tramoStartOffset = 0;
+        if (tramoResult.rows.length > 0) {
+            const tramoCodigo = tramoResult.rows[0].codigo;
+            const normalizedTramoCode = normalizeProgresivaForLookup(tramoCodigo);
+            if (normalizedTramoCode !== null) {
+                tramoStartOffset = normalizedTramoCode;
+            }
+        }
+
+        // CAMBIO CLAVE: Usar 'progresiva_inicial' en lugar de 'codigo' para el mapeo, ya que suele contener el valor limpio (ej: 500)
+        const progresivasQuery = await client.query('SELECT id, codigo, progresiva_inicial FROM progresivas WHERE parent_id = $1', [tramoId]);
+
+        const progresivaDbMap = new Map();
+        progresivasQuery.rows.forEach(p => {
+            // Prioridad 1: Usar progresiva_inicial (numérico/limpio)
+            let key = null;
+            if (p.progresiva_inicial !== null && p.progresiva_inicial !== undefined) {
+                key = Number(p.progresiva_inicial); // Asegurar numérico
+            } else {
+                // Fallback: Usar código normalizado
+                key = normalizeProgresivaForLookup(p.codigo);
+            }
+            if (key !== null) {
+                progresivaDbMap.set(key, p.id);
+            }
+        });
 
         const estratosQuery = await client.query("SELECT id, orden, parent_id AS progresiva_id FROM estratos WHERE parent_type = 'progresiva' AND parent_id = ANY($1::int[])", [progresivasQuery.rows.map(p => p.id)]);
+        // Mapeo Estratos: Clave "ProgresivaID-Orden" -> EstratoID
         const estratoDbMap = new Map(estratosQuery.rows.map(e => [`${e.progresiva_id}-${e.orden}`, e.id]));
 
-        const ensayosQuery = await client.query('SELECT id, codigo_ensayo FROM ensayos WHERE proyecto_id = $1', [proyectoId]);
-        const ensayoCodeMap = new Map(ensayosQuery.rows.map(e => [normalizeCode(e.codigo_ensayo), e.id])); // Normalize DB codes too
+        const ensayosQuery = await client.query('SELECT id, codigo_ensayo, identificador, tipo_ensayo FROM ensayos WHERE proyecto_id = $1', [proyectoId]);
+        // Map Key: "CODE|TYPE_ID"
+        const ensayoCodeMap = new Map(ensayosQuery.rows.map(e => [`${normalizeCode(e.codigo_ensayo)}|${e.tipo_ensayo}`, e.id]));
+
+        // --- NEW: Persistent Identifier Map ---
+        // Map 'IDENTIFIER|TYPE_ID' -> EnsayoID
+        const identificadorDbMap = new Map();
+        ensayosQuery.rows.forEach(e => {
+            if (e.identificador) {
+                identificadorDbMap.set(`${normalizeString(e.identificador)}|${e.tipo_ensayo}`, e.id);
+            }
+        });
+        // --------------------------------------
 
         // --- Fase B: Simulación y Recopilación de Errores ---
         const ensayosToInsert = []; // Will store data for createBaseEnsayo calls
@@ -1080,7 +1299,8 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
         let lastEstrato = null;
 
         for (const sheet of sheetsData) {
-            const config = sheet.tipoEnsayo.configForSheet || {};
+            const config = sheet.config || {};
+            console.log(`[IMPORT DEBUG] Sheet: ${sheet.sheetName}, Config Full:`, JSON.stringify(config)); // Inspect DB content
             const allConfigHeaders = config.tablas?.flatMap(t => t.headers.flatMap(h => h.subheaders ? h.subheaders : [h])) || config.headers || [];
             // Usar un array ordenado de claves en lugar de un mapa para manejar cabeceras duplicadas
             const keyOrder = allConfigHeaders.map(h => h.key);
@@ -1095,26 +1315,53 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
                 }
 
                 summary.ensayosAProcesar++;
-                
+
                 let codigoEnsayo = normalizeCode(row[0]);
-                // Corrected indices: [0]Code, [1]Date, [2]Progresiva, [3]Estrato
+                // Corrected indices: [0]Code, [1]Date, [2]Progresiva, [3]Estrato, [4]Identificador
                 let progresivaValue = row[2] ? String(row[2]) : lastProgresiva;
                 let estratoValue = row[3] ? String(row[3]) : lastEstrato;
+                let identificador = row[4] ? String(row[4]).trim() : null; // New Column
+
+                // DEBUG: Trace identificador reading
+                console.log(`[IMPORT READ] Row ${rowIndex}: Identificador raw='${row[4]}', parsed='${identificador}'`);
+
+                // --- VALIDACIÓN ANTI-FANTASMAS ---
+                // Si la fila NO tiene Código, NI Progresiva explicita, NI Identificador...
+                // ...entonces es probablemente una fila basura/residual. NO heredar contexto.
+                // Exigimos al menos UN identificador explícito para procesar una nueva fila si no trae progresiva.
+                if (!codigoEnsayo && !row[2] && !identificador) {
+                    console.log(`[IMPORT SKIP] Row ${rowIndex} ignorada: No tiene Código, Progresiva ni Identificador explícito.`);
+                    continue;
+                }
 
                 if (progresivaValue) lastProgresiva = progresivaValue;
                 if (estratoValue) lastEstrato = estratoValue;
+
+                // Priority for Merging: 1. Manual Identifier, 2. Automatic Code
+                let mergeKey = identificador ? normalizeString(identificador) : normalizeCode(codigoEnsayo);
 
                 const hasSubheaders = config.tablas?.some(t => t.headers.some(h => h.subheaders));
                 if (!progresivaValue || !estratoValue) {
                     validationErrors.push({ sheet: sheet.sheetName, row: rowIndex + (hasSubheaders ? 3 : 2), error: "Las columnas 'Progresiva' y 'Estrato' no pueden estar vacías." });
                     continue;
                 }
-                
+
                 const normalizedProgresiva = normalizeProgresivaForLookup(progresivaValue);
-                const progresivaId = progresivaDbMap.get(normalizedProgresiva);
+                // 1. Try Direct Lookup
+                let progresivaId = progresivaDbMap.get(normalizedProgresiva);
+
+                // 2. If failed, try with Offset (Relative -> Absolute)
+                if (!progresivaId && tramoStartOffset > 0 && normalizedProgresiva !== null) {
+                    const absoluteProgresiva = normalizedProgresiva + tramoStartOffset;
+                    // Handle float precision if needed, though map keys should match
+                    // Let's try direct exact match first
+                    progresivaId = progresivaDbMap.get(absoluteProgresiva);
+                }
+
+
 
                 if (!progresivaId) {
-                    validationErrors.push({ sheet: sheet.sheetName, row: rowIndex + (hasSubheaders ? 3 : 2), error: `La progresiva '${progresivaValue}' no se encontró en este tramo.` });
+                    validationErrors.push({ sheet: sheet.sheetName, row: rowIndex + (hasSubheaders ? 3 : 2), error: `La progresiva '${progresivaValue}' no se encontró en este tramo. (Valor leído: ${progresivaValue})` });
                     continue;
                 }
 
@@ -1125,44 +1372,240 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
                 }
 
                 const datos_formulario = {};
-                row.forEach((cellValue, index) => {
-                    // Omitir las 4 primeras columnas estáticas (Código, Fecha, Progresiva, Estrato)
-                    if (index < 4) return;
-                    // El índice de la celda menos 4 corresponde al índice en keyOrder
-                    const dataKey = keyOrder[index - 4];
-                    if (dataKey) {
-                        datos_formulario[dataKey] = cellValue;
-                    }
-                });
 
-                if (codigoEnsayo) {
-                    const ensayoId = ensayoCodeMap.get(codigoEnsayo);
-                    if (!ensayoId) {
-                        ensayosToInsert.push({ 
-                            tipo_ensayo_id: sheet.tipoEnsayo.id, 
-                            estrato_id: estratoId, 
-                            proyecto_id: proyectoId, 
-                            datos_formulario: datos_formulario,
-                            nombre_ensayo: `Importado (${codigoEnsayo}) - ${sheet.sheetName}`
-                        });
-                        summary.ensayosParaCrear++;
+                // --- NUEVA LÓGICA: Usar headers detectados del Excel ---
+                if (sheet.headers && sheet.headers.length > 0) {
+                    row.forEach((cellValue, index) => {
+                        const headerKey = sheet.headers[index];
+                        if (headerKey) {
+                            // Guardamos con la clave EXACTA del header (ej: "0.64mm_1")
+                            // Esto permite que luego el key_map encuentre la coincidencia.
+                            datos_formulario[headerKey] = cellValue;
+                        }
+                    });
+                } else {
+                    // --- LÓGICA DEFAULT ANTIGUA (Fallback) ---
+                    // Se basa en posición fija asumiendo que el Excel coincide con config_export
+                    row.forEach((cellValue, index) => {
+                        // Omitir las 5 primeras columnas estáticas
+                        if (index < 5) return;
+                        const dataKey = keyOrder[index - 5];
+                        if (dataKey) {
+                            setNestedProperty(datos_formulario, dataKey, cellValue);
+                        }
+                    });
+                }
+
+                // --- TRANSFORMACIÓN DE DATOS DINÁMICA (Basada en DB) ---
+                if (sheet.tipoEnsayo.importConfig) {
+                    // 1. Obtener mapa global
+                    let keyMap = sheet.tipoEnsayo.importConfig.key_map || {};
+
+                    // 2. Obtener mapa específico de la hoja (si existe) y mezclar (sobrescribe globales)
+                    if (sheet.tipoEnsayo.importConfig.sheets) {
+                        const sheetName = sheet.sheetName; // Fixed: sheet.sheetName
+                        const configSheet = sheet.tipoEnsayo.importConfig.sheets[sheetName];
+
+                        console.log(`[IMPORT DEBUG] Sheet '${sheetName}' - Buscando config específica... Encontrada? ${!!configSheet}. Keys disponibles: ${Object.keys(sheet.tipoEnsayo.importConfig.sheets).join(', ')}`);
+
+                        if (configSheet && configSheet.key_map) {
+                            console.log(`[IMPORT DEBUG] Sheet '${sheetName}' - Aplicando KeyMap Específico!`, JSON.stringify(configSheet.key_map));
+                            keyMap = { ...keyMap, ...configSheet.key_map };
+                        }
+                    }
+
+                    // Log final del mapa para fecha
+                    console.log(`[IMPORT DEBUG] Sheet '${sheet.sheetName}': KeyMap FINAL listo. Mapeo para 'fecha':`, JSON.stringify(keyMap['fecha']));
+
+                    // Iterar sobre las claves que llegaron del Excel (que están planas en datos_formulario porque así las leímos inicialmente)
+                    // Usamos un array de las claves para no iterar sobre propiedades nuevas que vayamos añadiendo
+                    const originalKeys = Object.keys(datos_formulario);
+
+                    originalKeys.forEach(excelKey => {
+                        const targetPath = keyMap[excelKey];
+
+                        if (targetPath) {
+                            // Si hay instrucción de mover este dato a una ruta especifica
+                            let value = datos_formulario[excelKey];
+
+                            // --- AUTO-CONVERSION DE FECHAS/HORAS EXCEL ---
+                            let numValue = parseFloat(value);
+
+                            const isDateTarget = Array.isArray(targetPath) ? targetPath.some(t => t.toLowerCase().includes('fecha')) : targetPath.toLowerCase().includes('fecha');
+                            const isTimeTarget = Array.isArray(targetPath) ? targetPath.some(t => t.toLowerCase().includes('hora')) : targetPath.toLowerCase().includes('hora');
+
+                            // Si el destino es 'fecha' y el valor parece una fecha Excel (> 40000)
+                            if (isDateTarget && !isNaN(numValue) && numValue > 40000 && numValue < 80000) {
+                                const parsedDate = parseExcelDate(numValue);
+                                if (parsedDate) {
+                                    value = parsedDate.toISOString().split('T')[0];
+                                }
+                            }
+                            // Si el destino es 'hora' y el valor es fracción de día (< 1)
+                            else if (isTimeTarget && !isNaN(numValue) && numValue < 1 && numValue > 0) {
+                                // Convertir fracción de día a HH:mm
+                                const totalSeconds = Math.round(numValue * 86400);
+                                const hours = Math.floor(totalSeconds / 3600);
+                                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                                value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                            }
+                            // ---------------------------------------------
+
+                            // 1. Si la ruta es un array (Multi-Target) o tiene puntos (Deep Path)
+                            if (Array.isArray(targetPath) || targetPath.includes('.')) {
+                                if (Array.isArray(targetPath)) {
+                                    targetPath.forEach(path => setNestedProperty(datos_formulario, path, value));
+                                } else {
+                                    setNestedProperty(datos_formulario, targetPath, value);
+                                }
+
+                                // Borrar la clave original plana para no dejar basura, 
+                                // salvo que la clave original sea parte de la ruta (raro)
+                                if (excelKey !== targetPath.split('.')[0]) {
+                                    delete datos_formulario[excelKey];
+                                }
+                            } else {
+                                // 2. Si es una renombración simple en la raiz (ej: "Old" -> "New")
+                                datos_formulario[targetPath] = value;
+                                if (excelKey !== targetPath) {
+                                    delete datos_formulario[excelKey];
+                                }
+                            }
+                        }
+                    });
+                }
+                // --------------------------------------------------------
+
+                if (codigoEnsayo || mergeKey) {
+                    // Normalización de fecha (Col 1)
+                    const fechaRaw = row[1];
+                    let fecha = null;
+                    if (fechaRaw) {
+                        const parsedDate = parseExcelDate(fechaRaw);
+                        if (parsedDate) {
+                            fecha = parsedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+                        } else {
+                            validationErrors.push({ sheet: sheet.sheetName, row: rowIndex + (hasSubheaders ? 3 : 2), error: `Formato de fecha inválido en columna 'Fecha': '${fechaRaw}'.` });
+                            continue;
+                        }
                     } else {
-                        ensayosToUpdate.push({ ensayoId, estrato_id: estratoId, datos_formulario });
-                        summary.ensayosParaActualizar++;
+                        // If date is empty, use current date as fallback, but warn
+                        console.warn(`[IMPORT WARNING] Sheet '${sheet.sheetName}', row ${rowIndex + (hasSubheaders ? 3 : 2)}: Fecha vacía. Usando fecha actual.`);
+                        fecha = new Date().toISOString().split('T')[0];
+                    }
+
+                    // GENERATE COMPOSITE KEY FOR UNIQUENESS PROPERLY SCOPED BY TYPE
+                    const baseIdentifier = mergeKey || codigoEnsayo;
+                    const compositeKey = `${baseIdentifier}|${sheet.tipoEnsayo.id}`;
+
+                    if (baseIdentifier) {
+                        // Check if this assay (by compositeKey) is already pending (from PREVIOUS sheets OR current sheet duplicate)
+                        let pending = pendingEnsayoMap.get(compositeKey);
+
+                        // DUPLICATE CHECK WITHIN SAME SHEET
+                        if (pending && pending._sheetName === sheet.sheetName) {
+                            validationErrors.push({
+                                sheet: sheet.sheetName,
+                                row: rowIndex + (hasSubheaders ? 3 : 2),
+                                error: `Identificador duplicado '${baseIdentifier}' detectado en la misma hoja. Ya existe un ensayo para este tipo en la fila anterior.`
+                            });
+                            continue; // Skip processing this duplicate row
+                        }
+
+                        // --- NEW: Check Persistent DB for Merge ---
+                        // If not pending in memory, check if it exists in DB via Identificador + Type OR Code + Type
+                        let existingEnsayoId = null;
+
+                        // 1. Check by Manual Identifier + Type
+                        const dbKeyId = `${normalizeString(identificador || '')}|${sheet.tipoEnsayo.id}`;
+                        if (!pending && identificador && identificadorDbMap.has(dbKeyId)) {
+                            existingEnsayoId = identificadorDbMap.get(dbKeyId);
+                            // console.log(`[IMPORT PERSIST] Found existing assay by Identifier '${identificador}' Type ${sheet.tipoEnsayo.id} -> ID ${existingEnsayoId}`);
+                        }
+
+                        // 2. Fallback to Code + Type
+                        if (!existingEnsayoId && codigoEnsayo && ensayoCodeMap) {
+                            const normCode = normalizeCode(codigoEnsayo);
+                            const dbKeyCode = `${normCode}|${sheet.tipoEnsayo.id}`;
+                            if (ensayoCodeMap.has(dbKeyCode)) {
+                                existingEnsayoId = ensayoCodeMap.get(dbKeyCode);
+                            }
+                        }
+                        // ------------------------------------------
+
+                        if (existingEnsayoId) {
+                            // UPDATE EXISTING DB ENTRY
+                            ensayosToUpdate.push({
+                                ensayoId: existingEnsayoId,
+                                estrato_id: estratoId,
+                                datos_formulario,
+                                fecha,
+                                identificador: identificador
+                            });
+                            summary.ensayosParaActualizar++;
+                        } else if (pending) {
+                            // NEW ENTRY (Mergeable across sheets) - Already pending in memory
+                            if (identificador && !pending.identificador) {
+                                pending.identificador = identificador;
+                            }
+
+                            // Merge datos_formulario
+                            if (datos_formulario) {
+                                pending.datos_formulario = deepMerge(pending.datos_formulario || {}, datos_formulario);
+                            }
+
+                            if (pending.estrato_id !== estratoId) {
+                                console.warn(`[IMPORT WARNING] Code '${codigoEnsayo}' has different stratums in different sheets! Keeping first one.`);
+                            }
+                        } else {
+                            // CREATE NEW PENDING
+                            const newEnsayoObj = {
+                                type: 'pending', // Marker
+                                tipo_ensayo_id: sheet.tipoEnsayo.id,
+                                estrato_id: estratoId,
+                                codigo_ensayo: codigoEnsayo || mergeKey,
+                                fecha: fecha,
+                                datos_formulario: datos_formulario,
+                                progresiva_id: progresivaId,
+                                _mergeKey: baseIdentifier,
+                                _sheetName: sheet.sheetName,
+                                identificador: identificador,
+                                proyecto_id: proyectoId
+                            };
+
+                            pendingEnsayoMap.set(compositeKey, newEnsayoObj);
+                            summary.ensayosParaCrear++;
+                        }
                     }
                 } else {
-                    ensayosToInsert.push({ 
-                        tipo_ensayo_id: sheet.tipoEnsayo.id, 
-                        estrato_id: estratoId, 
-                        proyecto_id: proyectoId, 
+                    // NO CODE -> ALWAYS NEW, NO MERGE
+                    ensayosToInsert.push({
+                        tipo_ensayo_id: sheet.tipoEnsayo.id,
+                        estrato_id: estratoId,
+                        proyecto_id: proyectoId,
                         datos_formulario: datos_formulario,
-                        nombre_ensayo: `Importado - ${sheet.sheetName}` 
+                        nombre_ensayo: `Importado - ${sheet.sheetName}`
                     });
                     summary.ensayosParaCrear++;
                 }
+
             }
         }
 
+        // --- FLUSH PENDING MERGES ---
+        // Add pending assays from map to insertion list (deduplicating objects)
+        const flushedPending = new Set();
+        for (const pending of pendingEnsayoMap.values()) {
+            if (!flushedPending.has(pending)) {
+                // Ensure name is set if not already (it should be)
+                if (!pending.nombre_ensayo) {
+                    pending.nombre_ensayo = `Importado (${pending.codigo_ensayo || 'S/C'})`;
+                }
+                ensayosToInsert.push(pending);
+                flushedPending.add(pending);
+            }
+        }
+        // ----------------------------
         if (validationErrors.length > 0) {
             throw { validationErrors };
         }
@@ -1170,8 +1613,8 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
         // --- Fase C: Ejecución de Cambios ---
         if (!isSimulation) { // Only commit changes if not in simulation mode
             for (const ensayo of ensayosToUpdate) {
-                await client.query('UPDATE ensayos SET estrato_id = $1, datos_formulario = $2, estado = $3, fecha = CURRENT_DATE WHERE id = $4', 
-                    [ensayo.estrato_id, ensayo.datos_formulario, 'actualizado', ensayo.ensayoId]);
+                await client.query('UPDATE ensayos SET estrato_id = $1, datos_formulario = $2, estado = $3, fecha = CURRENT_DATE, identificador = $4 WHERE id = $5',
+                    [ensayo.estrato_id, ensayo.datos_formulario, 'actualizado', ensayo.identificador, ensayo.ensayoId]);
             }
 
             for (const ensayoData of ensayosToInsert) {
@@ -1179,7 +1622,9 @@ const importarEnsayos = async (proyectoId, tramoId, fileBuffer, user, isSimulati
                 const { id: newEnsayoId, codigo_ensayo: newCodigoEnsayo } = await createBaseEnsayo({
                     estrato_id: ensayoData.estrato_id,
                     tipo_ensayo_id: ensayoData.tipo_ensayo_id,
-                    nombre_ensayo: ensayoData.nombre_ensayo
+                    nombre_ensayo: ensayoData.nombre_ensayo,
+                    identificador: ensayoData.identificador,
+                    proyecto_id: proyectoId
                 }, client); // Pass the existing client
 
                 // 2. Update the datos_formulario for the newly created assay
@@ -1223,13 +1668,13 @@ const getAllTiposEnsayo = async () => {
         return result.rows;
     } catch (err) {
         console.error('Error al obtener todos los tipos de ensayo en service:', err);
-                throw new Error('Error al obtener todos los tipos de ensayo.');
-            }
-        };
-        
-        const getAllCanteraEnsayos = async () => {
-            try {
-                const result = await db.query(`
+        throw new Error('Error al obtener todos los tipos de ensayo.');
+    }
+};
+
+const getAllCanteraEnsayos = async () => {
+    try {
+        const result = await db.query(`
                     SELECT
                         e.id,
                         e.nombre_ensayo,
@@ -1258,29 +1703,29 @@ const getAllTiposEnsayo = async () => {
                     WHERE est.parent_type = 'cantera'
                     ORDER BY te.descripcion, e.fecha DESC
                 `);
-        
-                return result.rows;
-            } catch (err) {
-                console.error('Error al obtener todos los ensayos de canteras en service:', err);
-                throw new Error('Error al obtener todos los ensayos de canteras.');
-            }
-        };
-        
-        module.exports = {
-            getEnsayoDetailsById,
-            createBaseEnsayo,
-            deleteEnsayo,
-            exportEnsayosToExcelByTramo,
-            importarEnsayos,
-            getAllTiposEnsayo,
-            createOrUpdateFullAssay,
-            updateBaseEnsayo,
-            getEnsayosByTramoId,
-            getEnsayosByEstratoId,
-            bulkDeleteEnsayos,
-            exportEnsayosToExcelByTipo,
-            getFormularioConfig,
-            getTipoEnsayos,
-            getAllCanteraEnsayos,
-            getEnsayos
-        };
+
+        return result.rows;
+    } catch (err) {
+        console.error('Error al obtener todos los ensayos de canteras en service:', err);
+        throw new Error('Error al obtener todos los ensayos de canteras.');
+    }
+};
+
+module.exports = {
+    getEnsayoDetailsById,
+    createBaseEnsayo,
+    deleteEnsayo,
+    exportEnsayosToExcelByTramo,
+    importarEnsayos,
+    getAllTiposEnsayo,
+    createOrUpdateFullAssay,
+    updateBaseEnsayo,
+    getEnsayosByTramoId,
+    getEnsayosByEstratoId,
+    bulkDeleteEnsayos,
+    exportEnsayosToExcelByTipo,
+    getFormularioConfig,
+    getTipoEnsayos,
+    getAllCanteraEnsayos,
+    getEnsayos
+};

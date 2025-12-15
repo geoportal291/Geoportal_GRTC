@@ -24,10 +24,10 @@ const alcantarillasService = {
                 if (!row) continue;
 
                 const claseCell = row[16]; // Columna Q
-                console.log(`DEBUG: Fila ${i + 1}, Columna Q, Valor: '${claseCell}'`);
+                // console.log(`DEBUG: Fila ${i + 1}, Columna Q, Valor: '${claseCell}'`);
 
                 if (typeof claseCell === 'string' && claseCell.toLowerCase().includes('alcantarilla')) {
-                    console.log(`DEBUG: 'alcantarilla' encontrada en la fila ${i + 1}. Procesando fila...`);
+                    // console.log(`DEBUG: 'alcantarilla' encontrada en la fila ${i + 1}. Procesando fila...`);
 
                     let codigo_extraido = null;
                     const match = claseCell.match(/(?:N°|No\.|Nº)\s*(\d+)/i);
@@ -43,12 +43,12 @@ const alcantarillasService = {
                     const easting = parseFloat(String(row[24]).replace(/,/g, '')); // Columna Y
                     const northing = parseFloat(String(row[25]).replace(/,/g, '')); // Columna Z
 
-                    console.log(`DEBUG: Fila ${i + 1}, Easting: ${easting}, Northing: ${northing}, utmZone received: ${utmZone}`);
+                    // console.log(`DEBUG: Fila ${i + 1}, Easting: ${easting}, Northing: ${northing}, utmZone received: ${utmZone}`);
                     const zoneNum = parseInt(utmZone.slice(0, -1));
                     const zoneLetter = utmZone.slice(-1);
-                    console.log(`DEBUG: Fila ${i + 1}, Parsed zoneNum: ${zoneNum}, Parsed zoneLetter: ${zoneLetter}`);
+                    // console.log(`DEBUG: Fila ${i + 1}, Parsed zoneNum: ${zoneNum}, Parsed zoneLetter: ${zoneLetter}`);
                     const latLon = toLatLon(easting, northing, zoneNum, zoneLetter);
-                    console.log(`DEBUG: Fila ${i + 1}, Lat/Lon convertidas:`, latLon);
+                    // console.log(`DEBUG: Fila ${i + 1}, Lat/Lon convertidas:`, latLon);
 
                     const alcantarilla = {
                         id_proyecto: projectId,
@@ -68,10 +68,12 @@ const alcantarillasService = {
                         ancho: row[23] || null, // Columna X
                         altitud: row[26] || null, // Columna AA
                         caracteristicas: row[27] || null, // Columna AB
+                        caracteristicas: row[27] || null, // Columna AB
                         panel_fotografico_codigo: row[13] || null, // Columna N
+                        entregable: row[12] || null, // Columna M
                     };
 
-                    console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, alcantarilla);
+                    // console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, alcantarilla);
 
                     if (isNaN(alcantarilla.latitud) || isNaN(alcantarilla.longitud)) {
                         console.warn(`Fila ${i + 1}: Latitud o Longitud inválida para la alcantarilla con código ${alcantarilla.codigo || 'N/A'}. Saltando.`);
@@ -94,16 +96,16 @@ const alcantarillasService = {
 
                 const insertPromises = alcantarillasData.map(a =>
                     client.query(
-                        `INSERT INTO alcantarillas (
-                            id_proyecto, codigo, tipo, material, diametro_lado, longitud_alcantarilla,
-                            estado, observaciones, progresiva, latitud, longitud,
-                            luz, alto, ancho, altitud, caracteristicas, clase, panel_fotografico_codigo
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id_alcantarilla`,
-                        [
-                            a.id_proyecto, a.codigo, a.tipo, a.material, a.diametro_lado, a.longitud_alcantarilla,
-                            a.estado, a.observaciones, a.progresiva, a.latitud, a.longitud,
-                            a.luz, a.alto, a.ancho, a.altitud, a.caracteristicas, a.clase, a.panel_fotografico_codigo
-                        ]
+                            `INSERT INTO alcantarillas (
+                                id_proyecto, codigo, tipo, material, diametro_lado, longitud_alcantarilla,
+                                estado, observaciones, progresiva, latitud, longitud,
+                                luz, alto, ancho, altitud, caracteristicas, clase, panel_fotografico_codigo, entregable
+                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id_alcantarilla`,
+                            [
+                                a.id_proyecto, a.codigo, a.tipo, a.material, a.diametro_lado, a.longitud_alcantarilla,
+                                a.estado, a.observaciones, a.progresiva, a.latitud, a.longitud,
+                                a.luz, a.alto, a.ancho, a.altitud, a.caracteristicas, a.clase, a.panel_fotografico_codigo, a.entregable
+                            ]
                     )
                 );
 
@@ -142,12 +144,12 @@ const alcantarillasService = {
                 `INSERT INTO alcantarillas (
                     id_proyecto, codigo, tipo, material, diametro_lado, longitud_alcantarilla,
                     estado, observaciones, progresiva, latitud, longitud,
-                    luz, alto, ancho, altitud, caracteristicas, clase, panel_fotografico_codigo
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING *`,
+                    luz, alto, ancho, altitud, caracteristicas, clase, panel_fotografico_codigo, entregable
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
                 [
                     data.id_proyecto, data.codigo, data.tipo, data.material, data.diametro_lado, data.longitud_alcantarilla,
                     data.estado, data.observaciones, data.progresiva, data.latitud, data.longitud,
-                    data.luz, data.alto, data.ancho, data.altitud, data.caracteristicas, data.clase, data.panel_fotografico_codigo
+                    data.luz, data.alto, data.ancho, data.altitud, data.caracteristicas, data.clase, data.panel_fotografico_codigo, data.entregable
                 ]
             );
             return result.rows[0];
@@ -166,7 +168,7 @@ const alcantarillasService = {
             const updatableFields = [
                 'id_proyecto', 'codigo', 'tipo', 'material', 'diametro_lado', 'longitud_alcantarilla',
                 'estado', 'observaciones', 'progresiva', 'latitud', 'longitud',
-                'luz', 'alto', 'ancho', 'altitud', 'caracteristicas', 'clase', 'panel_fotografico_codigo'
+                'luz', 'alto', 'ancho', 'altitud', 'caracteristicas', 'clase', 'panel_fotografico_codigo', 'entregable'
             ];
 
             for (const field of updatableFields) {
@@ -185,7 +187,7 @@ const alcantarillasService = {
 
             values.push(id);
             const query = `UPDATE alcantarillas SET ${fields.join(', ')} WHERE id_alcantarilla = $${fieldIndex} RETURNING *`;
-            
+
             const result = await db.query(query, values);
             return result.rows[0];
         } catch (error) {

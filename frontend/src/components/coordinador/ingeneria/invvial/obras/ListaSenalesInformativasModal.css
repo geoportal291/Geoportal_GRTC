@@ -1,0 +1,124 @@
+/* ListaSenalesInformativasModal.css */
+
+/* Reuse modal overlay styles from Alcantarillas.css structure but scoped */
+.lista-senales-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  /* Slightly darker for better focus */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 20000;
+  /* Increased z-index to ensure it sits above navbar */
+}
+
+.lista-senales-modal-content {
+  background-color: white;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  position: relative;
+  width: 95%;
+  max-width: 900px;
+  /* Reduced width to match "simple" look */
+  max-height: 85vh;
+  /* Slightly reduced height */
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.lista-senales-modal-close {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #666;
+  z-index: 10;
+}
+
+.lista-senales-modal-title {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 1.5rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.lista-senales-search-container {
+  margin-bottom: 20px;
+}
+
+.lista-senales-search-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 1rem;
+}
+
+.lista-senales-table-container {
+  overflow-x: auto;
+}
+
+.lista-senales-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: 'Inter', sans-serif;
+}
+
+.lista-senales-table th {
+  padding: 12px 15px;
+  text-align: left;
+  font-weight: 600;
+  color: #444;
+  border-bottom: 2px solid #e5e7eb;
+  background-color: #f9fafb;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+}
+
+.lista-senales-table td {
+  padding: 12px 15px;
+  color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+  font-size: 0.95rem;
+}
+
+.lista-senales-table tr:hover td {
+  background-color: #f9fafb;
+  cursor: pointer;
+}
+
+.lista-senales-pagination {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 20px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.lista-senales-pagination-button {
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  background-color: white;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.lista-senales-pagination-button.active {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
+}

@@ -13,6 +13,13 @@ import Badenes from './obras/Badenes'; // Import Badenes
 import Puentes from './obras/Puentes';
 import Muros from './obras/Muros';
 import withUpload from './obras/withUpload';
+import CanterasFuentes from './canteras/CanterasFuentes';
+import ZonasCriticas from './ZonasCriticas'; // Import ZonasCriticas
+import EstructurasExistentes from './EstructurasExistentes';
+import InterferenciasElectricas from './InterferenciasElectricas';
+import SenalesInformativas from './SenalesInformativas';
+import SenalesPreventivas from './SenalesPreventivas'; // Senales Preventivas
+import HitosKilometricos from './HitosKilometricos'; // Hitos Kilometricos
 import DataManagementModal from './DataManagementModal';
 import Swal from 'sweetalert2';
 
@@ -20,6 +27,12 @@ const AlcantarillasWithUpload = withUpload(Alcantarillas);
 const BadenesWithUpload = withUpload(Badenes); // Create BadenesWithUpload
 const PuentesWithUpload = withUpload(Puentes);
 const MurosWithUpload = withUpload(Muros);
+const ZonasCriticasWithUpload = withUpload(ZonasCriticas);
+const InterferenciasWithUpload = withUpload(InterferenciasElectricas);
+const SenalesInformativasWithUpload = withUpload(SenalesInformativas);
+const SenalesPreventivasWithUpload = withUpload(SenalesPreventivas);
+const HitosKilometricosWithUpload = withUpload(HitosKilometricos);
+
 
 
 const findClosestVertexIndex = (targetLatLng, routeCoords) => {
@@ -124,6 +137,13 @@ const Vialds = ({ isNavbarExpanded }) => {
   const [badenesData, setBadenesData] = useState([]); // New state to store all badenes
   const [puentesData, setPuentesData] = useState([]);
   const [murosData, setMurosData] = useState([]);
+  const [canterasData, setCanterasData] = useState([]); // New state for Canteras
+  const [fuentesData, setFuentesData] = useState([]); // New state for Fuentes
+  const [zonasCriticasData, setZonasCriticasData] = useState([]); // New state for Zonas Criticas
+  const [interferenciasData, setInterferenciasData] = useState([]);
+  const [senalesInformativasData, setSenalesInformativasData] = useState([]); // New state
+  const [senalesPreventivasData, setSenalesPreventivasData] = useState([]); // New state for Preventivas
+  const [hitosKilometricosData, setHitosKilometricosData] = useState([]); // New state for Hitos
   const [graphicsImages, setGraphicsImages] = useState([]); // NEW: State for graphics images
   const [isSwitchingTab, setIsSwitchingTab] = useState(false); // NEW: State for tab switching
   const canUpload = user && (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'COORDINADOR');
@@ -312,6 +332,116 @@ const Vialds = ({ isNavbarExpanded }) => {
         setGraphicsImages([]); // Default to empty array on error
       }
 
+      // Fetch Canteras
+      try {
+        const canterasRes = await axiosInstance.get(`/api/canteras-fuentes/canteras/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setCanterasData(canterasRes.data.map(c => ({
+          ...c,
+          latitud: parseFloat(c.latitud),
+          longitud: parseFloat(c.longitud)
+        })));
+      } catch (error) {
+        console.error('Error fetching canteras data:', error);
+        setCanterasData([]);
+      }
+
+      // Fetch Fuentes
+      try {
+        const fuentesRes = await axiosInstance.get(`/api/canteras-fuentes/fuentes/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setFuentesData(fuentesRes.data.map(f => ({
+          ...f,
+          latitud: parseFloat(f.latitud),
+          longitud: parseFloat(f.longitud)
+        })));
+      } catch (error) {
+        console.error('Error fetching fuentes data:', error);
+        setFuentesData([]);
+      }
+
+      // Fetch Zonas Criticas
+      try {
+        const zonasCriticasRes = await axiosInstance.get(`/api/zonas-criticas/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setZonasCriticasData(zonasCriticasRes.data.map(z => ({
+          ...z,
+          latitud: z.latitud ? parseFloat(z.latitud) : null,
+          longitud: z.longitud ? parseFloat(z.longitud) : null
+        })));
+      } catch (error) {
+        if (error.response && error.response.status === 404) {
+          console.warn('Endpoint de zonas críticas no encontrado.');
+          setZonasCriticasData([]);
+        } else {
+          console.error('Error fetching zonas criticas data:', error);
+          setZonasCriticasData([]);
+        }
+      }
+
+      // Fetch Interferencias
+      try {
+        const interferenciasRes = await axiosInstance.get(`/api/interferencias/project/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setInterferenciasData(interferenciasRes.data.map(i => ({
+          ...i,
+          latitud: i.latitud ? parseFloat(i.latitud) : null,
+          longitud: i.longitud ? parseFloat(i.longitud) : null
+        })));
+      } catch (error) {
+        console.error('Error fetching interferencias data:', error);
+        setInterferenciasData([]);
+      }
+
+      // Fetch Senales Informativas
+      try {
+        const senalesRes = await axiosInstance.get(`/api/senales-informativas/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setSenalesInformativasData((senalesRes.data || []).map(s => ({
+          ...s,
+          latitud: s.latitud ? parseFloat(s.latitud) : null,
+          longitud: s.longitud ? parseFloat(s.longitud) : null
+        })));
+      } catch (error) {
+        console.error('Error fetching senales informativas data:', error);
+        setSenalesInformativasData([]);
+      }
+
+      // Fetch Senales Preventivas
+      try {
+        const senalesPrevRes = await axiosInstance.get(`/api/senales-preventivas/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setSenalesPreventivasData((senalesPrevRes.data || []).map(s => ({
+          ...s,
+          latitud: s.latitud ? parseFloat(s.latitud) : null,
+          longitud: s.longitud ? parseFloat(s.longitud) : null
+        })));
+      } catch (error) {
+        console.error('Error fetching senales preventivas data:', error);
+        setSenalesPreventivasData([]);
+      }
+
+      // Fetch Hitos Kilometricos
+      try {
+        const hitosRes = await axiosInstance.get(`/api/hitos-kilometricos/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setHitosKilometricosData((hitosRes.data || []).map(h => ({
+          ...h,
+          latitud: h.latitud ? parseFloat(h.latitud) : null,
+          longitud: h.longitud ? parseFloat(h.longitud) : null
+        })));
+      } catch (error) {
+        console.error('Error fetching hitos kilometricos data:', error);
+        setHitosKilometricosData([]);
+      }
+
     } finally {
       setIsLoadingData(false);
     }
@@ -333,15 +463,16 @@ const Vialds = ({ isNavbarExpanded }) => {
   }, []);
 
   const handleSaveManualAlcantarilla = useCallback(async (newElementData) => {
-    console.log('Datos a guardar:', newElementData);
     if (!user || !user.token) {
       console.warn('Usuario no autenticado o token no disponible.');
       return;
     }
     setIsLoadingData(true);
+
     const isBaden = activeObrasSubTab === 'BADENES';
     const isPuente = activeObrasSubTab === 'PUENTES';
     const isMuro = activeObrasSubTab === 'MUROS DE CONTENCION';
+    const isInterferencia = activeTab === 'INTERFERENCIAS ELECTRICAS';
 
     let endpoint = '/api/alcantarillas';
     let idField = 'id_alcantarilla';
@@ -355,6 +486,18 @@ const Vialds = ({ isNavbarExpanded }) => {
     } else if (isMuro) {
       endpoint = '/api/muros';
       idField = 'id_muro';
+    } else if (isInterferencia) {
+      endpoint = '/api/interferencias';
+      idField = 'id';
+    } else if (activeSeñalizacionSubTab === 'S. INFORMATIVAS') {
+      endpoint = '/api/senales-informativas';
+      idField = 'id_senal_informativa';
+    } else if (activeSeñalizacionSubTab === 'S. PREVENTIVAS') {
+      endpoint = '/api/senales-preventivas';
+      idField = 'id_senal_preventiva';
+    } else if (activeSeñalizacionSubTab === 'HITOS KILOMETRICOS') {
+      endpoint = '/api/hitos-kilometricos';
+      idField = 'id_hito_kilometrico';
     }
 
     try {
@@ -409,12 +552,10 @@ const Vialds = ({ isNavbarExpanded }) => {
   }, [fetchVialData]);
 
   const renderObrasSubTabContent = () => {
-    const isAlcantarillasEntregable = vialHeaderOption.includes('entregable') && activeObrasSubTab === 'ALCANTARILLAS';
-    const isAlcantarillasGeneral = !vialHeaderOption.includes('entregable') && activeObrasSubTab === 'ALCANTARILLAS';
-
+    // Simplified: Always render with upload capabilities for the single view
     return (
       <>
-        {isAlcantarillasEntregable && (
+        {activeObrasSubTab === 'ALCANTARILLAS' && (
           <AlcantarillasWithUpload
             segmentedRoute={segmentedRoute}
             canUpload={canUpload}
@@ -427,96 +568,44 @@ const Vialds = ({ isNavbarExpanded }) => {
             onAlcantarillaSelect={setSelectedAlcantarilla}
           />
         )}
-        {isAlcantarillasGeneral && (
-          <Alcantarillas
+        {activeObrasSubTab === 'BADENES' && (
+          <BadenesWithUpload
             segmentedRoute={segmentedRoute}
             canUpload={canUpload}
+            showModal={handleShowModal}
             onEditElementSelect={handleEditElementSelect}
-            alcantarillasData={alcantarillasData}
+            badenesData={badenesData}
             graphicsImages={graphicsImages}
             projectId={projectId}
-            selectedAlcantarilla={selectedAlcantarilla}
-            onAlcantarillaSelect={setSelectedAlcantarilla}
-            showModal={handleShowModal}
+            selectedBaden={selectedBaden}
+            onBadenSelect={setSelectedBaden}
           />
         )}
-        {activeObrasSubTab === 'BADENES' && (
-          vialHeaderOption.includes('entregable') ? (
-            <BadenesWithUpload
-              segmentedRoute={segmentedRoute}
-              canUpload={canUpload}
-              showModal={handleShowModal}
-              onEditElementSelect={handleEditElementSelect}
-              badenesData={badenesData}
-              graphicsImages={graphicsImages}
-              projectId={projectId}
-              selectedBaden={selectedBaden}
-              onBadenSelect={setSelectedBaden}
-            />
-          ) : (
-            <Badenes
-              segmentedRoute={segmentedRoute}
-              onEditElementSelect={handleEditElementSelect}
-              badenesData={badenesData}
-              graphicsImages={graphicsImages}
-              projectId={projectId}
-              selectedBaden={selectedBaden}
-              onBadenSelect={setSelectedBaden}
-              showModal={handleShowModal}
-            />
-          )
-        )}
         {activeObrasSubTab === 'PUENTES' && (
-          vialHeaderOption.includes('entregable') ? (
-            <PuentesWithUpload
-              segmentedRoute={segmentedRoute}
-              canUpload={canUpload}
-              showModal={handleShowModal}
-              onEditElementSelect={handleEditElementSelect}
-              puentesData={puentesData}
-              graphicsImages={graphicsImages}
-              projectId={projectId}
-              selectedPuente={selectedPuente}
-              onPuenteSelect={setSelectedPuente}
-            />
-          ) : (
-            <Puentes
-              segmentedRoute={segmentedRoute}
-              onEditElementSelect={handleEditElementSelect}
-              puentesData={puentesData}
-              graphicsImages={graphicsImages}
-              projectId={projectId}
-              selectedPuente={selectedPuente}
-              onPuenteSelect={setSelectedPuente}
-              showModal={handleShowModal}
-            />
-          )
+          <PuentesWithUpload
+            segmentedRoute={segmentedRoute}
+            canUpload={canUpload}
+            showModal={handleShowModal}
+            onEditElementSelect={handleEditElementSelect}
+            puentesData={puentesData}
+            graphicsImages={graphicsImages}
+            projectId={projectId}
+            selectedPuente={selectedPuente}
+            onPuenteSelect={setSelectedPuente}
+          />
         )}
         {activeObrasSubTab === 'MUROS DE CONTENCION' && (
-          vialHeaderOption.includes('entregable') ? (
-            <MurosWithUpload
-              segmentedRoute={segmentedRoute}
-              canUpload={canUpload}
-              showModal={handleShowModal}
-              onEditElementSelect={handleEditElementSelect}
-              murosData={murosData}
-              graphicsImages={graphicsImages}
-              projectId={projectId}
-              selectedMuro={selectedMuro}
-              onMuroSelect={setSelectedMuro}
-            />
-          ) : (
-            <Muros
-              segmentedRoute={segmentedRoute}
-              onEditElementSelect={handleEditElementSelect}
-              murosData={murosData}
-              graphicsImages={graphicsImages}
-              projectId={projectId}
-              selectedMuro={selectedMuro}
-              onMuroSelect={setSelectedMuro}
-              showModal={handleShowModal}
-            />
-          )
+          <MurosWithUpload
+            segmentedRoute={segmentedRoute}
+            canUpload={canUpload}
+            showModal={handleShowModal}
+            onEditElementSelect={handleEditElementSelect}
+            murosData={murosData}
+            graphicsImages={graphicsImages}
+            projectId={projectId}
+            selectedMuro={selectedMuro}
+            onMuroSelect={setSelectedMuro}
+          />
         )}
       </>
     );
@@ -530,11 +619,44 @@ const Vialds = ({ isNavbarExpanded }) => {
   const renderSeñalizacionSubTabContent = () => {
     switch (activeSeñalizacionSubTab) {
       case 'S. INFORMATIVAS':
-        return <div><h3>Contenido de S. INFORMATIVAS</h3></div>;
+        return (
+          <SenalesInformativasWithUpload
+            senalesData={senalesInformativasData}
+            graphicsImages={graphicsImages}
+            canUpload={canUpload}
+            showModal={handleShowModal}
+            onElementSelect={(element) => handleEditElementSelect(element, 'senales_informativas')}
+            projectId={projectId}
+            vialHeaderOption={vialHeaderOption}
+            type="senales_informativas"
+          />
+        );
       case 'S. PREVENTIVAS':
-        return <div><h3>Contenido de S. PREVENTIVAS</h3></div>;
+        return (
+          <SenalesPreventivasWithUpload
+            senalesData={senalesPreventivasData}
+            graphicsImages={graphicsImages}
+            canUpload={canUpload}
+            showModal={handleShowModal}
+            onElementSelect={(element) => handleEditElementSelect(element, 'senales_preventivas')}
+            projectId={projectId}
+            vialHeaderOption={vialHeaderOption}
+            type="senales_preventivas"
+          />
+        );
       case 'HITOS KILOMETRICOS':
-        return <div><h3>Contenido de HITOS KILOMETRICOS</h3></div>;
+        return (
+          <HitosKilometricosWithUpload
+            hitosData={hitosKilometricosData}
+            graphicsImages={graphicsImages}
+            canUpload={canUpload}
+            showModal={handleShowModal}
+            onElementSelect={(element) => handleEditElementSelect(element, 'hitos_kilometricos')}
+            projectId={projectId}
+            vialHeaderOption={vialHeaderOption}
+            type="hitos_kilometricos"
+          />
+        );
       default:
         return null;
     }
@@ -554,19 +676,54 @@ const Vialds = ({ isNavbarExpanded }) => {
 
       case 'CANTERAS Y FUENTES DE AGUA':
 
-        return <div><h3>Contenido de CANTERAS Y FUENTES DE AGUA</h3></div>;
+      case 'CANTERAS Y FUENTES DE AGUA':
+
+        return (
+          <CanterasFuentes
+            canterasData={canterasData}
+            fuentesData={fuentesData}
+            projectId={projectId}
+            canUpload={canUpload}
+            onUploadSuccess={fetchVialData}
+            showUploadModal={handleShowModal}
+            graphicsImages={graphicsImages}
+          />
+        );
 
       case 'ZONAS CRITICAS':
 
-        return <div><h3>Contenido de ZONAS CRITICAS</h3></div>;
+      case 'ZONAS CRITICAS':
+        return (
+          <ZonasCriticasWithUpload
+            zonasCriticasData={zonasCriticasData}
+            graphicsImages={graphicsImages}
+            canUpload={canUpload}
+            projectId={projectId}
+            showModal={handleShowModal}
+            onEditElementSelect={handleEditElementSelect}
+          />
+        );
 
       case 'ESTRUCTURA EXISTENTE':
-
-        return <div><h3>Contenido de ESTRUCTURAS EXISTENTE</h3></div>;
+        return (
+          <EstructurasExistentes
+            projectId={projectId}
+            isVisible={activeTab === 'ESTRUCTURA EXISTENTE'}
+            graphicsImages={graphicsImages}
+          />
+        );
 
       case 'INTERFERENCIAS ELECTRICAS':
-
-        return <div><h3>Contenido de INTERFERENCIAS ELECTRICAS</h3></div>;
+        return (
+          <InterferenciasWithUpload
+            interferenciasData={interferenciasData}
+            graphicsImages={graphicsImages}
+            canUpload={canUpload}
+            projectId={projectId}
+            showModal={handleShowModal}
+            onEditElementSelect={handleEditElementSelect}
+          />
+        );
 
       case tabs?.[0]:
 
@@ -594,154 +751,77 @@ const Vialds = ({ isNavbarExpanded }) => {
 
 
   const renderContent = () => {
-    switch (vialHeaderOption) {
-      case 'resumen general':
-        return (
-          <>
-            <div className="invvial-tabs">
-              {resumenTabs.map(tab => {
-                if (tab === 'ESTRUCTURAS Y OBRAS DE ARTE') {
-                  return (
-                    <DropdownTab
-                      key={tab}
-                      title={`${tab}: ${activeObrasSubTab}`}
-                      options={obrasSubTabs}
-                      activeOption={activeObrasSubTab}
-                      onOptionSelect={(option) => {
-                        setIsSwitchingTab(true);
-                        setTimeout(() => {
-                          setActiveTab(tab);
-                          setActiveObrasSubTab(option);
-                          setTimeout(() => setIsSwitchingTab(false), 800);
-                        }, 50);
-                      }}
-                      isActive={activeTab === tab}
-                    />
-                  );
-                }
-                if (tab === 'SEÑALIZACION') {
-                  return (
-                    <DropdownTab
-                      key={tab}
-                      title={`${tab}: ${activeSeñalizacionSubTab}`}
-                      options={señalizacionSubTabs}
-                      activeOption={activeSeñalizacionSubTab}
-                      onOptionSelect={(option) => {
-                        setIsSwitchingTab(true);
-                        setTimeout(() => {
-                          setActiveTab(tab);
-                          setActiveSeñalizacionSubTab(option);
-                          setTimeout(() => setIsSwitchingTab(false), 800);
-                        }, 50);
-                      }}
-                      isActive={activeTab === tab}
-                    />
-                  );
-                }
-                return (
-                  <button
-                    key={tab}
-                    className={`invvial-tabs-button ${activeTab === tab ? 'active' : ''}`}
-                    onClick={() => {
-                      setIsSwitchingTab(true);
-                      setTimeout(() => {
-                        setActiveTab(tab);
-                        setTimeout(() => setIsSwitchingTab(false), 500);
-                      }, 50);
-                    }}
-                  >
-                    {tab}
-                  </button>
-                );
-              })}
+    // Defaulting to the main view always
+    return (
+      <>
+        <div className="invvial-tabs">
+          {resumenTabs.map(tab => {
+            if (tab === 'ESTRUCTURAS Y OBRAS DE ARTE') {
+              return (
+                <DropdownTab
+                  key={tab}
+                  title={`${tab}: ${activeObrasSubTab}`}
+                  options={obrasSubTabs}
+                  activeOption={activeObrasSubTab}
+                  onOptionSelect={(option) => {
+                    setIsSwitchingTab(true);
+                    setTimeout(() => {
+                      setActiveTab(tab);
+                      setActiveObrasSubTab(option);
+                      setTimeout(() => setIsSwitchingTab(false), 800);
+                    }, 50);
+                  }}
+                  isActive={activeTab === tab}
+                />
+              );
+            }
+            if (tab === 'SEÑALIZACION') {
+              return (
+                <DropdownTab
+                  key={tab}
+                  title={`${tab}: ${activeSeñalizacionSubTab}`}
+                  options={señalizacionSubTabs}
+                  activeOption={activeSeñalizacionSubTab}
+                  onOptionSelect={(option) => {
+                    setIsSwitchingTab(true);
+                    setTimeout(() => {
+                      setActiveTab(tab);
+                      setActiveSeñalizacionSubTab(option);
+                      setTimeout(() => setIsSwitchingTab(false), 800);
+                    }, 50);
+                  }}
+                  isActive={activeTab === tab}
+                />
+              );
+            }
+            return (
+              <button
+                key={tab}
+                className={`invvial-tabs-button ${activeTab === tab ? 'active' : ''}`}
+                onClick={() => {
+                  setIsSwitchingTab(true);
+                  setTimeout(() => {
+                    setActiveTab(tab);
+                    setTimeout(() => setIsSwitchingTab(false), 500);
+                  }, 50);
+                }}
+              >
+                {tab}
+              </button>
+            );
+          })}
+        </div>
+        <div className="invvial-tab-content-container" style={{ position: 'relative', minHeight: '300px' }}>
+          {(isLoadingData || isSwitchingTab) && (
+            <div className="invvial-loading-overlay">
+              <div className="loader-spinner-large"></div>
+              <div className="invvial-loading-text">Cargando datos...</div>
             </div>
-            <div className="invvial-tab-content-container" style={{ position: 'relative', minHeight: '300px' }}>
-              {(isLoadingData || isSwitchingTab) && (
-                <div className="invvial-loading-overlay">
-                  <div className="loader-spinner-large"></div>
-                  <div className="invvial-loading-text">Cargando datos...</div>
-                </div>
-              )}
-              {!isLoadingData && !isSwitchingTab && renderTabContent(null, [])}
-            </div>
-          </>
-        );
-      case '1er entregable':
-      case '2do entregable':
-      case '3er entregable':
-        return (
-          <>
-            <div className="invvial-tabs">
-              {resumenTabs.map(tab => {
-                if (tab === 'ESTRUCTURAS Y OBRAS DE ARTE') {
-                  return (
-                    <DropdownTab
-                      key={tab}
-                      title={`${tab}: ${activeObrasSubTab}`}
-                      options={obrasSubTabs}
-                      activeOption={activeObrasSubTab}
-                      onOptionSelect={(option) => {
-                        setIsSwitchingTab(true);
-                        setTimeout(() => {
-                          setActiveTab(tab);
-                          setActiveObrasSubTab(option);
-                          setTimeout(() => setIsSwitchingTab(false), 800);
-                        }, 50);
-                      }}
-                      isActive={activeTab === tab}
-                    />
-                  );
-                }
-                if (tab === 'SEÑALIZACION') {
-                  return (
-                    <DropdownTab
-                      key={tab}
-                      title={`${tab}: ${activeSeñalizacionSubTab}`}
-                      options={señalizacionSubTabs}
-                      activeOption={activeSeñalizacionSubTab}
-                      onOptionSelect={(option) => {
-                        setIsSwitchingTab(true);
-                        setTimeout(() => {
-                          setActiveTab(tab);
-                          setActiveSeñalizacionSubTab(option);
-                          setTimeout(() => setIsSwitchingTab(false), 800);
-                        }, 50);
-                      }}
-                      isActive={activeTab === tab}
-                    />
-                  );
-                }
-                return (
-                  <button
-                    key={tab}
-                    className={`invvial-tabs-button ${activeTab === tab ? 'active' : ''}`}
-                    onClick={() => {
-                      setIsSwitchingTab(true);
-                      setTimeout(() => {
-                        setActiveTab(tab);
-                        setTimeout(() => setIsSwitchingTab(false), 500);
-                      }, 50);
-                    }}
-                  >
-                    {tab}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="invvial-tab-content-container" style={{ position: 'relative', minHeight: '300px' }}>
-              {(isLoadingData || isSwitchingTab) && (
-                <div className="invvial-loading-overlay">
-                  <div className="loader-spinner-large"></div>
-                  <div className="invvial-loading-text">Cargando datos...</div>
-                </div>
-              )}
-              {!isLoadingData && !isSwitchingTab && renderTabContent(null, [])}
-            </div>
-          </>
-        );
-      default:
-        return <div><h3>Seleccione una opción de Inventario Vial del encabezado.</h3></div>;
-    }
+          )}
+          {!isLoadingData && !isSwitchingTab && renderTabContent(null, [])}
+        </div>
+      </>
+    );
   };
 
   return (
@@ -753,21 +833,55 @@ const Vialds = ({ isNavbarExpanded }) => {
         show={showExcelPreviewModal}
         onClose={handleCloseModal}
         listData={(() => {
-          if (activeObrasSubTab === 'BADENES') return badenesData;
-          if (activeObrasSubTab === 'PUENTES') return puentesData;
-          if (activeObrasSubTab === 'MUROS DE CONTENCION') return murosData;
+          if (activeTab === 'CANTERAS Y FUENTES DE AGUA') {
+            return [
+              ...canterasData.map(c => ({ ...c, type_label: 'Cantera', id: `c-${c.id}` })),
+              ...fuentesData.map(f => ({ ...f, type_label: 'Fuente', id: `f-${f.id}` }))
+            ];
+          }
+          if (activeTab === 'ZONAS CRITICAS') return zonasCriticasData;
+          if (activeTab === 'INTERFERENCIAS ELECTRICAS') return interferenciasData;
+
+          if (activeTab === 'SEÑALIZACION') {
+            if (activeSeñalizacionSubTab === 'S. INFORMATIVAS') return senalesInformativasData;
+            if (activeSeñalizacionSubTab === 'S. PREVENTIVAS') return senalesPreventivasData;
+            if (activeSeñalizacionSubTab === 'HITOS KILOMETRICOS') return hitosKilometricosData;
+          }
+
+          if (activeTab === 'ESTRUCTURAS Y OBRAS DE ARTE') {
+            if (activeObrasSubTab === 'BADENES') return badenesData;
+            if (activeObrasSubTab === 'PUENTES') return puentesData;
+            if (activeObrasSubTab === 'MUROS DE CONTENCION') return murosData;
+            // Default is Alcantarillas
+            return alcantarillasData;
+          }
+
           return alcantarillasData;
-        })()} // Pass correct data
+        })()}
         editData={selectedElementForEdit}
-        mode={modalMode} // Pass the new modalMode state
+        mode={modalMode}
         onSaveManualData={handleSaveManualAlcantarilla}
-        onUploadExcelData={handleUploadExcelData} // Nueva prop para la carga de Excel
-        projectId={projectId} // NEW: Pasar projectId al modal
-        vialHeaderOption={vialHeaderOption} // NEW: Pasar vialHeaderOption al modal
+        onUploadExcelData={handleUploadExcelData}
+        projectId={projectId}
+        vialHeaderOption={vialHeaderOption}
         type={(() => {
-          if (activeObrasSubTab === 'BADENES') return 'badenes';
-          if (activeObrasSubTab === 'PUENTES') return 'puentes';
-          if (activeObrasSubTab === 'MUROS DE CONTENCION') return 'muros';
+          if (activeTab === 'CANTERAS Y FUENTES DE AGUA') return 'canteras';
+          if (activeTab === 'ZONAS CRITICAS') return 'zonas-criticas';
+          if (activeTab === 'INTERFERENCIAS ELECTRICAS') return 'interferencias';
+
+          if (activeTab === 'SEÑALIZACION') {
+            if (activeSeñalizacionSubTab === 'S. INFORMATIVAS') return 'senales_informativas';
+            if (activeSeñalizacionSubTab === 'S. PREVENTIVAS') return 'senales_preventivas';
+            if (activeSeñalizacionSubTab === 'HITOS KILOMETRICOS') return 'hitos_kilometricos';
+          }
+
+          if (activeTab === 'ESTRUCTURAS Y OBRAS DE ARTE') {
+            if (activeObrasSubTab === 'BADENES') return 'badenes';
+            if (activeObrasSubTab === 'PUENTES') return 'puentes';
+            if (activeObrasSubTab === 'MUROS DE CONTENCION') return 'muros';
+            return 'alcantarillas';
+          }
+
           return 'alcantarillas';
         })()} // Pass type
         isNavbarExpanded={isNavbarExpanded}

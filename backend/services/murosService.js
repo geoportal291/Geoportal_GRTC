@@ -117,7 +117,7 @@ const murosService = {
                     }
                 }
             });
-            console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
+            // console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
 
             // 3. Get calibration data for the project
             const calibrationRes = await db.query(
@@ -128,7 +128,7 @@ const murosService = {
                 acc[cal.nombre_tramo.toUpperCase().trim()] = cal;
                 return acc;
             }, {});
-            console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
+            // console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
 
             // 4. Process Excel
             const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
@@ -151,7 +151,7 @@ const murosService = {
                 const claseCell = row[44]; // Column AS (Index 44)
 
                 if (typeof claseCell === 'string' && claseCell.toLowerCase().includes('muro')) {
-                    console.log(`DEBUG: 'Muro' encontrado en fila ${i + 1}, Columna AS: "${claseCell}"`);
+                    // console.log(`DEBUG: 'Muro' encontrado en fila ${i + 1}, Columna AS: "${claseCell}"`);
 
                     const progresivaStr = row[43]; // Column AR (Index 43)
                     if (!progresivaStr) {
@@ -252,7 +252,7 @@ const murosService = {
                             if (coords) {
                                 latitud = coords.latitude;
                                 longitud = coords.longitude;
-                                console.log(`Fila ${i + 1}: Coordenadas (sin calibrar) calculadas: ${latitud}, ${longitud}`);
+                                // console.log(`Fila ${i + 1}: Coordenadas (sin calibrar) calculadas: ${latitud}, ${longitud}`);
                             }
                         } else {
                             console.warn(`Fila ${i + 1}: No se pudo construir una ruta KML completa para el cálculo geométrico.`);
@@ -280,7 +280,7 @@ const murosService = {
                         latitud: latitud,
                         longitud: longitud
                     };
-                    console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, muro);
+                    // console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, muro);
 
                     murosData.push(muro);
                 }

@@ -111,7 +111,7 @@ const badenesService = {
                     // In GeoJSON LineString, coordinates are [lng, lat], switch to [lat, lng]
                     const positions = feature.geometry.coordinates.map(coord => [coord[1], coord[0]]);
                     routesMap[tramoName] = positions;
-                    
+
                     // Also add by number key for flexibility
                     const tramoNumberMatch = tramoName.match(/\d+/);
                     if (tramoNumberMatch) {
@@ -119,7 +119,7 @@ const badenesService = {
                     }
                 }
             });
-            console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
+            // console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
 
             // 3. Get calibration data for the project
             const calibrationRes = await db.query(
@@ -130,7 +130,7 @@ const badenesService = {
                 acc[cal.nombre_tramo.toUpperCase().trim()] = cal;
                 return acc;
             }, {});
-            console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
+            // console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
 
             // 4. Process Excel
             const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
@@ -153,14 +153,14 @@ const badenesService = {
                 const descripcionCell = row[34]; // Column AI
 
                 if (typeof descripcionCell === 'string' && /^Baden N/.test(descripcionCell)) {
-                    console.log(`DEBUG: 'Baden N...' encontrado en fila ${i + 1}, Columna AI: "${descripcionCell}"`);
+                    // console.log(`DEBUG: 'Baden N...' encontrado en fila ${i + 1}, Columna AI: "${descripcionCell}"`);
 
                     const progresivaStr = row[33]; // Column AH
                     if (!progresivaStr) {
                         console.warn(`Fila ${i + 1}: Se encontró un baden pero falta la progresiva. Saltando.`);
                         continue;
                     }
-                    
+
                     const progresivaExcelM = progresivaToMeters(progresivaStr);
                     if (isNaN(progresivaExcelM)) {
                         console.warn(`Fila ${i + 1}: Formato de progresiva no válido: '${progresivaStr}'. Saltando.`);
@@ -169,12 +169,12 @@ const badenesService = {
 
                     let tramoName = null;
                     let calibration = null;
-                    
+
                     for (const calibKey in calibrations) {
                         const cal = calibrations[calibKey];
                         const calInicioM = progresivaToMeters(cal.progresiva_inicio);
                         const calFinM = progresivaToMeters(cal.progresiva_fin);
-                        
+
                         if (!isNaN(calInicioM) && !isNaN(calFinM) && progresivaExcelM >= calInicioM && progresivaExcelM <= calFinM) {
                             tramoName = cal.nombre_tramo.toUpperCase().trim();
                             calibration = cal;
@@ -225,7 +225,7 @@ const badenesService = {
                         }
                     } else {
                         console.warn(`Fila ${i + 1}: No se encontró un tramo calibrado para la progresiva '${progresivaStr}'. Usando cálculo geométrico simple.`);
-                        
+
                         const orderedRouteKeys = Object.keys(routesMap).sort((a, b) => {
                             const numA = parseInt(a.replace(/[^0-9]/g, ''), 10);
                             const numB = parseInt(b.replace(/[^0-9]/g, ''), 10);
@@ -235,7 +235,7 @@ const badenesService = {
                         orderedRouteKeys.forEach(key => {
                             const routeSegment = routesMap[key];
                             if (routeSegment && Array.isArray(routeSegment)) {
-                               if (fullRoute.length > 0 && routeSegment.length > 0) {
+                                if (fullRoute.length > 0 && routeSegment.length > 0) {
                                     const lastPoint = fullRoute[fullRoute.length - 1];
                                     const firstPoint = routeSegment[0];
                                     if (lastPoint[0] === firstPoint[0] && lastPoint[1] === firstPoint[1]) {
@@ -254,7 +254,7 @@ const badenesService = {
                             if (coords) {
                                 latitud = coords.latitude;
                                 longitud = coords.longitude;
-                                console.log(`Fila ${i + 1}: Coordenadas (sin calibrar) calculadas: ${latitud}, ${longitud}`);
+                                // console.log(`Fila ${i + 1}: Coordenadas (sin calibrar) calculadas: ${latitud}, ${longitud}`);
                             }
                         } else {
                             console.warn(`Fila ${i + 1}: No se pudo construir una ruta KML completa para el cálculo geométrico.`);
@@ -264,7 +264,7 @@ const badenesService = {
                     if (latitud === null || longitud === null) {
                         badenesSinCoords++;
                         console.warn(`Fila ${i + 1}: No se pudieron calcular coordenadas para progresiva ${progresivaStr}.`);
-                        continue; 
+                        continue;
                     }
 
                     const baden = {
@@ -282,7 +282,7 @@ const badenesService = {
                         latitud: latitud,
                         longitud: longitud
                     };
-                    console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, baden);
+                    // console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, baden);
 
                     badenesData.push(baden);
                 }

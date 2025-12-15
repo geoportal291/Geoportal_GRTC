@@ -12,7 +12,8 @@ const EstratoItem = React.memo(({
     onAddEnsayo = null,
     handleDeleteEnsayo = () => {},
     handleEditEnsayo = () => {},
-    handleViewEnsayo = () => {}
+    handleViewEnsayo = () => {},
+    onClasificar = () => {}
 }) => {
     const navigate = useNavigate();
     const estratoId = estrato?.id ?? `${estrato?.nombre}-${estrato?.cota_inicial}`;
@@ -71,12 +72,7 @@ const EstratoItem = React.memo(({
                 </div>
 
                 <div className="estrato-actions" onClick={(e) => e.stopPropagation()}>
-                    <button
-                        type="button"
-                        className="estrato-action-btn add"
-                    >
-                        <i className="fas fa-plus" />
-                    </button>
+                    {/* Botón de acción principal (si es necesario en el futuro) */}
                 </div>
             </div>
 
@@ -91,6 +87,13 @@ const EstratoItem = React.memo(({
                             onClick={handleAddEnsayoClick}
                         >
                             <i className="fas fa-plus" /> Añadir Ensayo
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => onClasificar(estrato)}
+                        >
+                            <i className="fas fa-certificate" /> Clasificar Suelo
                         </button>
                         {selectedEnsayo && (
                             <div className="selected-ensayo-actions">

@@ -70,6 +70,16 @@ export default function GestorDeCanteras() {
   const [currentCanteraForAssay, setCurrentCanteraForAssay] = useState(null);
   const [currentEstratoForAssay, setCurrentEstratoForAssay] = useState(null);
   const [ensayoToEdit, setEnsayoToEdit] = useState(null);
+  const [showClasificacionModal, setShowClasificacionModal] = useState(false);
+  const [estratoToClasificar, setEstratoToClasificar] = useState(null);
+
+  const handleOpenClasificacionModal = (estrato) => {
+    setEstratoToClasificar(estrato);
+    // Por ahora, solo mostramos un mensaje. Luego abrirá el modal.
+    alertify.message(`Próximamente: Clasificación para estrato ID: ${estrato.id}`);
+    // setShowClasificacionModal(true); // Esto se activará cuando el modal exista
+  };
+
 
   useEffect(() => {
   }, [showEnsayoModal]);
@@ -491,6 +501,7 @@ export default function GestorDeCanteras() {
                           handleDeleteEnsayo={handleDeleteEnsayo}
                           handleEditEnsayo={handleEditEnsayo}
                           handleViewEnsayo={handleViewEnsayo}
+                          onClasificar={handleOpenClasificacionModal}
                         />
                       );
                     })

@@ -18,14 +18,16 @@ const ExportarMapaModal = ({ show, onClose, data, type, onExport }) => {
     const filteredData = data.filter(item =>
         (item.codigo && item.codigo.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (item.nombre && item.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (item.prog_ini && item.prog_ini.toString().includes(searchTerm))
+        (item.prog_ini && item.prog_ini.toString().includes(searchTerm)) ||
+        (item.progresiva && item.progresiva.toString().toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.panel_fotografico && item.panel_fotografico.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     const handleSelectAll = () => {
         if (selectedIds.length === filteredData.length) {
             setSelectedIds([]);
         } else {
-            setSelectedIds(filteredData.map(item => item.id_alcantarilla || item.id_baden));
+            setSelectedIds(filteredData.map(item => item.id || item.id_alcantarilla || item.id_baden || item.id_puente || item.id_muro || item.id_estructura));
         }
     };
 
@@ -38,8 +40,17 @@ const ExportarMapaModal = ({ show, onClose, data, type, onExport }) => {
     };
 
     const handleExportClick = (format) => {
-        const selectedItems = data.filter(item => selectedIds.includes(item.id_alcantarilla || item.id_baden));
+        const selectedItems = data.filter(item => selectedIds.includes(item.id || item.id_alcantarilla || item.id_baden || item.id_puente || item.id_muro || item.id_estructura));
         onExport(selectedItems, format);
+    };
+
+    const formatProgresiva = (progresiva) => {
+        if (!progresiva) return '-';
+        const num = parseInt(progresiva, 10);
+        if (isNaN(num)) return progresiva;
+        const km = Math.floor(num / 1000);
+        const m = num % 1000;
+        return `${km}+${m.toString().padStart(3, '0')}`;
     };
 
     return (
@@ -47,7 +58,7 @@ const ExportarMapaModal = ({ show, onClose, data, type, onExport }) => {
             <div className="alcantarilla-modal-content" style={{ maxWidth: '600px', width: '90%' }}>
                 <button className="alcantarilla-modal-close" onClick={onClose}>&times;</button>
                 <div className="alcantarilla-modal-header">
-                    <h2>Exportar {type === 'alcantarillas' ? 'Alcantarillas' : 'Badenes'}</h2>
+                    <h2>Exportar {type === 'alcantarillas' ? 'Alcantarillas' : type === 'badenes' ? 'Badenes' : type === 'canteras' ? 'Canteras y Fuentes' : type === 'estructuras-existentes' ? 'Estructuras Existentes' : type}</h2>
                 </div>
 
                 <div className="alcantarilla-modal-body">
@@ -82,7 +93,7 @@ const ExportarMapaModal = ({ show, onClose, data, type, onExport }) => {
                             </thead>
                             <tbody>
                                 {filteredData.map(item => {
-                                    const id = item.id_alcantarilla || item.id_baden;
+                                    const id = item.id || item.id_alcantarilla || item.id_baden || item.id_puente || item.id_muro || item.id_estructura;
                                     return (
                                         <tr key={id} style={{ borderBottom: '1px solid #eee' }}>
                                             <td style={{ padding: '10px', textAlign: 'center' }}>
@@ -92,8 +103,8 @@ const ExportarMapaModal = ({ show, onClose, data, type, onExport }) => {
                                                     onChange={() => handleSelectOne(id)}
                                                 />
                                             </td>
-                                            <td style={{ padding: '10px' }}>{item.codigo || 'S/C'}</td>
-                                            <td style={{ padding: '10px' }}>{item.prog_ini || '-'}</td>
+                                            <td style={{ padding: '10px' }}>{item.codigo || item.panel_fotografico || item.entregable || 'S/C'}</td>
+                                            <td style={{ padding: '10px' }}>{formatProgresiva(item.prog_ini || item.progresiva || item.progresiva_inicio)}</td>
                                         </tr>
                                     );
                                 })}

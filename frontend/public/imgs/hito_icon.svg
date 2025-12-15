@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 40" width="30" height="40" style="filter: drop-shadow(3px 3px 2px rgba(0,0,0,0.4));">
+    <defs>
+        <linearGradient id="postGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#e0e0e0;stop-opacity:1" />
+            <stop offset="50%" style="stop-color:#ffffff;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#d0d0d0;stop-opacity:1" />
+        </linearGradient>
+        <linearGradient id="capGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#404040;stop-opacity:1" />
+            <stop offset="50%" style="stop-color:#000000;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#303030;stop-opacity:1" />
+        </linearGradient>
+    </defs>
+    <!-- Sombra base -->
+    <ellipse cx="15" cy="38" rx="10" ry="2" fill="rgba(0,0,0,0.3)" />
+    
+    <!-- Cuerpo del poste -->
+    <path d="M5 10 L 5 36 Q 15 40 25 36 L 25 10 Z" fill="url(#postGradient)" stroke="#999" stroke-width="0.5"/>
+    
+    <!-- Tapa del poste (cilindro superior) -->
+    <path d="M5 10 L 5 6 Q 15 2 25 6 L 25 10 Q 15 14 5 10 Z" fill="url(#capGradient)" stroke="none"/>
+    <ellipse cx="15" cy="6" rx="10" ry="2" fill="#555" />
+    
+    <!-- Texto -->
+    <rect x="8" y="15" width="14" height="14" rx="2" fill="#fff" stroke="#ccc" stroke-width="0.5" />
+    <text x="15" y="25" font-size="10" text-anchor="middle" font-weight="900" fill="#000" font-family="Arial Black, Arial, sans-serif">K</text>
+</svg>

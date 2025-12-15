@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMap } from 'react-leaflet';
+import React, { useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
+import * as turf from '@turf/turf';
 import 'leaflet/dist/leaflet.css';
 
 // Componente auxiliar para ajustar el mapa
-const FitBounds = ({ point, geoJsonData }) => {
+const FitBounds = ({ point, segment, geoJsonData, slicedGeoJson }) => {
   const map = useMap();
 
   useEffect(() => {
@@ -17,18 +18,36 @@ const FitBounds = ({ point, geoJsonData }) => {
       geoJsonBounds = geoJsonLayer.getBounds();
     }
 
-    // Si hay un punto (alcantarilla)
+    // 1. Prioridad: Segmento Recortado (GeoJSON) - Ajuste preciso a la curva
+    if (slicedGeoJson) {
+      const slicedLayer = L.geoJSON(slicedGeoJson);
+      const slicedBounds = slicedLayer.getBounds();
+      if (slicedBounds.isValid()) {
+        map.fitBounds(slicedBounds, { padding: [50, 50], maxZoom: 18 });
+        return;
+      }
+    }
+
+    // 2. Fallback: Segmento Recto (Puntos)
+    if (segment && segment.length === 2) {
+      const bounds = L.latLngBounds(segment);
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+        return; // Prioritize segment view
+      }
+    }
+
+    // 3. Fallback: Punto único
     if (point && typeof point.lat === 'number' && typeof point.lng === 'number') {
       const pointLatLng = L.latLng(point.lat, point.lng);
       // Priorizar siempre la vista cercana a la alcantarilla
       map.setView(pointLatLng, 17);
     } else if (geoJsonBounds && geoJsonBounds.isValid()) {
-      // Solo hay ruta GeoJSON, ajustar a sus límites
+      // 4. Fallback: Toda la ruta
       map.fitBounds(geoJsonBounds, { padding: [20, 20], maxZoom: 15 });
     }
-    // Si no hay nada (ni alcantarilla ni GeoJSON), no hacemos nada y el MapContainer usará sus valores por defecto
 
-  }, [map, point, geoJsonData]); // Dependencias para re-ejecutar el efecto
+  }, [map, point, segment, geoJsonData, slicedGeoJson]); // Dependencias para re-ejecutar el efecto
 
   return null;
 };
@@ -64,16 +83,76 @@ const styleFunction = (feature) => {
 const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
   const defaultCenter = [-12.046374, -77.042793]; // Centro de Lima, Perú, como fallback
 
-  const alcantarillaPosition = alcantarilla && typeof alcantarilla.latitud === 'number' && typeof alcantarilla.longitud === 'number'
+  // Lógica para detectar si es un PUNTO o un SEGMENTO
+  const isSegment = alcantarilla &&
+    typeof alcantarilla.latitud_inicio === 'number' &&
+    typeof alcantarilla.latitud_final === 'number';
+
+  const alcantarillaPosition = (!isSegment && alcantarilla && typeof alcantarilla.latitud === 'number' && typeof alcantarilla.longitud === 'number')
     ? [alcantarilla.latitud, alcantarilla.longitud]
     : null;
 
-  const currentCenter = alcantarillaPosition || defaultCenter;
+  const segmentPositions = isSegment
+    ? [
+      [alcantarilla.latitud_inicio, alcantarilla.longitud_inicio],
+      [alcantarilla.latitud_final, alcantarilla.longitud_final]
+    ]
+    : null;
+
+  // Lógica para calcular el segmento recortado siguiendo la ruta (Turf.js)
+  const slicedSegment = useMemo(() => {
+    if (!isSegment || !geoJsonData || !geoJsonData.features) return null;
+
+    try {
+      const startPt = turf.point([alcantarilla.longitud_inicio, alcantarilla.latitud_inicio]);
+      const endPt = turf.point([alcantarilla.longitud_final, alcantarilla.latitud_final]);
+
+      let bestSlice = null;
+
+      // Iterar sobre las features del GeoJSON (Tramos)
+      for (const feature of geoJsonData.features) {
+        if (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') {
+          // Convertir a GeoJSON puro si es necesario, pero aquí ya iteramos sobre features geojson
+          // turf.lineSlice espera geojson features
+
+          // Verificar proximidad básica para no procesar tramos lejanos
+          const d1 = turf.pointToLineDistance(startPt, feature);
+          const d2 = turf.pointToLineDistance(endPt, feature);
+
+          if (d1 < 1 && d2 < 1) { // < 1km (tolerancia amplia)
+            try {
+              const sliced = turf.lineSlice(startPt, endPt, feature);
+              if (sliced) {
+                bestSlice = sliced;
+                break; // Encontramos el tramo, asumimos que no hay solapamiento complejo
+              }
+            } catch (e) {
+              console.warn("Error slicing segment:", e);
+            }
+          }
+        }
+      }
+      return bestSlice;
+
+    } catch (error) {
+      console.error("Critical error in slice calculation:", error);
+      return null;
+    }
+  }, [isSegment, alcantarilla, geoJsonData]);
+
+  // Center fallback logic
+  const currentCenter = isSegment
+    ? [(segmentPositions[0][0] + segmentPositions[1][0]) / 2, (segmentPositions[0][1] + segmentPositions[1][1]) / 2]
+    : (alcantarillaPosition || defaultCenter);
 
   // Function to get custom icon based on element type
   const getCustomIcon = (elementType, elementData) => {
     let iconUrl;
+    let iconSize = [32, 32];
+    let iconAnchor = [16, 32];
+    let popupAnchor = [0, -32];
     let popupText = '';
+
     switch (elementType) {
       case 'alcantarilla':
         iconUrl = '/imgs/alcantarilla_icon.png';
@@ -91,22 +170,71 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
         iconUrl = '/imgs/muro_icon.svg';
         popupText = `Muro: ${elementData.clase || 'N/A'}`;
         break;
+      case 'cantera':
+        iconUrl = '/imgs/cantera_icon.svg';
+        popupText = `Cantera: ${elementData.item_number || 'N/A'}`;
+        iconSize = [32, 44];
+        iconAnchor = [16, 44];
+        popupAnchor = [0, -44];
+        break;
+      case 'fuente':
+        iconUrl = '/imgs/fuente_icon.svg';
+        popupText = `Fuente: ${elementData.item_number || 'N/A'}`;
+        iconSize = [32, 44];
+        iconAnchor = [16, 44];
+        popupAnchor = [0, -44];
+        break;
+      case 'zona_critica':
+        const t = (elementData.tipo || '').toUpperCase();
+        if (t.includes('DESPRENDIMIENTO') || t.includes('TALUD') || t.includes('DESLIZAMIENTO')) {
+          iconUrl = '/imgs/zona_deslizamiento.svg';
+        } else {
+          iconUrl = '/imgs/zona_critica.svg';
+        }
+        popupText = `Zona Crítica: ${elementData.codigo || 'N/A'}`;
+        break;
+      case 'interferencia_electrica':
+        iconUrl = '/imgs/interferencia_icon.svg';
+        popupText = `Interferencia: ${elementData.tipo_interferencia || elementData.tipo || 'N/A'}`;
+        break;
+      case 'senales_informativas':
+        iconUrl = '/imgs/senal_informativa_icon.svg';
+        popupText = `Señal: ${elementData.codigo || 'N/A'}`;
+        break;
+      case 'senales_preventivas':
+        iconUrl = '/imgs/senal_preventiva_icon.svg';
+        popupText = `Señal: ${elementData.codigo || 'N/A'}`;
+        break;
+      case 'hitos_kilometricos':
+        iconUrl = '/imgs/hito_icon.svg';
+        popupText = `Hito: ${elementData.codigo || 'N/A'}`;
+        iconSize = [30, 40];
+        iconAnchor = [15, 40];
+        popupAnchor = [0, -40];
+        break;
+      case 'estructura_existente':
+        iconUrl = '/imgs/estructura_icon.svg';
+        popupText = `Estructura: ${elementData.progresiva_inicio || 'N/A'}`;
+        iconSize = [32, 32];
+        iconAnchor = [16, 32];
+        popupAnchor = [0, -32];
+        break;
       default:
-        iconUrl = '/imgs/alcantarilla_icon.png'; // Default to alcantarilla icon
+        iconUrl = '/imgs/alcantarilla_icon.png';
         popupText = `Elemento: ${elementData.id || 'N/A'}`;
         break;
     }
 
     return new L.Icon({
       iconUrl: iconUrl,
-      iconSize: [32, 32], // Adjust size as necessary
-      iconAnchor: [16, 32],
-      popupAnchor: [0, -32],
-      popupText: popupText // Store popup text here for easy access
+      iconSize: iconSize,
+      iconAnchor: iconAnchor,
+      popupAnchor: popupAnchor,
+      popupText: popupText
     });
   };
 
-  const currentIcon = alcantarilla ? getCustomIcon(alcantarilla.type, alcantarilla) : null;
+  const currentIcon = alcantarilla && !isSegment ? getCustomIcon(alcantarilla.type, alcantarilla) : null;
 
 
   return (
@@ -134,6 +262,8 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
         {geoJsonData && geoJsonData.features && (
           <GeoJSON data={geoJsonData} style={styleFunction} />
         )}
+
+        {/* Render Marker if Point */}
         {alcantarillaPosition && currentIcon && (
           <Marker position={alcantarillaPosition} icon={currentIcon}>
             <Popup>
@@ -141,7 +271,35 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
             </Popup>
           </Marker>
         )}
-        <FitBounds point={alcantarillaPosition ? { lat: alcantarillaPosition[0], lng: alcantarillaPosition[1] } : null} geoJsonData={geoJsonData} />
+
+        {/* Render Segment: Sliced (Curved) OR Polyline (Straight Fallback) */}
+        {isSegment && segmentPositions && (
+          <>
+            {slicedSegment ? (
+              <GeoJSON
+                data={slicedSegment}
+                // Use default params not style function here since it's just a line
+                style={{ color: '#FFFF00', weight: 6, opacity: 0.9 }}
+              />
+            ) : (
+              <Polyline
+                positions={segmentPositions}
+                pathOptions={{ color: '#FFFF00', weight: 6, dashArray: '10, 10' }}
+              />
+            )}
+
+            {/* Start/End Markers for visual clarity */}
+            <Marker position={segmentPositions[0]} icon={L.divIcon({ className: 'custom-div-icon', html: `<div style="width: 10px; height: 10px; background-color: #00FF00; border-radius: 50%; border: 2px solid white;"></div>` })} />
+            <Marker position={segmentPositions[1]} icon={L.divIcon({ className: 'custom-div-icon', html: `<div style="width: 10px; height: 10px; background-color: #FF0000; border-radius: 50%; border: 2px solid white;"></div>` })} />
+          </>
+        )}
+
+        <FitBounds
+          point={alcantarillaPosition ? { lat: alcantarillaPosition[0], lng: alcantarillaPosition[1] } : null}
+          segment={segmentPositions}
+          geoJsonData={geoJsonData}
+          slicedGeoJson={slicedSegment}
+        />
       </MapContainer>
     </div>
   );

@@ -1,0 +1,12 @@
+<svg width="64" height="88" viewBox="0 0 64 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <filter id="shadow" x="0" y="0" width="64" height="88" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+        <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+        <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+        <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+    </filter>
+    <path d="M32 0C14.3269 0 0 14.3269 0 32C0 56 32 88 32 88C32 88 64 56 64 32C64 14.3269 49.6731 0 32 0Z" fill="#D35400"/>
+    <circle cx="32" cy="32" r="28" fill="#E67E22"/>
+    <path d="M42 22L28 36L22 30L16 36C15.4477 36.5523 15.4477 37.4477 16 38L22 44C22.5523 44.5523 23.4477 44.5523 24 44L30 38L36 44L48 32L42 22Z" fill="white"/>
+    <path d="M38 46L26 46C24.8954 46 24 46.8954 24 48V50H40V48C40 46.8954 39.1046 46 38 46Z" fill="white"/>
+</svg>
