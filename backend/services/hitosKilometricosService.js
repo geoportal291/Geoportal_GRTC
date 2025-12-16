@@ -228,7 +228,6 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         colMap.latitud = 7;
         colMap.longitud = 8;
         colMap.altitud = 9;
-        colMap.altitud = 9;
         colMap.foto = 10;
         colMap.entregable = 12; // Fallback to M
     }
@@ -268,7 +267,6 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
 
             let coord1 = row[colMap.latitud];
             let coord2 = row[colMap.longitud];
-            let altitudVal = row[colMap.altitud];
             let altitudVal = row[colMap.altitud];
             const panel_fotografico_codigo = row[colMap.foto];
             const entregable = row[colMap.entregable];

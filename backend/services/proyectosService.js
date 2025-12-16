@@ -3,6 +3,8 @@ const db = require('../conexion'); // Adjust path as needed
 const { DateTime } = require('luxon'); // Assuming DateTime is used in project logic
 const { v4: uuidv4 } = require('uuid'); // Assuming uuidv4 is used in project logic
 const kmlService = require('./kmlService'); // NEW: Import kmlService
+const { put } = require('@vercel/blob'); // NEW: Import Vercel Blob
+
 
 // Listar proyectos con detalle (incluyendo los nuevos campos)
 const getDetailedProyectos = async () => {
@@ -13,7 +15,8 @@ const getDetailedProyectos = async () => {
                 p.nombre_tramo, p.proyecto_nom, p.solicitante, p.departamento, p.provincia,
                 p.distrito, p.localidad, p.longitud_total, p.progresiva_inicial, p.tipo_via,
                 p.intervalo_manual, p.descripcion_larga, p.create_at, p.update_at,
-                p.kml_trazado_id, kt.kml_filename, kt.kml_uploaded_at
+                p.intervalo_manual, p.descripcion_larga, p.create_at, p.update_at,
+                p.kml_trazado_id, p.url_kml, kt.kml_filename, kt.kml_uploaded_at
             FROM proyectos p
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
         `);
@@ -33,7 +36,8 @@ const getAssignedDetailedProyectos = async (userId) => {
                 p.nombre_tramo, p.proyecto_nom, p.solicitante, p.departamento, p.provincia,
                 p.distrito, p.localidad, p.longitud_total, p.progresiva_inicial, p.tipo_via,
                 p.intervalo_manual, p.descripcion_larga, p.create_at, p.update_at,
-                p.kml_trazado_id, kt.kml_filename, kt.kml_uploaded_at
+                p.intervalo_manual, p.descripcion_larga, p.create_at, p.update_at,
+                p.kml_trazado_id, p.url_kml, kt.kml_filename, kt.kml_uploaded_at
             FROM proyectos p
             JOIN proyecto_usuarios pu ON p.id = pu.proyecto_id
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
@@ -67,7 +71,8 @@ const getProyectoById = async (id) => {
                 p.nombre_tramo, p.proyecto_nom, p.solicitante, p.departamento, p.provincia,
                 p.distrito, p.localidad, p.longitud_total, p.progresiva_inicial, p.tipo_via,
                 p.intervalo_manual, p.is_interval_manual, p.descripcion_larga, p.create_at, p.update_at,
-                p.kml_trazado_id, kt.kml_filename, kt.kml_uploaded_at,
+                p.intervalo_manual, p.is_interval_manual, p.descripcion_larga, p.create_at, p.update_at,
+                p.kml_trazado_id, p.url_kml, kt.kml_filename, kt.kml_uploaded_at,
                 COALESCE(json_agg(pr) FILTER (WHERE pr.id IS NOT NULL), '[]'::json) as progresivas
             FROM proyectos p
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
@@ -338,13 +343,13 @@ const updateProyecto = async (id, projectData, progresivaData) => {
             distrito, localidad, longitud_total, progresiva_inicial, tipo_via,
             intervalo_manual, isIntervalManual, descripcion_larga, estado
         } = projectData;
-    
+
         // Basic backend validations
         if (!nombre_tramo || !departamento || !provincia || !distrito || !longitud_total || !progresiva_inicial || !tipo_via) {
             throw new Error('Faltan campos requeridos para actualizar el proyecto.');
         }
-        
-            const projectUpdateResult = await client.query(`
+
+        const projectUpdateResult = await client.query(`
                 UPDATE proyectos SET
                     nombre_tramo = $1,
                     proyecto_nom = $2,
@@ -364,10 +369,10 @@ const updateProyecto = async (id, projectData, progresivaData) => {
                 WHERE id = $15
                 RETURNING *
             `, [
-                nombre_tramo, proyecto_nom, solicitante, departamento, provincia,
-                distrito, localidad, longitud_total, progresiva_inicial, tipo_via,
-                intervalo_manual, isIntervalManual, descripcion_larga, estado, id
-            ]);
+            nombre_tramo, proyecto_nom, solicitante, departamento, provincia,
+            distrito, localidad, longitud_total, progresiva_inicial, tipo_via,
+            intervalo_manual, isIntervalManual, descripcion_larga, estado, id
+        ]);
         if (projectUpdateResult.rows.length === 0) {
             throw new Error('Proyecto no encontrado para actualizar.');
         }
@@ -585,13 +590,28 @@ const uploadKmlToProyecto = async (proyectoId, file, userId) => {
         const kmlTrazado = await kmlService.createKmlTrazado(file, userId);
         const newKmlTrazadoId = kmlTrazado.id;
 
-        // 2. Update proyecto with kml_trazado_id
+        // 2. Upload to Vercel Blob (NEW STEP)
+        let kmlUrl = null;
+        try {
+            // Upload buffer to blob
+            const blob = await put(file.originalname, file.buffer, {
+                access: 'public',
+                token: process.env.BLOB_READ_WRITE_TOKEN // Ensure this env var is set or implicit
+            });
+            kmlUrl = blob.url;
+            console.log("KML uploaded to Blob:", kmlUrl);
+        } catch (blobError) {
+            console.error("Error uploading KML to Vercel Blob (continuing with DB storage):", blobError);
+            // We continue without breaking the flow, url_kml will be null/unchanged
+        }
+
+        // 3. Update proyecto with kml_trazado_id AND url_kml
         const result = await client.query(
             `UPDATE proyectos
-             SET kml_trazado_id = $1, update_at = NOW()
-             WHERE id = $2
-             RETURNING id, kml_trazado_id;`,
-            [newKmlTrazadoId, proyectoId]
+             SET kml_trazado_id = $1, url_kml = COALESCE($2, url_kml), update_at = NOW()
+             WHERE id = $3
+             RETURNING id, kml_trazado_id, url_kml;`,
+            [newKmlTrazadoId, kmlUrl, proyectoId]
         );
 
         if (result.rows.length === 0) {
@@ -608,8 +628,9 @@ const uploadKmlToProyecto = async (proyectoId, file, userId) => {
             proyecto: {
                 id: result.rows[0].id,
                 kml_trazado_id: result.rows[0].kml_trazado_id,
-                kml_filename: kmlTrazado.kml_filename, // Include filename for frontend feedback
-                kml_uploaded_at: kmlTrazado.kml_uploaded_at // Include timestamp for frontend feedback
+                url_kml: result.rows[0].url_kml, // Return new URL
+                kml_filename: kmlTrazado.kml_filename,
+                kml_uploaded_at: kmlTrazado.kml_uploaded_at
             }
         };
 
@@ -655,7 +676,7 @@ const saveCalibracionForProyecto = async (id_proyecto, calibracionData) => {
     const client = await db.connect();
     try {
         await client.query('BEGIN');
-        
+
         for (const tramoName in calibracionData) {
             const { start, end } = calibracionData[tramoName];
             if (start && end) { // Only save if both start and end are provided

@@ -445,7 +445,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                 </button>
               </>
             )}
-            <button onClick={() => navigate('/coordinador/suelos/ensayos/tramos')} className="btn btn-outline btn-expandable">
+            <button onClick={() => navigate('/coordinador/recoleccion-datos/gestor-tramos')} className="btn btn-outline btn-expandable">
               <i className="fas fa-arrow-left"></i>
               <span className="btn-text">Volver a Tramos</span>
             </button>

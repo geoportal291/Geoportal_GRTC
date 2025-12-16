@@ -19,9 +19,13 @@ const getNested = (obj, path, defaultValue = 0) => {
 
 const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableConfig }) => {
   const config = tableConfig;
-  const headers = config?.headers || [];
+  const rawHeaders = config?.headers || [];
   const rows = config?.rows || [];
   const isTransposed = config?.transposed || false;
+
+  // Evitar duplicidad: Filtrar headers que ya estén definidos en 'fields'
+  const fieldKeys = new Set((config?.fields || []).map(f => f.key));
+  const headers = rawHeaders.filter(h => !fieldKeys.has(h.key));
 
   if (!config) {
     return <div>Cargando configuración de la tabla...</div>;

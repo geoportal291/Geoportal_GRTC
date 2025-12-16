@@ -143,14 +143,14 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
     try {
         await client.query('BEGIN');
 
-        // --- CORRECCIÓN CLAVE AQUÍ ---
         // Extraemos 'datos_ensayo' explícitamente del payload que manda el frontend
         // y lo renombramos a 'datos_formulario' para que coincida con la variable de la consulta SQL.
         const {
             nombre_ensayo,
             tipo_ensayo_id,
             estrato_id,
-            datos_ensayo: datos_formulario // <--- ESTA ES LA LÍNEA CORREGIDA
+            datos_ensayo: datos_formulario,
+            resultado // <--- Nuevo campo recibido
         } = assayData;
         // -----------------------------
 
@@ -197,8 +197,9 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
                     datos_formulario = $4, 
                     fecha = CURRENT_DATE, 
                     estado = $5,
-                    proyecto_id = $6
-                WHERE id = $7
+                    proyecto_id = $6,
+                    resultado = $7
+                WHERE id = $8
             `;
             const values = [
                 nombre_ensayo,
@@ -207,6 +208,7 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
                 datos_formulario,
                 'actualizado',
                 proyectoId,
+                resultado, // <--- Guardar resultado
                 currentEnsayoId
             ];
             await client.query(query, values);
@@ -214,8 +216,8 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
         } else { // Modo Creación
             const codigo_ensayo = generateUniqueCode('ENS'); // Generar código único
             const query = `
-                INSERT INTO ensayos (nombre_ensayo, tipo_ensayo, estrato_id, datos_formulario, fecha, estado, proyecto_id, codigo_ensayo)
-                VALUES ($1, $2, $3, $4, CURRENT_DATE, $5, $6, $7)
+                INSERT INTO ensayos (nombre_ensayo, tipo_ensayo, estrato_id, datos_formulario, fecha, estado, proyecto_id, codigo_ensayo, resultado)
+                VALUES ($1, $2, $3, $4, CURRENT_DATE, $5, $6, $7, $8)
                 RETURNING id;
             `;
             const values = [
@@ -225,7 +227,8 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
                 datos_formulario,
                 'pendiente',
                 proyectoId,
-                codigo_ensayo
+                codigo_ensayo,
+                resultado // <--- Guardar resultado
             ];
             const result = await client.query(query, values);
             currentEnsayoId = result.rows[0].id;

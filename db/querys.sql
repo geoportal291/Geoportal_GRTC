@@ -43,3 +43,6 @@ CREATE TABLE IF NOT EXISTS hitos_kilometricos (
 ALTER TABLE alcantarillas ADD COLUMN entregable VARCHAR(255);
 ALTER TABLE senales_preventivas ADD COLUMN entregable VARCHAR(255);
 ALTER TABLE hitos_kilometricos ADD COLUMN entregable VARCHAR(255);
+
+-- [2025-12-16] Adding url_kml to proyectos table
+ALTER TABLE proyectos ADD COLUMN url_kml TEXT;

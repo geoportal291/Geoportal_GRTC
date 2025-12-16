@@ -32,6 +32,10 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
         tipo_via: '500',
         intervalo_manual: '',
         isIntervalManual: false,
+        // Nuevos campos del esquema
+        codigo: '',
+        nombre_proyecto: '',
+        descripcion_proyecto: '',
         // Progresiva fields
         nombre_progresiva: '',
         codigo_progresiva: '',
@@ -101,6 +105,10 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
                         tipo_via: projectData.tipo_via || '500',
                         intervalo_manual: projectData.intervalo_manual || '',
                         isIntervalManual: projectData.is_interval_manual || false,
+                        // Update new fields
+                        codigo: projectData.codigo || '',
+                        nombre_proyecto: projectData.nombre_proyecto || '',
+                        descripcion_proyecto: projectData.descripcion_proyecto || '',
                         // Progresiva fields
                         nombre_progresiva: projectData.progresivas?.[0]?.nombre || '',
                         codigo_progresiva: projectData.progresivas?.[0]?.codigo || '',
@@ -211,8 +219,12 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
             tipo_via: formData.tipo_via,
             intervalo_manual: formData.isIntervalManual && formData.intervalo_manual !== '' ? parseFloat(formData.intervalo_manual) : null,
             descripcion_larga: formData.descripcion_larga,
-            isIntervalManual: formData.isIntervalManual,
+            is_interval_manual: formData.isIntervalManual, // Fixed key to snake_case
             estado: formData.estado,
+            // New fields mapping
+            codigo: formData.codigo,
+            nombre_proyecto: formData.nombre_proyecto,
+            descripcion_proyecto: formData.descripcion_proyecto,
         };
 
         const parentProgresiva = {
@@ -279,8 +291,20 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
                         <legend>Información General</legend>
                         <div className="form-grid">
                             <div className="form-group">
+                                <label>Código de Proyecto</label>
+                                <input type="text" name="codigo" value={formData.codigo} onChange={handleInputChange} className="bg-white" placeholder="Ej: PROJ-001" />
+                            </div>
+                            <div className="form-group">
+                                <label>Nombre del Proyecto</label>
+                                <input type="text" name="nombre_proyecto" value={formData.nombre_proyecto} onChange={handleInputChange} className="bg-white" placeholder="Nombre general del proyecto" />
+                            </div>
+                            <div className="form-group">
                                 <label>Nombre del Tramo</label>
                                 <input type="text" name="nombre_tramo" value={formData.nombre_tramo} onChange={handleInputChange} className="bg-white" />
+                            </div>
+                            <div className="form-group full-width">
+                                <label>Descripción del Proyecto</label>
+                                <textarea name="descripcion_proyecto" value={formData.descripcion_proyecto} onChange={handleInputChange} rows="2" className="w-full border rounded p-2" placeholder="Descripción general del proyecto"></textarea>
                             </div>
                             <div className="form-group">
                                 <label>{isProyectoNomManual ? "Entidad" : "Entidad Solicitante"}</label>

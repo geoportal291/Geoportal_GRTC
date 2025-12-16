@@ -18,18 +18,18 @@ export default function DetalleEnsayo() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Configuraciones
   const [formConfig, setFormConfig] = useState(null);
   const [resultsConfig, setResultsConfig] = useState(null);
   const [tableConfig, setTableConfig] = useState(null);
   const [calculationConfig, setCalculationConfig] = useState(null);
   const [graficosConfig, setGraficosConfig] = useState(null);
-  
+
   // ESTADOS SEPARADOS: uno para la entrada del usuario, otro para los cálculos.
   const [formData, setFormData] = useState({});
   const [resultados, setResultados] = useState({});
-  
+
   const [infoGeneral, setInfoGeneral] = useState({});
   const [ensayoDetails, setEnsayoDetails] = useState(null);
   const [activeTab, setActiveTab] = useState('formulario');
@@ -94,7 +94,7 @@ export default function DetalleEnsayo() {
         } else if (data.parent_type === 'cantera') {
           setInfoGeneral({ proyecto: data.proyecto_nombre, tramo: data.tramo_nombre, cantera: data.cantera_codigo, estrato: data.estrato_orden });
         }
-        
+
         if (data.tipo_ensayo) {
           const configRes = await axios.get(`${API_URL}/api/config/ensayo-tipos/${data.tipo_ensayo}`, { headers });
           const cfg = configRes.data;
@@ -152,9 +152,9 @@ export default function DetalleEnsayo() {
     };
 
     setFormData(prev => {
-        const newState = JSON.parse(JSON.stringify(prev));
-        set(newState, name, val);
-        return newState;
+      const newState = JSON.parse(JSON.stringify(prev));
+      set(newState, name, val);
+      return newState;
     });
   };
 
@@ -183,10 +183,10 @@ export default function DetalleEnsayo() {
         return output;
       };
 
-      const datos_ensayo = deepMerge(formData, resultados);
-      
+      // Enviamos inputs y resultados por separado para mantener la base de datos limpia y estructurada.
       const payload = {
-        datos_ensayo: datos_ensayo,
+        datos_ensayo: formData, // Solo inputs del usuario
+        resultado: resultados,  // Resultados calculados por el motor
         estrato_id: ensayoDetails?.estrato_id,
         nombre_ensayo: ensayoDetails?.nombre_ensayo,
         tipo_ensayo_id: ensayoDetails?.tipo_ensayo
@@ -208,7 +208,7 @@ export default function DetalleEnsayo() {
     const code = codigo.includes('-') ? codigo.split('-')[1] : codigo;
     return code.length < 3 ? code : `${code.slice(0, -3)}+${code.slice(-3)}`;
   };
-  
+
   if (loading) return <div>Cargando ensayo...</div>;
   if (error) return (
     <div className="ensayos-layout-container error-container">

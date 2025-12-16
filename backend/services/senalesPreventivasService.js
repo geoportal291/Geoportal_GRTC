@@ -101,7 +101,6 @@ const createSenal = async (req, res) => {
     const {
         codigo, progresiva, lado, tipo, clasificacion, material,
         latitud, longitud, altitud, condicion, observaciones,
-        latitud, longitud, altitud, condicion, observaciones,
         panel_fotografico_codigo, project_id, entregable
     } = req.body;
 
@@ -199,9 +198,6 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         latitud: -1,
         longitud: -1,
         altitud: -1,
-        latitud: -1,
-        longitud: -1,
-        altitud: -1,
         foto: -1,
         entregable: -1
     };
@@ -260,7 +256,6 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         colMap.latitud = 7;
         colMap.longitud = 8;
         colMap.altitud = 9;
-        colMap.altitud = 9;
         colMap.foto = 10;
         colMap.entregable = 12; // Fallback M
     }
@@ -298,8 +293,6 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
             const material = row[colMap.material];
 
             let coord1 = row[colMap.latitud];
-            let coord2 = row[colMap.longitud];
-            let altitudVal = row[colMap.altitud];
             let coord2 = row[colMap.longitud];
             let altitudVal = row[colMap.altitud];
             const panel_fotografico_codigo = row[colMap.foto];
