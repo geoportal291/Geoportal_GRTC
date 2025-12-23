@@ -964,7 +964,9 @@ const getProgresivasByProyectoId = async (proyectoId) => {
         // Step 1: Fetch all child progresivas for the project
         const progresivasResult = await db.query(`
             SELECT
-                p.id, p.codigo, p.nombre
+                p.id, p.codigo, p.nombre, p.descripcion, p.estado, 
+                p.lado, p.coordenada_este, p.coordenada_norte, p.linea,
+                p.progresiva_inicial, p.parent_id
             FROM progresivas p
             WHERE p.proyecto_id = $1
             AND p.parent_id IS NOT NULL -- Only child progresivas
@@ -1317,7 +1319,66 @@ const deleteKmlFromProgresiva = async (progresivaId) => {
 };
 
 
+const createProgresiva = async (data) => {
+    const {
+        proyecto_id, parent_id, codigo, nombre, descripcion,
+        progresiva_inicial, progresiva_final, estado,
+        coordenada_este, coordenada_norte, linea, lado
+    } = data;
+
+    if (!proyecto_id || !codigo) {
+        throw new Error('Proyecto ID y Código son obligatorios.');
+    }
+
+    let finalCodigo = codigo;
+    // Si es sub-progresiva y el código no incluye el parent_id, lo agregamos para mantener consistencia
+    if (parent_id && !String(codigo).startsWith(`${parent_id}-`)) {
+        finalCodigo = `${parent_id}-${codigo}`;
+    }
+
+    // Calcular valores numéricos de progresiva si no vienen
+    let p_val = progresiva_inicial;
+    if (p_val === undefined || p_val === null) {
+        // Intentar deducir del código original (ej: "0100" -> 100)
+        const rawCode = String(codigo).replace(`${parent_id}-`, '');
+        p_val = parseInt(rawCode, 10);
+        if (isNaN(p_val)) p_val = 0;
+    }
+
+    const query = `
+        INSERT INTO progresivas
+        (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, lado)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ON CONFLICT (codigo) DO UPDATE SET
+            nombre = EXCLUDED.nombre,
+            coordenada_este = COALESCE(EXCLUDED.coordenada_este, progresivas.coordenada_este),
+            coordenada_norte = COALESCE(EXCLUDED.coordenada_norte, progresivas.coordenada_norte),
+            descripcion = COALESCE(EXCLUDED.descripcion, progresivas.descripcion),
+            actualizado_en = NOW()
+        RETURNING *
+    `;
+
+    const params = [
+        proyecto_id,
+        parent_id || null,
+        finalCodigo,
+        nombre,
+        descripcion || '',
+        p_val, // progresiva_inicial
+        progresiva_final !== undefined ? progresiva_final : p_val, // progresiva_final (default to same as initial for points)
+        estado || 'activo',
+        coordenada_este || null,
+        coordenada_norte || null,
+        linea || null,
+        lado || 'C'
+    ];
+
+    const result = await db.query(query, params);
+    return result.rows[0];
+};
+
 module.exports = {
+    createProgresiva, // NEW EXPORT
 
     importarConEnsayos, // Añadir la nueva función
 

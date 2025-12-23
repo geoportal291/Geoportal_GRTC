@@ -2,8 +2,8 @@ import React from 'react';
 import SuelosMap from './SuelosMap'; // Assuming SuelosMap is in the same directory
 import './KmlMapModal.css'; // We'll create this CSS file
 
-const KmlMapModal = ({ isOpen, onClose, progresiva }) => {
-  console.log('[DEBUG] KmlMapModal.jsx - Received props:', { isOpen, progresiva });
+const KmlMapModal = ({ isOpen, onClose, progresiva, subProgresivas }) => {
+  console.log('[DEBUG] KmlMapModal.jsx - Received props:', { isOpen, progresiva, subProgresivas });
   if (!isOpen || !progresiva) return null;
 
   // Extract KML Trazado ID and coordinates for map centering
@@ -25,7 +25,7 @@ const KmlMapModal = ({ isOpen, onClose, progresiva }) => {
               center={mapCenter}
               zoom={14} // Adjust default zoom as needed
               kmlTrazadoIds={kmlTrazadoId ? [kmlTrazadoId] : []} // Pass the KML Trazado ID as an array
-              // Other props for SuelosMap can be added here if needed
+              progresivasData={subProgresivas} // Pass sub-progresivas data to map
             />
           ) : (
             <p>No hay un archivo KML asociado a este tramo para mostrar en el mapa.</p>

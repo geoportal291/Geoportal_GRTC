@@ -15,6 +15,7 @@ const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal,
     const [selectedSenal, setSelectedSenal] = useState(null);
     const [isInfoVisible, setIsInfoVisible] = useState(true);
     const [senalImages, setSenalImages] = useState([]);
+    const [senalesWithImages, setSenalesWithImages] = useState([]);
 
     // Modals
     const [showListModal, setShowListModal] = useState(false);
@@ -24,32 +25,129 @@ const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal,
 
     const infoRef = useRef(null);
 
-    // Filter images effect
+    // Filter images effect (Side Panel)
     useEffect(() => {
         if (selectedSenal && selectedSenal.panel_fotografico_codigo && graphicsImages) {
-            const code = String(selectedSenal.panel_fotografico_codigo);
-            // Basic matching logic (exact or range if needed in future)
-            // For now assume direct match or simple logic
+            const code = String(selectedSenal.panel_fotografico_codigo).trim();
+
+            // 1. Parse Ranges
+            const parts = code.split(' - ');
+            const rangePart = parts[0];
+            const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+
+            let start, end;
+            if (rangePart.includes('-')) {
+                const [startStr, endStr] = rangePart.split('-');
+                start = parseInt(startStr, 10);
+                end = parseInt(endStr, 10);
+            } else {
+                start = parseInt(rangePart, 10);
+                end = start;
+            }
+
+            const expectedNames = [];
+            if (!isNaN(start) && !isNaN(end)) {
+                for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+            } else {
+                expectedNames.push(code);
+            }
+
+            // 2. Filter Images
             const filtered = graphicsImages.filter(img => {
-                const imgCode = String(img.panel_fotografico_codigo || '').trim();
-                const imgIndex = img.index ? String(img.index).trim() : '';
+                const imgNameWithoutExt = img.index.split('.')[0];
+                const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                const entregable = selectedSenal.entregable ? String(selectedSenal.entregable).trim() : null;
 
-                // Extract filename from URL (e.g., "http://.../360.jpg" -> "360")
-                let urlFileName = '';
-                if (img.url) {
-                    const parts = img.url.split('/');
-                    const fileNameWithExt = parts[parts.length - 1];
-                    urlFileName = fileNameWithExt.split('.')[0]; // Remove extension
+                // A. Name Check
+                const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                if (!nameMatches) return false;
+
+                // B. Entregable Logic (Hybrid Legacy/Strict)
+                const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                if (entregable) {
+                    const normElement = normalize(entregable);
+                    const normImage = normalize(imgEntregable);
+
+                    if (normElement === 'E1') {
+                        return (!imgEntregable) || (normImage === 'E1');
+                    }
+                    return normImage === normElement;
                 }
-
-                const match = imgCode === code || imgIndex === code || urlFileName === code;
-                return match;
+                return true;
             });
             setSenalImages(filtered);
         } else {
             setSenalImages([]);
         }
     }, [selectedSenal, graphicsImages]);
+
+    // Bulk Image Processing for Map (Popups)
+    useEffect(() => {
+        if (senalesData.length > 0 && graphicsImages.length > 0) {
+            const processed = senalesData.map(senal => {
+                const code = senal.panel_fotografico_codigo ? String(senal.panel_fotografico_codigo) : null;
+                let imageUrls = [];
+
+                if (code) {
+                    // 1. Parse Ranges
+                    const parts = code.split(' - ');
+                    const rangePart = parts[0];
+                    const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+
+                    let start, end;
+                    if (rangePart.includes('-')) {
+                        const [startStr, endStr] = rangePart.split('-');
+                        start = parseInt(startStr, 10);
+                        end = parseInt(endStr, 10);
+                    } else {
+                        start = parseInt(rangePart, 10);
+                        end = start;
+                    }
+
+                    const expectedNames = [];
+                    if (!isNaN(start) && !isNaN(end)) {
+                        for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+                    } else {
+                        expectedNames.push(code);
+                    }
+
+                    // 2. Filter Images
+                    const foundImages = graphicsImages.filter(img => {
+                        const imgNameWithoutExt = img.index.split('.')[0];
+                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                        const entregable = senal.entregable ? String(senal.entregable).trim() : null;
+
+                        // A. Name Check
+                        const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                        if (!nameMatches) return false;
+
+                        // B. Entregable Logic
+                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                        if (entregable) {
+                            const normElement = normalize(entregable);
+                            const normImage = normalize(imgEntregable);
+
+                            if (normElement === 'E1') {
+                                return (!imgEntregable) || (normImage === 'E1');
+                            }
+                            return normImage === normElement;
+                        }
+                        return true;
+                    });
+
+                    if (foundImages.length > 0) {
+                        imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
+                    }
+                }
+                return { ...senal, imageUrls, type: 'senales_preventivas' };
+            });
+            setSenalesWithImages(processed);
+        } else {
+            setSenalesWithImages(senalesData.map(s => ({ ...s, imageUrls: [], type: 'senales_preventivas' })));
+        }
+    }, [senalesData, graphicsImages]);
 
     const handleSenalClick = useCallback((senal) => {
         setSelectedSenal(senal);
@@ -103,13 +201,7 @@ const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal,
         setShowExportModal(false);
     };
 
-    // Inject type into data for Geoite
-    const processedSenalesData = React.useMemo(() => {
-        return (senalesData || []).map(item => ({
-            ...item,
-            type: 'senales_preventivas'
-        }));
-    }, [senalesData]);
+
 
     // Format Progresiva helper
     const formatProgresiva = (prog) => {
@@ -128,7 +220,7 @@ const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal,
                 {/* Left Column: Map + Buttons */}
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                     <Geoite
-                        alcantarillasData={processedSenalesData} // Use processed data with type
+                        alcantarillasData={senalesWithImages} // Use processed data with images
                         type="senales_preventivas"
                         onAlcantarillaClick={handleSenalClick} // Reusing prop name
                         selectedAlcantarilla={selectedSenal} // Reusing prop name
@@ -219,7 +311,7 @@ const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal,
             <ListaSenalesPreventivasModal
                 show={showListModal}
                 onClose={() => setShowListModal(false)}
-                senalesData={processedSenalesData}
+                senalesData={senalesWithImages}
                 graphicsImages={graphicsImages}
                 initialSelection={selectedSenal}
             />

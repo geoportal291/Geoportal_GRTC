@@ -86,7 +86,7 @@ const calculateRouteLength = (routePositions) => {
 };
 
 const puentesService = {
-    processExcelAndSavePuentes: async (fileBuffer, projectId, utmZone) => {
+    processExcelAndSavePuentes: async (fileBuffer, projectId, utmZone, entregableDefault) => {
         try {
             // 1. Get KML URL from the same source as the frontend
             const kmlUrlRes = await db.query('SELECT kml_url FROM invvial WHERE id_proyecto = $1', [projectId]);
@@ -106,20 +106,16 @@ const puentesService = {
             geoJson.features.forEach(feature => {
                 if (feature.geometry && (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') && feature.properties && feature.properties.name) {
                     const tramoName = feature.properties.name.toUpperCase().trim();
-                    // In GeoJSON LineString, coordinates are [lng, lat], switch to [lat, lng]
                     const positions = feature.geometry.coordinates.map(coord => [coord[1], coord[0]]);
                     routesMap[tramoName] = positions;
-
-                    // Also add by number key for flexibility
                     const tramoNumberMatch = tramoName.match(/\d+/);
                     if (tramoNumberMatch) {
                         routesMap[tramoNumberMatch[0]] = positions;
                     }
                 }
             });
-            // console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
 
-            // 3. Get calibration data for the project
+            // 3. Get calibration data
             const calibrationRes = await db.query(
                 'SELECT * FROM proyecto_calibracion_tramos WHERE id_proyecto = $1',
                 [projectId]
@@ -128,7 +124,6 @@ const puentesService = {
                 acc[cal.nombre_tramo.toUpperCase().trim()] = cal;
                 return acc;
             }, {});
-            // console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
 
             // 4. Process Excel
             const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
@@ -143,17 +138,53 @@ const puentesService = {
             const puentesData = [];
             let puentesSinCoords = 0;
 
-            // 5. Iterate through rows from row 1 (index 0)
+            // Find Header Row and Map Columns
+            // Assuming default header is row 1 (index 0) based on typical file structure observed? 
+            // Wait, previous code iterated from i=0. That's unusual if there are headers.
+            // Let's assume there might be a header or not. 
+            // The previous logic checked `claseCell.toLowerCase().includes('puente')`.
+            // Let's keep the logic but add dynamic finding.
+
+            let headerRowIndex = -1; // Default to -1 implies data starts at 0? 
+            // Actually the previous code iterated 0..N, causing it to check every row.
+            // If there's a header, it would likely fail the 'puente' check or be skipped.
+
+            const colMap = {
+                entregable: 0, // A
+                panel: 1, // B
+                progresiva: 2, // C
+                nombre: 3, // D
+                clase: 4, // E
+                tipo: 5, // F
+                estado: 6, // G
+                num_vias: 7, // H
+                tablero: 8, // I
+                longitud: 9, // J
+                ancho: 10 // K
+            };
+
+            // Heuristic to find header if it exists, to support column Mapping
+            for (let i = 0; i < 20; i++) {
+                const row = jsonData[i];
+                if (!row) continue;
+                // Look for standard headers
+                if (row.some(c => typeof c === 'string' && c.toUpperCase().includes('NOMBRE') && c.toUpperCase().includes('PROGRESIVA'))) {
+                    const entIdx = row.findIndex(c => typeof c === 'string' && c.toUpperCase().includes('ENTREGABLE'));
+                    if (entIdx !== -1) colMap.entregable = entIdx;
+                    break;
+                }
+            }
+
+            // 5. Iterate through rows
             for (let i = 0; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if (!row || row.length === 0) continue;
 
-                const claseCell = row[4]; // Column E
+                const claseCell = row[colMap.clase];
 
                 if (typeof claseCell === 'string' && claseCell.toLowerCase().includes('puente')) {
-                    // console.log(`DEBUG: 'Puente' encontrado en fila ${i + 1}, Columna E: "${claseCell}"`);
 
-                    const progresivaStr = row[2]; // Column C
+                    const progresivaStr = row[colMap.progresiva];
                     if (!progresivaStr) {
                         console.warn(`Fila ${i + 1}: Se encontró un puente pero falta la progresiva. Saltando.`);
                         continue;
@@ -195,8 +226,7 @@ const puentesService = {
                         }
 
                         if (!routePositions) {
-                            console.error(`Could not find KML route for tramo key '${tramoIdKey}' or tramo name '${tramoName}'. Available route keys are: [${Object.keys(routesMap).join(', ')}]`);
-                            console.warn(`Fila ${i + 1}: No se encontró ruta KML para el tramo '${tramoName}'. Saltando.`);
+                            console.warn(`Fila ${i + 1}: No se encontró ruta KML parcial para el tramo '${tramoName}'.`);
                             continue;
                         }
 
@@ -207,7 +237,7 @@ const puentesService = {
                             const calLengthM = calFinM - calInicioM;
 
                             if (calLengthM <= 0 || kmlRouteLength <= 0) {
-                                throw new Error(`Invalid calibration or KML route length for tramo ${tramoName}.`);
+                                throw new Error(`Invalid calibration or KML route length.`);
                             }
 
                             const distOnKml = ((progresivaExcelM - calInicioM) / calLengthM) * kmlRouteLength;
@@ -222,8 +252,7 @@ const puentesService = {
                             console.error(`Error processing calibrated coordinates for row ${i + 1}: ${e.message}`);
                         }
                     } else {
-                        console.warn(`Fila ${i + 1}: No se encontró un tramo calibrado para la progresiva '${progresivaStr}'. Usando cálculo geométrico simple.`);
-
+                        // Fallback uncalibrated
                         const orderedRouteKeys = Object.keys(routesMap).sort((a, b) => {
                             const numA = parseInt(a.replace(/[^0-9]/g, ''), 10);
                             const numB = parseInt(b.replace(/[^0-9]/g, ''), 10);
@@ -232,19 +261,7 @@ const puentesService = {
                         let fullRoute = [];
                         orderedRouteKeys.forEach(key => {
                             const routeSegment = routesMap[key];
-                            if (routeSegment && Array.isArray(routeSegment)) {
-                                if (fullRoute.length > 0 && routeSegment.length > 0) {
-                                    const lastPoint = fullRoute[fullRoute.length - 1];
-                                    const firstPoint = routeSegment[0];
-                                    if (lastPoint[0] === firstPoint[0] && lastPoint[1] === firstPoint[1]) {
-                                        fullRoute.push(...routeSegment.slice(1));
-                                    } else {
-                                        fullRoute.push(...routeSegment);
-                                    }
-                                } else {
-                                    fullRoute.push(...routeSegment);
-                                }
-                            }
+                            if (routeSegment && Array.isArray(routeSegment)) fullRoute.push(...routeSegment);
                         });
 
                         if (fullRoute.length > 1) {
@@ -252,10 +269,7 @@ const puentesService = {
                             if (coords) {
                                 latitud = coords.latitude;
                                 longitud = coords.longitude;
-                                console.log(`Fila ${i + 1}: Coordenadas (sin calibrar) calculadas: ${latitud}, ${longitud}`);
                             }
-                        } else {
-                            console.warn(`Fila ${i + 1}: No se pudo construir una ruta KML completa para el cálculo geométrico.`);
                         }
                     }
 
@@ -265,23 +279,32 @@ const puentesService = {
                         continue;
                     }
 
+                    // Determine Entregable
+                    let entregableVal = row[colMap.entregable];
+                    if (!entregableVal && entregableDefault) {
+                        entregableVal = `E-${entregableDefault}`;
+                    }
+                    if (entregableVal && !String(entregableVal).toUpperCase().startsWith('E-') && !String(entregableVal).toUpperCase().startsWith('ENTREGABLE')) {
+                        // Keep as is
+                    }
+                    if (!entregableVal && entregableDefault) entregableVal = `E-${entregableDefault}`;
+
                     const puente = {
                         id_proyecto: projectId,
-                        entregable: row[0] || null, // Col A
-                        panel_fotografico_codigo: row[1] || null, // Col B
-                        progresiva: progresivaStr, // Col C
-                        nombre: row[3] || null, // Col D
-                        clase: claseCell, // Col E
-                        tipo: row[5] || null, // Col F
-                        estado: row[6] || null, // Col G
-                        numero_vias: row[7] || null, // Col H
-                        tablero: row[8] || null, // Col I
-                        longitud_puente: parseFloat(String(row[9]).replace(/,/g, '')) || null, // Col J
-                        ancho: parseFloat(String(row[10]).replace(/,/g, '')) || null, // Col K
+                        entregable: entregableVal,
+                        panel_fotografico_codigo: row[colMap.panel] || null,
+                        progresiva: progresivaStr,
+                        nombre: row[colMap.nombre] || null,
+                        clase: claseCell,
+                        tipo: row[colMap.tipo] || null,
+                        estado: row[colMap.estado] || null,
+                        numero_vias: row[colMap.num_vias] || null,
+                        tablero: row[colMap.tablero] || null,
+                        longitud_puente: parseFloat(String(row[colMap.longitud]).replace(/,/g, '')) || null,
+                        ancho: parseFloat(String(row[colMap.ancho]).replace(/,/g, '')) || null,
                         latitud: latitud,
                         longitud: longitud
                     };
-                    // console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, puente);
 
                     puentesData.push(puente);
                 }
@@ -408,6 +431,16 @@ const puentesService = {
             throw new Error('Error al eliminar datos de puentes.');
         } finally {
             client.release();
+        }
+    },
+
+    deletePuente: async (id) => {
+        try {
+            const result = await db.query('DELETE FROM puentes WHERE id_puente = $1', [id]);
+            return result.rowCount;
+        } catch (error) {
+            console.error(`Error al eliminar puente ${id}:`, error);
+            throw new Error('Error al eliminar puente de la base de datos.');
         }
     }
 };

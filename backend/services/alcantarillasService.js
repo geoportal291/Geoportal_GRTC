@@ -4,7 +4,7 @@ const axios = require('axios');
 const { toLatLon } = require('utm');
 
 const alcantarillasService = {
-    processExcelAndSaveAlcantarillas: async (fileBuffer, projectId, utmZone) => {
+    processExcelAndSaveAlcantarillas: async (fileBuffer, projectId, utmZone, entregableDefault) => {
         try {
             // El archivo se recibe como un buffer, no se necesita descarga
             const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
@@ -18,16 +18,49 @@ const alcantarillasService = {
             const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: false });
             const alcantarillasData = [];
 
-            // Iterar desde la fila 12 (índice 11)
-            for (let i = 11; i < jsonData.length; i++) {
+            // Find Header Row and Map Columns
+            let headerRowIndex = 11; // Default fallback (Row 12)
+            const colMap = {
+                codigo: 16, // Q
+                clase: 17, // R
+                tipo: 18, // S
+                estado: 19, // T
+                longitud: 20, // U
+                diametro: 21, // V
+                alto: 22, // W
+                luz: 23, // X
+                easting: 24, // Y
+                northing: 25, // Z
+                altitud: 26, // AA
+                caracteristicas: 27, // AB
+                observaciones: 28, // AC
+                panel: 13, // N
+                entregable: 12, // M
+                progresiva: 15 // P
+            };
+
+            // Heuristic search for header row
+            for (let i = 0; i < 20; i++) {
+                const row = jsonData[i];
+                if (!row) continue;
+                if (row.some(c => typeof c === 'string' && c.toUpperCase().includes('ALCANTARILLA') && c.toUpperCase().includes('CLASE'))) {
+                    headerRowIndex = i;
+                    // Dynamic Mapping can be added here if needed, for now we stick to observed defaults 
+                    // but we verify 'Entregable' specifically
+                    const entIdx = row.findIndex(c => typeof c === 'string' && c.toUpperCase().includes('ENTREGABLE'));
+                    if (entIdx !== -1) colMap.entregable = entIdx;
+                    break;
+                }
+            }
+
+            // Iterar desde la fila siguiente al header
+            for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if (!row) continue;
 
-                const claseCell = row[16]; // Columna Q
-                // console.log(`DEBUG: Fila ${i + 1}, Columna Q, Valor: '${claseCell}'`);
+                const claseCell = row[colMap.codigo];
 
                 if (typeof claseCell === 'string' && claseCell.toLowerCase().includes('alcantarilla')) {
-                    // console.log(`DEBUG: 'alcantarilla' encontrada en la fila ${i + 1}. Procesando fila...`);
 
                     let codigo_extraido = null;
                     const match = claseCell.match(/(?:N°|No\.|Nº)\s*(\d+)/i);
@@ -35,44 +68,51 @@ const alcantarillasService = {
                         codigo_extraido = match[1];
                     } else {
                         const genericMatch = claseCell.match(/\d+/);
-                        if (genericMatch) {
-                            codigo_extraido = genericMatch[0];
-                        }
+                        if (genericMatch) codigo_extraido = genericMatch[0];
                     }
 
-                    const easting = parseFloat(String(row[24]).replace(/,/g, '')); // Columna Y
-                    const northing = parseFloat(String(row[25]).replace(/,/g, '')); // Columna Z
+                    const easting = parseFloat(String(row[colMap.easting]).replace(/,/g, ''));
+                    const northing = parseFloat(String(row[colMap.northing]).replace(/,/g, ''));
 
-                    // console.log(`DEBUG: Fila ${i + 1}, Easting: ${easting}, Northing: ${northing}, utmZone received: ${utmZone}`);
                     const zoneNum = parseInt(utmZone.slice(0, -1));
                     const zoneLetter = utmZone.slice(-1);
-                    // console.log(`DEBUG: Fila ${i + 1}, Parsed zoneNum: ${zoneNum}, Parsed zoneLetter: ${zoneLetter}`);
                     const latLon = toLatLon(easting, northing, zoneNum, zoneLetter);
-                    // console.log(`DEBUG: Fila ${i + 1}, Lat/Lon convertidas:`, latLon);
+
+                    // Determine Entregable: Excel value > Fallback to passed default
+                    let entregableVal = row[colMap.entregable];
+                    if (!entregableVal && entregableDefault) {
+                        entregableVal = `E-${entregableDefault}`; // Standardize format E-1, E-2
+                    }
+                    if (entregableVal && !String(entregableVal).toUpperCase().startsWith('E-') && !String(entregableVal).toUpperCase().startsWith('ENTREGABLE')) {
+                        // If it's just a number like '1' or '2', prefix it? 
+                        // Assuming user might pass '1' for E-1.
+                        // But usually Excel has 'E-1'.
+                        // Let's rely on what's there if present, or Default.
+                    }
+                    // normalize entregable from default if needed (e.g. if default is '1', make it 'E-1')
+                    if (!entregableVal && entregableDefault) entregableVal = `E-${entregableDefault}`;
 
                     const alcantarilla = {
                         id_proyecto: projectId,
-                        codigo: codigo_extraido, // Extraído de la Columna Q
-                        clase: row[17] || null, // Columna R
-                        tipo: row[18] || null, // Columna S
-                        material: null, // No especificado en el nuevo mapeo
-                        diametro_lado: row[21] || null, // Columna V
-                        longitud_alcantarilla: parseFloat(String(row[20]).replace(/,/g, '')) || null, // Columna U (antes luz)
-                        estado: row[19] || null, // Columna T
-                        observaciones: row[28] || null, // Columna AC
-                        progresiva: row[15] || null, // Columna P
+                        codigo: codigo_extraido,
+                        clase: row[colMap.clase] || null,
+                        tipo: row[colMap.tipo] || null,
+                        material: null,
+                        diametro_lado: row[colMap.diametro] || null,
+                        longitud_alcantarilla: parseFloat(String(row[colMap.longitud]).replace(/,/g, '')) || null,
+                        estado: row[colMap.estado] || null,
+                        observaciones: row[colMap.observaciones] || null,
+                        progresiva: row[colMap.progresiva] || null,
                         latitud: latLon.latitude,
                         longitud: latLon.longitude,
-                        luz: row[23] || null, // Columna X (antes ancho)
-                        alto: parseFloat(String(row[22]).replace(/,/g, '')) || null, // Columna W
-                        ancho: row[23] || null, // Columna X
-                        altitud: row[26] || null, // Columna AA
-                        caracteristicas: row[27] || null, // Columna AB
-                        panel_fotografico_codigo: row[13] || null, // Columna N
-                        entregable: row[12] || null, // Columna M
+                        luz: row[colMap.luz] || null,
+                        alto: parseFloat(String(row[colMap.alto]).replace(/,/g, '')) || null,
+                        ancho: row[colMap.luz] || null, // Assuming ancho and luz might be mapped similarly or redundant
+                        altitud: row[colMap.altitud] || null,
+                        caracteristicas: row[colMap.caracteristicas] || null,
+                        panel_fotografico_codigo: row[colMap.panel] || null,
+                        entregable: entregableVal,
                     };
-
-                    // console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, alcantarilla);
 
                     if (isNaN(alcantarilla.latitud) || isNaN(alcantarilla.longitud)) {
                         console.warn(`Fila ${i + 1}: Latitud o Longitud inválida para la alcantarilla con código ${alcantarilla.codigo || 'N/A'}. Saltando.`);
@@ -192,6 +232,17 @@ const alcantarillasService = {
         } catch (error) {
             console.error(`Error al actualizar alcantarilla ${id}:`, error);
             throw new Error('Error al actualizar alcantarilla en la base de datos.');
+        }
+    },
+
+
+    deleteAlcantarilla: async (id) => {
+        try {
+            const result = await db.query('DELETE FROM alcantarillas WHERE id_alcantarilla = $1', [id]);
+            return result.rowCount;
+        } catch (error) {
+            console.error(`Error al eliminar alcantarilla ${id}:`, error);
+            throw new Error('Error al eliminar alcantarilla de la base de datos.');
         }
     }
 };

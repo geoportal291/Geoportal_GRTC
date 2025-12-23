@@ -25,6 +25,7 @@ import CoordinadorDashboard from './components/coordinador/cordinadords.jsx';
 import AmigoSecretoDashboard from './components/eventos/AmigoSecretoDashboard'; // NUEVO
 import GestionarParticipantes from './components/eventos/GestionarParticipantes'; // NUEVO
 import VisualizacionAmigo from './components/eventos/visualizacionamigo.jsx'; // NUEVO
+import NewYearCountdown from './components/eventos/NewYearCountdown.jsx'; // NUEVO: Importar Countdown
 // Coordinado
 import Proyectos from './components/coordinador/suelos/proyectosv2/ProyectosV2';
 import GestorDeTramosActual from './components/coordinador/suelos/gestion_tramos/GestorDeTramosActual';
@@ -86,9 +87,10 @@ function AppContent() {
     const [isInitialViz, setIsInitialViz] = useState(false);
 
     useEffect(() => {
-        if (sessionStorage.getItem('showAmigoSecretoViz') === 'true' && location.pathname !== '/') {
+        // Se cambió 'showAmigoSecretoViz' a 'showNewYearViz'
+        if (sessionStorage.getItem('showNewYearViz') === 'true' && location.pathname !== '/') {
             setIsInitialViz(true);
-            sessionStorage.removeItem('showAmigoSecretoViz');
+            sessionStorage.removeItem('showNewYearViz');
         }
     }, [location.pathname]);
 
@@ -141,7 +143,7 @@ function AppContent() {
     return (
         <div className="principal">
             {isInitialViz && ReactDOM.createPortal(
-                <VisualizacionAmigo onClose={handleCloseInitialViz} isOverlay={true} />,
+                <NewYearCountdown onClose={handleCloseInitialViz} />,
                 document.getElementById('overlay-root')
             )}
             <Routes>
@@ -219,3 +221,4 @@ function AppContent() {
 }
 
 export default App;
+

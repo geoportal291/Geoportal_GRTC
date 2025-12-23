@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './Progresivas.css';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.min.css';
 import 'alertifyjs/build/css/themes/default.min.css';
 import SeleccionarEstratosModal from '../estratos/SeleccionarEstratosModal';
-import KmlMapModal from '../mapa/KmlMapModal'; // NEW: Import KmlMapModal
+import KmlMapModal from '../mapa/KmlMapModal';
 import * as XLSX from 'xlsx';
+import { kml } from '@tmcw/togeojson';
+import { DOMParser } from 'xmldom';
+import { fromLatLon } from 'utm';
+import JSZip from 'jszip';
 
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import useProgresivasData from '../../../../hooks/useProgresivasData';
@@ -30,11 +34,11 @@ const PlusIcon = () => (
 );
 
 const ManageIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12.22 2h-4.44a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.54"/>
-      <path d="M18 2l4 4-10 10H8v-4L18 2z"/>
-    </svg>
-  );
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12.22 2h-4.44a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.54" />
+    <path d="M18 2l4 4-10 10H8v-4L18 2z" />
+  </svg>
+);
 
 const EyeIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -196,6 +200,7 @@ const getLadoInitial = (ladoDisplayName) => {
 
 const Progresivas = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, selectedProjectId, selectedProjectName } = useAuth();
   const isAdmin = user?.rol_nombre === 'ADMIN';
   const initialFormData = {
@@ -214,10 +219,10 @@ const Progresivas = () => {
     selectedProjectId: '',
   };
   const [formData, setFormData] = useState(initialFormData);
-      const [kmlFileProgresiva, setKmlFileProgresiva] = useState(null);
-      const [isUploadingKmlProgresiva, setIsUploadingKmlProgresiva] = useState(false);
-      const { progresivas, loading, error, fetchProgresivas: fetchProgresivasFromHook } = useProgresivasData();
-      const [proyectos, setProyectos] = useState([]);  const [generatedSubProgresivas, setGeneratedSubProgresivas] = useState([]);
+  const [kmlFileProgresiva, setKmlFileProgresiva] = useState(null);
+  const [isUploadingKmlProgresiva, setIsUploadingKmlProgresiva] = useState(false);
+  const { progresivas, loading, error, fetchProgresivas: fetchProgresivasFromHook } = useProgresivasData();
+  const [proyectos, setProyectos] = useState([]); const [generatedSubProgresivas, setGeneratedSubProgresivas] = useState([]);
   const [progresivaDetails, setProgresivaDetails] = useState(null);
   const [subProgresivas, setSubProgresivas] = useState([]);
   const [isLoadingCreation, setIsLoadingCreation] = useState(false);
@@ -241,10 +246,29 @@ const Progresivas = () => {
   const [step, setStep] = useState(1); // State for wizard form
 
   const [showMapModal, setShowMapModal] = useState(false); // NEW: State for KML map modal
+
   const [selectedKmlProgresiva, setSelectedKmlProgresiva] = useState(null); // NEW: State for selected progresiva for KML map
 
-  const handleViewKmlMap = (progresiva) => { // NEW: Handler for KML map button
+  // --- KML Progress State ---
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
+
+
+  const handleViewKmlMap = async (progresiva) => { // NEW: Handler for KML map button
     setSelectedKmlProgresiva(progresiva);
+
+    // Fetch sub-progresivas fresh to ensure data is there for map coloring
+    try {
+      const headers = getAuthHeaders();
+      const res = await axios.get(`${API_URL}/progresivas/${progresiva.id}/children/all`, { headers });
+      const subProgs = Array.isArray(res.data) ? res.data : [];
+      setSubProgresivas(subProgs);
+    } catch (err) {
+      console.error("Error fetching sub-progresivas for map", err);
+      setSubProgresivas([]);
+    }
+
     setShowMapModal(true);
   };
 
@@ -263,9 +287,9 @@ const Progresivas = () => {
     const userData = JSON.parse(localStorage.getItem('user'));
     const token = userData?.token;
     if (!token) {
-        alertify.error('Sesión expirada. Por favor, inicia sesión de nuevo.');
-        navigate('/login');
-        throw new Error('Token no proporcionado');
+      alertify.error('Sesión expirada. Por favor, inicia sesión de nuevo.');
+      navigate('/login');
+      throw new Error('Token no proporcionado');
     }
     return { Authorization: `Bearer ${token}` };
   }, [navigate]);
@@ -288,12 +312,24 @@ const Progresivas = () => {
     fetchProyectos();
   }, [fetchProyectos]);
 
+  // --- AUTO-OPEN LOGIC FROM DASHBOARD ---
+  useEffect(() => {
+    if (location.state?.openTramoId && progresivas.length > 0 && !viewingDetails) {
+      const tramoId = Number(location.state.openTramoId);
+      const tramo = progresivas.find(p => p.id === tramoId);
+
+      if (tramo) {
+        handleViewDetails(tramo);
+      }
+    }
+  }, [location.state, progresivas, viewingDetails]);
+
   const handleNavigateToGestor = () => {
     if (selectedIds.length !== 1) return;
     const tramoSeleccionado = progresivas.find(p => p.id === selectedIds[0]);
     if (tramoSeleccionado) {
-      navigate(`/coordinador/gestor-proyectos`, { 
-        state: { expandTramoId: tramoSeleccionado.id, selectedProjectId: tramoSeleccionado.proyecto_id } 
+      navigate(`/coordinador/gestor-proyectos`, {
+        state: { expandTramoId: tramoSeleccionado.id, selectedProjectId: tramoSeleccionado.proyecto_id }
       });
     }
   };
@@ -320,223 +356,223 @@ const Progresivas = () => {
     setShowForm(true);
   };
 
-// ✅ Bloque completo corregido y mejorado
-const handleEdit = async (progresiva) => {
-  if (!progresiva) {
-    alertify.error('No se encontró la progresiva seleccionada.');
-    return;
-  }
-
-  try {
-    setIsLoadingAction(true);
-    setEditingId(progresiva.id);
-
-    setFormData({
-      codigo: progresiva.codigo,
-      nombre: progresiva.nombre,
-      linea: progresiva.linea || '18L',
-      descripcion: progresiva.descripcion || '',
-      estado: progresiva.estado,
-      coordenada_este: progresiva.coordenada_este || '',
-      coordenada_norte: progresiva.coordenada_norte || '',
-      longitud_total: progresiva.longitud_total || '',
-      intervalo_manual: progresiva.intervalo_manual || '',
-      tipo_via: progresiva.tipo_via || '500',
-      kml_trazado_id: progresiva.kml_trazado_id || null, // Add this line
-      kml_filename: progresiva.kml_filename || null,
-      kml_uploaded_at: progresiva.kml_uploaded_at || null,
-    });
-
-    // Fetch generated sub-progresivas for editing
-    const headers = getAuthHeaders();
-    const res = await axios.get(`${API_URL}/progresivas/${progresiva.id}/children/all`, { headers });
-
-    setGeneratedSubProgresivas(Array.isArray(res.data?.children) ? res.data.children : res.data || []);
-    setShowForm(true);
-  } catch (err) {
-    if (err.message !== 'Token no proporcionado') {
-      setComponentError(err.response?.data?.error || err.message);
-      alertify.error(`Error al cargar progresivas: ${err.response?.data?.error || err.message}`);
+  // ✅ Bloque completo corregido y mejorado
+  const handleEdit = async (progresiva) => {
+    if (!progresiva) {
+      alertify.error('No se encontró la progresiva seleccionada.');
+      return;
     }
-  } finally {
-    setIsLoadingAction(false);
-  }
-};
 
-const handleCancelEdit = () => {
-  setEditingId(null);
-  setFormData(initialFormData);
-  setShowForm(false);
-  setGeneratedSubProgresivas([]);
-  setStep(1); // Reset step on cancel
-};
+    try {
+      setIsLoadingAction(true);
+      setEditingId(progresiva.id);
 
-const generateSubProgresivas = (longitud, intervalo, data) => {
-  if (isNaN(longitud) || longitud <= 0) {
-    alertify.error('El "Valor Total" debe ser un número positivo.');
-    return [];
-  }
-  if (isNaN(intervalo) || intervalo <= 0) {
-    alertify.error('El "Intervalo" debe ser un número positivo.');
-    return [];
-  }
-
-  const children = [];
-  for (let i = 0; i <= longitud; i += intervalo) {
-    const km = Math.floor(i / 1000);
-    const meters = i % 1000;
-    const codigoProgresiva = `${km}${String(meters).padStart(3, '0')}`;
-    children.push({
-      codigo: codigoProgresiva,
-      nombre: `Progresiva ${codigoProgresiva}`,
-      descripcion: `Progresiva generada automáticamente: ${codigoProgresiva}`,
-      estado: 'activo',
-      coordenada_este: null,
-      coordenada_norte: null,
-      linea: data.linea,
-      estratos_perfil: [],
-    });
-  }
-  return children;
-};
-
-const handleGenerateSubProgresivas = () => {
-  setComponentError(null);
-  const longitud = formData.longitud_total === '' ? 0 : parseFloat(formData.longitud_total);
-  const intervalo = formData.isIntervalManual
-    ? (formData.intervalo_manual === '' ? 0 : parseFloat(formData.intervalo_manual))
-    : parseFloat(formData.tipo_via);
-
-  const children = generateSubProgresivas(longitud, intervalo, formData);
-
-  if (children.length === 0) {
-    alertify.warning('No se generaron progresivas. Verifique el Valor Total y el Intervalo.');
-  }
-
-  setGeneratedSubProgresivas(children);
-  alertify.success(`Se generaron ${children.length} progresivas.`);
-};
-
-const handleSubmit = async (e) => {
-  e.preventDefault();
-
-  // Validation: only allow submit on last step if creating new
-  if (editingId === null && step !== 3) {
-    alertify.error('Por favor, complete todos los pasos antes de finalizar.');
-    return;
-  }
-
-  setSubmitting(true);
-  setComponentError(null);
-  setIsLoadingCreation(true);
-
-  try {
-    let progresivaIdToUpdate = editingId;
-
-    if (editingId) {
-      // --- UPDATE EXISTING PROGRESIVA ---
-      const updatedProgresiva = {
-        nombre: formData.nombre,
-        linea: formData.linea,
-        coordenada_este: formData.coordenada_este === '' ? null : Number(formData.coordenada_este),
-        coordenada_norte: formData.coordenada_norte === '' ? null : Number(formData.coordenada_norte),
-        descripcion: formData.descripcion,
-        estado: formData.estado,
-        proyecto_id: Number(selectedProjectId), // Use selectedProjectId from context
-        longitud_total: formData.longitud_total === '' ? null : Number(formData.longitud_total),
-        intervalo_manual: formData.intervalo_manual === '' ? null : Number(formData.intervalo_manual),
-        tipo_via: Number(formData.tipo_via),
-        kml_trazado_id: formData.kml_trazado_id, // Add this line
-        generatedChildren: generatedSubProgresivas,
-      };
-
-      const headers = getAuthHeaders();
-      await axios.put(`${API_URL}/progresivas/${editingId}`, updatedProgresiva, {
-        headers: { 'Content-Type': 'application/json', ...headers },
+      setFormData({
+        codigo: progresiva.codigo,
+        nombre: progresiva.nombre,
+        linea: progresiva.linea || '18L',
+        descripcion: progresiva.descripcion || '',
+        estado: progresiva.estado,
+        coordenada_este: progresiva.coordenada_este || '',
+        coordenada_norte: progresiva.coordenada_norte || '',
+        longitud_total: progresiva.longitud_total || '',
+        intervalo_manual: progresiva.intervalo_manual || '',
+        tipo_via: progresiva.tipo_via || '500',
+        kml_trazado_id: progresiva.kml_trazado_id || null, // Add this line
+        kml_filename: progresiva.kml_filename || null,
+        kml_uploaded_at: progresiva.kml_uploaded_at || null,
       });
-      alertify.success('Tramo actualizado.');
-    } else {
-      // --- CREATE NEW PROGRESIVA ---
-      if (generatedSubProgresivas.length === 0) {
-        setComponentError('Debe generar las progresivas antes de crear el tramo principal.');
-        alertify.error('Debe generar las progresivas antes de crear el tramo principal.');
-        setSubmitting(false);
-        setIsLoadingCreation(false);
-        return;
+
+      // Fetch generated sub-progresivas for editing
+      const headers = getAuthHeaders();
+      const res = await axios.get(`${API_URL}/progresivas/${progresiva.id}/children/all`, { headers });
+
+      setGeneratedSubProgresivas(Array.isArray(res.data?.children) ? res.data.children : res.data || []);
+      setShowForm(true);
+    } catch (err) {
+      if (err.message !== 'Token no proporcionado') {
+        setComponentError(err.response?.data?.error || err.message);
+        alertify.error(`Error al cargar progresivas: ${err.response?.data?.error || err.message}`);
+      }
+    } finally {
+      setIsLoadingAction(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setFormData(initialFormData);
+    setShowForm(false);
+    setGeneratedSubProgresivas([]);
+    setStep(1); // Reset step on cancel
+  };
+
+  const generateSubProgresivas = (longitud, intervalo, data) => {
+    if (isNaN(longitud) || longitud <= 0) {
+      alertify.error('El "Valor Total" debe ser un número positivo.');
+      return [];
+    }
+    if (isNaN(intervalo) || intervalo <= 0) {
+      alertify.error('El "Intervalo" debe ser un número positivo.');
+      return [];
+    }
+
+    const children = [];
+    for (let i = 0; i <= longitud; i += intervalo) {
+      const km = Math.floor(i / 1000);
+      const meters = i % 1000;
+      const codigoProgresiva = `${km}${String(meters).padStart(3, '0')}`;
+      children.push({
+        codigo: codigoProgresiva,
+        nombre: `Progresiva ${codigoProgresiva}`,
+        descripcion: `Progresiva generada automáticamente: ${codigoProgresiva}`,
+        estado: 'activo',
+        coordenada_este: null,
+        coordenada_norte: null,
+        linea: data.linea,
+        estratos_perfil: [],
+      });
+    }
+    return children;
+  };
+
+  const handleGenerateSubProgresivas = () => {
+    setComponentError(null);
+    const longitud = formData.longitud_total === '' ? 0 : parseFloat(formData.longitud_total);
+    const intervalo = formData.isIntervalManual
+      ? (formData.intervalo_manual === '' ? 0 : parseFloat(formData.intervalo_manual))
+      : parseFloat(formData.tipo_via);
+
+    const children = generateSubProgresivas(longitud, intervalo, formData);
+
+    if (children.length === 0) {
+      alertify.warning('No se generaron progresivas. Verifique el Valor Total y el Intervalo.');
+    }
+
+    setGeneratedSubProgresivas(children);
+    alertify.success(`Se generaron ${children.length} progresivas.`);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Validation: only allow submit on last step if creating new
+    if (editingId === null && step !== 3) {
+      alertify.error('Por favor, complete todos los pasos antes de finalizar.');
+      return;
+    }
+
+    setSubmitting(true);
+    setComponentError(null);
+    setIsLoadingCreation(true);
+
+    try {
+      let progresivaIdToUpdate = editingId;
+
+      if (editingId) {
+        // --- UPDATE EXISTING PROGRESIVA ---
+        const updatedProgresiva = {
+          nombre: formData.nombre,
+          linea: formData.linea,
+          coordenada_este: formData.coordenada_este === '' ? null : Number(formData.coordenada_este),
+          coordenada_norte: formData.coordenada_norte === '' ? null : Number(formData.coordenada_norte),
+          descripcion: formData.descripcion,
+          estado: formData.estado,
+          proyecto_id: Number(selectedProjectId), // Use selectedProjectId from context
+          longitud_total: formData.longitud_total === '' ? null : Number(formData.longitud_total),
+          intervalo_manual: formData.intervalo_manual === '' ? null : Number(formData.intervalo_manual),
+          tipo_via: Number(formData.tipo_via),
+          kml_trazado_id: formData.kml_trazado_id, // Add this line
+          generatedChildren: generatedSubProgresivas,
+        };
+
+        const headers = getAuthHeaders();
+        await axios.put(`${API_URL}/progresivas/${editingId}`, updatedProgresiva, {
+          headers: { 'Content-Type': 'application/json', ...headers },
+        });
+        alertify.success('Tramo actualizado.');
+      } else {
+        // --- CREATE NEW PROGRESIVA ---
+        if (generatedSubProgresivas.length === 0) {
+          setComponentError('Debe generar las progresivas antes de crear el tramo principal.');
+          alertify.error('Debe generar las progresivas antes de crear el tramo principal.');
+          setSubmitting(false);
+          setIsLoadingCreation(false);
+          return;
+        }
+
+        const parentProgresiva = {
+          codigo: formData.codigo,
+          nombre: formData.nombre,
+          linea: formData.linea,
+          coordenada_este: formData.coordenada_este === '' ? null : Number(formData.coordenada_este),
+          coordenada_norte: formData.coordenada_norte === '' ? null : Number(formData.coordenada_norte),
+          descripcion: formData.descripcion,
+          estado: formData.estado,
+          proyecto_id: Number(selectedProjectId || formData.selectedProjectId) || null,
+          longitud_total: formData.longitud_total === '' ? null : Number(formData.longitud_total),
+          intervalo_manual: formData.intervalo_manual === '' ? null : Number(formData.intervalo_manual),
+          tipo_via: Number(formData.tipo_via),
+        };
+
+        const generationParams = {
+          valorTotal: formData.longitud_total === '' ? 0 : parseFloat(formData.longitud_total),
+          intervalo: formData.isIntervalManual
+            ? (formData.intervalo_manual === '' ? 0 : parseFloat(formData.intervalo_manual))
+            : parseFloat(formData.tipo_via),
+        };
+
+        const headers = getAuthHeaders();
+        const requestHeaders = { 'Content-Type': 'application/json', ...headers };
+        const createRes = await axios.post(
+          `${API_URL}/progresivas/importar-con-ensayos`,
+          { parentProgresiva, generationParams, generatedChildren: generatedSubProgresivas },
+          { headers: requestHeaders }
+        );
+
+        progresivaIdToUpdate = createRes.data.progresivaId || createRes.data.id;
+        alertify.success('Tramo(s) creado(s).');
       }
 
-      const parentProgresiva = {
-        codigo: formData.codigo,
-        nombre: formData.nombre,
-        linea: formData.linea,
-        coordenada_este: formData.coordenada_este === '' ? null : Number(formData.coordenada_este),
-        coordenada_norte: formData.coordenada_norte === '' ? null : Number(formData.coordenada_norte),
-        descripcion: formData.descripcion,
-        estado: formData.estado,
-        proyecto_id: Number(selectedProjectId || formData.selectedProjectId) || null,
-        longitud_total: formData.longitud_total === '' ? null : Number(formData.longitud_total),
-        intervalo_manual: formData.intervalo_manual === '' ? null : Number(formData.intervalo_manual),
-        tipo_via: Number(formData.tipo_via),
-      };
+      // --- KML Upload Logic ---
+      if (kmlFileProgresiva && progresivaIdToUpdate) {
+        if (!kmlFileProgresiva.name.match(/\.(kml|kmz)$/i)) {
+          alertify.error('Solo se permiten archivos KML o KMZ.');
+        } else {
+          setIsUploadingKmlProgresiva(true);
+          const kmlFormData = new FormData();
+          kmlFormData.append('kmlFile', kmlFileProgresiva);
 
-      const generationParams = {
-        valorTotal: formData.longitud_total === '' ? 0 : parseFloat(formData.longitud_total),
-        intervalo: formData.isIntervalManual
-          ? (formData.intervalo_manual === '' ? 0 : parseFloat(formData.intervalo_manual))
-          : parseFloat(formData.tipo_via),
-      };
-
-      const headers = getAuthHeaders();
-      const requestHeaders = { 'Content-Type': 'application/json', ...headers };
-      const createRes = await axios.post(
-        `${API_URL}/progresivas/importar-con-ensayos`,
-        { parentProgresiva, generationParams, generatedChildren: generatedSubProgresivas },
-        { headers: requestHeaders }
-      );
-
-      progresivaIdToUpdate = createRes.data.progresivaId || createRes.data.id;
-      alertify.success('Tramo(s) creado(s).');
-    }
-
-    // --- KML Upload Logic ---
-    if (kmlFileProgresiva && progresivaIdToUpdate) {
-      if (!kmlFileProgresiva.name.match(/\.(kml|kmz)$/i)) {
-        alertify.error('Solo se permiten archivos KML o KMZ.');
-      } else {
-        setIsUploadingKmlProgresiva(true);
-        const kmlFormData = new FormData();
-        kmlFormData.append('kmlFile', kmlFileProgresiva);
-
-        try {
-          const headers = getAuthHeaders();
-          await axios.post(`${API_URL}/api/progresivas/${progresivaIdToUpdate}/upload-kml`, kmlFormData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              ...headers,
-            },
-          });
-          alertify.success('Archivo KML cargado correctamente a la progresiva.');
-          setKmlFileProgresiva(null);
-        } catch (kmlUploadError) {
-          console.error('Error al subir archivo KML a la progresiva:', kmlUploadError);
-          alertify.error(`Error al subir KML a la progresiva: ${kmlUploadError.response?.data?.error || kmlUploadError.message}`);
-        } finally {
-          setIsUploadingKmlProgresiva(false);
+          try {
+            const headers = getAuthHeaders();
+            await axios.post(`${API_URL}/api/progresivas/${progresivaIdToUpdate}/upload-kml`, kmlFormData, {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+                ...headers,
+              },
+            });
+            alertify.success('Archivo KML cargado correctamente a la progresiva.');
+            setKmlFileProgresiva(null);
+          } catch (kmlUploadError) {
+            console.error('Error al subir archivo KML a la progresiva:', kmlUploadError);
+            alertify.error(`Error al subir KML a la progresiva: ${kmlUploadError.response?.data?.error || kmlUploadError.message}`);
+          } finally {
+            setIsUploadingKmlProgresiva(false);
+          }
         }
       }
-    }
-    // --- End KML Upload Logic ---
+      // --- End KML Upload Logic ---
 
-    fetchProgresivasFromHook();
-    handleCancelEdit();
-  } catch (err) {
-    setComponentError(err.response?.data?.error || err.message);
-    alertify.error(`Error: ${err.response?.data?.error || err.message}`);
-  } finally {
-    setSubmitting(false);
-    setIsLoadingCreation(false);
-  }
-};
+      fetchProgresivasFromHook();
+      handleCancelEdit();
+    } catch (err) {
+      setComponentError(err.response?.data?.error || err.message);
+      alertify.error(`Error: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setSubmitting(false);
+      setIsLoadingCreation(false);
+    }
+  };
 
 
   const handleBulkDelete = async () => {
@@ -553,7 +589,7 @@ const handleSubmit = async (e) => {
             { headers: { ...headers } }
           );
           alertify.success('Tramos eliminados.');
-          
+
           fetchProgresivasFromHook();
           setSelectedIds([]);
 
@@ -565,7 +601,7 @@ const handleSubmit = async (e) => {
         }
       },
       () => alertify.message('Cancelado')
-    ).set('labels', {ok:'Sí', cancel:'No'});
+    ).set('labels', { ok: 'Sí', cancel: 'No' });
   };
 
   const handleViewDetails = async (progresiva) => {
@@ -573,7 +609,7 @@ const handleSubmit = async (e) => {
     try {
       const headers = getAuthHeaders();
       const res = await axios.get(`${API_URL}/progresivas/${progresiva.id}/children/all`, { headers });
-      
+
       const subProgresivasData = Array.isArray(res.data) ? res.data : [];
       const processedSubProgresivas = subProgresivasData.map(subProg => ({
         ...subProg,
@@ -663,23 +699,23 @@ const handleSubmit = async (e) => {
     setComponentError(null);
 
     try {
-        const headers = getAuthHeaders();
-        const payload = {
-            ...progresivaFormData,
-            lado: progresivaFormData.lado,
-            estratos_perfil: estratosPerfil,
-        };
-        // Assumption: API endpoint to update a single sub-progresiva
-        await axios.put(`${API_URL}/progresivas/child/${progresivaFormData.id}`, payload, { headers });
-        alertify.success('Progresiva actualizada.');
-        setManagingProgresiva(null);
-        // Refresh the details view
-        handleViewDetails(progresivaDetails);
+      const headers = getAuthHeaders();
+      const payload = {
+        ...progresivaFormData,
+        lado: progresivaFormData.lado,
+        estratos_perfil: estratosPerfil,
+      };
+      // Assumption: API endpoint to update a single sub-progresiva
+      await axios.put(`${API_URL}/progresivas/child/${progresivaFormData.id}`, payload, { headers });
+      alertify.success('Progresiva actualizada.');
+      setManagingProgresiva(null);
+      // Refresh the details view
+      handleViewDetails(progresivaDetails);
     } catch (err) {
-        setComponentError(err.response?.data?.error || err.message);
-        alertify.error(`Error: ${err.response?.data?.error || err.message}`);
+      setComponentError(err.response?.data?.error || err.message);
+      alertify.error(`Error: ${err.response?.data?.error || err.message}`);
     } finally {
-        setSubmitting(false);
+      setSubmitting(false);
     }
   };
 
@@ -728,27 +764,27 @@ const handleSubmit = async (e) => {
 
       // --- Second pass: Populate childDataToExport with pre-formatted text ---
       for (const child of allChildrenData) {
-          const childRow = {
-            '#': childEnumeration++,
-            'progresiva': formatCodigoForDisplay(child.codigo.includes('-') ? child.codigo.split('-')[1] : child.codigo),
-            'nombre de progresiva': child.nombre,
-            'lado': child.lado || 'N/A',
-            'descripcion': child.descripcion,
-            'coord. este': child.coordenada_este || 'N/A',
-            'coord norte': child.coordenada_norte || 'N/A',
-            'zona': child.linea || 'N/A',
-            'estado': child.estado || 'activo',
-            'n° estratos': child.estratos_perfil ? child.estratos_perfil.length : 0,
-          };
+        const childRow = {
+          '#': childEnumeration++,
+          'progresiva': formatCodigoForDisplay(child.codigo.includes('-') ? child.codigo.split('-')[1] : child.codigo),
+          'nombre de progresiva': child.nombre,
+          'lado': child.lado || 'N/A',
+          'descripcion': child.descripcion,
+          'coord. este': child.coordenada_este || 'N/A',
+          'coord norte': child.coordenada_norte || 'N/A',
+          'zona': child.linea || 'N/A',
+          'estado': child.estado || 'activo',
+          'n° estratos': child.estratos_perfil ? child.estratos_perfil.length : 0,
+        };
 
-          // Add dynamic strata columns
-          for (let i = 0; i < maxEstratosCount; i++) {
-            const estrato = child.estratos_perfil ? child.estratos_perfil[i] : null;
-            childRow[`ini_est_${i + 1}`] = estrato ? estrato.profundidad_inicial : '';
-            childRow[`fin_est_${i + 1}`] = estrato ? estrato.profundidad_final : '';
-            childRow[`descripcion_est_${i + 1}`] = estrato ? estrato.descripcion : '';
-          }
-          childDataToExport.push(childRow);
+        // Add dynamic strata columns
+        for (let i = 0; i < maxEstratosCount; i++) {
+          const estrato = child.estratos_perfil ? child.estratos_perfil[i] : null;
+          childRow[`ini_est_${i + 1}`] = estrato ? estrato.profundidad_inicial : '';
+          childRow[`fin_est_${i + 1}`] = estrato ? estrato.profundidad_final : '';
+          childRow[`descripcion_est_${i + 1}`] = estrato ? estrato.descripcion : '';
+        }
+        childDataToExport.push(childRow);
       }
 
 
@@ -809,7 +845,7 @@ const handleSubmit = async (e) => {
 
     // Store the file in a ref or state if needed for later processing after project selection
     // For now, we'll pass it directly to processImportFile
-    
+
     if (selectedIds.length === 0) {
       // Scenario 1: No tramo selected - create new
       alertify.confirm(
@@ -831,7 +867,7 @@ const handleSubmit = async (e) => {
           alertify.message('Importación cancelada.');
           event.target.value = null; // Clear the file input
         }
-      ).set('labels', {ok:'Sí', cancel:'No'});
+      ).set('labels', { ok: 'Sí', cancel: 'No' });
     } else {
       // Scenario 2: Tramo(s) selected - overwrite the first one
       const firstSelectedProgresiva = progresivas.find(p => p.id === selectedIds[0]);
@@ -880,8 +916,8 @@ const handleSubmit = async (e) => {
         const childJson = XLSX.utils.sheet_to_json(childWorksheet);
 
         // Filter out empty/ghost rows before any processing
-        const filteredChildJson = childJson.filter(row => 
-          (row.progresiva !== undefined && row.progresiva !== null) || 
+        const filteredChildJson = childJson.filter(row =>
+          (row.progresiva !== undefined && row.progresiva !== null) ||
           (row['nombre de progresiva'] !== undefined && row['nombre de progresiva'] !== null)
         );
         console.log('DEBUG: filteredChildJson:', filteredChildJson);
@@ -898,7 +934,7 @@ const handleSubmit = async (e) => {
 
         // --- Start Validation ---
         const importedParentData = parentJson[0];
-        
+
         if (!importedParentData.Tramo) {
           alertify.alert('Error de Validación', "Error en 'Detalles de Tramos': El campo 'Tramo' es obligatorio.");
           throw new Error("Validation failed");
@@ -944,13 +980,13 @@ const handleSubmit = async (e) => {
         };
 
         const reconstructedSubProgresivas = filteredChildJson.map((childRow, index) => {
-        
+
           const estratos_perfil = [];
           const numEstratos = childRow['n° estratos'] || 0;
           for (let j = 1; j <= numEstratos; j++) {
             estratos_perfil.push({
-              profundidad_inicial: parseFloat(String(childRow[`ini_est_${j}`]).replace(',', '.')), 
-              profundidad_final: parseFloat(String(childRow[`fin_est_${j}`]).replace(',', '.')), 
+              profundidad_inicial: parseFloat(String(childRow[`ini_est_${j}`]).replace(',', '.')),
+              profundidad_final: parseFloat(String(childRow[`fin_est_${j}`]).replace(',', '.')),
               descripcion: childRow[`descripcion_est_${j}`],
             });
           }
@@ -1019,7 +1055,7 @@ const handleSubmit = async (e) => {
           }
           alertify.alert('Error de Importación de Excel', detailedMessage);
         } else if (err.message !== "Validation failed" && err.message !== "Sheet not found" && err.message !== "Sheet empty") {
-           alertify.alert('Error de Importación', `Se produjo un error inesperado: ${err.response?.data?.error || err.message}`);
+          alertify.alert('Error de Importación', `Se produjo un error inesperado: ${err.response?.data?.error || err.message}`);
         }
       } finally {
         setSubmitting(false);
@@ -1062,13 +1098,13 @@ const handleSubmit = async (e) => {
       if (mode === 'new') {
         console.log('DEBUG: Sending to backend (new with assays):', payload);
         await axios.post(`${API_URL}/progresivas/importar-con-ensayos`, payload, {
-            headers: { 'Content-Type': 'application/json', ...headers }
+          headers: { 'Content-Type': 'application/json', ...headers }
         });
         alertify.success('Tramo importado y ensayos creados correctamente.');
       } else if (mode === 'overwrite') {
         console.log('DEBUG: Sending to backend (overwrite with assays):', payload);
         await axios.put(`${API_URL}/progresivas/importar-con-ensayos/${overwriteProgresivaId}`, payload, {
-           headers: { 'Content-Type': 'application/json', ...headers }
+          headers: { 'Content-Type': 'application/json', ...headers }
         });
         alertify.success('Tramo actualizado y ensayos creados correctamente.');
       }
@@ -1087,11 +1123,11 @@ const handleSubmit = async (e) => {
           detailedMessage += `Progresiva: ${errorDetails.progressiveName}\n`;
           detailedMessage += `Estrato N°: ${errorDetails.stratumNumber}\n`;
           detailedMessage += `Campo: ${errorDetails.field}\n`;
-                      detailedMessage += `Valor(es) inválido(s): Inicial: "${errorDetails.invalidValueInitial}", Final: "${errorDetails.invalidValueFinal}"\n`;          detailedMessage += `Razón: ${errorDetails.reason}\n`;
+          detailedMessage += `Valor(es) inválido(s): Inicial: "${errorDetails.invalidValueInitial}", Final: "${errorDetails.invalidValueFinal}"\n`; detailedMessage += `Razón: ${errorDetails.reason}\n`;
         }
         alertify.alert('Error de Importación de Excel', detailedMessage);
       } else {
-         alertify.alert('Error de Importación', `Se produjo un error inesperado: ${err.response?.data?.error || err.message}`);
+        alertify.alert('Error de Importación', `Se produjo un error inesperado: ${err.response?.data?.error || err.message}`);
       }
     } finally {
       setSubmitting(false);
@@ -1228,8 +1264,231 @@ const handleSubmit = async (e) => {
         }
       },
       () => alertify.message('Eliminación de KML cancelada.')
-    ).set('labels', {ok:'Sí', cancel:'No'});
+    ).set('labels', { ok: 'Sí', cancel: 'No' });
   };
+
+  // --- KML POINTS IMPORT FOR SUB-PROGRESIVAS ---
+  const handleImportKmlPoints = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.name.match(/\.(kml|kmz)$/i)) {
+      alertify.error('Solo se permiten archivos KML o KMZ.');
+      e.target.value = '';
+      return;
+    }
+
+    if (!progresivaDetails || !subProgresivas) {
+      alertify.error('No hay un tramo activo para asociar los puntos.');
+      return;
+    }
+
+    try {
+      let kmlText = '';
+
+      if (file.name.match(/\.kmz$/i)) {
+        // Handle KMZ (ZIP)
+        const zip = new JSZip();
+        const content = await zip.loadAsync(file);
+        const kmlFilename = Object.keys(content.files).find(name => name.toLowerCase().endsWith('.kml'));
+
+        if (!kmlFilename) {
+          throw new Error('El archivo KMZ no contiene un archivo .kml válido.');
+        }
+
+        kmlText = await content.files[kmlFilename].async('string');
+      } else {
+        // Handle KML (Text)
+        kmlText = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target.result);
+          reader.onerror = reject;
+          reader.readAsText(file);
+        });
+      }
+
+      // Check XML validity
+      if (!kmlText.trim().startsWith('<')) {
+        throw new Error('El contenido extraído no es un XML válido.');
+      }
+
+      const kmlDoc = new DOMParser().parseFromString(kmlText, 'text/xml');
+      const parserError = kmlDoc.getElementsByTagName("parsererror");
+      if (parserError.length > 0) {
+        throw new Error('Error al analizar la estructura del XML.');
+      }
+
+      const geojson = kml(kmlDoc);
+
+      if (!geojson || !geojson.features) {
+        throw new Error('No se encontraron datos geográficos válidos.');
+      }
+
+      const updates = [];
+      let matchedCount = 0;
+      let ignoredCount = 0;
+
+      geojson.features.forEach(feature => {
+        if (feature.geometry && feature.geometry.type === 'Point') {
+          const [lon, lat] = feature.geometry.coordinates;
+          const name = feature.properties?.name || '';
+
+          // Mejorar Normalización: "Km 0+100", "0+100.00" -> "0100"
+          const cleanName = name.trim().replace(/\s/g, '').replace(/km/i, '').replace(/m/i, '');
+          // Si tiene decimales como 0+100.00, quitarlos si no son relevantes o parsear
+          // convertProgresivaToMeters maneja "0+100" -> 100.
+          const meters = convertProgresivaToMeters(cleanName);
+          const targetCode = convertMetersToProgresiva(meters); // "0100"
+
+          if (targetCode) {
+            const zoneStr = progresivaDetails.linea || '18L';
+            const zoneNum = parseInt(zoneStr.match(/\d+/)?.[0] || '18', 10);
+            const utmCoords = fromLatLon(lat, lon, zoneNum);
+            const este = parseFloat(utmCoords.easting.toFixed(2));
+            const norte = parseFloat(utmCoords.northing.toFixed(2));
+
+            // MATCHING ROBUSTO: Comparar sufijo (ej: "349-0100" vs "0100")
+            const match = subProgresivas.find(sp => {
+              const spCodeSuffix = String(sp.codigo).split('-').pop(); // obtener la parte "0100"
+              return spCodeSuffix === targetCode || sp.codigo === targetCode;
+            });
+
+            if (match) {
+              updates.push({
+                id: match.id,
+                nombre: match.nombre,
+                lado: match.lado,
+                estratos_perfil: match.estratos_perfil,
+                codigo: match.codigo,
+                descripcion: match.descripcion,
+                estado: match.estado,
+                linea: match.linea,
+                coordenada_este: este,
+                coordenada_norte: norte
+              });
+              matchedCount++;
+            } else {
+              // NO AGREGAR A INSERTS. Simplemente contar como ignorado (solo para visualización)
+              ignoredCount++;
+            }
+          }
+        }
+      });
+
+      alertify.confirm(
+        'Confirmar Procesamiento KML/KMZ',
+        `Se procesará el archivo: <strong>${file.name}</strong><br/>
+         - <b>Trazado Completo:</b> Se guardará para visualizar en el mapa.<br/>
+         - <b>Actualizaciones de Coordenadas:</b> ${matchedCount} (para progresivas existentes).<br/>
+         - <b>Puntos Ignorados (Solo Visuales):</b> ${ignoredCount}<br/><br/>
+         ¿Desea continuar?`,
+        async () => {
+          // Initialize Progress Modal
+          setViewingDetails(null); // Close details view first
+          setProgress(0);
+          setProgressMessage('Iniciando carga...');
+          setShowProgressModal(true);
+          // Remove default alertify loading message since we have our own modal now
+          // const loadingMsg = alertify.message('Subiendo KML y actualizando coordenadas...', 0);
+
+          try {
+            const headers = getAuthHeaders();
+            let success = 0;
+
+            // 1. SUBIR EL ARCHIVO KML AL BACKEND (Para visualización)
+            // Progress 0% -> 40% reserved for upload
+            const formData = new FormData();
+            formData.append('kmlFile', file); // Enviar el archivo original (KML o KMZ)
+
+            // Usamos un endpoint específico para el TRAMO (progresiva padre)
+            await axios.post(`${API_URL}/api/progresivas/${progresivaDetails.id}/upload-kml`, formData, {
+              headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+              onUploadProgress: (progressEvent) => {
+                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                // Map 0-100 upload to 0-40 total progress
+                const mappedProgress = Math.round(percentCompleted * 0.4);
+                setProgress(mappedProgress);
+                setProgressMessage(`Subiendo archivo (${percentCompleted}%)...`);
+              }
+            });
+
+            // 2. ACTUALIZAR PROGRESIVAS EXISTENTES
+            // Progress 40% -> 100% reserved for processing updates
+            setProgress(40);
+            setProgressMessage('Procesando actualizaciones de coordenadas...');
+
+            const totalUpdates = updates.length;
+
+            if (totalUpdates > 0) {
+              for (let i = 0; i < totalUpdates; i++) {
+                const updatedProg = updates[i];
+                // Update progress relative to the remaining 60%
+                const currentStepProgress = 40 + Math.round(((i + 1) / totalUpdates) * 60);
+                setProgress(currentStepProgress);
+                setProgressMessage(`Actualizando progresiva ${i + 1} de ${totalUpdates}...`);
+
+                // Sanear estratos para evitar errores en backend
+                const cleanEstratos = (updatedProg.estratos_perfil || []).map(est => ({
+                  ...est,
+                  profundidad_inicial: est.profundidad_inicial !== null && est.profundidad_inicial !== undefined
+                    ? String(est.profundidad_inicial).replace(',', '.')
+                    : 0,
+                  profundidad_final: est.profundidad_final !== null && est.profundidad_final !== undefined
+                    ? String(est.profundidad_final).replace(',', '.')
+                    : 0,
+                }));
+
+                // Hacer la petición PUT para actualizar cada sub-progresiva
+                try {
+                  await axios.put(`${API_URL}/progresivas/child/${updatedProg.id}`, {
+                    coordenada_este: updatedProg.coordenada_este,
+                    coordenada_norte: updatedProg.coordenada_norte,
+                    lado: updatedProg.lado,
+                    nombre: updatedProg.nombre,
+                    descripcion: updatedProg.descripcion,
+                    estado: updatedProg.estado || 'activo',
+                    estratos_perfil: cleanEstratos
+                  }, { headers });
+                  success++;
+                } catch (putErr) {
+                  console.error(`Error updating child ${updatedProg.id}:`, putErr.response?.data || putErr.message);
+                  // Continue with others but maybe flag error? For now just log.
+                }
+              }
+            } else {
+              // If no updates, jump to 100
+              setProgress(100);
+            }
+
+            // Final success
+            setProgressMessage('¡Proceso completado!');
+            // Short delay to show 100% before closing
+            setTimeout(() => {
+              setShowProgressModal(false);
+              alertify.success(`Proceso finalizado. ${success} coordenadas actualizadas.`);
+              handleViewDetails(progresivaDetails);
+            }, 800);
+
+          } catch (err) {
+            // loadingMsg.dismiss(); // Not used anymore
+            console.error(err);
+            setShowProgressModal(false); // Close modal on error
+            alertify.error('Error al procesar: ' + (err.response?.data?.error || err.message));
+          } finally {
+            // setIsLoadingAction(false); // Not strictly needed if we control modal visibility
+          }
+        },
+        () => { }
+      ).set('labels', { ok: 'Procesar', cancel: 'Cancelar' });
+
+    } catch (err) {
+      console.error(err);
+      alertify.error(`Error procesando archivo: ${err.message}`);
+    } finally {
+      e.target.value = ''; // Reset input
+    }
+  };
+
 
   return (
     <div className="progresivas-container">
@@ -1243,7 +1502,26 @@ const handleSubmit = async (e) => {
         data={importDataForSelection}
         onConfirm={handleConfirmarImportacionConEnsayos}
       />
+
+      {/* KML Progress Modal */}
+      {showProgressModal && (
+        <div className="progress-modal-overlay">
+          <div className="progress-modal-content">
+            <h3>Procesando Archivo KML</h3>
+            <div className="progress-bar-container">
+              <div
+                className="progress-bar-fill"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+            <span className="progress-text">{progress}%</span>
+            <p className="progress-detail">{progressMessage}</p>
+          </div>
+        </div>
+      )}
+
       {isExporting && (
+
         <div className="loading-overlay">
           <div className="loading-spinner"></div>
           <p>Exportando datos a Excel...</p>
@@ -1303,26 +1581,26 @@ const handleSubmit = async (e) => {
                       <label>Nombre del Tramo</label>
                       <input type="text" name="nombre" value={formData.nombre} onChange={handleChange} required />
                     </div>
-                                    <div className="form-group">
-                                      <label>Proyecto</label>
-                                      {selectedProjectId ? (
-                                        <p className="form-static-text">{selectedProjectName || 'Cargando nombre...'}</p>
-                                      ) : (
-                                        <select
-                                            name="selectedProjectId"
-                                            value={formData.selectedProjectId}
-                                            onChange={handleChange}
-                                            required
-                                        >
-                                            <option value="">Seleccionar Proyecto</option>
-                                            {proyectos.map(proyecto => (
-                                                <option key={proyecto.id} value={proyecto.id}>
-                                                    {proyecto.nombre}
-                                                </option>
-                                            ))}
-                                        </select>
-                                      )}
-                                    </div>
+                    <div className="form-group">
+                      <label>Proyecto</label>
+                      {selectedProjectId ? (
+                        <p className="form-static-text">{selectedProjectName || 'Cargando nombre...'}</p>
+                      ) : (
+                        <select
+                          name="selectedProjectId"
+                          value={formData.selectedProjectId}
+                          onChange={handleChange}
+                          required
+                        >
+                          <option value="">Seleccionar Proyecto</option>
+                          {proyectos.map(proyecto => (
+                            <option key={proyecto.id} value={proyecto.id}>
+                              {proyecto.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1360,14 +1638,14 @@ const handleSubmit = async (e) => {
                     </div>
                   </div>
                   {generatedSubProgresivas.length > 0 && (
-                      <div className="sub-progresivas-container">
-                          <h4>Progresivas Generadas ({generatedSubProgresivas.length})</h4>
-                          <ul className="sub-progresivas-list">
-                              {generatedSubProgresivas.map((prog, index) => (
-                                  <li key={index}>{formatCodigoForDisplay(prog.codigo)}</li>
-                              ))}
-                          </ul>
-                      </div>
+                    <div className="sub-progresivas-container">
+                      <h4>Progresivas Generadas ({generatedSubProgresivas.length})</h4>
+                      <ul className="sub-progresivas-list">
+                        {generatedSubProgresivas.map((prog, index) => (
+                          <li key={index}>{formatCodigoForDisplay(prog.codigo)}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               )}
@@ -1375,7 +1653,7 @@ const handleSubmit = async (e) => {
               {/* Step 3: Additional Details */}
               {step === 3 && (
                 <div className="form-step-content">
-                   <div className="form-grid">
+                  <div className="form-grid">
                     <div className="form-group">
                       <label>Zona</label>
                       <select name="linea" value={formData.linea} onChange={handleChange}>
@@ -1407,31 +1685,31 @@ const handleSubmit = async (e) => {
 
                   {/* NEW: KML Upload Section for Progresiva */}
                   <fieldset>
-                      <legend>Trazado KML (Opcional)</legend>
-                      <div className="form-group">
-                          <label htmlFor="kmlFileProgresiva">Archivo KML/KMZ</label>
-                          <input
-                              type="file"
-                              id="kmlFileProgresiva"
-                              name="kmlFileProgresiva"
-                              accept=".kml,.kmz"
-                              onChange={handleKmlFileChangeProgresiva}
-                              disabled={isUploadingKmlProgresiva}
-                          />
-                          {isUploadingKmlProgresiva && (
-                              <p className="loading-text">Subiendo KML... por favor espera.</p>
-                          )}
-                          {formData?.kml_filename && (
-                              <div className="kml-info-display">
-                                  <p className="file-info">
-                                      KML actual: <strong>{formData.kml_filename}</strong> (cargado el {new Date(formData.kml_uploaded_at).toLocaleDateString()})
-                                  </p>
-                                  <button type="button" className="delete-kml-btn" onClick={handleDeleteKml}>
-                                      <DeleteIcon /> Eliminar KML
-                                  </button>
-                              </div>
-                          )}
-                      </div>
+                    <legend>Trazado KML (Opcional)</legend>
+                    <div className="form-group">
+                      <label htmlFor="kmlFileProgresiva">Archivo KML/KMZ</label>
+                      <input
+                        type="file"
+                        id="kmlFileProgresiva"
+                        name="kmlFileProgresiva"
+                        accept=".kml,.kmz"
+                        onChange={handleKmlFileChangeProgresiva}
+                        disabled={isUploadingKmlProgresiva}
+                      />
+                      {isUploadingKmlProgresiva && (
+                        <p className="loading-text">Subiendo KML... por favor espera.</p>
+                      )}
+                      {formData?.kml_filename && (
+                        <div className="kml-info-display">
+                          <p className="file-info">
+                            KML actual: <strong>{formData.kml_filename}</strong> (cargado el {new Date(formData.kml_uploaded_at).toLocaleDateString()})
+                          </p>
+                          <button type="button" className="delete-kml-btn" onClick={handleDeleteKml}>
+                            <DeleteIcon /> Eliminar KML
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </fieldset>
                   {/* END NEW: KML Upload Section */}
 
@@ -1461,7 +1739,25 @@ const handleSubmit = async (e) => {
       {viewingDetails && progresivaDetails && (
         <div className="overlay" onClick={() => setViewingDetails(null)}>
           <div className="batch-details-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Detalles de {progresivaDetails.nombre}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <h3>Detalles de {progresivaDetails.nombre}</h3>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input
+                  type="file"
+                  id="import-kml-points"
+                  accept=".kml,.kmz"
+                  style={{ display: 'none' }}
+                  onChange={handleImportKmlPoints}
+                />
+                <button
+                  className="btn-warning"
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', fontSize: '0.9rem' }}
+                  onClick={() => document.getElementById('import-kml-points').click()}
+                >
+                  <ImportIcon /> Importar Puntos KML
+                </button>
+              </div>
+            </div>
             <div className="table-wrapper">
               {subProgresivas.length > 0 ? (
                 <table className="progresivas-table horizontal-estratos">
@@ -1539,70 +1835,70 @@ const handleSubmit = async (e) => {
             <form className="progresivas-form" onSubmit={handleUpdateProgresiva}>
               <h3>Gestionar Progresiva: {getProgresivaCodeForDisplay(progresivaFormData.codigo)}</h3>
               <div className="form-grid">
-                  <div className="form-group">
-                    <label>Código</label>
-                    <input type="text" name="codigo" value={getProgresivaCodeForInput(progresivaFormData.codigo)} onChange={handleProgresivaFormChange} required disabled />
+                <div className="form-group">
+                  <label>Código</label>
+                  <input type="text" name="codigo" value={getProgresivaCodeForInput(progresivaFormData.codigo)} onChange={handleProgresivaFormChange} required disabled />
+                </div>
+                <div className="form-group">
+                  <label>Nombre</label>
+                  <input type="text" name="nombre" value={progresivaFormData.nombre} onChange={handleProgresivaFormChange} required />
+                </div>
+                <div className="form-group">
+                  <label>Lado</label>
+                  <select name="lado" value={progresivaFormData.lado} onChange={handleProgresivaFormChange} required>
+                    <option value="">Seleccionar Lado</option>
+                    <option value="I">I - IZQUIERDA</option>
+                    <option value="C">C - CENTRO</option>
+                    <option value="D">D - DERECHA</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Ubicación</label>
+                  <div className="coordenadas-group">
+                    <input type="text" name="coordenada_este" placeholder="Coord. Este" value={progresivaFormData.coordenada_este || ''} onChange={handleProgresivaFormChange} />
+                    <input type="text" name="coordenada_norte" placeholder="Coord. Norte" value={progresivaFormData.coordenada_norte || ''} onChange={handleProgresivaFormChange} />
                   </div>
-                  <div className="form-group">
-                    <label>Nombre</label>
-                    <input type="text" name="nombre" value={progresivaFormData.nombre} onChange={handleProgresivaFormChange} required />
-                  </div>
-                  <div className="form-group">
-                    <label>Lado</label>
-                    <select name="lado" value={progresivaFormData.lado} onChange={handleProgresivaFormChange} required>
-                      <option value="">Seleccionar Lado</option>
-                      <option value="I">I - IZQUIERDA</option>
-                      <option value="C">C - CENTRO</option>
-                      <option value="D">D - DERECHA</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Ubicación</label>
-                    <div className="coordenadas-group">
-                      <input type="text" name="coordenada_este" placeholder="Coord. Este" value={progresivaFormData.coordenada_este || ''} onChange={handleProgresivaFormChange} />
-                      <input type="text" name="coordenada_norte" placeholder="Coord. Norte" value={progresivaFormData.coordenada_norte || ''} onChange={handleProgresivaFormChange} />
-                    </div>
-                  </div>
-                  <div className="form-group">
-                    <label>Estado</label>
-                    <select name="estado" value={progresivaFormData.estado} onChange={handleProgresivaFormChange} required>
-                      <option value="activo">Activo</option>
-                      <option value="inactivo">Inactivo</option>
-                      <option value="completado">Completado</option>
-                    </select>
-                  </div>
-                  <div className="form-group full-width">
-                    <label>Descripción</label>
-                    <textarea name="descripcion" value={progresivaFormData.descripcion} onChange={handleProgresivaFormChange} />
-                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Estado</label>
+                  <select name="estado" value={progresivaFormData.estado} onChange={handleProgresivaFormChange} required>
+                    <option value="activo">Activo</option>
+                    <option value="inactivo">Inactivo</option>
+                    <option value="completado">Completado</option>
+                  </select>
+                </div>
+                <div className="form-group full-width">
+                  <label>Descripción</label>
+                  <textarea name="descripcion" value={progresivaFormData.descripcion} onChange={handleProgresivaFormChange} />
+                </div>
 
-                  <div className="form-group full-width">
-                    <h4>Perfil de Estratos</h4>
-                    <div className="estratos-editor-list">
-                      {estratosPerfil.map((estrato, index) => (
-                        <div className="estrato-editor-row" key={index}>
-                          <div className="estrato-input-group">
-                            <label>Prof. Inicial (m)</label>
-                            <input type="number" name="profundidad_inicial" value={estrato.profundidad_inicial} onChange={(e) => handleEstratoChange(index, e)} readOnly required />
-                          </div>
-                          <div className="estrato-input-group">
-                            <label>Prof. Final (m)</label>
-                            <input type="number" step="any" name="profundidad_final" value={estrato.profundidad_final} onChange={(e) => handleEstratoChange(index, e)} required />
-                          </div>
-                          <div className="estrato-input-group estrato-descripcion-group">
-                            <label>Descripción</label>
-                            <textarea name="descripcion" value={estrato.descripcion} onChange={(e) => handleEstratoChange(index, e)} rows="1"></textarea>
-                          </div>
-                          <div className="estrato-actions">
-                            <button type="button" onClick={() => handleRemoveEstrato(index)} className="remove-estrato-btn" disabled={index === 0}>×</button>
-                          </div>
+                <div className="form-group full-width">
+                  <h4>Perfil de Estratos</h4>
+                  <div className="estratos-editor-list">
+                    {estratosPerfil.map((estrato, index) => (
+                      <div className="estrato-editor-row" key={index}>
+                        <div className="estrato-input-group">
+                          <label>Prof. Inicial (m)</label>
+                          <input type="number" name="profundidad_inicial" value={estrato.profundidad_inicial} onChange={(e) => handleEstratoChange(index, e)} readOnly required />
                         </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={handleAddEstrato} className="add-estrato-btn-modern">
-                      <PlusIcon /> Añadir Estrato
-                    </button>
+                        <div className="estrato-input-group">
+                          <label>Prof. Final (m)</label>
+                          <input type="number" step="any" name="profundidad_final" value={estrato.profundidad_final} onChange={(e) => handleEstratoChange(index, e)} required />
+                        </div>
+                        <div className="estrato-input-group estrato-descripcion-group">
+                          <label>Descripción</label>
+                          <textarea name="descripcion" value={estrato.descripcion} onChange={(e) => handleEstratoChange(index, e)} rows="1"></textarea>
+                        </div>
+                        <div className="estrato-actions">
+                          <button type="button" onClick={() => handleRemoveEstrato(index)} className="remove-estrato-btn" disabled={index === 0}>×</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                  <button type="button" onClick={handleAddEstrato} className="add-estrato-btn-modern">
+                    <PlusIcon /> Añadir Estrato
+                  </button>
+                </div>
               </div>
               <div className="form-actions">
                 <button type="button" className="close-btn" onClick={() => setManagingProgresiva(null)}>Cancelar</button>
@@ -1613,115 +1909,116 @@ const handleSubmit = async (e) => {
         </div>
       )}
 
-    {viewingEstratos && (
+      {viewingEstratos && (
         <div className="overlay" onClick={() => setViewingEstratos(null)}>
           <div className="batch-details-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Resumen de Estratos: {viewingEstratos.codigo}</h3>
             <div className="table-wrapper">
               {(viewingEstratos.estratos_perfil && viewingEstratos.estratos_perfil.length > 0) ? (
                 <table className="estratos-summary-table">
-                    <thead>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Prof. Inicial (m)</th>
+                      <th>Prof. Final (m)</th>
+                      <th>Descripción</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewingEstratos.estratos_perfil.map((estrato, index) => (
+                      <React.Fragment key={estrato.id || index}>
                         <tr>
-                            <th>#</th>
-                            <th>Prof. Inicial (m)</th>
-                            <th>Prof. Final (m)</th>
-                            <th>Descripción</th>
-                            <th>Acciones</th>
+                          <td>{index + 1}</td>
+                          <td>{estrato.profundidad_inicial}</td>
+                          <td>{estrato.profundidad_final}</td>
+                          <td className="descripcion-cell">{estrato.descripcion}</td>
+                          <td>
+                            <button className="action-btn view" onClick={(e) => { e.stopPropagation(); toggleEnsayos(estrato.id); }}>
+                              <i className="fas fa-eye"></i> Ver Ensayos ({estrato.ensayos ? estrato.ensayos.length : 0})
+                            </button>
+                          </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {viewingEstratos.estratos_perfil.map((estrato, index) => (
-                            <React.Fragment key={estrato.id || index}>
-                                <tr>
-                                    <td>{index + 1}</td>
-                                    <td>{estrato.profundidad_inicial}</td>
-                                    <td>{estrato.profundidad_final}</td>
-                                    <td className="descripcion-cell">{estrato.descripcion}</td>
-                                    <td>
-                                        <button className="action-btn view" onClick={(e) => { e.stopPropagation(); toggleEnsayos(estrato.id); }}>
-                                            <i className="fas fa-eye"></i> Ver Ensayos ({estrato.ensayos ? estrato.ensayos.length : 0})
-                                        </button>
-                                    </td>
-                                </tr>
-                                {expandedEnsayos[estrato.id] && (
-                                    <tr>
-                                        <td colSpan="5">
-                                            <div className="ensayos-container">
-                                                <div className="ensayos-header">
-                                                    <h4>Ensayos realizados</h4>
-                                                    <button className="btn btn-secondary btn-sm addEnsayosBtn">
-                                                        <i className="fas fa-plus"></i> Nuevo Ensayo
-                                                    </button>
-                                                </div>
-                                                <div className="ensayos-list">
-                                                    {estrato.ensayos && estrato.ensayos.length > 0 ? (
-                                                        estrato.ensayos.map((ensayo, ensayoIndex) => (
-                                                            <div className="ensayo-card" key={ensayoIndex}>
-                                                                <div className="ensayo-header">
-                                                                    <div className="ensayo-title">{ensayo.type}</div>
-                                                                    <div className="ensayo-date">{ensayo.date}</div>
-                                                                </div>
-                                                                <div className="ensayo-details">
-                                                                    <div className="detail-item">
-                                                                        <span className="detail-label">Método</span>
-                                                                        <span className="detail-value">{ensayo.method}</span>
-                                                                    </div>
-                                                                    <div className="detail-item">
-                                                                        <span className="detail-label">Resultado</span>
-                                                                        <span className="detail-value" style={{ color: ensayo.status === 'Aprobado' ? 'var(--secondary)' : ensayo.status === 'Pendiente' ? 'var(--warning)' : 'var(--info)' }}>{ensayo.status}</span>
-                                                                    </div>
-                                                                    <div className="detail-item">
-                                                                        <span className="detail-label">Responsable</span>
-                                                                        <span className="detail-value">{ensayo.responsible}</span>
-                                                                    </div>
-                                                                    <div className="detail-item">
-                                                                        <span className="detail-label">Estado</span>
-                                                                        <span className="detail-value" style={{ color: ensayo.status === 'Aprobado' ? 'var(--secondary)' : ensayo.status === 'Pendiente' ? 'var(--warning)' : 'var(--info)' }}>{ensayo.status}</span>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="ensayo-actions">
-                                                                    <button className="action-btn edit"><i className="fas fa-edit"></i></button>
-                                                                    <button className="action-btn delete"><i className="fas fa-trash"></i></button>
-                                                                    <button className="action-btn view"><i className="fas fa-eye"></i></button>
-                                                                </div>
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <p>No hay ensayos registrados para este estrato.</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </React.Fragment>
-                        ))}
-                    </tbody>
+                        {expandedEnsayos[estrato.id] && (
+                          <tr>
+                            <td colSpan="5">
+                              <div className="ensayos-container">
+                                <div className="ensayos-header">
+                                  <h4>Ensayos realizados</h4>
+                                  <button className="btn btn-secondary btn-sm addEnsayosBtn">
+                                    <i className="fas fa-plus"></i> Nuevo Ensayo
+                                  </button>
+                                </div>
+                                <div className="ensayos-list">
+                                  {estrato.ensayos && estrato.ensayos.length > 0 ? (
+                                    estrato.ensayos.map((ensayo, ensayoIndex) => (
+                                      <div className="ensayo-card" key={ensayoIndex}>
+                                        <div className="ensayo-header">
+                                          <div className="ensayo-title">{ensayo.type}</div>
+                                          <div className="ensayo-date">{ensayo.date}</div>
+                                        </div>
+                                        <div className="ensayo-details">
+                                          <div className="detail-item">
+                                            <span className="detail-label">Método</span>
+                                            <span className="detail-value">{ensayo.method}</span>
+                                          </div>
+                                          <div className="detail-item">
+                                            <span className="detail-label">Resultado</span>
+                                            <span className="detail-value" style={{ color: ensayo.status === 'Aprobado' ? 'var(--secondary)' : ensayo.status === 'Pendiente' ? 'var(--warning)' : 'var(--info)' }}>{ensayo.status}</span>
+                                          </div>
+                                          <div className="detail-item">
+                                            <span className="detail-label">Responsable</span>
+                                            <span className="detail-value">{ensayo.responsible}</span>
+                                          </div>
+                                          <div className="detail-item">
+                                            <span className="detail-label">Estado</span>
+                                            <span className="detail-value" style={{ color: ensayo.status === 'Aprobado' ? 'var(--secondary)' : ensayo.status === 'Pendiente' ? 'var(--warning)' : 'var(--info)' }}>{ensayo.status}</span>
+                                          </div>
+                                        </div>
+                                        <div className="ensayo-actions">
+                                          <button className="action-btn edit"><i className="fas fa-edit"></i></button>
+                                          <button className="action-btn delete"><i className="fas fa-trash"></i></button>
+                                          <button className="action-btn view"><i className="fas fa-eye"></i></button>
+                                        </div>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <p>No hay ensayos registrados para este estrato.</p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
                 </table>
               ) : (
                 <p>Esta progresiva no tiene estratos definidos.</p>
               )}
             </div>
             <div className="profundidad-final-display">
-                <label>Profundidad Final Total (m):</label>
-                <span>
-                    {viewingEstratos.estratos_perfil && viewingEstratos.estratos_perfil.length > 0
-                    ? viewingEstratos.estratos_perfil[viewingEstratos.estratos_perfil.length - 1].profundidad_final
-                    : 0}
-                </span>
+              <label>Profundidad Final Total (m):</label>
+              <span>
+                {viewingEstratos.estratos_perfil && viewingEstratos.estratos_perfil.length > 0
+                  ? viewingEstratos.estratos_perfil[viewingEstratos.estratos_perfil.length - 1].profundidad_final
+                  : 0}
+              </span>
             </div>
             <button onClick={() => setViewingEstratos(null)} className="close-btn">Cerrar</button>
           </div>
         </div>
-    )}
+      )}
 
-    {showMapModal && ( // NEW: Render KmlMapModal
+      {showMapModal && ( // NEW: Render KmlMapModal
         <KmlMapModal
-            isOpen={showMapModal}
-            onClose={() => setShowMapModal(false)}
-            progresiva={selectedKmlProgresiva}
+          isOpen={showMapModal}
+          onClose={() => setShowMapModal(false)}
+          progresiva={selectedKmlProgresiva}
+          subProgresivas={subProgresivas} // Pass all sub-progresivas data
         />
-    )}
+      )}
 
       {showProjectSelectionForImport && (
         <div className="overlay">
@@ -1854,7 +2151,7 @@ const handleSubmit = async (e) => {
           {selectedIds.length === 1 && (
             <button className="btn-navegar" onClick={handleNavigateToGestor}>
               <ManageIcon />
-              Gestionar Tramo 
+              Gestionar Tramo
             </button>
           )}
           <button className="btn-navegar" onClick={navigateToProyectos}>

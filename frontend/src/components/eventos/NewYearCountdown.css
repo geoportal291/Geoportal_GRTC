@@ -1,0 +1,244 @@
+/* NewYearCountdown.css */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+
+.new-year-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at center, #0a1e3c 0%, #000000 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    overflow: hidden;
+    color: #fff;
+    font-family: 'Playfair Display', serif;
+}
+
+.ny-content {
+    text-align: center;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    padding: 3rem;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    box-shadow: 0 0 50px rgba(255, 215, 0, 0.1);
+    animation: fadeInUp 1.5s ease-out;
+    max-width: 800px;
+    width: 90%;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(50px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ny-title {
+    font-family: 'Cinzel', serif;
+    font-size: 3rem;
+    color: #FFD700;
+    /* Gold */
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 10px rgba(255, 215, 0, 0.5);
+    letter-spacing: 2px;
+}
+
+.ny-year {
+    font-family: 'Cinzel', serif;
+    font-size: 6rem;
+    color: transparent;
+    background: linear-gradient(to bottom, #FFD700, #B8860B);
+    -webkit-background-clip: text;
+    background-clip: text;
+    margin: 0;
+    line-height: 1;
+    filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.4));
+}
+
+.ny-subtitle {
+    font-size: 1.2rem;
+    color: #e0e0e0;
+    margin-top: 1rem;
+    font-style: italic;
+    letter-spacing: 1px;
+    min-height: 1.5em;
+    /* Ensure height doesn't collapse */
+    transition: opacity 0.5s ease-in-out;
+}
+
+.fade-in-out {
+    animation: fadeInOut 4s infinite;
+}
+
+@keyframes fadeInOut {
+
+    0%,
+    100% {
+        opacity: 0;
+    }
+
+    10%,
+    90% {
+        opacity: 1;
+    }
+}
+
+.ny-countdown {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin: 3rem 0;
+    flex-wrap: wrap;
+}
+
+.ny-time-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1.5rem;
+    border-radius: 10px;
+    min-width: 100px;
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.ny-time-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #FFD700, transparent);
+    animation: scan 2s linear infinite;
+}
+
+@keyframes scan {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.ny-time-value {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+}
+
+.ny-time-label {
+    font-size: 0.8rem;
+    color: #FFD700;
+    margin-top: 0.5rem;
+    letter-spacing: 2px;
+}
+
+.ny-celebration {
+    font-size: 3rem;
+    color: #FFD700;
+    margin: 3rem 0;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.ny-enter-btn {
+    background: linear-gradient(45deg, #B8860B, #FFD700);
+    border: none;
+    padding: 1rem 3rem;
+    border-radius: 50px;
+    font-size: 1.2rem;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 20px rgba(255, 215, 0, 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Cinzel', serif;
+}
+
+.ny-enter-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(255, 215, 0, 0.5);
+    background: linear-gradient(45deg, #FFD700, #ffec8b);
+}
+
+/* Background Effects */
+.ny-stars {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image:
+        radial-gradient(white, rgba(255, 255, 255, .2) 2px, transparent 3px),
+        radial-gradient(white, rgba(255, 255, 255, .15) 1px, transparent 2px),
+        radial-gradient(white, rgba(255, 255, 255, .1) 2px, transparent 3px);
+    background-size: 550px 550px, 350px 350px, 250px 250px;
+    background-position: 0 0, 40px 60px, 130px 270px;
+    animation: animStar 60s linear infinite;
+    z-index: 1;
+}
+
+@keyframes animStar {
+    from {
+        transform: translateY(0px)
+    }
+
+    to {
+        transform: translateY(-2000px)
+    }
+}
+
+@media (max-width: 768px) {
+    .ny-title {
+        font-size: 2rem;
+    }
+
+    .ny-year {
+        font-size: 4rem;
+    }
+
+    .ny-countdown {
+        gap: 1rem;
+    }
+
+    .ny-time-box {
+        padding: 1rem;
+        min-width: 70px;
+    }
+
+    .ny-time-value {
+        font-size: 1.5rem;
+    }
+}

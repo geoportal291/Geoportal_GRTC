@@ -1,5 +1,6 @@
 const db = require('../conexion');
 const ExcelJS = require('exceljs');
+const AdmZip = require('adm-zip');
 const path = require('path');
 const { put, del } = require('@vercel/blob');
 const axios = require('axios');
@@ -7,6 +8,38 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const { exec } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
+const FormData = require('form-data'); // Import FormData
+
+// --- HELPER TO CALL PYTHON WORKER ---
+const processImageWithPython = async (fileBuffer, originalName) => {
+    try {
+        const formData = new FormData();
+        formData.append('file', fileBuffer, originalName);
+
+        const response = await axios.post('http://127.0.0.1:8000/process-image', formData, {
+            headers: {
+                ...formData.getHeaders()
+            },
+            responseType: 'arraybuffer' // Important to receive binary
+        });
+
+        // Extract metadata
+        const detectedIndex = response.headers['x-detected-index'];
+        const ocrText = response.headers['x-ocr-text'];
+
+        console.log(`✅ Python OCR Success: ${originalName} -> Index: ${detectedIndex}`);
+
+        return {
+            buffer: Buffer.from(response.data),
+            index: detectedIndex !== 'null' ? detectedIndex : null,
+            ocrText: ocrText
+        };
+    } catch (error) {
+        console.error(`⚠️ Python OCR Failed for ${originalName}:`, error.message);
+        // Fallback: return original buffer and no index
+        return { buffer: fileBuffer, index: null, ocrText: null };
+    }
+};
 
 
 const processGraphicsJob = async (jobId) => {
@@ -34,7 +67,7 @@ const processGraphicsJob = async (jobId) => {
         // 3. Procesar el archivo desde la ruta local.
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.readFile(filePath);
-        
+
         console.log(`Workbook cargado desde ${filePath} correctamente.`);
 
         const worksheet = workbook.worksheets[0];
@@ -70,7 +103,7 @@ const processGraphicsJob = async (jobId) => {
         filteredImages.sort((a, b) => a.range.tl.row !== b.range.tl.row ? a.range.tl.row - b.range.tl.row : a.range.tl.col - b.range.tl.col);
 
         // Limpiar registros existentes para este proyecto
- // Usamos la función existente para limpiar
+        // Usamos la función existente para limpiar
 
         const extractedImages = [];
         let usefulImageCounter = 1;
@@ -79,17 +112,26 @@ const processGraphicsJob = async (jobId) => {
             const img = workbook.getImage(imgData.imageId);
             const { buffer, extension } = img;
             const currentImageIndex = usefulImageCounter;
+
+            // NOTE: processGraphicsJob (Excel extraction) might NOT need OCR because context gives position?
+            // User requested functions in "subir imagenes" (Upload Images).
+            // But if user wants OCR everywhere, we could add it here too.
+            // For now, leaving Excel logic as is (it relies on cell position).
+
             const filename = `tramoinv/excelft/${projectId}/${currentImageIndex}.${extension}`;
 
-            const blob = await put(filename, buffer, { 
-                access: 'public', 
+            const blob = await put(filename, buffer, {
+                access: 'public',
                 allowOverwrite: true,
-                token: process.env.BLOB_READ_WRITE_TOKEN 
+                token: process.env.BLOB_READ_WRITE_TOKEN
             });
 
+            const entregableCell = worksheet.getRow(imgData.range.tl.row + 1).getCell(13); // Column M is 13th
+            const entregableVal = entregableCell ? (entregableCell.value ? String(entregableCell.value).trim() : null) : null;
+
             await db.query(
-                'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url) VALUES ($1, $2, $3)',
-                [projectId, String(currentImageIndex), blob.url]
+                'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url, entregable) VALUES ($1, $2, $3, $4)',
+                [projectId, String(currentImageIndex), blob.url, entregableVal]
             );
 
             extractedImages.push({ index: currentImageIndex, url: blob.url });
@@ -173,11 +215,19 @@ const deleteAllGraphicImages = async (projectId) => {
 
 const getGraphicsImagesByProjectId = async (projectId) => {
     try {
+        // Auto-migration check (Lazy)
+        try {
+            await db.query("ALTER TABLE alcantarillas_graficos ADD COLUMN IF NOT EXISTS entregable VARCHAR(50)");
+        } catch (migError) {
+            console.error('Auto-migration for column entregable failed:', migError.message);
+        }
+
         const result = await db.query(
             `SELECT 
                 ag.id, 
                 ag.image_index as index, 
-                ag.image_url as url
+                ag.image_url as url,
+                ag.entregable
              FROM alcantarillas_graficos ag
              WHERE ag.proyecto_id = $1 
              ORDER BY ag.image_index`,
@@ -190,7 +240,7 @@ const getGraphicsImagesByProjectId = async (projectId) => {
     }
 };
 
-const reassembleAndProcessChunks = async (projectId, uploadId, originalFilename, userId) => {
+const reassembleAndProcessChunks = async (projectId, uploadId, originalFilename, userId, entregable) => {
     const chunkDir = path.join('/tmp', uploadId);
     const finalFilePath = path.join('/tmp', originalFilename);
 
@@ -214,7 +264,7 @@ const reassembleAndProcessChunks = async (projectId, uploadId, originalFilename,
 
         await fsp.rmdir(chunkDir);
 
-        const jobPayload = { filePath: finalFilePath, originalName: originalFilename, userId: userId };
+        const jobPayload = { filePath: finalFilePath, originalName: originalFilename, userId: userId, entregable: entregable || null };
         const jobType = path.extname(originalFilename).toLowerCase() === '.rar' ? 'rar_extraction' : 'simple_file_upload';
 
         const newJob = await db.query(
@@ -254,8 +304,30 @@ const processRarExtractionJob = async (jobId) => {
 
         await db.query("UPDATE processing_jobs SET status = 'processing', updated_at = NOW() WHERE id = $1", [jobId]);
         const { project_id: projectId } = job;
+        const entregable = job.payload.entregable || null;
 
         // 1. Create extraction directory
+        await fsp.mkdir(extractionDir, { recursive: true });
+
+        // 2. Extract RAR file to disk
+        // ... (lines 312-356 omitted for brevity, keeping existing logic) ...
+        console.log(`Iniciando extracción de ${rarFilePath} a ${extractionDir}`);
+
+        // ... (execution of unrar) ...
+        // I need to be careful not to delete the unrar logic.
+        // I will target the INSERT statement directly and add 'entregable' variable reading at the top of the loop or function.
+        // Actually, let's just insert the variable declaration and update the loop.
+
+        // Re-targeting only the necessary parts to avoid large replace.
+        // Splitting into two replaces might be cleaner, but I'll try to target the loop content or just the INSERT.
+
+        // Let's modify the INSERT part. But I need 'entregable' variable available.
+        // I'll add 'const entregable = job.payload.entregable || null;' at the beginning of the function (after job is loaded).
+
+
+        // Wait, 'job' is loaded at line 302.
+        // I will target line 306.
+
         await fsp.mkdir(extractionDir, { recursive: true });
 
         // 2. Extract RAR file to disk
@@ -313,21 +385,46 @@ const processRarExtractionJob = async (jobId) => {
             const isImage = /\.(jpg|jpeg|png|gif)$/i.test(filePath);
             if (isImage) {
                 extractedImageCount++; // Still count for the final message
-                const originalFileName = path.basename(filePath); // Get original filename
-                // Construct filename for Vercel Blob using original name
-                const filename = `tramoinv/uploaded/${projectId}/${originalFileName}`;
+                const originalFileName = path.basename(filePath);
+                console.log(`Procesando imagen extraída: ${originalFileName}`);
 
                 const fileBuffer = await fsp.readFile(filePath);
 
-                const blob = await put(filename, fileBuffer, {
+                // --- PROCESS WITH PYTHON OCR ---
+                const { buffer: processedBuffer, index: detectedIndex } = await processImageWithPython(fileBuffer, originalFileName);
+
+                // Determine final filename
+                let finalIndex;
+                if (detectedIndex) {
+                    finalIndex = detectedIndex;
+                } else {
+                    // Fallback to auto-increment if OCR failed or found no index
+                    // Check if original filename IS a number?
+                    const match = originalFileName.match(/^(\d+)\./);
+                    if (match) {
+                        finalIndex = match[1];
+                    } else {
+                        // Fallback to original name (dangerous if duplicates?) 
+                        // or generate new index. Let's use original name as index if numeric structure not clear
+                        // But 'image_index' implies numeric. 
+                        // Let's use name.
+                        finalIndex = originalFileName;
+                    }
+                }
+
+                // Construct filename with the FINAL INDEX
+                const ext = path.extname(originalFileName);
+                const filename = `tramoinv/uploaded/${projectId}/${finalIndex}${ext}`;
+
+                const blob = await put(filename, processedBuffer, {
                     access: 'public',
                     allowOverwrite: true,
                     token: process.env.BLOB_READ_WRITE_TOKEN
                 });
 
                 await db.query(
-                    'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url) VALUES ($1, $2, $3)',
-                    [projectId, originalFileName, blob.url] // Store original filename in image_index
+                    'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url, entregable) VALUES ($1, $2, $3, $4)',
+                    [projectId, String(finalIndex), blob.url, entregable]
                 );
             } else {
                 console.log(`Archivo omitido (no es una imagen): ${filePath}`);
@@ -338,7 +435,7 @@ const processRarExtractionJob = async (jobId) => {
             throw new Error('El archivo RAR no contenía imágenes válidas (jpg, jpeg, png, gif).');
         }
 
-        const successResult = { message: `Procesamiento completado. ${extractedImageCount} imágenes extraídas y guardadas.` };
+        const successResult = { message: `Procesamiento completado. ${extractedImageCount} imágenes extraídas y guardadas (OCR implementado).` };
         await db.query("UPDATE processing_jobs SET status = 'completed', result = $1, updated_at = NOW() WHERE id = $2", [successResult, jobId]);
 
     } catch (error) {
@@ -367,25 +464,38 @@ const processSimpleUploadJob = async (jobId) => {
 
         const { project_id: projectId, payload } = job;
         const fileBuffer = await fsp.readFile(filePath);
-        const extension = path.extname(payload.originalName).substring(1);
+        const originalName = payload.originalName;
+        const entregable = payload.entregable || null;
+        const extension = path.extname(originalName).substring(1);
 
-        const maxIndexResult = await db.query('SELECT MAX(image_index::INT) as max_index FROM alcantarillas_graficos WHERE proyecto_id = $1', [projectId]);
-        const nextIndex = (maxIndexResult.rows[0].max_index || 0) + 1;
+        console.log(`Procesando imagen simple: ${originalName} [Entregable: ${entregable}]`);
+
+        // --- PROCESS WITH PYTHON OCR ---
+        const { buffer: processedBuffer, index: detectedIndex } = await processImageWithPython(fileBuffer, originalName);
+
+        let nextIndex;
+        if (detectedIndex) {
+            nextIndex = detectedIndex;
+        } else {
+            // Fallback to auto-increment behavior
+            const maxIndexResult = await db.query('SELECT MAX(image_index::INT) as max_index FROM alcantarillas_graficos WHERE proyecto_id = $1', [projectId]);
+            nextIndex = (maxIndexResult.rows[0].max_index || 0) + 1;
+        }
 
         const filename = `tramoinv/uploaded/${projectId}/${nextIndex}.${extension}`;
 
-        const blob = await put(filename, fileBuffer, {
+        const blob = await put(filename, processedBuffer, {
             access: 'public',
             allowOverwrite: true,
             token: process.env.BLOB_READ_WRITE_TOKEN
         });
 
         await db.query(
-            'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url) VALUES ($1, $2, $3)',
-            [projectId, String(nextIndex), blob.url]
+            'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url, entregable) VALUES ($1, $2, $3, $4)',
+            [projectId, String(nextIndex), blob.url, entregable]
         );
 
-        const successResult = { message: `Archivo subido y guardado correctamente.` };
+        const successResult = { message: `Archivo subido y procesado (OCR: ${detectedIndex ? 'Sí' : 'No'}). Index: ${nextIndex}` };
         await db.query("UPDATE processing_jobs SET status = 'completed', result = $1, updated_at = NOW() WHERE id = $2", [successResult, jobId]);
     } catch (error) {
         console.error(`Error procesando el Job de subida simple ID ${jobId}:`, error);
@@ -398,6 +508,190 @@ const processSimpleUploadJob = async (jobId) => {
     }
 };
 
+const processBulkOcrJob = async (jobId) => {
+    let job, extractionDir;
+
+    // Create query to get job
+    // We assume the payload contains the path to a directory of images OR a standard file list
+    // reusing the logic from RAR extraction is smart. 
+    // If the input was a RAR, it's already extracted to a dir? No, that was inline.
+    // Let's assume the payload provided a 'sourceDir' (extracted from RAR or upload).
+
+    try {
+        const jobResult = await db.query('SELECT * FROM processing_jobs WHERE id = $1', [jobId]);
+        if (jobResult.rows.length === 0) throw new Error(`Job con ID ${jobId} no encontrado.`);
+        job = jobResult.rows[0];
+
+        await db.query("UPDATE processing_jobs SET status = 'processing', updated_at = NOW() WHERE id = $1", [jobId]);
+
+        const { filePath, originalName, sourceDir, isBatch } = job.payload;
+
+        // 1. Prepare directory
+        // If isBatch is true, sourceDir is already prepared by the controller
+        if (isBatch && sourceDir) {
+            extractionDir = sourceDir;
+        } else {
+            // Legacy single file/RAR logic (fallback)
+            extractionDir = path.join('/tmp', `bulk_ocr_${uuidv4()}`);
+            await fsp.mkdir(extractionDir, { recursive: true });
+
+            if (filePath && originalName) {
+                // 2. Extract if it's a RAR/ZIP
+                const ext = path.extname(originalName).toLowerCase();
+                if (ext === '.rar') {
+                    const command = `unrar e "${filePath}" "${extractionDir}"`;
+                    await new Promise((resolve, reject) => {
+                        exec(command, (err) => err ? reject(err) : resolve());
+                    });
+                } else if (ext === '.zip') {
+                    const zip = new AdmZip(filePath);
+                    zip.extractAllTo(extractionDir, true);
+                }
+            }
+        }
+
+        console.log('Bulk Job Payload:', job.payload);
+        console.log('Extraction Dir:', extractionDir);
+
+        // NEW: Check for archives in the directory and extract them (Handling "RAR inside Batch" case)
+        try {
+            const dirContents = await fsp.readdir(extractionDir);
+            for (const file of dirContents) {
+                const fullPath = path.join(extractionDir, file);
+                const ext = path.extname(file).toLowerCase();
+
+                if (ext === '.rar') {
+                    console.log(`Extracting RAR found in batch: ${file}`);
+                    await new Promise((resolve, reject) => {
+                        exec(`unrar e -o+ "${fullPath}" "${extractionDir}"`, (err) => {
+                            if (err) console.error('Unrar error (ignoring):', err);
+                            resolve();
+                        });
+                    });
+                } else if (ext === '.zip') {
+                    console.log(`Extracting ZIP found in batch: ${file}`);
+                    try {
+                        const zip = new AdmZip(fullPath);
+                        zip.extractAllTo(extractionDir, true);
+                    } catch (e) {
+                        console.error('Unzip error:', e);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error scanning/extracting archives in batch:', err);
+        }
+
+        // 3. Find images
+        const getAllFiles = async (dir) => {
+            const dirents = await fsp.readdir(dir, { withFileTypes: true });
+            const files = await Promise.all(dirents.map((dirent) => {
+                const res = path.join(dir, dirent.name);
+                return dirent.isDirectory() ? getAllFiles(res) : res;
+            }));
+            return files.flat();
+        };
+
+        const allFiles = await getAllFiles(extractionDir);
+        console.log(`Found ${allFiles.length} files in total.`);
+
+        const imageFiles = allFiles.filter(f => /\.(jpg|jpeg|png|gif)$/i.test(f));
+        console.log(`Found ${imageFiles.length} image files to process.`);
+
+        const results = [];
+        let processedCount = 0;
+
+        // 4. Process Loop
+        const startTime = Date.now();
+        const totalImages = imageFiles.length;
+
+        for (const imgPath of imageFiles) {
+            try {
+                const fileBuffer = await fsp.readFile(imgPath);
+                const originalName = path.basename(imgPath);
+
+                const formData = new FormData();
+                formData.append('file', fileBuffer, originalName);
+
+                // Call Python Extract Endpoint
+                const pyRes = await axios.post('http://127.0.0.1:8000/extract-metadata', formData, {
+                    headers: { ...formData.getHeaders() }
+                });
+
+                if (pyRes.data && pyRes.data.status === 'ok') {
+                    const meta = pyRes.data.metadata;
+                    results.push({
+                        nombre_imagen: originalName,
+                        numero_indice: meta.numero_indice,
+                        fecha_hora: meta.fecha_hora,
+                        coordenadas_identificador: meta.coordenadas_identificador,
+                        ubicacion: meta.ubicacion,
+                        estacion: meta.estacion,
+                        ruta: meta.ruta,
+                        altitud: meta.altitud
+                    });
+                }
+
+                processedCount++;
+
+                // Update progress in DB every 2 items or 10% (to reduce DB load)
+                if (processedCount % 5 === 0 || processedCount === totalImages) {
+                    const elapsedSeconds = (Date.now() - startTime) / 1000;
+                    const imagesPerSecond = processedCount / elapsedSeconds;
+                    const remainingImages = totalImages - processedCount;
+                    const etrSeconds = imagesPerSecond > 0 ? Math.ceil(remainingImages / imagesPerSecond) : 0;
+                    const progressPercent = Math.round((processedCount / totalImages) * 100);
+
+                    const progressData = {
+                        progress: progressPercent,
+                        etr: etrSeconds,
+                        processed: processedCount,
+                        total: totalImages,
+                        status: 'processing'
+                    };
+
+                    // We update 'result' column with progress data while status is still 'processing'
+                    await db.query("UPDATE processing_jobs SET result = $1, updated_at = NOW() WHERE id = $2", [progressData, jobId]);
+                }
+
+            } catch (err) {
+                console.error(`Error processing ${imgPath}:`, err.message);
+                results.push({
+                    nombre_imagen: path.basename(imgPath),
+                    error: 'Error en procesamiento'
+                });
+            }
+        }
+
+        // 5. Create Result File (JSON)
+        // Store as Blob so user can download
+        const resultJson = JSON.stringify(results, null, 2);
+        const resultFilename = `bulk_ocr_results_${jobId}.json`;
+
+        const blob = await put(`tramoinv/exports/${resultFilename}`, resultJson, {
+            access: 'public',
+            allowOverwrite: true,
+            token: process.env.BLOB_READ_WRITE_TOKEN,
+            contentType: 'application/json'
+        });
+
+        const successResult = {
+            message: `Procesamiento completado. ${results.length} imágenes analizadas.`,
+            downloadUrl: blob.url
+        };
+
+        await db.query("UPDATE processing_jobs SET status = 'completed', result = $1, updated_at = NOW() WHERE id = $2", [successResult, jobId]);
+
+    } catch (error) {
+        console.error(`Error en Bulk OCR Job ${jobId}:`, error);
+        if (jobId) {
+            await db.query("UPDATE processing_jobs SET status = 'failed', result = $1, updated_at = NOW() WHERE id = $2", [{ error: error.message }, jobId]);
+        }
+    } finally {
+        if (extractionDir && fs.existsSync(extractionDir)) await fsp.rm(extractionDir, { recursive: true, force: true });
+        if (job && job.payload.filePath && fs.existsSync(job.payload.filePath)) await fsp.unlink(job.payload.filePath);
+    }
+};
 
 module.exports = {
     processGraphicsJob,
@@ -407,4 +701,5 @@ module.exports = {
     reassembleAndProcessChunks,
     processRarExtractionJob,
     processSimpleUploadJob,
+    processBulkOcrJob, // Export new function
 };

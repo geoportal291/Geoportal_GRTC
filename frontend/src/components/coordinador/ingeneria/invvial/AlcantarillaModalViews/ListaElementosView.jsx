@@ -70,6 +70,7 @@ const ListaElementosView = ({
   handleEditClick,
   setModalViewMode,
   type = 'alcantarillas', // Default to alcantarillas
+  onDeleteElement,
 }) => {
   const config = viewConfig[type] || viewConfig.alcantarillas;
 
@@ -123,7 +124,22 @@ const ListaElementosView = ({
                     return <td key={field}>{val}</td>;
                   })}
                   <td>
-                    <button onClick={() => handleEditClick(element)} className="modal-button-edit">Editar</button>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <button onClick={() => handleEditClick(element)} className="modal-button-edit">Editar</button>
+                      <button
+                        onClick={() => {
+                          if (onDeleteElement) {
+                            onDeleteElement(element, type);
+                          } else {
+                            console.error("onDeleteElement not provided");
+                          }
+                        }}
+                        className="modal-button-delete"
+                        style={{ backgroundColor: '#ff4d4f', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

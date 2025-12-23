@@ -86,7 +86,7 @@ const calculateRouteLength = (routePositions) => {
 };
 
 const murosService = {
-    processExcelAndSaveMuros: async (fileBuffer, projectId, utmZone) => {
+    processExcelAndSaveMuros: async (fileBuffer, projectId, utmZone, entregableDefault) => {
         try {
             // 1. Get KML URL from the same source as the frontend
             const kmlUrlRes = await db.query('SELECT kml_url FROM invvial WHERE id_proyecto = $1', [projectId]);
@@ -106,18 +106,14 @@ const murosService = {
             geoJson.features.forEach(feature => {
                 if (feature.geometry && (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') && feature.properties && feature.properties.name) {
                     const tramoName = feature.properties.name.toUpperCase().trim();
-                    // In GeoJSON LineString, coordinates are [lng, lat], switch to [lat, lng]
                     const positions = feature.geometry.coordinates.map(coord => [coord[1], coord[0]]);
                     routesMap[tramoName] = positions;
-
-                    // Also add by number key for flexibility
                     const tramoNumberMatch = tramoName.match(/\d+/);
                     if (tramoNumberMatch) {
                         routesMap[tramoNumberMatch[0]] = positions;
                     }
                 }
             });
-            // console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
 
             // 3. Get calibration data for the project
             const calibrationRes = await db.query(
@@ -128,7 +124,6 @@ const murosService = {
                 acc[cal.nombre_tramo.toUpperCase().trim()] = cal;
                 return acc;
             }, {});
-            // console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
 
             // 4. Process Excel
             const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
@@ -143,17 +138,44 @@ const murosService = {
             const murosData = [];
             let murosSinCoords = 0;
 
-            // 5. Iterate through rows from row 12 (index 11)
-            for (let i = 11; i < jsonData.length; i++) {
+            // Find Header Row and Map Columns
+            let headerRowIndex = 11; // Default
+            const colMap = {
+                entregable: 41, // AP
+                panel: 42, // AQ
+                progresiva: 43, // AR
+                clase: 44, // AS 
+                material: 45, // AT
+                estado: 46, // AU
+                lado: 47, // AV
+                longitud: 48, // AW
+                alto: 49, // AX
+                ancho: 50 // AY
+            };
+
+            // Heuristic search for header row
+            for (let i = 0; i < 20; i++) {
+                const row = jsonData[i];
+                if (!row) continue;
+                if (row.some(c => typeof c === 'string' && c.toUpperCase().includes('MURO') && c.toUpperCase().includes('PROGRESIVA'))) {
+                    headerRowIndex = i;
+                    const entIdx = row.findIndex(c => typeof c === 'string' && c.toUpperCase().includes('ENTREGABLE'));
+                    if (entIdx !== -1) colMap.entregable = entIdx;
+                    break;
+                }
+            }
+
+
+            // 5. Iterate through rows
+            for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if (!row || row.length === 0) continue;
 
-                const claseCell = row[44]; // Column AS (Index 44)
+                const claseCell = row[colMap.clase];
 
                 if (typeof claseCell === 'string' && claseCell.toLowerCase().includes('muro')) {
-                    // console.log(`DEBUG: 'Muro' encontrado en fila ${i + 1}, Columna AS: "${claseCell}"`);
 
-                    const progresivaStr = row[43]; // Column AR (Index 43)
+                    const progresivaStr = row[colMap.progresiva];
                     if (!progresivaStr) {
                         console.warn(`Fila ${i + 1}: Se encontró un muro pero falta la progresiva. Saltando.`);
                         continue;
@@ -195,8 +217,7 @@ const murosService = {
                         }
 
                         if (!routePositions) {
-                            console.error(`Could not find KML route for tramo key '${tramoIdKey}' or tramo name '${tramoName}'. Available route keys are: [${Object.keys(routesMap).join(', ')}]`);
-                            console.warn(`Fila ${i + 1}: No se encontró ruta KML para el tramo '${tramoName}'. Saltando.`);
+                            console.warn(`Fila ${i + 1}: No se encontró ruta KML parcial para el tramo '${tramoName}'.`);
                             continue;
                         }
 
@@ -207,7 +228,7 @@ const murosService = {
                             const calLengthM = calFinM - calInicioM;
 
                             if (calLengthM <= 0 || kmlRouteLength <= 0) {
-                                throw new Error(`Invalid calibration or KML route length for tramo ${tramoName}.`);
+                                throw new Error(`Invalid calibration or KML route length.`);
                             }
 
                             const distOnKml = ((progresivaExcelM - calInicioM) / calLengthM) * kmlRouteLength;
@@ -222,8 +243,7 @@ const murosService = {
                             console.error(`Error processing calibrated coordinates for row ${i + 1}: ${e.message}`);
                         }
                     } else {
-                        console.warn(`Fila ${i + 1}: No se encontró un tramo calibrado para la progresiva '${progresivaStr}'. Usando cálculo geométrico simple.`);
-
+                        // Fallback uncalibrated
                         const orderedRouteKeys = Object.keys(routesMap).sort((a, b) => {
                             const numA = parseInt(a.replace(/[^0-9]/g, ''), 10);
                             const numB = parseInt(b.replace(/[^0-9]/g, ''), 10);
@@ -232,19 +252,7 @@ const murosService = {
                         let fullRoute = [];
                         orderedRouteKeys.forEach(key => {
                             const routeSegment = routesMap[key];
-                            if (routeSegment && Array.isArray(routeSegment)) {
-                                if (fullRoute.length > 0 && routeSegment.length > 0) {
-                                    const lastPoint = fullRoute[fullRoute.length - 1];
-                                    const firstPoint = routeSegment[0];
-                                    if (lastPoint[0] === firstPoint[0] && lastPoint[1] === firstPoint[1]) {
-                                        fullRoute.push(...routeSegment.slice(1));
-                                    } else {
-                                        fullRoute.push(...routeSegment);
-                                    }
-                                } else {
-                                    fullRoute.push(...routeSegment);
-                                }
-                            }
+                            if (routeSegment && Array.isArray(routeSegment)) fullRoute.push(...routeSegment);
                         });
 
                         if (fullRoute.length > 1) {
@@ -252,10 +260,7 @@ const murosService = {
                             if (coords) {
                                 latitud = coords.latitude;
                                 longitud = coords.longitude;
-                                // console.log(`Fila ${i + 1}: Coordenadas (sin calibrar) calculadas: ${latitud}, ${longitud}`);
                             }
-                        } else {
-                            console.warn(`Fila ${i + 1}: No se pudo construir una ruta KML completa para el cálculo geométrico.`);
                         }
                     }
 
@@ -265,22 +270,31 @@ const murosService = {
                         continue;
                     }
 
+                    // Determine Entregable
+                    let entregableVal = row[colMap.entregable];
+                    if (!entregableVal && entregableDefault) {
+                        entregableVal = `E-${entregableDefault}`;
+                    }
+                    if (entregableVal && !String(entregableVal).toUpperCase().startsWith('E-') && !String(entregableVal).toUpperCase().startsWith('ENTREGABLE')) {
+                        // Keep as is
+                    }
+                    if (!entregableVal && entregableDefault) entregableVal = `E-${entregableDefault}`;
+
                     const muro = {
                         id_proyecto: projectId,
-                        entregable: row[41] || null, // Col AP
-                        panel_fotografico_codigo: row[42] || null, // Col AQ
-                        progresiva: progresivaStr, // Col AR
-                        clase: claseCell, // Col AS
-                        material: row[45] || null, // Col AT
-                        estado: row[46] || null, // Col AU
-                        lado: row[47] || null, // Col AV
-                        longitud_muro: parseFloat(String(row[48]).replace(/,/g, '')) || null, // Col AW
-                        alto: parseFloat(String(row[49]).replace(/,/g, '')) || null, // Col AX
-                        ancho: parseFloat(String(row[50]).replace(/,/g, '')) || null, // Col AY
+                        entregable: entregableVal,
+                        panel_fotografico_codigo: row[colMap.panel] || null,
+                        progresiva: progresivaStr,
+                        clase: claseCell,
+                        material: row[colMap.material] || null,
+                        estado: row[colMap.estado] || null,
+                        lado: row[colMap.lado] || null,
+                        longitud_muro: parseFloat(String(row[colMap.longitud]).replace(/,/g, '')) || null,
+                        alto: parseFloat(String(row[colMap.alto]).replace(/,/g, '')) || null,
+                        ancho: parseFloat(String(row[colMap.ancho]).replace(/,/g, '')) || null,
                         latitud: latitud,
                         longitud: longitud
                     };
-                    // console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, muro);
 
                     murosData.push(muro);
                 }
@@ -407,6 +421,16 @@ const murosService = {
             throw new Error('Error al eliminar datos de muros.');
         } finally {
             client.release();
+        }
+    },
+
+    deleteMuro: async (id) => {
+        try {
+            const result = await db.query('DELETE FROM muros WHERE id_muro = $1', [id]);
+            return result.rowCount;
+        } catch (error) {
+            console.error(`Error al eliminar muro ${id}:`, error);
+            throw new Error('Error al eliminar muro de la base de datos.');
         }
     }
 };

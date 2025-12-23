@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import './ResultadosBrevesModal.css';
+import { calcularResultados } from './ensayos.calculos.js';
 
 // Helper function to get nested property values from an object
 const getNestedValue = (obj, path) => {
@@ -8,13 +9,42 @@ const getNestedValue = (obj, path) => {
 };
 
 const ResultadosBrevesModal = ({ ensayo, onClose }) => {
-  if (!ensayo) return null;
-
   // Use results_config from the ensayo object, with a fallback for safety
-  const config = ensayo.results_config || { groups: [] };
+  const config = ensayo?.results_config || { groups: [] };
 
-  console.log('[DEBUG RESULTADOS BREVES] Estructura de ensayo.resultado:', ensayo.resultado);
+  // === LÓGICA DE CÁLCULO AL VUELO ===
+  // Si el ensayo tiene resultados guardados, los usamos.
+  // Si no, y tiene config_calculos, calculamos al vuelo (ideal para imports).
+  const resultadosFinales = useMemo(() => {
+    if (!ensayo) return {}; // Manejo seguro dentro del hook
+
+    if (ensayo.resultado) {
+      console.log('[RESULTADOS BREVES] Usando resultados persistidos DB');
+      return ensayo.resultado;
+    }
+    if (ensayo.config_calculos && ensayo.datos_formulario) {
+      console.log('[RESULTADOS BREVES] Resultados persistidos son NULL. Calculando al vuelo...');
+      try {
+        // calcularResultados devuelve un objeto { results: ... } o la estructura que defina la config
+        const calculados = calcularResultados(ensayo.config_calculos, ensayo.datos_formulario);
+        console.log('[RESULTADOS BREVES] Resultado del cálculo al vuelo:', calculados);
+
+        // Ajuste importante: Si el motor nuevo devuelve { "results": { "granulometria": ... } }
+        // y nuestras claves son "results.granulometria...", necesitamos asegurarnos de que el match sea correcto.
+        // calcularResultados (new engine) devuelve el objeto tal cual.
+        return calculados;
+      } catch (e) {
+        console.error('Error calculando al vuelo:', e);
+        return {};
+      }
+    }
+    return {};
+  }, [ensayo]);
+
+  console.log('[DEBUG RESULTADOS BREVES] Data Final a Renderizar:', resultadosFinales);
   console.log('[DEBUG RESULTADOS BREVES] Configuración config:', config);
+
+  if (!ensayo) return null;
 
   return (
     <div className="resultados-modal-overlay" onClick={onClose}>
@@ -36,10 +66,10 @@ const ResultadosBrevesModal = ({ ensayo, onClose }) => {
                     // Normalizar el path: quitar 'results.' inicial si existe, ya que ensayo.resultado es el objeto results
                     let searchPath = resultsKey ? `${resultsKey}.${field.name}` : field.name;
 
-                    // 1. Prioridad: Buscar en ensayo.resultado (cálculos)
+                    // 1. Prioridad: Buscar en resultadosFinales (cálculos persistidos o al vuelo)
                     // Si el path empieza con 'results.', lo limpiamos para buscar dentro del objeto resultado
                     const cleanPathResult = searchPath.replace(/^results\./, '');
-                    let value = getNestedValue(ensayo.resultado, cleanPathResult);
+                    let value = getNestedValue(resultadosFinales, cleanPathResult);
 
                     // 2. Fallback: Buscar en datos_formulario (inputs crudos)
                     // Si no lo encontramos en resultados, buscamos en los inputs

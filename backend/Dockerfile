@@ -1,13 +1,17 @@
 #Usa Node.js 18 como base
 FROM node:18
 
-# Instalar GDAL/OGR y sus dependencias
-# Actualizar la lista de paquetes e instalar gdal-bin
+# Instalar GDAL/OGR y sus dependencias + PYTHON
+# Actualizar la lista de paquetes e instalar gdal-bin y python
 RUN sed -i 's/Components: main/Components: main contrib non-free/g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y \
     gdal-bin \
     python3-gdal \
     unrar \
+    python3 \
+    python3-pip \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # --- AÑADIR ESTAS LÍNEAS PARA DEPURACIÓN ---
@@ -31,9 +35,21 @@ COPY package-lock.json ./
 
 RUN npm install
 
+# Install Python dependencies
+COPY python_worker/requirements.txt ./python_worker/requirements.txt
+
+# OPTIMIZATION: Install CPU-only PyTorch first to avoid massive CUDA download
+# This reduces image size from >3GB to ~500MB
+RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --break-system-packages
+
+RUN pip3 install --no-cache-dir -r python_worker/requirements.txt --break-system-packages
 
 COPY . .
 
+# Make start script executable
+RUN chmod +x start.sh
+
 EXPOSE 5000
 
-CMD ["node", "--max-old-space-size=16384", "index.js"]
+# CMD ["node", "--max-old-space-size=16384", "index.js"]
+CMD ["./start.sh"]

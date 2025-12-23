@@ -4,7 +4,7 @@ const { DateTime } = require('luxon'); // Assuming DateTime is used in project l
 const { v4: uuidv4 } = require('uuid'); // Assuming uuidv4 is used in project logic
 const kmlService = require('./kmlService'); // NEW: Import kmlService
 const { put } = require('@vercel/blob'); // NEW: Import Vercel Blob
-
+const utm = require('utm'); // NEW: Import UTM for coordinate conversion
 
 // Listar proyectos con detalle (incluyendo los nuevos campos)
 const getDetailedProyectos = async () => {
@@ -71,16 +71,37 @@ const getProyectoById = async (id) => {
                 p.nombre_tramo, p.proyecto_nom, p.solicitante, p.departamento, p.provincia,
                 p.distrito, p.localidad, p.longitud_total, p.progresiva_inicial, p.tipo_via,
                 p.intervalo_manual, p.is_interval_manual, p.descripcion_larga, p.create_at, p.update_at,
-                p.intervalo_manual, p.is_interval_manual, p.descripcion_larga, p.create_at, p.update_at,
-                p.kml_trazado_id, p.url_kml, kt.kml_filename, kt.kml_uploaded_at,
+                p.kml_trazado_id, 
+                COALESCE(v.kml_url, p.url_kml) as url_kml, 
+                kt.kml_filename, kt.kml_uploaded_at,
                 COALESCE(json_agg(pr) FILTER (WHERE pr.id IS NOT NULL), '[]'::json) as progresivas
             FROM proyectos p
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
+            LEFT JOIN invvial v ON v.id_proyecto = p.id
             LEFT JOIN progresivas pr ON pr.proyecto_id = p.id AND pr.parent_id IS NULL
             WHERE p.id = $1
-            GROUP BY p.id, kt.id
+            GROUP BY p.id, kt.id, v.kml_url
         `, [id]);
-        return result.rows[0];
+
+        const project = result.rows[0];
+
+        if (project) {
+            // Fetch calibration data
+            const calRes = await db.query(
+                'SELECT nombre_tramo, progresiva_inicio, progresiva_fin FROM proyecto_calibracion_tramos WHERE id_proyecto = $1',
+                [id]
+            );
+            const calibrationData = {};
+            calRes.rows.forEach(row => {
+                calibrationData[row.nombre_tramo] = {
+                    start: row.progresiva_inicio,
+                    end: row.progresiva_fin,
+                };
+            });
+            project.calibracion = calibrationData;
+        }
+
+        return project;
     } catch (err) {
         console.error(`Error al obtener proyecto ${id} en service:`, err);
         throw new Error(`Error al obtener el proyecto ${id}.`);
@@ -333,7 +354,7 @@ const exportProyectos = async () => {
     }
 };
 
-const updateProyecto = async (id, projectData, progresivaData) => {
+const updateProyecto = async (id, projectData, progresivaData, calibrationData) => {
     const client = await db.connect();
     try {
         await client.query('BEGIN');
@@ -341,7 +362,9 @@ const updateProyecto = async (id, projectData, progresivaData) => {
         const {
             nombre_tramo, proyecto_nom, solicitante, departamento, provincia,
             distrito, localidad, longitud_total, progresiva_inicial, tipo_via,
-            intervalo_manual, isIntervalManual, descripcion_larga, estado
+            intervalo_manual, isIntervalManual, descripcion_larga, estado,
+            // New fields
+            codigo, nombre_proyecto, descripcion_proyecto
         } = projectData;
 
         // Basic backend validations
@@ -365,13 +388,18 @@ const updateProyecto = async (id, projectData, progresivaData) => {
                     is_interval_manual = $12,
                     descripcion_larga = $13,
                     estado = $14,
+                    codigo = COALESCE($15, codigo),
+                    nombre_proyecto = COALESCE($16, nombre_proyecto),
+                    descripcion_proyecto = COALESCE($17, descripcion_proyecto),
                     update_at = NOW()
-                WHERE id = $15
+                WHERE id = $18
                 RETURNING *
             `, [
             nombre_tramo, proyecto_nom, solicitante, departamento, provincia,
             distrito, localidad, longitud_total, progresiva_inicial, tipo_via,
-            intervalo_manual, isIntervalManual, descripcion_larga, estado, id
+            intervalo_manual, isIntervalManual, descripcion_larga, estado,
+            codigo, nombre_proyecto, descripcion_proyecto,
+            id
         ]);
         if (projectUpdateResult.rows.length === 0) {
             throw new Error('Proyecto no encontrado para actualizar.');
@@ -407,6 +435,28 @@ const updateProyecto = async (id, projectData, progresivaData) => {
                 console.warn(`No se encontró progresiva principal para el proyecto ${id} con código ${progCodigo} al actualizar.`);
             }
         }
+
+        // --- Handle Calibration Data ---
+        // If calibrationData is provided (even if empty object), we assume a replacement or update intent.
+        // However, if it's null/undefined, we might just skip it.
+        // Frontend sends it if identifiedTramos.length > 0.
+        if (calibrationData) {
+            // Option 1: Delete all existing for this project and re-insert (Cleanest for synchronization with KML)
+            await client.query('DELETE FROM proyecto_calibracion_tramos WHERE id_proyecto = $1', [id]);
+
+            for (const tramoName in calibrationData) {
+                const { start, end } = calibrationData[tramoName];
+                // Only insert if valid data exists
+                if (start && end) {
+                    await client.query(
+                        `INSERT INTO proyecto_calibracion_tramos (id_proyecto, nombre_tramo, progresiva_inicio, progresiva_fin)
+                         VALUES ($1, $2, $3, $4)`,
+                        [id, tramoName, start, end]
+                    );
+                }
+            }
+        }
+        // -------------------------------
 
         await client.query('COMMIT');
         return projectUpdateResult.rows[0];
@@ -701,6 +751,190 @@ const saveCalibracionForProyecto = async (id_proyecto, calibracionData) => {
     }
 };
 
+const getProjectStatistics = async (projectId) => {
+    try {
+        const client = await db.connect();
+        try {
+            // 1. Calculate Total Calibrated Length
+            const calibrationRes = await client.query(
+                'SELECT progresiva_inicio, progresiva_fin FROM proyecto_calibracion_tramos WHERE id_proyecto = $1',
+                [projectId]
+            );
+
+            let totalCalibratedMeters = 0;
+            const parseProg = (p) => {
+                if (!p) return 0;
+                // Normalize: remove "KM", spaces, handle 12+345 format
+                const clean = p.toUpperCase().replace('KM', '').replace(/\s/g, '');
+                const parts = clean.split('+');
+                if (parts.length === 2) {
+                    return parseInt(parts[0]) * 1000 + parseFloat(parts[1]);
+                }
+                return 0;
+            };
+
+            calibrationRes.rows.forEach(row => {
+                const start = parseProg(row.progresiva_inicio);
+                const end = parseProg(row.progresiva_fin);
+                if (end > start) {
+                    totalCalibratedMeters += (end - start);
+                }
+            });
+            const totalCalibratedKm = (totalCalibratedMeters / 1000).toFixed(2);
+
+
+            // 2. Parallel Queries for Inventory Counts & Groupings
+            const queries = {
+                alcantarillas: 'SELECT count(*) FROM alcantarillas WHERE id_proyecto = $1',
+                badenes: 'SELECT count(*) FROM badenes WHERE id_proyecto = $1',
+                puentes: 'SELECT count(*) FROM puentes WHERE id_proyecto = $1',
+                muros: 'SELECT count(*) FROM muros WHERE id_proyecto = $1',
+
+                senales_informativas: 'SELECT count(*) FROM senales_informativas WHERE id_proyecto = $1',
+                senales_preventivas: 'SELECT count(*) FROM senales_preventivas WHERE id_proyecto = $1',
+                hitos: 'SELECT count(*) FROM hitos_kilometricos WHERE id_proyecto = $1',
+
+                canteras: 'SELECT count(*) FROM invvial_canteras WHERE id_proyecto = $1',
+                fuentes: 'SELECT count(*) FROM invvial_fuentes WHERE id_proyecto = $1',
+
+                estructuras_existentes: 'SELECT count(*) FROM estructuras_existentes WHERE id_proyecto = $1',
+                interferencias: 'SELECT count(*) FROM interferencias_electricas WHERE id_proyecto = $1',
+
+                // Grouped Queries
+                zonas_criticas_tipos: 'SELECT tipo, count(*) FROM zonas_criticas WHERE id_proyecto = $1 GROUP BY tipo',
+                senales_tipos: `
+                    SELECT 'Informativa' as categoria, tipo, count(*) FROM senales_informativas WHERE id_proyecto = $1 GROUP BY tipo
+                    UNION ALL
+                    SELECT 'Preventiva' as categoria, tipo, count(*) FROM senales_preventivas WHERE id_proyecto = $1 GROUP BY tipo
+                `,
+
+                // Entregables (Combined)
+                entregables: `
+                    SELECT entregable, count(*) as count FROM (
+                        SELECT entregable FROM alcantarillas WHERE id_proyecto = $1
+                        UNION ALL SELECT entregable FROM badenes WHERE id_proyecto = $1
+                        UNION ALL SELECT entregable FROM puentes WHERE id_proyecto = $1
+                        UNION ALL SELECT entregable FROM muros WHERE id_proyecto = $1
+                        UNION ALL SELECT entregable FROM senales_informativas WHERE id_proyecto = $1
+                        UNION ALL SELECT entregable FROM senales_preventivas WHERE id_proyecto = $1
+                        UNION ALL SELECT entregable FROM hitos_kilometricos WHERE id_proyecto = $1
+                        UNION ALL SELECT entregable FROM zonas_criticas WHERE id_proyecto = $1
+                    ) as combined GROUP BY entregable
+                `,
+
+                // Max Progressive (Heuristic: Scan Hitos & Alcantarillas)
+                max_prog: `
+                    SELECT max(progresiva) as max_p FROM (
+                        SELECT progresiva FROM hitos_kilometricos WHERE id_proyecto = $1
+                        UNION ALL
+                        SELECT progresiva FROM alcantarillas WHERE id_proyecto = $1
+                    ) as progs
+                `,
+
+                // Debug: Unassigned Breakdown
+                unassigned_breakdown: `
+                    SELECT 'Alcantarillas' as source, count(*) as count FROM alcantarillas WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
+                    UNION ALL SELECT 'Badenes', count(*) FROM badenes WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
+                    UNION ALL SELECT 'Puentes', count(*) FROM puentes WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
+                    UNION ALL SELECT 'Muros', count(*) FROM muros WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
+                    UNION ALL SELECT 'Senales Informativas', count(*) FROM senales_informativas WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
+                    UNION ALL SELECT 'Senales Preventivas', count(*) FROM senales_preventivas WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
+                    UNION ALL SELECT 'Hitos', count(*) FROM hitos_kilometricos WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
+                    UNION ALL SELECT 'Zonas Criticas', count(*) FROM zonas_criticas WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
+                `
+            };
+
+            // Execute all queries in parallel
+            const keys = Object.keys(queries);
+            const promises = keys.map(key => client.query(queries[key], [projectId]));
+            const results = await Promise.all(promises);
+
+            const data = {};
+            keys.forEach((key, index) => {
+                data[key] = results[index].rows;
+            });
+
+            // 3. Process Results
+            const totalElementos =
+                parseInt(data.alcantarillas[0].count) +
+                parseInt(data.badenes[0].count) +
+                parseInt(data.puentes[0].count) +
+                parseInt(data.muros[0].count) +
+                parseInt(data.senales_informativas[0].count) +
+                parseInt(data.senales_preventivas[0].count) +
+                parseInt(data.hitos[0].count) +
+                parseInt(data.canteras[0].count) +
+                parseInt(data.fuentes[0].count) +
+                parseInt(data.estructuras_existentes[0].count) +
+                parseInt(data.interferencias[0].count) +
+                data.zonas_criticas_tipos.reduce((acc, r) => acc + parseInt(r.count), 0);
+
+            // Max Prog Parsing
+            let maxMeters = 0;
+            if (data.max_prog[0] && data.max_prog[0].max_p) {
+                const allProgsRes = await client.query(`
+                    SELECT progresiva FROM hitos_kilometricos WHERE id_proyecto = $1
+                    UNION ALL SELECT progresiva FROM alcantarillas WHERE id_proyecto = $1
+                 `, [projectId]);
+
+                allProgsRes.rows.forEach(r => {
+                    const m = parseProg(r.progresiva);
+                    if (m > maxMeters) maxMeters = m;
+                });
+            }
+
+            const avanceGeograficoPct = totalCalibratedMeters > 0 ? ((maxMeters / totalCalibratedMeters) * 100).toFixed(1) : 0;
+
+            // Formatted Response
+            return {
+                kpis: {
+                    totalCalibratedKm,
+                    totalCalibratedMeters,
+                    avanceGeograficoPct,
+                    maxRegisteredMeters: maxMeters,
+                    totalElementos
+                },
+                activos: {
+                    alcantarillas: parseInt(data.alcantarillas[0].count),
+                    badenes: parseInt(data.badenes[0].count),
+                    puentes: parseInt(data.puentes[0].count),
+                    muros: parseInt(data.muros[0].count)
+                },
+                senalizacion: {
+                    informativas: parseInt(data.senales_informativas[0].count),
+                    preventivas: parseInt(data.senales_preventivas[0].count),
+                    hitos: parseInt(data.hitos[0].count),
+                    tipos: data.senales_tipos
+                },
+                recursos: {
+                    canteras: parseInt(data.canteras[0].count),
+                    fuentes: parseInt(data.fuentes[0].count)
+                },
+                otros: {
+                    estructuras_existentes: parseInt(data.estructuras_existentes[0].count),
+                    interferencias: parseInt(data.interferencias[0].count)
+                },
+                zonas_criticas: data.zonas_criticas_tipos,
+                entregables: data.entregables.reduce((acc, r) => {
+                    acc[r.entregable || 'Sin Asignar'] = parseInt(r.count);
+                    return acc;
+                }, {}),
+                debug_unassigned: data.unassigned_breakdown.reduce((acc, r) => {
+                    if (parseInt(r.count) > 0) acc[r.source] = parseInt(r.count);
+                    return acc;
+                }, {})
+            };
+
+        } finally {
+            client.release();
+        }
+
+    } catch (err) {
+        console.error(`Error al obtener estadísticas del proyecto ${projectId}:`, err);
+        throw new Error('Error al obtener estadísticas detalladas.');
+    }
+};
+
 const deleteCalibracionForProyecto = async (id_proyecto) => {
     try {
         await db.query('DELETE FROM proyecto_calibracion_tramos WHERE id_proyecto = $1', [id_proyecto]);
@@ -711,6 +945,93 @@ const deleteCalibracionForProyecto = async (id_proyecto) => {
     }
 };
 
+
+
+const getProjectMapData = async (projectId) => {
+    try {
+        const client = await db.connect();
+        try {
+            const queries = {
+                alcantarillas: 'SELECT id_alcantarilla as id, latitud, longitud, 0 as este, 0 as norte, codigo, progresiva FROM alcantarillas WHERE id_proyecto = $1',
+                badenes: 'SELECT id_baden as id, latitud, longitud, 0 as este, 0 as norte, codigo, progresiva FROM badenes WHERE id_proyecto = $1',
+                puentes: 'SELECT id_puente as id, latitud, longitud, 0 as este, 0 as norte, panel_fotografico_codigo as codigo, progresiva FROM puentes WHERE id_proyecto = $1',
+                muros: 'SELECT id_muro as id, latitud, longitud, 0 as este, 0 as norte, panel_fotografico_codigo as codigo, progresiva FROM muros WHERE id_proyecto = $1',
+
+                senales_informativas: 'SELECT id_senal_informativa as id, latitud, longitud, 0 as este, 0 as norte, codigo, progresiva FROM senales_informativas WHERE id_proyecto = $1',
+                senales_preventivas: 'SELECT id_senal_preventiva as id, latitud, longitud, 0 as este, 0 as norte, codigo, progresiva FROM senales_preventivas WHERE id_proyecto = $1',
+                hitos_kilometricos: 'SELECT id_hito_kilometrico as id, latitud, longitud, 0 as este, 0 as norte, codigo, progresiva FROM hitos_kilometricos WHERE id_proyecto = $1',
+
+                canteras: 'SELECT id as id, latitud, longitud, 0 as este, 0 as norte, panel_fotografico as codigo, progresiva FROM invvial_canteras WHERE id_proyecto = $1',
+                fuentes: 'SELECT id as id, latitud, longitud, 0 as este, 0 as norte, panel_fotografico as codigo, progresiva FROM invvial_fuentes WHERE id_proyecto = $1',
+
+                estructuras_existentes: 'SELECT id_estructura as id, latitud_inicio as latitud, longitud_inicio as longitud, 0 as este, 0 as norte, codigo, progresiva_inicio as progresiva FROM estructuras_existentes WHERE id_proyecto = $1',
+                interferencias_electricas: 'SELECT id as id, latitud, longitud, 0 as este, 0 as norte, tipo_interferencia as codigo, progresiva FROM interferencias_electricas WHERE id_proyecto = $1',
+                zonas_criticas: 'SELECT id_zona_critica as id, latitud, longitud, 0 as este, 0 as norte, codigo, tipo, progresiva FROM zonas_criticas WHERE id_proyecto = $1',
+            };
+
+            const keys = Object.keys(queries);
+            const promises = keys.map(key => client.query(queries[key], [projectId]));
+            const results = await Promise.all(promises);
+
+            const mapData = {};
+
+            // Helper to clean coords
+            const isValid = (n) => n && !isNaN(parseFloat(n)) && parseFloat(n) !== 0;
+
+            keys.forEach((key, index) => {
+                const rows = results[index].rows;
+                mapData[key] = rows.map(row => {
+                    let lat = parseFloat(row.latitud);
+                    let lng = parseFloat(row.longitud);
+
+                    // Convert UTM if Lat/Lng not present but UTM is
+                    if ((!isValid(lat) || !isValid(lng)) && isValid(row.este) && isValid(row.norte)) {
+                        try {
+                            const { latitude, longitude } = utm.toLatLon(parseFloat(row.este), parseFloat(row.norte), 18, 'L'); // Assuming Zone 18L (South) Common in Peru or dynamic? 
+                            // Defaulting to 18 South as most projects are there. 
+                            // Ideally this should be dynamic or project-dependent (e.g. project.zona)
+                            // But for now, 18S is a safe bet for this region (Cusco/Quellouno).
+                            // 'L' usually implies South but utm lib expects 'K', 'L', 'M' etc as band, or boolean 'southern'
+                            // utm.toLatLon(easting, northing, zoneNum, zoneLetter, southern, strict)
+                            const res = utm.toLatLon(parseFloat(row.este), parseFloat(row.norte), 18, 'L', true, false);
+                            lat = res.latitude;
+                            lng = res.longitude;
+                        } catch (e) {
+                            // Fallback or ignore
+                        }
+                    }
+
+                    if (isValid(lat) && isValid(lng)) {
+                        return { id: row.id, codigo: row.codigo, lat, lng, type: key, subType: row.tipo, progresiva: row.progresiva };
+                    }
+                    // Return checks with progressive for frontend processing even if lat/lng are missing
+                    if (row.progresiva) {
+                        return { id: row.id, codigo: row.codigo, lat: 0, lng: 0, type: key, subType: row.tipo, progresiva: row.progresiva };
+                    }
+                    return null;
+                }).filter(r => r !== null);
+            });
+
+            return mapData;
+
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error(`Error al obtener datos del mapa para proyecto ${projectId}:`, err);
+        throw new Error('Error al obtener datos del mapa.');
+    }
+}
+
+const getProjectCalibrations = async (projectId) => {
+    try {
+        const result = await db.query('SELECT * FROM proyecto_calibracion_tramos WHERE id_proyecto = $1', [projectId]);
+        return result.rows;
+    } catch (error) {
+        console.error(`Error al obtener calibraciones del proyecto ${projectId}:`, error);
+        throw new Error('Error al obtener datos de calibración.');
+    }
+};
 
 module.exports = {
     getDetailedProyectos,
@@ -734,4 +1055,7 @@ module.exports = {
     getCalibracionByProyecto,
     saveCalibracionForProyecto,
     deleteCalibracionForProyecto,
+    getProjectStatistics,
+    getProjectMapData,
+    getProjectCalibrations
 };

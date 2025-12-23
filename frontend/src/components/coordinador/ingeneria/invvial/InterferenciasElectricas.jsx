@@ -73,9 +73,11 @@ const InterferenciasElectricas = ({ onEditElementSelect, interferenciasData, gra
                 const code = item.panel_fotografico ? String(item.panel_fotografico) : null;
                 let imageUrls = [];
                 if (code && graphicsImages.length > 0) {
+                    // 1. Parse Ranges
                     const parts = code.split(' - ');
                     const rangePart = parts[0];
                     const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+
                     let start, end;
                     if (rangePart.includes('-')) {
                         const [startStr, endStr] = rangePart.split('-');
@@ -85,18 +87,46 @@ const InterferenciasElectricas = ({ onEditElementSelect, interferenciasData, gra
                         start = parseInt(rangePart, 10);
                         end = start;
                     }
+
+                    const expectedNames = [];
                     if (!isNaN(start) && !isNaN(end)) {
-                        const expectedNames = [];
-                        for (let i = start; i <= end; i++) {
-                            expectedNames.push(`${i}${suffix}`);
+                        for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+                    } else {
+                        expectedNames.push(code);
+                    }
+
+                    // 2. Filter Images
+                    const foundImages = graphicsImages.filter(img => {
+                        const imgNameWithoutExt = img.index.split('.')[0];
+                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                        const entregable = item.entregable ? String(item.entregable).trim() : null;
+
+                        // A. Name Check
+                        const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                        if (!nameMatches) return false;
+
+                        // B. Entregable Logic (Hybrid Legacy/Strict)
+                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                        if (entregable) {
+                            const normElement = normalize(entregable);
+                            const normImage = normalize(imgEntregable);
+
+                            // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                            if (normElement === 'E1') {
+                                return (!imgEntregable) || (normImage === 'E1');
+                            }
+
+                            // Scenario 2: Element is "E2". STRICT match.
+                            return normImage === normElement;
                         }
-                        const foundImages = graphicsImages.filter(img => {
-                            const imgNameWithoutExt = img.index.split('.')[0];
-                            return expectedNames.includes(imgNameWithoutExt);
-                        });
-                        if (foundImages.length > 0) {
-                            imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
-                        }
+
+                        // Scenario 3: No Entregable.
+                        return true;
+                    });
+
+                    if (foundImages.length > 0) {
+                        imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
                     }
                 }
                 return { ...item, imageUrls: imageUrls, type: 'interferencia_electrica', id_estructura: item.id };

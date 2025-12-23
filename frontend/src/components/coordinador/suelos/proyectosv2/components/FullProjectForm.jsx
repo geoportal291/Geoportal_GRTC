@@ -4,6 +4,8 @@ import alertify from 'alertifyjs';
 import '../ProyectosV2.css';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './SharedComponents';
 import { useAuth } from '../../../../../data/contexts/AuthContext';
+import { kml } from '@tmcw/togeojson';
+import { DOMParser } from 'xmldom';
 
 // Import Ubigeo JSONs (Fixing the path relative to component location)
 // Component is in frontend/src/components/coordinador/suelos/proyectosv2/components
@@ -68,6 +70,10 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
     const [isUploadingKml, setIsUploadingKml] = useState(false);
     const [subProgresivasGeneradas, setSubProgresivasGeneradas] = useState([]);
 
+    // Calibration States
+    const [identifiedTramos, setIdentifiedTramos] = useState([]);
+    const [calibrationData, setCalibrationData] = useState({});
+
     // Initial Load & Catalog Fetching (Entities only via API)
     useEffect(() => {
         if (!isOpen) return;
@@ -128,6 +134,18 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
                         const filteredDists = distritosData.filter(d => d.province_id === projectData.provincia);
                         setDistritos(filteredDists);
                     }
+
+                    if (projectData.calibracion) {
+                        setCalibrationData(projectData.calibracion);
+                        // setIdentifiedTramos(Object.keys(projectData.calibracion)); // Don't rely solely on saved keys, fetch KML to be sure
+                    }
+
+                    if (projectData.url_kml) {
+                        fetchAndParseRemoteKml(projectData.url_kml);
+                    } else if (projectData.calibracion) {
+                        // Fallback if no URL but data exists (unlikely given flow, but safe)
+                        setIdentifiedTramos(Object.keys(projectData.calibracion));
+                    }
                 }
             } catch (err) {
                 console.error("Error initializing form data", err);
@@ -170,6 +188,94 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
             }
             return next;
         });
+    };
+
+    // KML Analysis Logic
+    const handleKmlFileChange = (e) => {
+        const file = e.target.files[0];
+        setKmlFile(file);
+        setIdentifiedTramos([]); // Reset tramos
+        setCalibrationData({}); // Reset calibration
+
+        if (file) {
+            analyzeKml(file);
+        }
+    };
+
+    const analyzeKml = (file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const kmlText = e.target.result;
+            parseKmlText(kmlText);
+        };
+        reader.readAsText(file);
+    };
+
+    const parseKmlText = (kmlText) => {
+        try {
+            const parser = new DOMParser();
+            const kmlDoc = parser.parseFromString(kmlText, 'text/xml');
+            const convertedGeoJson = kml(kmlDoc);
+
+            const tramos = [];
+            convertedGeoJson.features.forEach(feature => {
+                if (feature.properties && feature.properties.name) {
+                    tramos.push(feature.properties.name);
+                }
+            });
+
+            // Sort tramos logically (Tramo 1, Tramo 2, etc.)
+            tramos.sort((a, b) => {
+                const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
+                const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
+                return numA - numB;
+            });
+
+            if (tramos.length > 0) {
+                setIdentifiedTramos(tramos);
+
+                // If we have SAVED calibration data, merge it. 
+                // Otherwise initialize empty.
+                const newCalib = { ...calibrationData };
+
+                tramos.forEach(t => {
+                    if (!newCalib[t]) {
+                        newCalib[t] = { start: '', end: '' };
+                    }
+                });
+
+                setCalibrationData(newCalib);
+                // Only alert success if it's a manual upload actions, otherwise concise
+                if (kmlFile) alertify.success(`Se identificaron ${tramos.length} tramos.`);
+            } else {
+                if (kmlFile) alertify.warning('No se encontraron tramos nombrados en el KML.');
+            }
+
+        } catch (error) {
+            console.error("Error parsing KML", error);
+            if (kmlFile) alertify.error('Error al analizar el archivo KML.');
+        }
+    };
+
+    const fetchAndParseRemoteKml = async (url) => {
+        try {
+            const response = await axios.get(url);
+            parseKmlText(response.data);
+        } catch (error) {
+            console.error("Error downloading remote KML", error);
+            // Silent fail or toast? Maybe minimal warning
+            // alertify.error('No se pudo cargar el KML del proyecto para calibración.');
+        }
+    };
+
+    const handleCalibrationChange = (tramo, field, value) => {
+        setCalibrationData(prev => ({
+            ...prev,
+            [tramo]: {
+                ...prev[tramo],
+                [field]: value
+            }
+        }));
     };
 
     const handleGenerarProgresivas = () => {
@@ -246,7 +352,11 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
             const headers = { Authorization: `Bearer ${token}` };
 
             // Logic matching V1 but adapted for V2 "completion" workflow
-            await axios.put(`${API_URL}/proyectos/${formData.id}`, { projectData: projectDataPayload, progresivaData }, { headers });
+            await axios.put(`${API_URL}/proyectos/${formData.id}`, {
+                projectData: projectDataPayload,
+                progresivaData,
+                calibrationData: identifiedTramos.length > 0 ? calibrationData : null
+            }, { headers });
 
             // KML Upload
             if (kmlFile) {
@@ -373,14 +483,60 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
                     </fieldset>
 
                     <fieldset>
-                        <legend>Trazado KML</legend>
+                        <legend>Trazado KML y Calibración</legend>
                         <div className="form-group">
                             <label>Archivo KML/KMZ</label>
-                            <input type="file" accept=".kml,.kmz" onChange={(e) => setKmlFile(e.target.files[0])} disabled={isUploadingKml} />
+                            <input type="file" accept=".kml,.kmz" onChange={handleKmlFileChange} disabled={isUploadingKml} />
                             {originalProject?.kml_filename && !kmlFile && (
                                 <p className="file-info text-xs text-blue-600 mt-1">Actual: {originalProject.kml_filename}</p>
                             )}
                         </div>
+
+                        {/* Calibration Form */}
+                        {identifiedTramos.length > 0 && (
+                            <div className="mt-4 p-4 border border-blue-200 rounded bg-blue-50">
+                                <h4 className="text-sm font-bold text-blue-800 mb-2">Calibración de Tramos Identificados</h4>
+                                <div className="text-xs text-gray-600 mb-3">
+                                    Ingrese la progresiva oficial de inicio y fin para cada tramo encontrado en el KML (ej: 0+000).
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full bg-white text-sm border-collapse">
+                                        <thead>
+                                            <tr>
+                                                <th className="border px-2 py-1 bg-gray-100">Tramo (KML)</th>
+                                                <th className="border px-2 py-1 bg-gray-100">Prog. Inicio</th>
+                                                <th className="border px-2 py-1 bg-gray-100">Prog. Fin</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {identifiedTramos.map(tramo => (
+                                                <tr key={tramo}>
+                                                    <td className="border px-2 py-1 font-medium">{tramo}</td>
+                                                    <td className="border px-2 py-1">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="0+000"
+                                                            className="w-full p-1 border rounded focus:border-blue-500"
+                                                            value={calibrationData[tramo]?.start || ''}
+                                                            onChange={(e) => handleCalibrationChange(tramo, 'start', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="border px-2 py-1">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="5+000"
+                                                            className="w-full p-1 border rounded focus:border-blue-500"
+                                                            value={calibrationData[tramo]?.end || ''}
+                                                            onChange={(e) => handleCalibrationChange(tramo, 'end', e.target.value)}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
                     </fieldset>
 
                     <fieldset>

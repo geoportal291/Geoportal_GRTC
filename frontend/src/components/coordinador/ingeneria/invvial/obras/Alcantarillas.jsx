@@ -48,29 +48,33 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
 
   useEffect(() => {
     if (selectedAlcantarilla && selectedAlcantarilla.panel_fotografico_codigo && graphicsImages) {
-      const code = selectedAlcantarilla.panel_fotografico_codigo;
-      const parts = code.split(' - ');
-      const rangePart = parts[0];
-      const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+      const code = String(selectedAlcantarilla.panel_fotografico_codigo).trim();
+      const entregable = selectedAlcantarilla.entregable ? String(selectedAlcantarilla.entregable).trim() : null;
 
-      const [startStr, endStr] = rangePart.split('-');
-      const start = parseInt(startStr, 10);
-      const end = parseInt(endStr, 10);
+      const filtered = graphicsImages.filter(img => {
+        const imgCode = String(img.panel_fotografico_codigo || '').trim();
+        const imgIndex = img.index ? String(img.index).trim() : '';
+        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
 
-      if (!isNaN(start) && !isNaN(end)) {
-        const expectedNames = [];
-        for (let i = start; i <= end; i++) {
-          expectedNames.push(`${i}${suffix}`);
+        // Extract filename from URL
+        let urlFileName = '';
+        if (img.url) {
+          const parts = img.url.split('/');
+          const fileNameWithExt = parts[parts.length - 1];
+          urlFileName = fileNameWithExt.split('.')[0];
         }
 
-        const filtered = graphicsImages.filter(img => {
-          const imgNameWithoutExt = img.index.split('.')[0];
-          return expectedNames.includes(imgNameWithoutExt);
-        });
-        setAlcantarillaImages(filtered);
-      } else {
-        setAlcantarillaImages([]);
-      }
+        const codeMatches = imgCode === code || imgIndex === code || urlFileName === code;
+
+        // If both have entregable, they must match
+        if (entregable && imgEntregable) {
+          return codeMatches && (entregable === imgEntregable);
+        }
+
+        return codeMatches;
+      });
+
+      setAlcantarillaImages(filtered);
     } else {
       setAlcantarillaImages([]);
     }
@@ -79,10 +83,13 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
   useEffect(() => {
     if (alcantarillasData.length > 0 && graphicsImages.length > 0) {
       const processedAlcantarillas = alcantarillasData.map(alcantarilla => {
-        const code = alcantarilla.panel_fotografico_codigo;
+        const code = String(alcantarilla.panel_fotografico_codigo || '').trim();
+        const entregable = alcantarilla.entregable ? String(alcantarilla.entregable).trim() : null;
         let imageUrls = [];
+        let foundImages = [];
 
         if (code) {
+          // 1. Parse Ranges (e.g. "3-6" or "19")
           const parts = code.split(' - ');
           const rangePart = parts[0];
           const suffix = parts.length > 1 ? `-${parts[1]}` : '';
@@ -91,23 +98,52 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
           const start = parseInt(startStr, 10);
           const end = parseInt(endStr, 10);
 
+          const expectedNames = [];
           if (!isNaN(start) && !isNaN(end)) {
-            const expectedNames = [];
-            for (let i = start; i <= end; i++) {
-              expectedNames.push(`${i}${suffix}`);
+            for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+          } else {
+            expectedNames.push(code);
+          }
+
+          // 2. Filter Images
+          foundImages = graphicsImages.filter(img => {
+            const imgNameWithoutExt = img.index.split('.')[0];
+            const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+
+            // A. Name Check (Always Required)
+            const nameMatches = expectedNames.includes(imgNameWithoutExt);
+            if (!nameMatches) return false;
+
+            // B. Entregable Logic
+            // Normalize: Remove non-alphanumeric, Uppercase. "E - 1" -> "E1"
+            const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+            if (entregable) {
+              const normElement = normalize(entregable);
+              const normImage = normalize(imgEntregable);
+
+              // Scenario 1: Element is "E1". 
+              // We allow matching "E1" images OR images with NO Entregable (Legacy/Null).
+              if (normElement === 'E1') {
+                return (!imgEntregable) || (normImage === 'E1');
+              }
+
+              // Scenario 2: Element is "E2" (or "E3", etc).
+              // We enforce STRICT matching. The image MUST be explicitly "E2".
+              // We REJECT nulls to prevent old E1 images from appearing here.
+              return normImage === normElement;
             }
 
-            const foundImages = graphicsImages.filter(img => {
-              const imgNameWithoutExt = img.index.split('.')[0];
-              return expectedNames.includes(imgNameWithoutExt);
-            });
+            // Scenario 3: Element has NO Entregable.
+            // Just match by name.
+            return true;
+          });
 
-            if (foundImages.length > 0) {
-              imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
-            }
+          if (foundImages.length > 0) {
+            imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
           }
         }
-        return { ...alcantarilla, imageUrls: imageUrls, type: 'alcantarilla' };
+        return { ...alcantarilla, imageUrls: imageUrls, images: foundImages, type: 'alcantarilla' }; // Also adding 'images' just in case
       });
       setAlcantarillasWithImages(processedAlcantarillas);
     } else {
@@ -284,91 +320,7 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
               <button style={{ backgroundColor: '#6c757d', color: 'white', padding: '3px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer', width: 'fit-content' }}>Exportar Mapa</button>
             </div>
           </div>
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-            border: '1px solid #e2e8f0',
-            padding: '20px'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '15px',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #f1f5f9'
-            }}>
-              <h3 style={{
-                fontSize: '1.1em',
-                fontWeight: 600,
-                color: '#1e293b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                margin: 0
-              }}>
-                <i className="fas fa-road" style={{ color: '#3b82f6' }}></i>
-                Tramos
-              </h3>
-            </div>
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              gap: '10px'
-            }}>
-              {
-                Object.keys(tramoData).map(tramoId => {
-                  const tramo = tramoData[tramoId];
-                  const ranges = { 'TRAMO 1': '0+00 - 34+00', 'TRAMO 2': '34+00 - 66+00', 'TRAMO 3': '66+00 - 86+500' };
-                  const isActive = highlightedTramoId === tramo.id;
 
-                  const baseButtonStyle = {
-                    padding: '15px',
-                    border: 'none',
-                    backgroundColor: '#f8f9fa',
-                    color: '#6c757d',
-                    cursor: 'pointer',
-                    borderRadius: '8px',
-                    transition: 'all 0.2s ease',
-                    textAlign: 'left',
-                    flex: '1 1 calc(33.33% - 10px)',
-                    maxWidth: 'calc(33.33% - 10px)',
-                    minWidth: '150px'
-                  };
-
-                  const activeButtonStyle = {
-                    backgroundColor: '#3498db',
-                    color: 'white'
-                  };
-
-                  const buttonStyle = isActive ? { ...baseButtonStyle, ...activeButtonStyle } : baseButtonStyle;
-
-                  const topTextStyle = {
-                    fontWeight: '600',
-                    fontSize: '14px',
-                    display: 'block'
-                  };
-
-                  const bottomTextStyle = {
-                    fontSize: '12px',
-                    opacity: isActive ? 0.9 : 0.8,
-                    display: 'block'
-                  };
-
-                  return (
-                    <div key={tramo.id} style={buttonStyle} onClick={() => setHighlightedTramoId(tramo.id)}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <strong style={topTextStyle}>{tramo.id.replace('TRAMO ', 'T-')}</strong>
-                        <small style={bottomTextStyle}>{ranges[tramo.id]}</small>
-                      </div>
-                    </div>
-                  );
-                })
-              }
-            </div>
-          </div>
         </div>
 
         {/* Columna de Información - Derecha */}

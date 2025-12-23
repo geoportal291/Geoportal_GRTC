@@ -3,35 +3,61 @@ import './EstratoItem.css';
 import { useNavigate } from 'react-router-dom';
 import alertify from 'alertifyjs';
 
-const EstratoItem = React.memo(({
+const EstratoItem = React.memo(React.forwardRef(({
     estrato,
     expandedEstratos = null,
     onToggle = null,
     canteraSeleccionada = null,
-    progresiva = null, // Añadido para el contexto de tramos
+    progresiva = null,
     onAddEnsayo = null,
-    handleDeleteEnsayo = () => {},
-    handleEditEnsayo = () => {},
-    handleViewEnsayo = () => {},
-    onClasificar = () => {}
-}) => {
+    handleDeleteEnsayo = () => { },
+    handleEditEnsayo = () => { },
+    handleViewEnsayo = () => { },
+    onClasificar = () => { },
+    // Props adicionales soportadas por GestorDeTramosActual
+    isExpanded: propIsExpanded,
+    onToggleExpand,
+    handleManageProgresiva,
+    handleViewEstratos,
+    handleViewGraficos,
+    selectedProgresivaId
+}, ref) => {
     const navigate = useNavigate();
-    const estratoId = estrato?.id ?? `${estrato?.nombre}-${estrato?.cota_inicial}`;
-    const [selectedEnsayoId, setSelectedEnsayoId] = useState(null);
 
-    // Determina el contexto padre (progresiva o cantera)
+    // Determinar si estamos renderizando una Progresiva (modo fila) o un Estrato (modo detalle)
+    const isProgresivaRow = !!progresiva && !estrato;
+    const itemData = estrato || progresiva;
+    const estratoId = itemData?.id ?? `${itemData?.nombre}-${itemData?.cota_inicial}`;
+
+    // Contexto padre
     const parentContext = progresiva || canteraSeleccionada;
 
-    // Comportamiento controlado o local
-    const isControlled = expandedEstratos && typeof onToggle === 'function';
-    const [localExpanded, setLocalExpanded] = useState(Boolean(expandedEstratos?.[estratoId]) || false);
-    const isExpanded = isControlled ? Boolean(expandedEstratos[estratoId]) : localExpanded;
+    // Estado expandido:
+    // 1. Si se pasa 'propIsExpanded' (desde GestorDeTramosActual), usarlo.
+    // 2. Si se pasa 'expandedEstratos' y 'onToggle' (modo antiguo), usarlo.
+    // 3. Si no, usar estado local.
+    const [localExpanded, setLocalExpanded] = useState(false);
 
-    const toggleExpand = () => {
-        if (isControlled) onToggle(estratoId);
-        else setLocalExpanded(prev => !prev);
+    let isExpanded = localExpanded;
+    if (typeof propIsExpanded !== 'undefined') {
+        isExpanded = propIsExpanded;
+    } else if (expandedEstratos && typeof onToggle === 'function') {
+        isExpanded = !!expandedEstratos[estratoId];
+    }
+
+    const toggleExpand = (e) => {
+        if (e) e.stopPropagation();
+
+        if (typeof onToggleExpand === 'function') {
+            onToggleExpand();
+        } else if (expandedEstratos && typeof onToggle === 'function') {
+            onToggle(estratoId);
+        } else {
+            setLocalExpanded(prev => !prev);
+        }
     };
 
+    const [selectedEnsayoId, setSelectedEnsayoId] = useState(null);
     const handleSelectEnsayo = (ensayoId) => {
         setSelectedEnsayoId(prevId => prevId === ensayoId ? null : ensayoId);
     };
@@ -45,12 +71,72 @@ const EstratoItem = React.memo(({
         if (typeof onAddEnsayo === 'function') {
             onAddEnsayo(parentContext, estrato);
         } else {
-            alertify.error('⚠ No se ha definido la función onAddEnsayo en el componente padre.');
+            console.warn('onAddEnsayo no definido');
         }
     };
 
+    // --- RENDERIZADO DE FILA DE PROGRESIVA (GestorDeTramosActual) ---
+    if (isProgresivaRow) {
+        return (
+            <div
+                ref={ref}
+                key={progresiva.id}
+                className={`estrato-item progresiva-row ${isExpanded ? 'open' : ''} ${selectedProgresivaId === progresiva.id ? 'highlight-pulse' : ''}`}
+            >
+                <div className="estrato-header" onClick={toggleExpand}>
+                    <div className="estrato-info">
+                        <div className="estrato-color" style={{ backgroundColor: '#2196f3' }}></div> {/* Azul para progresivas */}
+                        <div className="estrato-details">
+                            <h4 className="estrato-name">{progresiva.nombre}</h4>
+                            <p className="estrato-description">
+                                <strong>Código:</strong> {progresiva.codigo} | <strong>Lado:</strong> {progresiva.lado || 'Eje'} | <strong>Prof. Total:</strong> {progresiva.estratos_perfil?.length > 0 ? progresiva.estratos_perfil[progresiva.estratos_perfil.length - 1].profundidad_final + 'm' : '0m'}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="estrato-actions" onClick={(e) => e.stopPropagation()}>
+                        {/* Botones de acción específicos de progresiva */}
+                        {handleViewGraficos && (
+                            <button className="action-btn view" title="Ver Gráficos" onClick={() => handleViewGraficos(progresiva)}>
+                                <i className="fas fa-chart-line"></i>
+                            </button>
+                        )}
+                        {handleViewEstratos && (
+                            <button className="action-btn view" title="Ver Detalles de Estratos" onClick={() => handleViewEstratos(progresiva)}>
+                                <i className="fas fa-layer-group"></i>
+                            </button>
+                        )}
+                        {handleManageProgresiva && (
+                            <button className="action-btn edit" title="Editar Progresiva" onClick={() => handleManageProgresiva(progresiva)}>
+                                <i className="fas fa-edit"></i>
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {isExpanded && (
+                    <div className="estrato-body">
+                        {/* Renderizar lista de estratos de la progresiva */}
+                        <div className="estratos-list-container">
+                            <h5>Estratos ({progresiva.estratos_perfil?.length || 0})</h5>
+                            {progresiva.estratos_perfil?.map((est, idx) => (
+                                <div key={idx} className="sub-estrato-row">
+                                    <span className="depth-badge">{est.profundidad_inicial}m - {est.profundidad_final}m</span>
+                                    <span className="estrato-desc">{est.descripcion}</span>
+                                </div>
+                            ))}
+                            {(!progresiva.estratos_perfil || progresiva.estratos_perfil.length === 0) && (
+                                <p className="no-data-msg">Sin estratos registrados.</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // --- RENDERIZADO DE ESTRATO INDIVIDUAL (Modo Original) ---
     return (
-        <div key={estratoId} className={`estrato-item ${isExpanded ? 'open' : ''}`}>
+        <div ref={ref} key={estratoId} className={`estrato-item ${isExpanded ? 'open' : ''}`}>
             {/* HEADER */}
             <div className="estrato-header" onClick={toggleExpand}>
                 <div className="estrato-info">
@@ -178,6 +264,6 @@ const EstratoItem = React.memo(({
             )}
         </div>
     );
-});
+}));
 
 export default EstratoItem;

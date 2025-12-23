@@ -69,7 +69,31 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
 
                 const filtered = graphicsImages.filter(img => {
                     const imgNameWithoutExt = img.index.split('.')[0];
-                    return expectedNames.includes(imgNameWithoutExt);
+                    const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                    const entregable = selectedBaden.entregable ? String(selectedBaden.entregable).trim() : null;
+
+                    // A. Name Check
+                    const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                    if (!nameMatches) return false;
+
+                    // B. Entregable Logic (Hybrid Legacy/Strict)
+                    const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                    if (entregable) {
+                        const normElement = normalize(entregable);
+                        const normImage = normalize(imgEntregable);
+
+                        // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                        if (normElement === 'E1') {
+                            return (!imgEntregable) || (normImage === 'E1');
+                        }
+
+                        // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
+                        return normImage === normElement;
+                    }
+
+                    // Scenario 3: No Entregable on Element. loose match.
+                    return true;
                 });
                 setBadenImages(filtered);
             } else {
@@ -87,35 +111,60 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                 let imageUrls = [];
 
                 if (code) {
+                    // 1. Parse Ranges
                     const parts = code.split(' - ');
                     const rangePart = parts[0];
                     const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
                     let start, end;
-
                     if (rangePart.includes('-')) {
                         const [startStr, endStr] = rangePart.split('-');
                         start = parseInt(startStr, 10);
                         end = parseInt(endStr, 10);
                     } else {
                         start = parseInt(rangePart, 10);
-                        end = start; // Treat single number as a range of one
+                        end = start;
                     }
 
+                    const expectedNames = [];
                     if (!isNaN(start) && !isNaN(end)) {
-                        const expectedNames = [];
-                        for (let i = start; i <= end; i++) {
-                            expectedNames.push(`${i}${suffix}`);
+                        for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+                    } else {
+                        expectedNames.push(code);
+                    }
+
+                    // 2. Filter Images
+                    const foundImages = graphicsImages.filter(img => {
+                        const imgNameWithoutExt = img.index.split('.')[0];
+                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                        const entregable = baden.entregable ? String(baden.entregable).trim() : null;
+
+                        // A. Name Check
+                        const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                        if (!nameMatches) return false;
+
+                        // B. Entregable Logic (Hybrid Legacy/Strict)
+                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                        if (entregable) {
+                            const normElement = normalize(entregable);
+                            const normImage = normalize(imgEntregable);
+
+                            // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                            if (normElement === 'E1') {
+                                return (!imgEntregable) || (normImage === 'E1');
+                            }
+
+                            // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
+                            return normImage === normElement;
                         }
 
-                        const foundImages = graphicsImages.filter(img => {
-                            const imgNameWithoutExt = img.index.split('.')[0];
-                            return expectedNames.includes(imgNameWithoutExt);
-                        });
+                        // Scenario 3: No Entregable on Element. loose match.
+                        return true;
+                    });
 
-                        if (foundImages.length > 0) {
-                            imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
-                        }
+                    if (foundImages.length > 0) {
+                        imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
                     }
                 }
                 return { ...baden, imageUrls: imageUrls, type: 'baden' };
@@ -295,91 +344,7 @@ const Badenes = ({ onEditElementSelect, badenesData, graphicsImages, canUpload, 
                             <button style={{ backgroundColor: '#6c757d', color: 'white', padding: '3px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer', width: 'fit-content' }}>Exportar Mapa</button>
                         </div>
                     </div>
-                    <div style={{
-                        background: 'white',
-                        borderRadius: '12px',
-                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-                        border: '1px solid #e2e8f0',
-                        padding: '20px'
-                    }}>
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '15px',
-                            paddingBottom: '10px',
-                            borderBottom: '2px solid #f1f5f9'
-                        }}>
-                            <h3 style={{
-                                fontSize: '1.1em',
-                                fontWeight: 600,
-                                color: '#1e293b',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '10px',
-                                margin: 0
-                            }}>
-                                <i className="fas fa-road" style={{ color: '#3b82f6' }}></i>
-                                Tramos
-                            </h3>
-                        </div>
-                        <div style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            justifyContent: 'center',
-                            gap: '10px'
-                        }}>
-                            {
-                                Object.keys(tramoData).map(tramoId => {
-                                    const tramo = tramoData[tramoId];
-                                    const ranges = { 'TRAMO 1': '0+00 - 34+00', 'TRAMO 2': '34+00 - 66+00', 'TRAMO 3': '66+00 - 86+500' };
-                                    const isActive = highlightedTramoId === tramo.id;
 
-                                    const baseButtonStyle = {
-                                        padding: '15px',
-                                        border: 'none',
-                                        backgroundColor: '#f8f9fa',
-                                        color: 'white',
-                                        cursor: 'pointer',
-                                        borderRadius: '8px',
-                                        transition: 'all 0.2s ease',
-                                        textAlign: 'left',
-                                        flex: '1 1 calc(33.33% - 10px)',
-                                        maxWidth: 'calc(33.33% - 10px)',
-                                        minWidth: '150px'
-                                    };
-
-                                    const activeButtonStyle = {
-                                        backgroundColor: '#3498db',
-                                        color: 'white'
-                                    };
-
-                                    const buttonStyle = isActive ? { ...baseButtonStyle, ...activeButtonStyle } : baseButtonStyle;
-
-                                    const topTextStyle = {
-                                        fontWeight: '600',
-                                        fontSize: '14px',
-                                        display: 'block'
-                                    };
-
-                                    const bottomTextStyle = {
-                                        fontSize: '12px',
-                                        opacity: isActive ? 0.9 : 0.8,
-                                        display: 'block'
-                                    };
-
-                                    return (
-                                        <div key={tramo.id} style={buttonStyle} onClick={() => setHighlightedTramoId(tramo.id)}>
-                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <strong style={topTextStyle}>{tramo.id.replace('TRAMO ', 'T-')}</strong>
-                                                <small style={bottomTextStyle}>{ranges[tramo.id]}</small>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            }
-                        </div>
-                    </div>
                 </div>
 
                 {/* Columna de Información - Derecha */}

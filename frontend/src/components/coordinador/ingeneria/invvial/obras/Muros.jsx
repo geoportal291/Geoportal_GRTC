@@ -68,7 +68,31 @@ const Muros = ({ onEditElementSelect, murosData, graphicsImages, canUpload, show
 
                 const filtered = graphicsImages.filter(img => {
                     const imgNameWithoutExt = img.index.split('.')[0];
-                    return expectedNames.includes(imgNameWithoutExt);
+                    const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                    const entregable = selectedMuro.entregable ? String(selectedMuro.entregable).trim() : null;
+
+                    // A. Name Check
+                    const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                    if (!nameMatches) return false;
+
+                    // B. Entregable Logic (Hybrid Legacy/Strict)
+                    const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                    if (entregable) {
+                        const normElement = normalize(entregable);
+                        const normImage = normalize(imgEntregable);
+
+                        // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                        if (normElement === 'E1') {
+                            return (!imgEntregable) || (normImage === 'E1');
+                        }
+
+                        // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
+                        return normImage === normElement;
+                    }
+
+                    // Scenario 3: No Entregable on Element. loose match.
+                    return true;
                 });
                 setMuroImages(filtered);
             } else {
@@ -86,35 +110,60 @@ const Muros = ({ onEditElementSelect, murosData, graphicsImages, canUpload, show
                 let imageUrls = [];
 
                 if (code) {
+                    // 1. Parse Ranges
                     const parts = code.split(' - ');
                     const rangePart = parts[0];
                     const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
                     let start, end;
-
                     if (rangePart.includes('-')) {
                         const [startStr, endStr] = rangePart.split('-');
                         start = parseInt(startStr, 10);
                         end = parseInt(endStr, 10);
                     } else {
                         start = parseInt(rangePart, 10);
-                        end = start; // Treat single number as a range of one
+                        end = start;
                     }
 
+                    const expectedNames = [];
                     if (!isNaN(start) && !isNaN(end)) {
-                        const expectedNames = [];
-                        for (let i = start; i <= end; i++) {
-                            expectedNames.push(`${i}${suffix}`);
+                        for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+                    } else {
+                        expectedNames.push(code);
+                    }
+
+                    // 2. Filter Images
+                    const foundImages = graphicsImages.filter(img => {
+                        const imgNameWithoutExt = img.index.split('.')[0];
+                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                        const entregable = muro.entregable ? String(muro.entregable).trim() : null;
+
+                        // A. Name Check
+                        const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                        if (!nameMatches) return false;
+
+                        // B. Entregable Logic (Hybrid Legacy/Strict)
+                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                        if (entregable) {
+                            const normElement = normalize(entregable);
+                            const normImage = normalize(imgEntregable);
+
+                            // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                            if (normElement === 'E1') {
+                                return (!imgEntregable) || (normImage === 'E1');
+                            }
+
+                            // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
+                            return normImage === normElement;
                         }
 
-                        const foundImages = graphicsImages.filter(img => {
-                            const imgNameWithoutExt = img.index.split('.')[0];
-                            return expectedNames.includes(imgNameWithoutExt);
-                        });
+                        // Scenario 3: No Entregable on Element. loose match.
+                        return true;
+                    });
 
-                        if (foundImages.length > 0) {
-                            imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
-                        }
+                    if (foundImages.length > 0) {
+                        imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
                     }
                 }
                 return { ...muro, imageUrls: imageUrls, type: 'muro' };

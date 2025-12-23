@@ -13,17 +13,24 @@
     justify-content: center;
     align-items: flex-start;
     padding: 60px 40px 40px 40px;
-    z-index: 2000;
+    z-index: 10000;
+    /* Increased z-index significantly */
     animation: fadeIn 0.2s ease-out;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .seleccionar-estratos-modal-container {
-    background: #fff;
+    background-color: #ffffff !important;
+    /* Force solid background */
     border-radius: 16px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     width: 95vw;
@@ -33,13 +40,23 @@
     flex-direction: column;
     overflow: hidden;
     position: relative;
-    border: 1px solid rgba(255,255,255,0.1);
+    z-index: 10001;
+    /* Ensure container is above overlay */
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    /* Changed border to be visible on white */
     animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes slideUp {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 /* --- Layout Interno --- */
@@ -112,7 +129,8 @@
     white-space: nowrap;
 }
 
-.excel-style-table th, .excel-style-table td {
+.excel-style-table th,
+.excel-style-table td {
     border-bottom: 1px solid #e2e8f0;
     border-right: 1px solid #e2e8f0;
     padding: 10px 14px;
@@ -157,10 +175,10 @@
     background-color: #fff;
     font-weight: 600;
     z-index: 20;
-    
+
     /* CAMBIO: Reducido de 180px a 130px */
-    min-width: 130px; 
-    
+    min-width: 130px;
+
     color: #1e293b;
     border-right: 2px solid #e2e8f0;
     text-align: center;
@@ -179,29 +197,31 @@
     right: -4px;
     bottom: 0;
     width: 4px;
-    background: linear-gradient(to right, rgba(0,0,0,0.05), transparent);
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.05), transparent);
     pointer-events: none;
 }
 
 /* --- Estrato Cells Interaction --- */
 .estrato-cell {
     cursor: pointer;
-    
+
     /* Ancho uniforme idéntico al header */
     min-width: 280px;
     width: 280px;
     max-width: 280px;
-    
+
     transition: all 0.15s ease-in-out;
     background-color: #fff;
-    
-    display: table-cell; 
+
+    display: table-cell;
     vertical-align: middle;
-    
-    position: relative; /* Referencia para el checkbox */
-    padding: 8px 12px 8px 40px; /* Padding izquierdo para el checkbox */
-    
-    text-align: center; 
+
+    position: relative;
+    /* Referencia para el checkbox */
+    padding: 8px 12px 8px 40px;
+    /* Padding izquierdo para el checkbox */
+
+    text-align: center;
 }
 
 .estrato-cell:hover {
@@ -211,24 +231,24 @@
 
 .estrato-cell.selected {
     background-color: #eff6ff;
-    box-shadow: inset 0 0 0 2px #1a237e; 
+    box-shadow: inset 0 0 0 2px #1a237e;
 }
 
 /* --- Checkbox Absoluto --- */
 .estrato-checkbox {
-    width: 18px !important; 
+    width: 18px !important;
     height: 18px !important;
     min-width: 18px !important;
     max-width: 18px !important;
-    
+
     cursor: pointer;
     accent-color: #1a237e;
-    
+
     position: absolute;
     left: 12px;
     top: 50%;
     transform: translateY(-50%);
-    
+
     margin: 0;
     padding: 0;
     pointer-events: none;
@@ -241,13 +261,13 @@
 
 /* Contenedor de texto */
 .estrato-cell-info {
-    display: inline-flex; 
+    display: inline-flex;
     flex-direction: column;
     justify-content: center;
-    text-align: left; 
+    text-align: left;
     gap: 2px;
     vertical-align: middle;
-    
+
     max-width: 100%;
 }
 
@@ -284,7 +304,8 @@
     margin-top: auto;
 }
 
-.close-btn, .submit-btn {
+.close-btn,
+.submit-btn {
     padding: 10px 24px;
     border-radius: 8px;
     border: none;
@@ -293,7 +314,7 @@
     font-size: 14px;
     letter-spacing: 0.3px;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .close-btn {

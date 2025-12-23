@@ -88,7 +88,7 @@ const calculateRouteLength = (routePositions) => {
 };
 
 const badenesService = {
-    processExcelAndSaveBadenes: async (fileBuffer, projectId, utmZone) => {
+    processExcelAndSaveBadenes: async (fileBuffer, projectId, utmZone, entregableDefault) => {
         try {
             // 1. Get KML URL from the same source as the frontend
             const kmlUrlRes = await db.query('SELECT kml_url FROM invvial WHERE id_proyecto = $1', [projectId]);
@@ -119,7 +119,6 @@ const badenesService = {
                     }
                 }
             });
-            // console.log(`DEBUG: Loaded KML and built routes map. Keys: [${Object.keys(routesMap).join(', ')}]`);
 
             // 3. Get calibration data for the project
             const calibrationRes = await db.query(
@@ -130,7 +129,6 @@ const badenesService = {
                 acc[cal.nombre_tramo.toUpperCase().trim()] = cal;
                 return acc;
             }, {});
-            // console.log(`DEBUG: Loaded ${calibrationRes.rows.length} calibrations for project ${projectId}.`);
 
             // 4. Process Excel
             const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
@@ -145,17 +143,44 @@ const badenesService = {
             const badenesData = [];
             let badenesSinCoords = 0;
 
-            // 5. Iterate through rows from row 12 (index 11)
-            for (let i = 11; i < jsonData.length; i++) {
+            // Find Header Row and Map Columns
+            let headerRowIndex = 11; // Default
+            const colMap = {
+                descripcion: 34, // AI
+                progresiva: 33, // AH
+                entregable: 30, // AE
+                panel: 31, // AF
+                codigo: 32, // AG
+                clase: 35, // AJ
+                tipo: 36, // AK
+                luz: 37, // AL
+                ancho: 38, // AM
+                estado: 39 // AN
+            };
+
+            // Heuristic search for header row
+            for (let i = 0; i < 20; i++) {
+                const row = jsonData[i];
+                if (!row) continue;
+                if (row.some(c => typeof c === 'string' && c.toUpperCase().includes('BADEN') && c.toUpperCase().includes('PROGRESIVA'))) {
+                    headerRowIndex = i;
+                    const entIdx = row.findIndex(c => typeof c === 'string' && c.toUpperCase().includes('ENTREGABLE'));
+                    if (entIdx !== -1) colMap.entregable = entIdx;
+                    break;
+                }
+            }
+
+            // 5. Iterate from header + 1
+            for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if (!row || row.length === 0) continue;
 
-                const descripcionCell = row[34]; // Column AI
+                const descripcionCell = row[colMap.descripcion];
 
+                // Check mainly by descripcion or codigo matching 'Baden'
                 if (typeof descripcionCell === 'string' && /^Baden N/.test(descripcionCell)) {
-                    // console.log(`DEBUG: 'Baden N...' encontrado en fila ${i + 1}, Columna AI: "${descripcionCell}"`);
 
-                    const progresivaStr = row[33]; // Column AH
+                    const progresivaStr = row[colMap.progresiva];
                     if (!progresivaStr) {
                         console.warn(`Fila ${i + 1}: Se encontró un baden pero falta la progresiva. Saltando.`);
                         continue;
@@ -197,8 +222,7 @@ const badenesService = {
                         }
 
                         if (!routePositions) {
-                            console.error(`Could not find KML route for tramo key '${tramoIdKey}' or tramo name '${tramoName}'. Available route keys are: [${Object.keys(routesMap).join(', ')}]`);
-                            console.warn(`Fila ${i + 1}: No se encontró ruta KML para el tramo '${tramoName}'. Saltando.`);
+                            console.warn(`Fila ${i + 1}: No se encontró ruta KML parcial para el tramo '${tramoName}'.`);
                             continue;
                         }
 
@@ -209,7 +233,7 @@ const badenesService = {
                             const calLengthM = calFinM - calInicioM;
 
                             if (calLengthM <= 0 || kmlRouteLength <= 0) {
-                                throw new Error(`Invalid calibration or KML route length for tramo ${tramoName}.`);
+                                throw new Error(`Invalid calibration or KML route length.`);
                             }
 
                             const distOnKml = ((progresivaExcelM - calInicioM) / calLengthM) * kmlRouteLength;
@@ -224,8 +248,7 @@ const badenesService = {
                             console.error(`Error processing calibrated coordinates for row ${i + 1}: ${e.message}`);
                         }
                     } else {
-                        console.warn(`Fila ${i + 1}: No se encontró un tramo calibrado para la progresiva '${progresivaStr}'. Usando cálculo geométrico simple.`);
-
+                        // Fallback uncalibrated
                         const orderedRouteKeys = Object.keys(routesMap).sort((a, b) => {
                             const numA = parseInt(a.replace(/[^0-9]/g, ''), 10);
                             const numB = parseInt(b.replace(/[^0-9]/g, ''), 10);
@@ -234,19 +257,7 @@ const badenesService = {
                         let fullRoute = [];
                         orderedRouteKeys.forEach(key => {
                             const routeSegment = routesMap[key];
-                            if (routeSegment && Array.isArray(routeSegment)) {
-                                if (fullRoute.length > 0 && routeSegment.length > 0) {
-                                    const lastPoint = fullRoute[fullRoute.length - 1];
-                                    const firstPoint = routeSegment[0];
-                                    if (lastPoint[0] === firstPoint[0] && lastPoint[1] === firstPoint[1]) {
-                                        fullRoute.push(...routeSegment.slice(1));
-                                    } else {
-                                        fullRoute.push(...routeSegment);
-                                    }
-                                } else {
-                                    fullRoute.push(...routeSegment);
-                                }
-                            }
+                            if (routeSegment && Array.isArray(routeSegment)) fullRoute.push(...routeSegment);
                         });
 
                         if (fullRoute.length > 1) {
@@ -254,10 +265,7 @@ const badenesService = {
                             if (coords) {
                                 latitud = coords.latitude;
                                 longitud = coords.longitude;
-                                // console.log(`Fila ${i + 1}: Coordenadas (sin calibrar) calculadas: ${latitud}, ${longitud}`);
                             }
-                        } else {
-                            console.warn(`Fila ${i + 1}: No se pudo construir una ruta KML completa para el cálculo geométrico.`);
                         }
                     }
 
@@ -267,22 +275,32 @@ const badenesService = {
                         continue;
                     }
 
+                    // Determine Entregable
+                    let entregableVal = row[colMap.entregable];
+                    if (!entregableVal && entregableDefault) {
+                        entregableVal = `E-${entregableDefault}`;
+                    }
+                    if (entregableVal && !String(entregableVal).toUpperCase().startsWith('E-') && !String(entregableVal).toUpperCase().startsWith('ENTREGABLE')) {
+                        // Keep as is or normalize? keeping as is for safety 
+                        // But if totally failing, maybe user didn't fill it.
+                    }
+                    if (!entregableVal && entregableDefault) entregableVal = `E-${entregableDefault}`;
+
                     const baden = {
                         id_proyecto: projectId,
-                        entregable: row[30] || null, // AE
-                        panel_fotografico_codigo: row[31] || null, // AF
-                        codigo: row[32] || `BAD-${i}`, // AG
-                        progresiva: progresivaStr || null, // AH
-                        observaciones: descripcionCell, // AI
-                        clase: row[35] || null, // AJ
-                        tipo: row[36] || null, // AK
-                        luz: row[37] || null, // AL
-                        ancho: row[38] || null, // AM
-                        estado: row[39] || null, // AN
+                        entregable: entregableVal,
+                        panel_fotografico_codigo: row[colMap.panel] || null,
+                        codigo: row[colMap.codigo] || `BAD-${i}`,
+                        progresiva: progresivaStr || null,
+                        observaciones: descripcionCell,
+                        clase: row[colMap.clase] || null,
+                        tipo: row[colMap.tipo] || null,
+                        luz: row[colMap.luz] || null,
+                        ancho: row[colMap.ancho] || null,
+                        estado: row[colMap.estado] || null,
                         latitud: latitud,
                         longitud: longitud
                     };
-                    // console.log(`DEBUG: Fila ${i + 1}, Datos extraídos:`, baden);
 
                     badenesData.push(baden);
                 }
@@ -420,6 +438,16 @@ const badenesService = {
             throw new Error('Error al eliminar datos de badenes.');
         } finally {
             client.release();
+        }
+    },
+
+    deleteBaden: async (id) => {
+        try {
+            const result = await db.query('DELETE FROM badenes WHERE id_baden = $1', [id]);
+            return result.rowCount;
+        } catch (error) {
+            console.error(`Error al eliminar badén ${id}:`, error);
+            throw new Error('Error al eliminar badén de la base de datos.');
         }
     }
 };

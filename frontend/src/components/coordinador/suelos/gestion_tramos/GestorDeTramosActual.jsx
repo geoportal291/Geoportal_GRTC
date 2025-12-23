@@ -118,22 +118,22 @@ const ForwardedProgressivaItem = React.forwardRef(({ progresiva, expandedProgres
                 <div className="progressiva-meta">
                     <div className="meta-group">
                         <div className="meta-item">
-                        <i className="fas fa-layer-group"></i>
-                        <span>
-                            {progresiva.estratos_perfil ? progresiva.estratos_perfil.length : 0} Estratos
-                        </span>
+                            <i className="fas fa-layer-group"></i>
+                            <span>
+                                {progresiva.estratos_perfil ? progresiva.estratos_perfil.length : 0} Estratos
+                            </span>
                         </div>
                         <div className="meta-item">
-                        <i className="fas fa-flask"></i>
-                        <span>
-                            {progresiva.estratos_perfil
-                            ? progresiva.estratos_perfil.reduce(
-                                (total, estrato) => total + (estrato.ensayos ? estrato.ensayos.length : 0),
-                                0
-                                )
-                            : 0}{' '}
-                            Ensayos
-                        </span>
+                            <i className="fas fa-flask"></i>
+                            <span>
+                                {progresiva.estratos_perfil
+                                    ? progresiva.estratos_perfil.reduce(
+                                        (total, estrato) => total + (estrato.ensayos ? estrato.ensayos.length : 0),
+                                        0
+                                    )
+                                    : 0}{' '}
+                                Ensayos
+                            </span>
                         </div>
                     </div>
 
@@ -141,8 +141,8 @@ const ForwardedProgressivaItem = React.forwardRef(({ progresiva, expandedProgres
                         type="button"
                         className="action-btn edit"
                         onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditProgresiva(progresiva);
+                            e.stopPropagation();
+                            handleEditProgresiva(progresiva);
                         }}
                     >
                         <i className="fas fa-edit"></i>
@@ -151,34 +151,34 @@ const ForwardedProgressivaItem = React.forwardRef(({ progresiva, expandedProgres
 
             </div>
             <div className={`estratos-container ${expandedProgresivas[progresiva.id] ? 'expanded' : ''}`}>
-                    <div className="estratos-header">
-                        <h3 className="estratos-title"><i className="fas fa-layer-group"></i> Estratos identificados</h3>
-                        <div className="estratos-header-actions">
-                            <button type="button" onClick={(e) => { e.stopPropagation(); handleViewGraficos(progresiva); }} className="btn btn-outline"> {/* MODIFIED */}
-                                <i className="fas fa-chart-bar"></i> Ver Gráficos
-                            </button>
-                            <button type="button" onClick={() => handleGestionarEstratos(progresiva)} className="btn btn-outline">
-                                <i className="fas fa-plus"></i> Añadir Estrato
-                            </button>
-                        </div>
+                <div className="estratos-header">
+                    <h3 className="estratos-title"><i className="fas fa-layer-group"></i> Estratos identificados</h3>
+                    <div className="estratos-header-actions">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); handleViewGraficos(progresiva); }} className="btn btn-outline"> {/* MODIFIED */}
+                            <i className="fas fa-chart-bar"></i> Ver Gráficos
+                        </button>
+                        <button type="button" onClick={() => handleGestionarEstratos(progresiva)} className="btn btn-outline">
+                            <i className="fas fa-plus"></i> Añadir Estrato
+                        </button>
                     </div>
-                    {progresiva.estratos_perfil && progresiva.estratos_perfil.length > 0 ? (
-                        progresiva.estratos_perfil.map((estrato) => (
-                            <EstratoItem
-                                key={estrato.id || `estrato-${estrato.estrato_nombre}-${estrato.profundidad_inicial}`}
-                                estrato={estrato}
-                                expandedEstratos={expandedEstratos}
-                                onToggle={toggleEstrato}
-                                handleGestionarEstratos={handleGestionarEstratos}
-                                progresiva={progresiva} // Pass progresiva to EstratoItem for handleGestionarEstratos
-                                onAddEnsayo={handleOpenEnsayoModal}
-                                handleDeleteEnsayo={handleDeleteEnsayo}
-                                handleEditEnsayo={handleEditEnsayo} // Pass handleEditEnsayo
-                                handleViewEnsayo={handleViewEnsayo} // Pass handleViewEnsayo
-                            />
-                        ))
-                    ) : <p>No hay estratos definidos.</p>}
                 </div>
+                {progresiva.estratos_perfil && progresiva.estratos_perfil.length > 0 ? (
+                    progresiva.estratos_perfil.map((estrato) => (
+                        <EstratoItem
+                            key={estrato.id || `estrato-${estrato.estrato_nombre}-${estrato.profundidad_inicial}`}
+                            estrato={estrato}
+                            expandedEstratos={expandedEstratos}
+                            onToggle={toggleEstrato}
+                            handleGestionarEstratos={handleGestionarEstratos}
+                            progresiva={progresiva} // Pass progresiva to EstratoItem for handleGestionarEstratos
+                            onAddEnsayo={handleOpenEnsayoModal}
+                            handleDeleteEnsayo={handleDeleteEnsayo}
+                            handleEditEnsayo={handleEditEnsayo} // Pass handleEditEnsayo
+                            handleViewEnsayo={handleViewEnsayo} // Pass handleViewEnsayo
+                        />
+                    ))
+                ) : <p>No hay estratos definidos.</p>}
+            </div>
         </div>
     );
 });
@@ -207,7 +207,7 @@ export default function GestorDeTramosActual() {
     const [expandedProgresivas, setExpandedProgresivas] = useState({});
     const [expandedEstratos, setExpandedEstratos] = useState({});
     const [selectedProgresivaId, setSelectedProgresivaId] = useState(null); // NEW STATE
-    
+
     // State for Strata Modal
     const [showGestionarEstratosModal, setShowGestionarEstratosModal] = useState(false);
     const [progresivaParaGestionar, setProgresivaParaGestionar] = useState(null);
@@ -236,7 +236,7 @@ export default function GestorDeTramosActual() {
     const [viewingEstratos, setViewingEstratos] = useState(null);
     const [expandedEnsayos, setExpandedEnsayos] = useState({});
     const [selectedEnsayoInModal, setSelectedEnsayoInModal] = useState(null);
-    
+
     // NEW: State for graphics modal
     const [viewingGraficosFor, setViewingGraficosFor] = useState(null);
 
@@ -276,7 +276,7 @@ export default function GestorDeTramosActual() {
         setLoadingProgresivas(true);
         try {
             const headers = getAuthHeaders();
-            
+
             let url = `${API_URL}/progresivas/${tramoId}/children?page=${page}&limit=${itemsPerPage}`;
             if (search) {
                 url += `&search=${encodeURIComponent(search)}`;
@@ -316,7 +316,7 @@ export default function GestorDeTramosActual() {
         try {
             const headers = getAuthHeaders();
             const res = await axios.get(`${API_URL}/progresivas/${tramoId}/children/all`, { headers });
-            
+
             const processedData = res.data.filter(Boolean).map(subProg => ({
                 ...subProg,
                 estratos_perfil: (subProg.estratos_perfil || []).map(estrato => ({
@@ -366,12 +366,6 @@ export default function GestorDeTramosActual() {
             const res = await axios.get(url, { headers });
             setTramos(res.data);
 
-            if (res.data && res.data.length > 0) {
-                handleSelectTramo(res.data[0]);
-            } else {
-                setTramoSeleccionado(null);
-                setSubProgresivas([]);
-            }
         } catch (err) {
             if (err.message !== 'Token no proporcionado') {
                 setError('No se pudieron cargar los tramos.');
@@ -379,64 +373,134 @@ export default function GestorDeTramosActual() {
         } finally {
             setLoading(false);
         }
-    }, [API_URL, getAuthHeaders, handleSelectTramo, selectedProjectId]);
-    
+    }, [API_URL, getAuthHeaders, selectedProjectId]);
+
+    // NEW: Handle Initial Selection (Default vs Deep Link)
     useEffect(() => {
-        const { tramoId, progresivaId, estratoId } = location.state || {};
+        if (tramos.length > 0 && !tramoSeleccionado) {
+            const state = location.state || {};
+            const hasDeepLink = state.activeTramoId || state.tramoId || state.openTramoId;
 
-        if (tramoId && progresivaId && estratoId && tramos.length > 0) {
-            const tramoToSelect = tramos.find(t => t.id === tramoId);
+            // Only select default if NO deep link is trying to set a specific one
+            if (!hasDeepLink) {
+                handleSelectTramo(tramos[0]);
+            }
+        }
+    }, [tramos, tramoSeleccionado, location.state, handleSelectTramo]);
 
-            if (tramoToSelect) {
-                // Ensure tramoSeleccionado is set to the correct tramo
+    useEffect(() => {
+        const state = location.state || {};
+        const tramoId = state.activeTramoId || state.tramoId || state.openTramoId;
+        const progresivaId = state.activeProgresivaId || state.progresivaId || state.openProgresivaId;
+        const estratoId = state.estratoId;
+
+        console.log('>>> [GestorDeTramos] Deep Link Analysis:', { tramoId, progresivaId, estratoId });
+
+        // Ensure strictly integer comparison if IDs are numbers
+        const pId = progresivaId ? Number(progresivaId) : null;
+        const tId = tramoId ? Number(tramoId) : null;
+
+        if (tId && tramos.length > 0) {
+            const tramoToSelect = tramos.find(t => t.id === tId);
+
+            // Case 1: Switching Tramos or No Tramo Selected
+            if (tramoToSelect && (!tramoSeleccionado || tramoSeleccionado.id !== tId)) {
                 setTramoSeleccionado(tramoToSelect);
                 setActiveTab('progresivas');
 
-                const fetchPageAndProgresivas = async () => {
+                if (pId) {
+                    const fetchPageAndExpand = async () => {
+                        try {
+                            const headers = getAuthHeaders();
+                            const res = await axios.get(`${API_URL}/progresivas/${pId}/page`, { headers });
+                            const { page } = res.data;
+
+                            // Always fetch to ensure data is fresh and page is correct
+                            await fetchProgresivas(tramoToSelect.id, page);
+
+                            // Expand and Select
+                            setExpandedProgresivas(prev => ({ ...prev, [pId]: true }));
+                            if (estratoId) setExpandedEstratos(prev => ({ ...prev, [estratoId]: true }));
+                            setSelectedProgresivaId(pId);
+
+                            // Clean URL state
+                            navigate(location.pathname, { replace: true, state: {} });
+                        } catch (err) {
+                            console.error('Error handling deep link (new tramo):', err);
+                            fetchProgresivas(tramoToSelect.id, 1);
+                        }
+                    };
+                    fetchPageAndExpand();
+                } else {
+                    fetchProgresivas(tramoToSelect.id, 1);
+                }
+            }
+            // Case 2: Tramo Already Selected - Just Need to Expand/Scroll
+            else if (tramoSeleccionado && tramoSeleccionado.id === tId && pId) {
+                const handleExistingTramoDeepLink = async () => {
+                    console.log('>>> [GestorDeTramos] Case 2: Handling Valid Deep Link for pId:', pId);
                     try {
                         const headers = getAuthHeaders();
-                        const res = await axios.get(`${API_URL}/progresivas/${progresivaId}/page`, { headers });
+                        // Verify page just in case
+                        const res = await axios.get(`${API_URL}/progresivas/${pId}/page`, { headers });
                         const { page } = res.data;
-                        await fetchProgresivas(tramoToSelect.id, page);
+                        console.log('>>> [GestorDeTramos] Page Check:', { apiPage: page, currentPage });
 
-                        setExpandedProgresivas({ [progresivaId]: true });
-                        setExpandedEstratos({ [estratoId]: true });
-                        setSelectedProgresivaId(progresivaId); // NEW: Set the selected progresiva
-                        navigate(location.pathname, { replace: true });
-                    } catch (err) {
-                        console.error('Error fetching progresiva page or progresivas:', err);
-                    }
+                        // Force fetch if page is different OR to ensure children are loaded
+                        if (page !== currentPage) {
+                            console.log('>>> [GestorDeTramos] Pages mismatch, fetching page:', page);
+                            await fetchProgresivas(tramoSeleccionado.id, page);
+                        } else {
+                            console.log('>>> [GestorDeTramos] Page matches, proceeding to expand.');
+                        }
+
+                        // Force expansion logic even if already expanded (to trigger scroll effects if needed)
+                        setExpandedProgresivas(prev => ({ ...prev, [pId]: true }));
+                        if (estratoId) setExpandedEstratos(prev => ({ ...prev, [estratoId]: true }));
+                        setSelectedProgresivaId(pId);
+
+                        // Trigger Scroll
+                        setTimeout(() => {
+                            const el = progresivaRefs.current[pId];
+                            console.log('>>> [GestorDeTramos] Attempting Scroll. Ref found?', !!el);
+
+                            if (el) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                // Add a temporary highlight class if desired
+                                el.classList.add('highlight-pulse');
+                                setTimeout(() => el.classList.remove('highlight-pulse'), 2000);
+                            } else {
+                                console.warn('>>> [GestorDeTramos] SCROLL FAILED: Ref not found for pId', pId);
+                            }
+                        }, 800); // Increased delay slightly to be safe
+
+                        navigate(location.pathname, { replace: true, state: {} });
+                    } catch (e) { console.error('Error handling deep link (existing tramo):', e); }
                 };
-                fetchPageAndProgresivas();
+                handleExistingTramoDeepLink();
             }
         }
-    }, [location.state, tramos, tramoSeleccionado, getAuthHeaders, API_URL, navigate, fetchProgresivas, setActiveTab, setExpandedProgresivas, setExpandedEstratos, setTramoSeleccionado, location.pathname]);
+    }, [location.state, tramos, tramoSeleccionado, getAuthHeaders, API_URL, navigate, fetchProgresivas, currentPage]);
 
+    // Secondary Effect for Scrolling when list is loaded (subProgresivas changes)
     useEffect(() => {
-        const { progresivaId, estratoId } = location.state || {};
+        const state = location.state || {}; // React Router state persists until cleared/navigation
+        // But we cleared it in the previous effect? Not necessarily if subProgresivas wasn't ready.
+        // Let's use a local ref or simpler check. 
+        // Actually, the previous effect handles the fetch. This effect handles the SCROLL once data arrives.
 
-        if (progresivaId && estratoId && subProgresivas.length > 0) {
-            const progresiva = subProgresivas.find(p => p.id === progresivaId);
-            if (progresiva) {
-                setExpandedProgresivas({ [progresivaId]: true });
-                setExpandedEstratos({ [estratoId]: true });
+        // However, since we cleared state in the previous effect, this might miss. 
+        // Let's RELY on the 'selectedProgresivaId' state which we set in the previous effect.
 
-                // Scroll to the progresiva
+        if (selectedProgresivaId && subProgresivas.length > 0) {
+            const element = progresivaRefs.current[selectedProgresivaId];
+            if (element) {
                 setTimeout(() => {
-                    if (progresivaRefs.current[progresivaId]) {
-                        progresivaRefs.current[progresivaId].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    } else {
-                        console.log('Progresiva ref not found for ID (after timeout):', progresivaId);
-                    }
-                }, 100); // Small delay to allow DOM to update
-
-                // Clear the state to prevent re-triggering
-                navigate(location.pathname, { replace: true });
-            } else {
-                console.log('Progresiva not found in current subProgresivas for ID:', progresivaId);
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 300);
             }
         }
-    }, [subProgresivas, location.state, navigate, location.pathname]);
+    }, [subProgresivas, selectedProgresivaId]);
 
     useEffect(() => {
         fetchTramos();
@@ -617,7 +681,7 @@ export default function GestorDeTramosActual() {
 
 
     const handleViewEnsayo = (ensayo) => {
-    const assayDetails = `
+        const assayDetails = `
     <div class="ensayo-details-modal-container">
         <div class="ensayo-details-modal-header">
             <i class="fas fa-vial"></i>
@@ -657,9 +721,9 @@ export default function GestorDeTramosActual() {
         </div>
     </div>
     `;
-    // Remove the default title and padding from alertify to use our own
-    alertify.alert('', assayDetails).set('padding', false);
-};
+        // Remove the default title and padding from alertify to use our own
+        alertify.alert('', assayDetails).set('padding', false);
+    };
 
     const formatDateForDisplay = (dateString) => {
         if (!dateString) return 'N/A';
@@ -709,10 +773,10 @@ export default function GestorDeTramosActual() {
             const codigo = formatCodigoForDisplay(getProgresivaCodeForDisplay(p.codigo)).toLowerCase();
             const nombre = (p.nombre || '').toLowerCase();
             const descripcion = (p.descripcion || '').toLowerCase();
-            
-            return codigo.includes(lowercasedFilter) || 
-                       nombre.includes(lowercasedFilter) || 
-                       descripcion.includes(lowercasedFilter);
+
+            return codigo.includes(lowercasedFilter) ||
+                nombre.includes(lowercasedFilter) ||
+                descripcion.includes(lowercasedFilter);
         });
     }, [searchTerm, subProgresivasList]);
 
@@ -757,17 +821,17 @@ export default function GestorDeTramosActual() {
                         <>
                             <div className="panel-header">
                                 <h2><i className="fas fa-map-marker-alt"></i> {tramoSeleccionado.nombre}</h2>
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     className="btn btn-primary btn-sm ml-3"
                                     onClick={() => navigate(`/coordinador/suelos/ensayos/tramos/${tramoSeleccionado.id}`)}
                                 >
                                     <i className="fas fa-flask"></i> Ver Ensayos del Tramo
                                 </button>
                                 <div className="search-container">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Buscar en la pestaña actual..." 
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar en la pestaña actual..."
                                         className="search-input"
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -802,8 +866,8 @@ export default function GestorDeTramosActual() {
                                                 handleDeleteEnsayo={handleDeleteEnsayo}
                                                 handleEditEnsayo={handleEditEnsayo}
                                                 handleViewEnsayo={handleViewEnsayo}
-                                                handleViewGraficos={handleViewGraficos} 
-                                                selectedProgresivaId={selectedProgresivaId} 
+                                                handleViewGraficos={handleViewGraficos}
+                                                selectedProgresivaId={selectedProgresivaId}
                                                 ref={el => progresivaRefs.current[progresiva.id] = el}
                                             />
                                         ))}
@@ -816,43 +880,43 @@ export default function GestorDeTramosActual() {
                                 </div>
                             )}
                             {activeTab === 'listado' && (
-                            <div className="tab-content active">
-                                {isLoadingListado ? (
-                                <div style={{ padding: '20px' }}>Cargando listado completo...</div>
-                                ) : filteredListado.length > 0 ? (
-                                <div className="virtual-table-container">
-                                    <div className="virtual-table-header">
-                                    <div className="virtual-table-cell" style={{ flex: '0 0 50px' }}>#</div>
-                                    <div className="virtual-table-cell progresiva-cell" style={{ flex: '1 1 120px' }}>Progresiva</div>
-                                    <div className="virtual-table-cell" style={{ flex: '1 1 150px' }}>Nombre</div>
-                                    <div className="virtual-table-cell" style={{ flex: '2 1 250px' }}>Descripción</div>
-                                    <div className="virtual-table-cell" style={{ flex: '1 1 120px' }}>Coord. Este</div>
-                                    <div className="virtual-table-cell" style={{ flex: '1 1 120px' }}>Coord. Norte</div>
-                                    <div className="virtual-table-cell" style={{ flex: '0 0 80px' }}>Zona</div>
-                                    <div className="virtual-table-cell" style={{ flex: '0 0 120px' }}>N° Estratos</div>
-                                    <div className="virtual-table-cell" style={{ flex: '1 1 100px' }}>Estado</div>
-                                    </div>
-
-                                    <div className="virtual-table-list">
-                                        {filteredListado.map((progresiva, index) => (
-                                            <div key={progresiva.id || index} className="virtual-table-row">
-                                                <div className="virtual-table-cell" style={{ flex: '0 0 50px' }}>{index + 1}</div>
-                                                <div className="virtual-table-cell progresiva-cell" style={{ flex: '1 1 120px' }}>{formatCodigoForDisplay(getProgresivaCodeForDisplay(progresiva.codigo))}</div>
-                                                <div className="virtual-table-cell" style={{ flex: '1 1 150px' }}>{progresiva.nombre || 'N/A'}</div>
-                                                <div className="virtual-table-cell" style={{ flex: '2 1 250px' }}>{progresiva.descripcion || 'N/A'}</div>
-                                                <div className="virtual-table-cell" style={{ flex: '1 1 120px' }}>{progresiva.coordenada_este || 'N/A'}</div>
-                                                <div className="virtual-table-cell" style={{ flex: '1 1 120px' }}>{progresiva.coordenada_norte || 'N/A'}</div>
-                                                <div className="virtual-table-cell" style={{ flex: '0 0 80px' }}>{progresiva.zona || 'N/A'}</div>
-                                                <div className="virtual-table-cell" style={{ flex: '0 0 120px' }}>{progresiva.estratos_perfil ? progresiva.estratos_perfil.length : 0}</div>
-                                                <div className="virtual-table-cell" style={{ flex: '1 1 100px' }}>{progresiva.estado || 'N/A'}</div>
+                                <div className="tab-content active">
+                                    {isLoadingListado ? (
+                                        <div style={{ padding: '20px' }}>Cargando listado completo...</div>
+                                    ) : filteredListado.length > 0 ? (
+                                        <div className="virtual-table-container">
+                                            <div className="virtual-table-header">
+                                                <div className="virtual-table-cell" style={{ flex: '0 0 50px' }}>#</div>
+                                                <div className="virtual-table-cell progresiva-cell" style={{ flex: '1 1 120px' }}>Progresiva</div>
+                                                <div className="virtual-table-cell" style={{ flex: '1 1 150px' }}>Nombre</div>
+                                                <div className="virtual-table-cell" style={{ flex: '2 1 250px' }}>Descripción</div>
+                                                <div className="virtual-table-cell" style={{ flex: '1 1 120px' }}>Coord. Este</div>
+                                                <div className="virtual-table-cell" style={{ flex: '1 1 120px' }}>Coord. Norte</div>
+                                                <div className="virtual-table-cell" style={{ flex: '0 0 80px' }}>Zona</div>
+                                                <div className="virtual-table-cell" style={{ flex: '0 0 120px' }}>N° Estratos</div>
+                                                <div className="virtual-table-cell" style={{ flex: '1 1 100px' }}>Estado</div>
                                             </div>
-                                        ))}
-                                    </div>
+
+                                            <div className="virtual-table-list">
+                                                {filteredListado.map((progresiva, index) => (
+                                                    <div key={progresiva.id || index} className="virtual-table-row">
+                                                        <div className="virtual-table-cell" style={{ flex: '0 0 50px' }}>{index + 1}</div>
+                                                        <div className="virtual-table-cell progresiva-cell" style={{ flex: '1 1 120px' }}>{formatCodigoForDisplay(getProgresivaCodeForDisplay(progresiva.codigo))}</div>
+                                                        <div className="virtual-table-cell" style={{ flex: '1 1 150px' }}>{progresiva.nombre || 'N/A'}</div>
+                                                        <div className="virtual-table-cell" style={{ flex: '2 1 250px' }}>{progresiva.descripcion || 'N/A'}</div>
+                                                        <div className="virtual-table-cell" style={{ flex: '1 1 120px' }}>{progresiva.coordenada_este || 'N/A'}</div>
+                                                        <div className="virtual-table-cell" style={{ flex: '1 1 120px' }}>{progresiva.coordenada_norte || 'N/A'}</div>
+                                                        <div className="virtual-table-cell" style={{ flex: '0 0 80px' }}>{progresiva.zona || 'N/A'}</div>
+                                                        <div className="virtual-table-cell" style={{ flex: '0 0 120px' }}>{progresiva.estratos_perfil ? progresiva.estratos_perfil.length : 0}</div>
+                                                        <div className="virtual-table-cell" style={{ flex: '1 1 100px' }}>{progresiva.estado || 'N/A'}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p>No hay progresivas para mostrar en el listado general.</p>
+                                    )}
                                 </div>
-                                ) : (
-                                <p>No hay progresivas para mostrar en el listado general.</p>
-                                )}
-                            </div>
                             )}
 
                         </>
@@ -991,7 +1055,7 @@ export default function GestorDeTramosActual() {
                                                                         {estrato.ensayos && estrato.ensayos.length > 0 ? (
                                                                             estrato.ensayos.map((ensayo, ensayoIndex) => {
                                                                                 return (
-                                                                                    <div 
+                                                                                    <div
                                                                                         className={`ensayo-card selectable ${selectedEnsayoInModal === ensayo.id ? 'selected' : ''}`}
                                                                                         key={ensayo.id || ensayoIndex}
                                                                                         onClick={() => handleSelectEnsayoInModal(ensayo.id)}
@@ -1042,8 +1106,8 @@ export default function GestorDeTramosActual() {
                             <label>Profundidad Final Total (m):</label>
                             <span>
                                 {viewingEstratos.estratos_perfil && viewingEstratos.estratos_perfil.length > 0
-                                ? viewingEstratos.estratos_perfil[viewingEstratos.estratos_perfil.length - 1].profundidad_final
-                                : 0}
+                                    ? viewingEstratos.estratos_perfil[viewingEstratos.estratos_perfil.length - 1].profundidad_final
+                                    : 0}
                             </span>
                         </div>
                         <button onClick={() => setViewingEstratos(null)} className="close-btn">Cerrar</button>

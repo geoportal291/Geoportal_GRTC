@@ -259,6 +259,16 @@ const EstructurasExistentesService = {
     deleteProjectData: async (projectId) => {
         await db.query('DELETE FROM estructuras_existentes WHERE id_proyecto = $1', [projectId]);
         return { message: 'Datos eliminados correctamente' };
+    },
+
+    deleteEstructuraExistente: async (id) => {
+        try {
+            await db.query('DELETE FROM estructuras_existentes WHERE id_estructura = $1', [id]);
+            return { message: 'Eliminado correctamente' };
+        } catch (error) {
+            console.error(`Error al eliminar estructura existente ${id}:`, error);
+            throw new Error('Error al eliminar estructura existente de la base de datos.');
+        }
     }
 };
 

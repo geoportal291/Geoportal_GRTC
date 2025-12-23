@@ -14,6 +14,7 @@ const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, on
     const [selectedHito, setSelectedHito] = useState(null);
     const [isInfoVisible, setIsInfoVisible] = useState(true);
     const [hitoImages, setHitoImages] = useState([]);
+    const [hitosWithImages, setHitosWithImages] = useState([]);
 
     // Modals
     const [showListModal, setShowListModal] = useState(false);
@@ -23,29 +24,126 @@ const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, on
 
     const infoRef = useRef(null);
 
-    // Filter images effect
+    // Filter images effect (Side Panel)
     useEffect(() => {
         if (selectedHito && selectedHito.panel_fotografico_codigo && graphicsImages) {
-            const code = String(selectedHito.panel_fotografico_codigo);
+            const code = String(selectedHito.panel_fotografico_codigo).trim();
+
+            // 1. Parse Ranges
+            const parts = code.split(' - ');
+            const rangePart = parts[0];
+            const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+
+            let start, end;
+            if (rangePart.includes('-')) {
+                const [startStr, endStr] = rangePart.split('-');
+                start = parseInt(startStr, 10);
+                end = parseInt(endStr, 10);
+            } else {
+                start = parseInt(rangePart, 10);
+                end = start;
+            }
+
+            const expectedNames = [];
+            if (!isNaN(start) && !isNaN(end)) {
+                for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+            } else {
+                expectedNames.push(code);
+            }
+
+            // 2. Filter Images
             const filtered = graphicsImages.filter(img => {
-                const imgCode = String(img.panel_fotografico_codigo || '').trim();
-                const imgIndex = img.index ? String(img.index).trim() : '';
+                const imgNameWithoutExt = img.index.split('.')[0];
+                const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                const entregable = selectedHito.entregable ? String(selectedHito.entregable).trim() : null;
 
-                let urlFileName = '';
-                if (img.url) {
-                    const parts = img.url.split('/');
-                    const fileNameWithExt = parts[parts.length - 1];
-                    urlFileName = fileNameWithExt.split('.')[0];
+                // A. Name Check
+                const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                if (!nameMatches) return false;
+
+                // B. Entregable Logic
+                const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                if (entregable) {
+                    const normElement = normalize(entregable);
+                    const normImage = normalize(imgEntregable);
+
+                    if (normElement === 'E1') {
+                        return (!imgEntregable) || (normImage === 'E1');
+                    }
+                    return normImage === normElement;
                 }
-
-                const match = imgCode === code || imgIndex === code || urlFileName === code;
-                return match;
+                return true;
             });
             setHitoImages(filtered);
         } else {
             setHitoImages([]);
         }
     }, [selectedHito, graphicsImages]);
+
+    // Bulk Image Processing for Map
+    useEffect(() => {
+        if (hitosData.length > 0 && graphicsImages.length > 0) {
+            const processed = hitosData.map(hito => {
+                const code = hito.panel_fotografico_codigo ? String(hito.panel_fotografico_codigo) : null;
+                let imageUrls = [];
+
+                if (code) {
+                    // 1. Parse Ranges
+                    const parts = code.split(' - ');
+                    const rangePart = parts[0];
+                    const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+
+                    let start, end;
+                    if (rangePart.includes('-')) {
+                        const [startStr, endStr] = rangePart.split('-');
+                        start = parseInt(startStr, 10);
+                        end = parseInt(endStr, 10);
+                    } else {
+                        start = parseInt(rangePart, 10);
+                        end = start;
+                    }
+
+                    const expectedNames = [];
+                    if (!isNaN(start) && !isNaN(end)) {
+                        for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+                    } else {
+                        expectedNames.push(code);
+                    }
+
+                    // 2. Filter Images
+                    const foundImages = graphicsImages.filter(img => {
+                        const imgNameWithoutExt = img.index.split('.')[0];
+                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                        const entregable = hito.entregable ? String(hito.entregable).trim() : null;
+
+                        const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                        if (!nameMatches) return false;
+
+                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                        if (entregable) {
+                            const normElement = normalize(entregable);
+                            const normImage = normalize(imgEntregable);
+                            if (normElement === 'E1') {
+                                return (!imgEntregable) || (normImage === 'E1');
+                            }
+                            return normImage === normElement;
+                        }
+                        return true;
+                    });
+
+                    if (foundImages.length > 0) {
+                        imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
+                    }
+                }
+                return { ...hito, imageUrls, type: 'hitos_kilometricos' };
+            });
+            setHitosWithImages(processed);
+        } else {
+            setHitosWithImages(hitosData.map(s => ({ ...s, imageUrls: [], type: 'hitos_kilometricos' })));
+        }
+    }, [hitosData, graphicsImages]);
 
     const handleHitoClick = useCallback((hito) => {
         setSelectedHito(hito);
@@ -96,12 +194,7 @@ const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, on
         setShowExportModal(false);
     };
 
-    const processedHitosData = React.useMemo(() => {
-        return (hitosData || []).map(item => ({
-            ...item,
-            type: 'hitos_kilometricos'
-        }));
-    }, [hitosData]);
+
 
     const formatProgresiva = (value) => {
         if (value === null || value === undefined) return '';
@@ -118,7 +211,7 @@ const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, on
 
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                     <Geoite
-                        alcantarillasData={processedHitosData}
+                        alcantarillasData={hitosWithImages}
                         type="hitos_kilometricos"
                         onAlcantarillaClick={handleHitoClick}
                         selectedAlcantarilla={selectedHito}
@@ -207,7 +300,7 @@ const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, on
             <ListaHitosKilometricosModal
                 show={showListModal}
                 onClose={() => setShowListModal(false)}
-                hitosData={processedHitosData}
+                hitosData={hitosWithImages}
                 graphicsImages={graphicsImages}
                 initialSelection={selectedHito}
             />

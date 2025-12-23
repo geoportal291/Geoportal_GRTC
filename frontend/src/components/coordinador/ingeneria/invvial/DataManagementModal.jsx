@@ -13,7 +13,9 @@ import SubirImagenesAlcantarillasView from './AlcantarillaModalViews/SubirImagen
 import FormularioZonaCriticaView from './AlcantarillaModalViews/FormularioZonaCriticaView'; // Import Zonas Criticas Form
 import FormularioInterferenciaView from './AlcantarillaModalViews/FormularioInterferenciaView'; // Import Interferencias Form
 import FormularioSenalInformativaView from './AlcantarillaModalViews/FormularioSenalInformativaView';
+import FormularioSenalReguladoraView from './AlcantarillaModalViews/FormularioSenalReguladoraView';
 import FormularioHitoKilometricoView from './AlcantarillaModalViews/FormularioHitoKilometricoView';
+
 
 const DataManagementModal = ({
   show,
@@ -27,6 +29,7 @@ const DataManagementModal = ({
   vialHeaderOption,
   type = 'alcantarillas', // Default type
   isNavbarExpanded,
+  onDeleteElement, // New prop
 }) => {
   const initialFormData = {
     id_alcantarilla: '',
@@ -80,6 +83,12 @@ const DataManagementModal = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState('');
+
+  // Bulk OCR Progress State
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkEtr, setBulkEtr] = useState(null);
+
+  const [entregableToUpload, setEntregableToUpload] = useState('');
 
   const [excelFileInfo, setExcelFileInfo] = useState(null);
 
@@ -329,9 +338,19 @@ const DataManagementModal = ({
     formData.append('projectId', projectId);
     formData.append('utmZone', utmZone);
     const entregableMatch = vialHeaderOption.match(/(\d+)/);
+    let entNum = null;
     if (entregableMatch) {
-      formData.append('entregableNum', entregableMatch[1]);
+      entNum = entregableMatch[1];
+      formData.append('entregableNum', entNum);
+    } else {
+      console.warn('DEBUG: No Entregable number found in option:', vialHeaderOption);
+      alertify.warning('Advertencia: No se detectó número de entregable (E-1, E-2...). Se subirá como Sin Asignar si no está en el Excel.');
     }
+
+    console.log('DEBUG FRONTEND: Uploading with vialHeaderOption:', vialHeaderOption, 'Parsed Entregable:', entNum);
+
+    // form.append('project_id', projectId); // Wrong variable name and redundant (formData has projectId)
+
     try {
       let uploadEndpoint = '/api/alcantarillas/upload-excel';
       if (type === 'badenes') uploadEndpoint = '/api/badenes/upload-excel';
@@ -343,6 +362,7 @@ const DataManagementModal = ({
       if (type === 'estructuras-existentes') uploadEndpoint = '/api/estructuras-existentes/upload-excel';
       if (type === 'interferencias') uploadEndpoint = '/api/interferencias/upload-excel';
       if (type === 'senales_informativas') uploadEndpoint = '/api/senales-informativas/upload-excel';
+      if (type === 'senales_reguladoras') uploadEndpoint = '/api/senales-reguladoras/upload-excel';
       if (type === 'senales_preventivas') uploadEndpoint = '/api/senales-preventivas/upload-excel';
       if (type === 'hitos_kilometricos') uploadEndpoint = '/api/hitos-kilometricos/upload-excel';
 
@@ -426,6 +446,9 @@ const DataManagementModal = ({
     const formData = new FormData();
     formData.append('projectId', projectId);
     formData.append('files', file);
+    if (entregableToUpload) {
+      formData.append('entregable', entregableToUpload);
+    }
 
     setUploadStatus({ message: 'Subiendo archivo...', type: 'info' });
 
@@ -538,6 +561,7 @@ const DataManagementModal = ({
         projectId,
         uploadId,
         originalFilename: file.name,
+        entregable: entregableToUpload || null
       });
 
       if (response.status === 202) {
@@ -555,6 +579,82 @@ const DataManagementModal = ({
       }
     } finally {
       setIsUploading(false);
+    }
+  };
+
+
+
+  const handleBulkOcr = async (fileInput) => {
+    if (!fileInput.files || fileInput.files.length === 0) {
+      alertify.warning('Selecciona al menos una imagen o un archivo comprimido.');
+      return;
+    }
+
+    const formData = new FormData();
+    // Append all files
+    for (let i = 0; i < fileInput.files.length; i++) {
+      formData.append('files', fileInput.files[i]);
+    }
+    // Append Project ID
+    formData.append('projectId', projectId);
+
+    const statusDiv = document.getElementById('bulkStatus');
+    if (statusDiv) {
+      statusDiv.innerHTML = '⏳ Subiendo archivos y creando trabajo...';
+      statusDiv.style.color = '#666';
+    }
+
+    try {
+      const response = await axiosInstance.post('/api/utils/bulk-ocr', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      const { jobId } = response.data;
+      if (statusDiv) statusDiv.innerHTML = `🚀 Procesando (Job ID: ${jobId})... Esto tomará un tiempo.`;
+
+      // Start Polling
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await axiosInstance.get(`/api/jobs/${jobId}/status`);
+          const { status, result } = statusRes.data;
+
+          if (status === 'completed') {
+            clearInterval(pollInterval);
+            setBulkProgress(100);
+            setBulkEtr(0);
+            if (statusDiv) {
+              statusDiv.innerHTML = `✅ <strong>Completado!</strong> <a href="${result.downloadUrl}" target="_blank" style="color: blue; text-decoration: underline;">Descargar Resultados JSON</a>`;
+              statusDiv.style.color = 'green';
+            }
+            alertify.success('Extracción masiva completada.');
+          } else if (status === 'failed') {
+            clearInterval(pollInterval);
+            setBulkProgress(0);
+            setBulkEtr(null);
+            if (statusDiv) {
+              statusDiv.innerHTML = `❌ Falló: ${result.error}`;
+              statusDiv.style.color = 'red';
+            }
+          } else {
+            // Processing
+            if (result && result.progress) {
+              setBulkProgress(result.progress);
+              setBulkEtr(result.etr);
+              if (statusDiv) statusDiv.innerHTML = `⚙️ Procesando... ${result.progress}% completado.`;
+            } else {
+              if (statusDiv) statusDiv.innerHTML = `⚙️ Procesando imágenes... (Estado: ${status})`;
+            }
+          }
+        } catch (err) {
+          console.error("Polling error", err);
+        }
+      }, 3000);
+
+    } catch (error) {
+      if (statusDiv) {
+        statusDiv.innerHTML = `❌ Error al iniciar: ${error.response?.data?.error || error.message}`;
+        statusDiv.style.color = 'red';
+      }
     }
   };
 
@@ -698,9 +798,10 @@ const DataManagementModal = ({
         type === 'est_existentes' ? 'Gestión de Estructuras Existentes' :
           type === 'interferencias' ? 'Gestión de Interferencias' :
             type === 'senales_informativas' ? 'Gestión de Señales Informativas' :
-              type === 'senales_preventivas' ? 'Gestión de Señales Preventivas' :
-                type === 'hitos_kilometricos' ? 'Gestión de Hitos Kilométricos' :
-                  'Gestión de Alcantarillas';
+              type === 'senales_reguladoras' ? 'Gestión de Señales Reguladoras' :
+                type === 'senales_preventivas' ? 'Gestión de Señales Preventivas' :
+                  type === 'hitos_kilometricos' ? 'Gestión de Hitos Kilométricos' :
+                    'Gestión de Alcantarillas';
   };
 
   if (!show) {
@@ -718,9 +819,9 @@ const DataManagementModal = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 10000,
+      zIndex: 100000,
       fontFamily: 'Arial, sans-serif',
-      paddingLeft: isNavbarExpanded ? '260px' : '0px'
+      paddingLeft: '0px'
     }}>
       <div ref={modalRef} className="hide-scrollbar" style={{
         backgroundColor: '#ffffff',
@@ -729,7 +830,7 @@ const DataManagementModal = ({
         boxShadow: '0 8px 25px rgba(0, 0, 0, 0.2)',
         maxWidth: '900px',
         width: '95%',
-        zIndex: 10001,
+        zIndex: 100001,
         position: 'relative',
         maxHeight: '85vh',
         overflowY: 'auto',
@@ -763,6 +864,7 @@ const DataManagementModal = ({
               // onDelete={handleDeleteClick} // This was not in the original code, so not adding it.
               setModalViewMode={setModalViewMode} // Changed from 'onUploadExcel' and 'onUploadImages'
               type={type} // Pass type to the generic view
+              onDeleteElement={onDeleteElement}
             // canUpload={true} // Not in original code
             // isNavbarExpanded={isNavbarExpanded} // Not in original code
             />
@@ -794,6 +896,11 @@ const DataManagementModal = ({
               />
             ) : type === 'senales_informativas' ? (
               <FormularioSenalInformativaView
+                formData={formData}
+                handleInputChange={handleChange}
+              />
+            ) : type === 'senales_reguladoras' ? (
+              <FormularioSenalReguladoraView
                 formData={formData}
                 handleInputChange={handleChange}
               />
@@ -832,29 +939,34 @@ const DataManagementModal = ({
             />
           )}
 
-          {modalViewMode === 'upload_graphics_excel' && (
-            <SubirImagenesAlcantarillasView
-              filesToUpload={filesToUpload}
-              isUploading={isUploading}
-              pollingJobId={pollingJobId}
-              handleFileChange={handleFileChange}
-              handleImageUploadProcess={handleImageUploadProcess}
-              handleDeleteAllGraphicImages={handleDeleteAllGraphicImages}
-              uploadStatus={uploadStatus}
-              uploadProgress={uploadProgress}
-              etr={etr}
-              formatEtr={formatEtr}
-              graphicsImages={graphicsImages}
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              handleDeleteGraphicImage={handleDeleteGraphicImage}
-              setPreviewImageUrl={setPreviewImageUrl}
-              setIsPreviewModalOpen={setIsPreviewModalOpen}
-              setModalViewMode={setModalViewMode}
-              setUploadStatus={setUploadStatus}
-              setGraphicsImages={setGraphicsImages}
-            />
-          )}
+          <SubirImagenesAlcantarillasView
+            filesToUpload={filesToUpload}
+            isUploading={isUploading}
+            pollingJobId={pollingJobId}
+            handleFileChange={handleFileChange}
+            handleImageUploadProcess={handleImageUploadProcess}
+            handleDeleteAllGraphicImages={handleDeleteAllGraphicImages}
+            uploadStatus={uploadStatus}
+            uploadProgress={uploadProgress}
+            etr={etr}
+            formatEtr={formatEtr}
+            graphicsImages={graphicsImages}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            handleDeleteGraphicImage={handleDeleteGraphicImage}
+            setPreviewImageUrl={setPreviewImageUrl}
+            setIsPreviewModalOpen={setIsPreviewModalOpen}
+            setModalViewMode={setModalViewMode}
+            setUploadStatus={setUploadStatus}
+            setGraphicsImages={setGraphicsImages}
+
+            handleBulkOcr={handleBulkOcr}
+            bulkProgress={bulkProgress}
+            bulkEtr={bulkEtr}
+
+            entregableToUpload={entregableToUpload}
+            setEntregableToUpload={setEntregableToUpload}
+          />
 
 
 

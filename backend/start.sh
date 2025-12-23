@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+# Start FastAPI in background
+echo "Starting Python FastAPI worker..."
+# Assuming requirements are installed system-wide or in a venv
+# Here assuming system-wide install via pip in Dockerfile
+uvicorn python_worker.main:app --host 127.0.0.1 --port 8000 &
+
+# Start Node.js in foreground
+echo "Starting Node.js server..."
+node --max-old-space-size=16384 index.js

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Suelos - Concepto Premium</title>
+    <!-- Fuente Google Inter para look moderno -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-body: #f3f6f9;
+            --bg-card: #ffffff;
+            --primary: #2563eb; /* Azul Vibrante */
+            --secondary: #64748b; /* Gris Texto */
+            --success: #10b981; /* Verde Esmeralda */
+            --warning: #f59e0b; /* Ambar */
+            --danger: #ef4444; /* Rojo Suave */
+            --surface-hover: #f8fafc;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --radius-lg: 1rem;
+            --radius-xl: 1.5rem;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-body);
+            color: #1e293b;
+            margin: 0;
+            padding: 2rem;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* --- MAPA --- */
+        .map-section {
+            background-color: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+            box-shadow: var(--shadow-md);
+            height: 400px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: url('https://img.freepik.com/free-vector/abstract-city-map_23-2148074902.jpg?w=1380&t=st=1686760000~exp=1686760600~hmac=...'); /* Placeholder textura mapa */
+            background-size: cover;
+            background-position: center;
+        }
+        .map-overlay {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 1rem 2rem;
+            border-radius: 999px;
+            font-weight: 600;
+            color: var(--secondary);
+            box-shadow: var(--shadow-sm);
+            backdrop-filter: blur(4px);
+        }
+
+        /* --- KPIS --- */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-left: 5px solid transparent;
+        }
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .kpi-card.blue { border-left-color: var(--primary); }
+        .kpi-card.green { border-left-color: var(--success); }
+        .kpi-card.orange { border-left-color: var(--warning); }
+        .kpi-card.indigo { border-left-color: #6366f1; }
+
+        .kpi-info h3 {
+            font-size: 0.875rem;
+            color: var(--secondary);
+            margin: 0 0 0.5rem 0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .kpi-info .value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0;
+        }
+        .kpi-info .sub-text {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-top: 0.25rem;
+        }
+
+        .kpi-viz {
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .kpi-icon {
+            font-size: 2rem;
+            opacity: 0.2;
+        }
+        .canteras-icon { color: var(--warning); }
+        .agua-icon { color: var(--primary); }
+
+        /* --- SECCIÓN INFERIOR: RESUMEN --- */
+        .bottom-section {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 1.5rem;
+            height: 500px;
+        }
+
+        /* Gráfico de Dona Grande (Izquierda) */
+        .chart-panel {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .chart-wrapper {
+            position: relative;
+            width: 250px;
+            height: 250px;
+            margin-top: 1rem;
+        }
+        .chart-center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .chart-center-text .total-num {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #1e293b;
+            line-height: 1;
+        }
+        .chart-center-text .total-label {
+            font-size: 0.8rem;
+            color: var(--secondary);
+            text-transform: uppercase;
+        }
+
+        .chart-legend {
+            margin-top: 2rem;
+            width: 100%;
+        }
+        .legend-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .legend-color {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        /* Lista de Tarjetas (Derecha) */
+        .list-panel {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .panel-header h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cards-list {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        /* Scrollbar styling */
+        .cards-list::-webkit-scrollbar { width: 6px; }
+        .cards-list::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
+
+        .resource-card {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            transition: all 0.2s ease;
+        }
+        .resource-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+            transform: translateX(4px);
+        }
+
+        .resource-icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: #eff6ff;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            margin-right: 1rem;
+        }
+        .resource-info {
+            flex: 1;
+        }
+        .resource-name {
+            font-weight: 600;
+            font-size: 1rem;
+            color: #1e293b;
+            display: block;
+        }
+        .resource-meta {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 0.25rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .badge.approved { background-color: #dcfce7; color: #166534; }
+        .badge.pending { background-color: #fef9c3; color: #854d0e; }
+        .badge.rejected { background-color: #fee2e2; color: #991b1b; }
+
+        .distance-tag {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-weight: 500;
+            color: #6366f1;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+
+    <!-- SECCIÓN DE MAPA -->
+    <section class="map-section">
+        <div class="map-overlay">
+            <i class="fas fa-map-marked-alt text-primary"></i> Mapa Interactivo Geoportal (Preview)
+        </div>
+    </section>
+
+    <!-- SECCIÓN DE KPIs -->
+    <section class="kpi-grid">
+        <!-- Tarjeta 1: Gráfico Circular -->
+        <div class="kpi-card green">
+            <div class="kpi-info">
+                <h3>Avance del Tramo</h3>
+                <p class="value">38.5%</p>
+                <p class="sub-text">Progresiva ejecutada</p>
+            </div>
+            <div class="kpi-viz">
+                <canvas id="avanceChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Tarjeta 2 -->
+        <div class="kpi-card orange">
+            <div class="kpi-info">
+                <h3>Volumen Canteras</h3>
+                <p class="value">120K m³</p>
+                <p class="sub-text">Capacidad disponible</p>
+            </div>
+            <div class="kpi-viz">
+                <i class="fas fa-cubes kpi-icon canteras-icon" style="opacity: 1;"></i>
+            </div>
+        </div>
+
+        <!-- Tarjeta 3 -->
+        <div class="kpi-card blue">
+            <div class="kpi-info">
+                <h3>Agua - Abastecimiento</h3>
+                <p class="value">85%</p>
+                <p class="sub-text">Demanda satisfecha</p>
+            </div>
+            <div class="kpi-viz">
+                <i class="fas fa-tint kpi-icon agua-icon" style="opacity: 1;"></i>
+            </div>
+        </div>
+
+         <!-- Tarjeta 4 -->
+         <div class="kpi-card indigo">
+            <div class="kpi-info">
+                <h3>Distancia Promedio</h3>
+                <p class="value">25 km</p>
+                <p class="sub-text">Cantera a Frente</p>
+            </div>
+            <div class="kpi-viz">
+                <i class="fas fa-route kpi-icon" style="opacity: 1; color: #6366f1;"></i>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECCIÓN INFERIOR -->
+    <section class="bottom-section">
+        
+        <!-- PANEL IZQUIERDO: ESTADÍSTICAS ENSAYOS -->
+        <aside class="chart-panel">
+            <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin:0; font-size:1rem;">Estado de Ensayos</h3>
+                <i class="fas fa-ellipsis-h" style="color:var(--secondary); cursor: pointer;"></i>
+            </div>
+            
+            <div class="chart-wrapper">
+                <canvas id="ensayosStatusChart"></canvas>
+                <div class="chart-center-text">
+                    <div class="total-num">45</div>
+                    <div class="total-label">Ensayos</div>
+                </div>
+            </div>
+
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <span><span class="legend-color" style="background:#10b981"></span>Aprobados</span>
+                    <strong>28 (62%)</strong>
+                </div>
+                <div class="legend-item">
+                    <span><span class="legend-color" style="background:#f59e0b"></span>Pendientes</span>
+                    <strong>12 (27%)</strong>
+                </div>
+                <div class="legend-item">
+                    <span><span class="legend-color" style="background:#ef4444"></span>Rechazados</span>
+                    <strong>5 (11%)</strong>
+                </div>
+            </div>
+        </aside>
+
+        <!-- PANEL DERECHO: LISTA DE TARJETAS -->
+        <main class="list-panel">
+            <div class="panel-header">
+                <h2>
+                    <span style="background: #e0e7ff; color: #4338ca; padding:8px; border-radius:8px;">
+                        <i class="fas fa-clipboard-check"></i>
+                    </span> 
+                    Últimas Certificaciones & Ensayos
+                </h2>
+                <button style="border:none; background:transparent; color: var(--primary); font-weight:600; cursor:pointer;">Ver todo</button>
+            </div>
+
+            <div class="cards-list">
+                <!-- Item 1 -->
+                <div class="resource-card">
+                    <div class="resource-icon-box">
+                        <i class="fas fa-mountain"></i>
+                    </div>
+                    <div class="resource-info">
+                        <span class="resource-name">Cantera "El Peñón" - Muestra M-201</span>
+                        <div class="resource-meta">
+                            <span><i class="fas fa-layer-group"></i> Grava-Arena (GW)</span>
+                            <span class="distance-tag"><i class="fas fa-road"></i> 15.2 km</span>
+                        </div>
+                    </div>
+                    <span class="badge approved">Aprobado</span>
+                </div>
+
+                <!-- Item 2 -->
+                <div class="resource-card">
+                    <div class="resource-icon-box" style="background: #ecfdf5; color: #059669;">
+                        <i class="fas fa-water"></i>
+                    </div>
+                    <div class="resource-info">
+                        <span class="resource-name">Fuente "Río Seco" - Análisis Químico</span>
+                        <div class="resource-meta">
+                            <span><i class="fas fa-heartbeat"></i> PH: 7.5</span>
+                            <span class="distance-tag"><i class="fas fa-road"></i> 8.1 km</span>
+                        </div>
+                    </div>
+                    <span class="badge pending">Pendiente Lab</span>
+                </div>
+
+                <!-- Item 3 -->
+                <div class="resource-card">
+                    <div class="resource-icon-box" style="background: #fff1f2; color: #be123c;">
+                        <i class="fas fa-mountain"></i>
+                    </div>
+                    <div class="resource-info">
+                        <span class="resource-name">Cantera "Loma Sur" - Muestra M-204</span>
+                        <div class="resource-meta">
+                            <span><i class="fas fa-layer-group"></i> Arcilla (CL)</span>
+                            <span class="distance-tag"><i class="fas fa-road"></i> 32.7 km</span>
+                        </div>
+                    </div>
+                    <span class="badge rejected">Rechazado</span>
+                </div>
+
+                <!-- Item 4 -->
+                <div class="resource-card">
+                    <div class="resource-icon-box">
+                        <i class="fas fa-vial"></i>
+                    </div>
+                    <div class="resource-info">
+                        <span class="resource-name">Ensayo de Compactación - Km 12+500</span>
+                        <div class="resource-meta">
+                            <span>Proctor Modificado</span>
+                        </div>
+                    </div>
+                    <span class="badge approved">Aprobado</span>
+                </div>
+            </div>
+        </main>
+    </section>
+
+</div>
+
+<script>
+    // --- GRÁFICO PEQUEÑO: AVANCE ---
+    const ctxAvance = document.getElementById('avanceChart').getContext('2d');
+    new Chart(ctxAvance, {
+        type: 'doughnut',
+        data: {
+            labels: ['Ejecutado', 'Pendiente'],
+            datasets: [{
+                data: [38.5, 61.5],
+                backgroundColor: ['#10b981', '#e2e8f0'],
+                borderWidth: 0,
+                cutout: '75%'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            animation: { animateScale: true, animateRotate: true }
+        }
+    });
+
+    // --- GRÁFICO GRANDE: ESTADO ENSAYOS ---
+    const ctxStatus = document.getElementById('ensayosStatusChart').getContext('2d');
+    new Chart(ctxStatus, {
+        type: 'doughnut',
+        data: {
+            labels: ['Aprobados', 'Pendientes', 'Rechazados'],
+            datasets: [{
+                data: [28, 12, 5],
+                backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                borderWidth: 0,
+                hoverOffset: 4,
+                cutout: '65%'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false } // Usamos leyenda HTML personalizada
+            }
+        }
+    });
+</script>
+
+</body>
+</html>

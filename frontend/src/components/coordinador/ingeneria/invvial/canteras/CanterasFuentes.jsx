@@ -37,27 +37,59 @@ const CanterasFuentes = ({ canterasData, fuentesData, projectId, canUpload, onUp
         if (!element.panel_fotografico || !graphicsImages) {
             return [];
         }
-        const code = element.panel_fotografico;
-        let expectedNames = [];
-        if (code.includes('-')) {
-            const part = code.split(' ')[0];
-            const [startStr, endStr] = part.split('-');
-            const start = parseInt(startStr, 10);
-            const end = parseInt(endStr, 10);
-            if (!isNaN(start) && !isNaN(end)) {
-                for (let i = start; i <= end; i++) {
-                    expectedNames.push(`${i}`);
-                }
-            }
+        const code = String(element.panel_fotografico).trim();
+
+        // 1. Parse Ranges
+        const parts = code.split(' - ');
+        const rangePart = parts[0];
+        const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+
+        let start, end;
+        if (rangePart.includes('-')) {
+            const [startStr, endStr] = rangePart.split('-');
+            start = parseInt(startStr, 10);
+            end = parseInt(endStr, 10);
         } else {
-            expectedNames.push(code.trim());
+            start = parseInt(rangePart, 10);
+            end = start;
         }
 
+        const expectedNames = [];
+        if (!isNaN(start) && !isNaN(end)) {
+            for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+        } else {
+            expectedNames.push(code);
+        }
+
+        // 2. Filter Images
         return graphicsImages.filter(img => {
             const imgNameWithoutExt = img.index.split('.')[0];
-            return expectedNames.includes(imgNameWithoutExt);
+            const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+            const entregable = element.entregable ? String(element.entregable).trim() : null;
+
+            // A. Name Check
+            const nameMatches = expectedNames.includes(imgNameWithoutExt);
+            if (!nameMatches) return false;
+
+            // B. Entregable Logic (Hybrid Legacy/Strict)
+            const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+            if (entregable) {
+                const normElement = normalize(entregable);
+                const normImage = normalize(imgEntregable);
+
+                // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                if (normElement === 'E1') {
+                    return (!imgEntregable) || (normImage === 'E1');
+                }
+
+                // Scenario 2: Element is "E2". STRICT match.
+                return normImage === normElement;
+            }
+
+            // Scenario 3: No Entregable.
+            return true;
         });
-        // Returns objects {id, url, index, ...}
     }, [graphicsImages]);
 
     // Update images when selection changes

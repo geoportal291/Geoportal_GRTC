@@ -63,15 +63,14 @@ const EstructurasExistentes = ({ projectId, isVisible, graphicsImages }) => {
 
     useEffect(() => {
         if (selectedStructure && selectedStructure.panel_fotografico && graphicsImages) {
-            const code = String(selectedStructure.panel_fotografico);
-            // Logic to parse range e.g., "1-3" or "10"
-            // Copied adapted logic from ZonasCriticas
+            const code = String(selectedStructure.panel_fotografico).trim();
+
+            // 1. Parse Ranges
             const parts = code.split(' - ');
             const rangePart = parts[0];
             const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
             let start, end;
-
             if (rangePart.includes('-')) {
                 const [startStr, endStr] = rangePart.split('-');
                 start = parseInt(startStr, 10);
@@ -81,20 +80,38 @@ const EstructurasExistentes = ({ projectId, isVisible, graphicsImages }) => {
                 end = start;
             }
 
+            const expectedNames = [];
             if (!isNaN(start) && !isNaN(end)) {
-                const expectedNames = [];
-                for (let i = start; i <= end; i++) {
-                    expectedNames.push(`${i}${suffix}`);
-                }
-
-                const filtered = graphicsImages.filter(img => {
-                    const imgNameWithoutExt = img.index.split('.')[0];
-                    return expectedNames.includes(imgNameWithoutExt);
-                });
-                setStructureImages(filtered);
+                for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
             } else {
-                setStructureImages([]);
+                expectedNames.push(code);
             }
+
+            // 2. Filter Images
+            const filtered = graphicsImages.filter(img => {
+                const imgNameWithoutExt = img.index.split('.')[0];
+                const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                const entregable = selectedStructure.entregable ? String(selectedStructure.entregable).trim() : null;
+
+                // A. Name Check
+                const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                if (!nameMatches) return false;
+
+                // B. Entregable Logic
+                const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                if (entregable) {
+                    const normElement = normalize(entregable);
+                    const normImage = normalize(imgEntregable);
+
+                    if (normElement === 'E1') {
+                        return (!imgEntregable) || (normImage === 'E1');
+                    }
+                    return normImage === normElement;
+                }
+                return true;
+            });
+            setStructureImages(filtered);
         } else {
             setStructureImages([]);
         }
@@ -105,35 +122,57 @@ const EstructurasExistentes = ({ projectId, isVisible, graphicsImages }) => {
         if (!estructurasData || !graphicsImages) return estructurasData;
 
         return estructurasData.map(structure => {
-            const code = String(structure.panel_fotografico || '');
-            if (!code) return { ...structure, images: [] };
-
-            const parts = code.split(' - ');
-            const rangePart = parts[0];
-            const suffix = parts.length > 1 ? `-${parts[1]}` : '';
-
-            let start, end;
-            if (rangePart.includes('-')) {
-                const [startStr, endStr] = rangePart.split('-');
-                start = parseInt(startStr, 10);
-                end = parseInt(endStr, 10);
-            } else {
-                start = parseInt(rangePart, 10);
-                end = start;
-            }
-
+            const code = String(structure.panel_fotografico || '').trim();
             let images = [];
-            if (!isNaN(start) && !isNaN(end)) {
-                const expectedNames = [];
-                for (let i = start; i <= end; i++) {
-                    expectedNames.push(`${i}${suffix}`);
+
+            if (code) {
+                // 1. Parse Ranges
+                const parts = code.split(' - ');
+                const rangePart = parts[0];
+                const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+
+                let start, end;
+                if (rangePart.includes('-')) {
+                    const [startStr, endStr] = rangePart.split('-');
+                    start = parseInt(startStr, 10);
+                    end = parseInt(endStr, 10);
+                } else {
+                    start = parseInt(rangePart, 10);
+                    end = start;
                 }
+
+                const expectedNames = [];
+                if (!isNaN(start) && !isNaN(end)) {
+                    for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+                } else {
+                    expectedNames.push(code);
+                }
+
+                // 2. Filter Images
                 images = graphicsImages.filter(img => {
                     const imgNameWithoutExt = img.index.split('.')[0];
-                    return expectedNames.includes(imgNameWithoutExt);
+                    const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                    const entregable = structure.entregable ? String(structure.entregable).trim() : null;
+
+                    const nameMatches = expectedNames.includes(imgNameWithoutExt);
+                    if (!nameMatches) return false;
+
+                    const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                    if (entregable) {
+                        const normElement = normalize(entregable);
+                        const normImage = normalize(imgEntregable);
+                        if (normElement === 'E1') {
+                            return (!imgEntregable) || (normImage === 'E1');
+                        }
+                        return normImage === normElement;
+                    }
+                    return true;
                 });
             }
-            return { ...structure, images };
+            // Ensure compatibility with Geoite which looks for imageUrls usually, but here we keep images array too
+            const imageUrls = images.map(img => img.url);
+            return { ...structure, images, imageUrls };
         });
     }, [estructurasData, graphicsImages]);
 

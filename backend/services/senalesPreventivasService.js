@@ -237,8 +237,18 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
 
             colMap.foto = row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto')))
                 !== -1 ? row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto'))) : progIdx + 7;
-            colMap.entregable = row.findIndex(c => typeof c === 'string' && (c.toUpperCase().includes('ENTREGABLE')))
-                !== -1 ? row.findIndex(c => typeof c === 'string' && (c.toUpperCase().includes('ENTREGABLE'))) : progIdx + 8; // Assuming Entregable is after Foto
+
+            // Search explicitly for Entregable
+            colMap.entregable = row.findIndex(c => typeof c === 'string' && c.toUpperCase().includes('ENTREGABLE'));
+            // If not found, guess it's after Foto? Or don't guess to be safe. 
+            if (colMap.entregable === -1) {
+                // Heuristic: check col M (index 12) if it looks like E-X
+                const valAtM = row[12];
+                if (typeof valAtM === 'string' && valAtM.toUpperCase().startsWith('E-')) {
+                    colMap.entregable = 12;
+                }
+            }
+
             break;
         }
     }
@@ -271,6 +281,9 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         let insertedCount = 0;
         let notLocatedCount = 0;
 
+        // Clear existing data for this project to avoid duplicates/stale data
+        await client.query('DELETE FROM senales_preventivas WHERE id_proyecto = $1', [projectId]);
+
         for (let i = startRowIndex; i < rawData.length; i++) {
             const row = rawData[i];
             if (!row || row.length === 0) continue;
@@ -296,7 +309,21 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
             let coord2 = row[colMap.longitud];
             let altitudVal = row[colMap.altitud];
             const panel_fotografico_codigo = row[colMap.foto];
-            const entregable = row[colMap.entregable];
+
+            // Entregable Logic
+            let entregableVal = colMap.entregable !== -1 ? row[colMap.entregable] : null;
+            if (!entregableVal && entregableNum) {
+                entregableVal = `E-${entregableNum}`;
+            }
+            // Normalize E-X prefix if needed, or trust user input
+            if (entregableVal && !String(entregableVal).toUpperCase().startsWith('E-') && !String(entregableVal).toUpperCase().startsWith('ENTREGABLE')) {
+                // Maybe just number?
+                if (!isNaN(entregableVal)) entregableVal = `E-${entregableVal}`;
+            }
+
+            if (insertedCount < 5) {
+                console.log(`DEBUG ROW ${i}: entregableVal=${entregableVal}, rawCell=${colMap.entregable !== -1 ? row[colMap.entregable] : 'N/A'}, fallback=${entregableNum}`);
+            }
 
             // Normalize Altitud
             if (typeof altitudVal === 'string') {
@@ -383,7 +410,7 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
                 [codigo, progresivaStr, lado, tipo, clasificacion, material,
                     latitud || null, longitud || null, altitudVal, null,
-                    panel_fotografico_codigo, projectId, entregable]
+                    panel_fotografico_codigo, projectId, entregableVal]
             );
             insertedCount++;
         }
@@ -403,8 +430,13 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
 
 const uploadExcel = async (req, res) => {
     const { projectId, entregableNum, utmZone } = req.body;
+    console.log('DEBUG UPLOAD: Received body:', req.body);
+    console.log('DEBUG UPLOAD: entregableNum:', entregableNum);
+
     try {
         const result = await processExcel(req.file.buffer, projectId || 1, entregableNum, utmZone);
+        // Trace string to verify deployment
+        result.message = "PROCESADO CON DEBUG V2 - SI VES ESTO, EL CODIGO ESTA ACTUALIZADO";
         res.json(result);
     } catch (error) {
         res.status(500).json({ message: error.message });

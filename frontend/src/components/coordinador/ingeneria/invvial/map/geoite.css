@@ -216,17 +216,20 @@ body {
 }
 
 /* --- Estilos para Popups de Alcantarillas/Badenes/Puentes/Muros --- */
+/* --- Estilos para Popups de Alcantarillas/Badenes/Puentes/Muros --- */
+/* Reset Leaflet default wrapper to avoid double-box effect */
 .leaflet-popup-content-wrapper {
-    min-width: 200px !important;
-    max-width: 240px !important;
-    border-radius: 8px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
 }
 
 .leaflet-popup-content {
-    margin: 12px !important;
-    font-size: 13px !important;
-    line-height: 1.5 !important;
-    min-width: 180px !important;
+    margin: 0 !important;
+    width: 260px !important;
+    /* Force fixed width for correct centering */
+    line-height: inherit !important;
 }
 
 /* Imagen del popup */
@@ -591,4 +594,101 @@ body {
     width: 80px;
     min-width: 80px;
     white-space: nowrap;
+}
+
+/* --- ESTILOS DE POPUP TIPO TARJETA --- */
+.invvial-map-popup-card {
+    width: 260px;
+    /* Reduced from 300px */
+    font-family: 'Arial', sans-serif;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.invvial-map-popup-card .popup-header {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #e9ecef;
+    padding: 8px;
+    /* Reduced padding */
+    text-align: center;
+    font-weight: bold;
+    font-size: 13px;
+    /* Slightly smaller */
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #333;
+}
+
+.invvial-map-popup-card .popup-content {
+    padding: 0;
+}
+
+.invvial-map-popup-card .popup-image-container {
+    width: 100%;
+    height: 140px;
+    /* Reduced from 180px */
+    overflow: hidden;
+    background: #eee;
+    position: relative;
+}
+
+.invvial-map-popup-card .popup-image-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.invvial-map-popup-card .popup-details-grid {
+    padding: 8px 12px;
+    /* Reduced padding */
+    font-size: 11px;
+    /* Smaller font */
+}
+
+.invvial-map-popup-card .detail-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    /* Tighter spacing */
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 3px;
+}
+
+.invvial-map-popup-card .detail-row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.invvial-map-popup-card .detail-row .label {
+    font-weight: bold;
+    color: #555;
+    text-transform: uppercase;
+}
+
+.invvial-map-popup-card .detail-row .value {
+    text-align: right;
+    color: #000;
+    font-weight: 500;
+}
+
+.invvial-map-popup-card .popup-footer-btn {
+    width: 100%;
+    background-color: #2c3e50;
+    color: white;
+    border: none;
+    padding: 8px;
+    /* Reduced padding */
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-radius: 0 0 8px 8px;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.invvial-map-popup-card .popup-footer-btn:hover {
+    background-color: #1a252f;
 }

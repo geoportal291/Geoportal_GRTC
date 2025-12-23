@@ -1364,3 +1364,102 @@
 .ajs-dimmer {
   z-index: 99998 !important;
 }
+
+
+/* === PROGRESS BAR MODAL === */
+.progress-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999; /* Ensure it's on top of everything */
+    backdrop-filter: blur(2px);
+}
+
+.progress-modal-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+    animation: scaleInData 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes scaleInData {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.progress-modal-content h3 {
+    color: #1a237e;
+    margin-bottom: 20px;
+    font-size: 1.4em;
+    font-weight: 700;
+}
+
+.progress-bar-container {
+    background-color: #e0e0e0;
+    border-radius: 20px;
+    height: 20px;
+    width: 100%;
+    margin-bottom: 15px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.progress-bar-fill {
+    background: linear-gradient(90deg, #1a237e, #3f51b5);
+    height: 100%;
+    transition: width 0.3s ease-in-out;
+    border-radius: 20px;
+    position: relative;
+}
+
+/* Optional: Animated striped effect for the bar */
+.progress-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background-image: linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.15) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.15) 75%,
+        transparent 75%,
+        transparent
+    );
+    background-size: 20px 20px;
+    animation: moveStripes 1s linear infinite;
+}
+
+@keyframes moveStripes {
+    0% { background-position: 0 0; }
+    100% { background-position: 40px 40px; }
+}
+
+.progress-text {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.progress-detail {
+    font-size: 0.9em;
+    color: #666;
+    height: 1.2em; /* Reserve space for text lines */
+}

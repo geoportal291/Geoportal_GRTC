@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import axiosInstance from '../../../../api/axios';
 import './vial.css';
+import './map/loading.css'; // Import Full Screen Loader CSS
 import { usePageTitle } from '../../../contexts/PageTitleContext';
 import { useVialOption } from '../../../../data/contexts/VialOptionContext';
 import { useAuth } from '../../../../data/contexts/AuthContext';
@@ -8,20 +9,27 @@ import { logAuditEvent } from '../../../../api/audit';
 import { toLatLon } from 'utm';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';
+import withUpload from './obras/withUpload';
+import DataManagementModal from './DataManagementModal';
+import Swal from 'sweetalert2';
+import Dashboard from './Dashboard'; // Import Dashboard
+import ExternalView from './ExternalView'; // Import External View
+import DetailViewModal from './DetailViewModal'; // NEW IMPORT
+
+// Import components (updated paths/names)
 import Alcantarillas from './obras/Alcantarillas';
-import Badenes from './obras/Badenes'; // Import Badenes
+import Badenes from './obras/Badenes';
 import Puentes from './obras/Puentes';
 import Muros from './obras/Muros';
-import withUpload from './obras/withUpload';
 import CanterasFuentes from './canteras/CanterasFuentes';
-import ZonasCriticas from './ZonasCriticas'; // Import ZonasCriticas
+import ZonasCriticas from './ZonasCriticas';
 import EstructurasExistentes from './EstructurasExistentes';
 import InterferenciasElectricas from './InterferenciasElectricas';
 import SenalesInformativas from './SenalesInformativas';
-import SenalesPreventivas from './SenalesPreventivas'; // Senales Preventivas
-import HitosKilometricos from './HitosKilometricos'; // Hitos Kilometricos
-import DataManagementModal from './DataManagementModal';
-import Swal from 'sweetalert2';
+import SenalesReguladoras from './SenalesReguladoras';
+import SenalesPreventivas from './SenalesPreventivas';
+import HitosKilometricos from './HitosKilometricos';
+
 
 const AlcantarillasWithUpload = withUpload(Alcantarillas);
 const BadenesWithUpload = withUpload(Badenes); // Create BadenesWithUpload
@@ -30,6 +38,7 @@ const MurosWithUpload = withUpload(Muros);
 const ZonasCriticasWithUpload = withUpload(ZonasCriticas);
 const InterferenciasWithUpload = withUpload(InterferenciasElectricas);
 const SenalesInformativasWithUpload = withUpload(SenalesInformativas);
+const SenalesReguladorasWithUpload = withUpload(SenalesReguladoras);
 const SenalesPreventivasWithUpload = withUpload(SenalesPreventivas);
 const HitosKilometricosWithUpload = withUpload(HitosKilometricos);
 
@@ -101,7 +110,10 @@ const DropdownTab = ({ title, options, activeOption, onOptionSelect, isActive })
 };
 
 
+
+
 const resumenTabs = [
+  'RESUMEN DEL PROYECTO', // New Tab
   'ESTRUCTURAS Y OBRAS DE ARTE',
   'SEÑALIZACION',
   'CANTERAS Y FUENTES DE AGUA',
@@ -111,13 +123,75 @@ const resumenTabs = [
 ];
 
 const obrasSubTabs = ['ALCANTARILLAS', 'BADENES', 'PUENTES', 'MUROS DE CONTENCION'];
-const señalizacionSubTabs = ['S. INFORMATIVAS', 'S. PREVENTIVAS', 'HITOS KILOMETRICOS'];
+const señalizacionSubTabs = ['S. INFORMATIVAS', 'S. REGULADORAS', 'S. PREVENTIVAS', 'HITOS KILOMETRICOS'];
+
+// --- Modal Selection Component ---
+const ViewSelectionModal = ({ onSelect }) => {
+  return (
+    <div className="view-selection-overlay">
+      <div className="view-selection-card">
+        <h3>Bienvenido al Geoportal</h3>
+        <p>Seleccione el modo de visualización:</p>
+
+        <div className="view-options">
+          <div className="view-option" onClick={() => onSelect('internal')}>
+            <div className="icon-box">📊</div>
+            <h4>Gestión Interna</h4>
+            <p>Administración y edición de inventario.</p>
+          </div>
+
+          <div className="view-option" onClick={() => onSelect('external')}>
+            <div className="icon-box">🗺️</div>
+            <h4>Vista Externa</h4>
+            <p>Visualización geográfica interactiva.</p>
+          </div>
+        </div>
+      </div>
+      <style>{`
+                .view-selection-overlay {
+                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                    background: rgba(0,0,0,0.8); z-index: 9999;
+                    display: flex; align-items: center; justify-content: center;
+                    backdrop-filter: blur(5px);
+                }
+                .view-selection-card {
+                    background: white; padding: 40px; border-radius: 20px;
+                    text-align: center; max-width: 600px; width: 90%;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                    font-family: 'Segoe UI', sans-serif;
+                }
+                .view-selection-card h3 { margin-top: 0; color: #333; font-size: 1.8rem; }
+                .view-options {
+                    display: flex; gap: 20px; margin-top: 30px;
+                    justify-content: center;
+                }
+                .view-option {
+                    flex: 1; padding: 20px; border-radius: 12px;
+                    border: 2px solid #eee; cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+                .view-option:hover {
+                    border-color: #0056b3; transform: translateY(-5px);
+                    box-shadow: 0 5px 15px rgba(0,86,179,0.1);
+                }
+                .icon-box { font-size: 3rem; margin-bottom: 10px; }
+                .view-option h4 { margin: 10px 0; color: #0056b3; }
+                .view-option p { font-size: 0.9rem; color: #666; }
+            `}</style>
+    </div>
+  );
+};
 
 const Vialds = ({ isNavbarExpanded }) => {
   const { vialHeaderOption } = useVialOption();
   const { user, selectedProjectId: projectId } = useAuth();
   const { setPageTitle } = usePageTitle();
 
+  // View Mode Logic
+  const [viewMode, setViewMode] = useState(null); // 'internal', 'external'
+  const [showSelection, setShowSelection] = useState(false);
+
+  // Normal States
   const [activeTab, setActiveTab] = useState(resumenTabs[0]);
   const [activeObrasSubTab, setActiveObrasSubTab] = useState(obrasSubTabs[0]);
   const [activeSeñalizacionSubTab, setActiveSeñalizacionSubTab] = useState(señalizacionSubTabs[0]);
@@ -130,7 +204,10 @@ const Vialds = ({ isNavbarExpanded }) => {
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   const [showExcelPreviewModal, setShowExcelPreviewModal] = useState(false);
-
+  // State for external detail view modal
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailElementData, setDetailElementData] = useState(null);
+  const [detailElementType, setDetailElementType] = useState(null);
   const [excelDataPreview, setExcelDataPreview] = useState([]);
   const [modalMode, setModalMode] = useState('list'); // Default to list mode when modal opens
   const [alcantarillasData, setAlcantarillasData] = useState([]); // New state to store all alcantarillas
@@ -142,11 +219,33 @@ const Vialds = ({ isNavbarExpanded }) => {
   const [zonasCriticasData, setZonasCriticasData] = useState([]); // New state for Zonas Criticas
   const [interferenciasData, setInterferenciasData] = useState([]);
   const [senalesInformativasData, setSenalesInformativasData] = useState([]); // New state
+  const [senalesReguladorasData, setSenalesReguladorasData] = useState([]); // New state
   const [senalesPreventivasData, setSenalesPreventivasData] = useState([]); // New state for Preventivas
   const [hitosKilometricosData, setHitosKilometricosData] = useState([]); // New state for Hitos
   const [graphicsImages, setGraphicsImages] = useState([]); // NEW: State for graphics images
+  const [estructurasExistentesData, setEstructurasExistentesData] = useState([]); // NEW
+  const [projectData, setProjectData] = useState(null); // NEW: State for project metadata
   const [isSwitchingTab, setIsSwitchingTab] = useState(false); // NEW: State for tab switching
   const canUpload = user && (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'COORDINADOR');
+
+
+  // Decide initial view mode
+  useEffect(() => {
+    if (user) {
+      if (user.role?.toUpperCase() === 'ADMIN') {
+        setShowSelection(true);
+      } else {
+        setViewMode('internal');
+      }
+    }
+  }, [user]);
+
+  // Handle Selection
+  const handleViewSelect = (mode) => {
+    setViewMode(mode);
+    setShowSelection(false);
+  };
+
 
   // 1. Define placeholder main route (moved outside useEffect)
   const mainRoute = [
@@ -256,6 +355,27 @@ const Vialds = ({ isNavbarExpanded }) => {
     setIsLoadingData(true);
 
     try {
+      // Fetch Project Metadata (including KML URL)
+      try {
+        const projectRes = await axiosInstance.get(`/api/proyectos/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setProjectData(projectRes.data);
+      } catch (error) {
+        console.error('Error fetching project data:', error);
+        // If project endpoint fails, try to fetch KML directly
+        try {
+          const kmlRes = await axiosInstance.get(`/api/proyectos/${projectId}/kml`, {
+            headers: { Authorization: `Bearer ${user.token}` }
+          });
+          if (kmlRes.data && kmlRes.data.url) {
+            setProjectData({ kml_url: kmlRes.data.url });
+          }
+        } catch (kmlError) {
+          console.error('Error fetching KML URL:', kmlError);
+        }
+      }
+
       // Fetch Alcantarillas
       try {
         const alcantarillasRes = await axiosInstance.get(`/api/proyectos/${projectId}/alcantarillas`, {
@@ -412,6 +532,21 @@ const Vialds = ({ isNavbarExpanded }) => {
         setSenalesInformativasData([]);
       }
 
+      // Fetch Senales Reguladoras
+      try {
+        const senalesRegRes = await axiosInstance.get(`/api/senales-reguladoras/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setSenalesReguladorasData((senalesRegRes.data || []).map(s => ({
+          ...s,
+          latitud: s.latitud ? parseFloat(s.latitud) : null,
+          longitud: s.longitud ? parseFloat(s.longitud) : null
+        })));
+      } catch (error) {
+        console.error('Error fetching senales reguladoras data:', error);
+        setSenalesReguladorasData([]);
+      }
+
       // Fetch Senales Preventivas
       try {
         const senalesPrevRes = await axiosInstance.get(`/api/senales-preventivas/${projectId}`, {
@@ -442,6 +577,21 @@ const Vialds = ({ isNavbarExpanded }) => {
         setHitosKilometricosData([]);
       }
 
+      // Fetch Estructuras Existentes
+      try {
+        const estExRes = await axiosInstance.get(`/api/estructuras-existentes/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setEstructurasExistentesData((estExRes.data || []).map(s => ({
+          ...s,
+          latitud: s.latitud ? parseFloat(s.latitud) : null,
+          longitud: s.longitud ? parseFloat(s.longitud) : null
+        })));
+      } catch (error) {
+        console.warn('Error fetching estructuras existentes data (can be ignored if endpoint not ready):', error);
+        setEstructurasExistentesData([]);
+      }
+
     } finally {
       setIsLoadingData(false);
     }
@@ -453,6 +603,21 @@ const Vialds = ({ isNavbarExpanded }) => {
     setSelectedElementForEdit(elementData);
     setShowExcelPreviewModal(true);
     setModalMode('edit');
+  }, [showExcelPreviewModal]);
+
+  const handleExternalShowDetails = useCallback((point) => {
+    const { type, data } = point;
+
+    // Set data for the new DetailViewModal
+    setDetailElementData(data);
+    setDetailElementType(type);
+    setShowDetailModal(true);
+  }, []);
+
+  const handleCloseDetailModal = useCallback(() => {
+    setShowDetailModal(false);
+    setDetailElementData(null);
+    setDetailElementType(null);
   }, []);
 
   const handleCloseModal = useCallback(() => {
@@ -492,6 +657,9 @@ const Vialds = ({ isNavbarExpanded }) => {
     } else if (activeSeñalizacionSubTab === 'S. INFORMATIVAS') {
       endpoint = '/api/senales-informativas';
       idField = 'id_senal_informativa';
+    } else if (activeSeñalizacionSubTab === 'S. REGULADORAS') {
+      endpoint = '/api/senales-reguladoras';
+      idField = 'id_senal_reguladora';
     } else if (activeSeñalizacionSubTab === 'S. PREVENTIVAS') {
       endpoint = '/api/senales-preventivas';
       idField = 'id_senal_preventiva';
@@ -532,7 +700,84 @@ const Vialds = ({ isNavbarExpanded }) => {
     } finally {
       setIsLoadingData(false);
     }
+
+
   }, [user, fetchVialData, handleCloseModal, activeObrasSubTab]);
+
+  const handleDeleteElement = useCallback(async (elementToDelete, type) => {
+    if (!user || !user.token) {
+      console.warn('Usuario no autenticado.');
+      return;
+    }
+
+    const { isConfirmed } = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: "No podrás revertir esto!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, eliminarlo!'
+    });
+
+    if (!isConfirmed) return;
+
+    setIsLoadingData(true);
+    let endpoint = '';
+    let idValue = '';
+
+    // Determine endpoint and ID based on type
+    if (type === 'alcantarillas') {
+      endpoint = `/api/alcantarillas/${elementToDelete.id_alcantarilla}`;
+    } else if (type === 'badenes') {
+      endpoint = `/api/badenes/${elementToDelete.id_baden}`;
+    } else if (type === 'puentes') {
+      endpoint = `/api/puentes/${elementToDelete.id_puente}`;
+    } else if (type === 'muros') {
+      endpoint = `/api/muros/${elementToDelete.id_muro}`;
+    } else if (type === 'zonas-criticas') {
+      endpoint = `/api/zonas-criticas/${elementToDelete.id_zona_critica || elementToDelete.id}`;
+    } else if (type === 'estructuras-existentes') {
+      endpoint = `/api/estructuras-existentes/${elementToDelete.id_estructura || elementToDelete.id}`;
+    } else if (type === 'canteras') {
+      endpoint = `/api/canteras-fuentes/${elementToDelete.id}`; // Check endpoint
+    } else if (type === 'interferencias') {
+      endpoint = `/api/interferencias/${elementToDelete.id}`;
+    } else if (type === 'senales_informativas') {
+      endpoint = `/api/senales-informativas/${elementToDelete.id_senal_informativa}`;
+    } else if (type === 'senales_reguladoras') {
+      endpoint = `/api/senales-reguladoras/${elementToDelete.id_senal_reguladora}`;
+    } else if (type === 'senales_preventivas') {
+      endpoint = `/api/senales-preventivas/${elementToDelete.id_senal_preventiva}`;
+    } else if (type === 'hitos_kilometricos') {
+      endpoint = `/api/hitos-kilometricos/${elementToDelete.id_hito_kilometrico}`;
+    }
+
+    if (!endpoint) {
+      console.error('Tipo de elemento no reconocido para eliminación:', type);
+      setIsLoadingData(false);
+      return;
+    }
+
+    try {
+      await axiosInstance.delete(endpoint, {
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      fetchVialData();
+      Swal.fire(
+        '¡Eliminado!',
+        'El elemento ha sido eliminado correctamente.',
+        'success'
+      );
+      // If the deleted element was the one being edited, close the modal?
+      // Usually delete is done from list view so no need to close modal if it's the list.
+    } catch (error) {
+      console.error('Error al eliminar elemento:', error);
+      Swal.fire('Error', 'No se pudo eliminar el elemento.', 'error');
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [user, fetchVialData]);
 
   const handleUploadExcelData = useCallback(async () => {
     fetchVialData();
@@ -631,6 +876,19 @@ const Vialds = ({ isNavbarExpanded }) => {
             type="senales_informativas"
           />
         );
+      case 'S. REGULADORAS':
+        return (
+          <SenalesReguladorasWithUpload
+            senalesData={senalesReguladorasData}
+            graphicsImages={graphicsImages}
+            canUpload={canUpload}
+            showModal={handleShowModal}
+            onElementSelect={(element) => handleEditElementSelect(element, 'senales_reguladoras')}
+            projectId={projectId}
+            vialHeaderOption={vialHeaderOption}
+            type="senales_reguladoras"
+          />
+        );
       case 'S. PREVENTIVAS':
         return (
           <SenalesPreventivasWithUpload
@@ -665,6 +923,9 @@ const Vialds = ({ isNavbarExpanded }) => {
   const renderTabContent = (entregableNumero, tabs) => {
 
     switch (activeTab) {
+
+      case 'RESUMEN DEL PROYECTO':
+        return <Dashboard projectId={projectId} />;
 
       case 'ESTRUCTURAS Y OBRAS DE ARTE':
 
@@ -812,10 +1073,10 @@ const Vialds = ({ isNavbarExpanded }) => {
           })}
         </div>
         <div className="invvial-tab-content-container" style={{ position: 'relative', minHeight: '300px' }}>
-          {(isLoadingData || isSwitchingTab) && (
+          {(isSwitchingTab) && (
             <div className="invvial-loading-overlay">
               <div className="loader-spinner-large"></div>
-              <div className="invvial-loading-text">Cargando datos...</div>
+              <div className="invvial-loading-text">Cargando...</div>
             </div>
           )}
           {!isLoadingData && !isSwitchingTab && renderTabContent(null, [])}
@@ -824,11 +1085,81 @@ const Vialds = ({ isNavbarExpanded }) => {
     );
   };
 
+  const consolidatedData = useMemo(() => ({
+    alcantarillas: alcantarillasData,
+    badenes: badenesData,
+    puentes: puentesData,
+    muros: murosData,
+    senalesInformativas: senalesInformativasData,
+    senalesPreventivas: senalesPreventivasData,
+    hitosKilometricos: hitosKilometricosData,
+    senalesReguladoras: senalesReguladorasData,
+    canteras: canterasData,
+    fuentes: fuentesData,
+    zonasCriticas: zonasCriticasData,
+    interferencias: interferenciasData,
+    estructurasExistentes: estructurasExistentesData
+  }), [
+    alcantarillasData, badenesData, puentesData, murosData,
+    senalesInformativasData, senalesPreventivasData, senalesReguladorasData, hitosKilometricosData,
+    canterasData, fuentesData, zonasCriticasData,
+    interferenciasData, estructurasExistentesData
+  ]);
+
+  if (!projectId) {
+    return <div className="no-project-selected">Por favor seleccione un proyecto</div>
+  }
+
   return (
-
     <div className="invvial-container">
+      {isLoadingData && (
+        <div className="invvial-loading-overlay">
+          <div className="loader-spinner-large"></div>
+          <div className="invvial-loading-text">Cargando datos del proyecto...</div>
+        </div>
+      )}
+      {showSelection && (
+        <ViewSelectionModal onSelect={handleViewSelect} />
+      )}
 
-      {renderContent()}
+      {viewMode === 'external' ? (
+        <ExternalView
+          onExit={() => { setShowSelection(true); setViewMode(null); }}
+          data={consolidatedData}
+          kmlUrl={projectData?.url_kml || projectData?.kml_url || projectData?.kml}
+          graphicsImages={graphicsImages}
+          onShowDetails={handleExternalShowDetails}
+          showModal={showExcelPreviewModal}
+          onCloseModal={handleCloseModal}
+          modalMode={modalMode}
+          selectedElementForEdit={selectedElementForEdit}
+          onSaveManualData={handleSaveManualAlcantarilla}
+          onUploadExcelData={handleUploadExcelData}
+          projectId={projectId}
+          vialHeaderOption={vialHeaderOption}
+          activeTab={activeTab}
+          activeObrasSubTab={activeObrasSubTab}
+          activeSeñalizacionSubTab={activeSeñalizacionSubTab}
+          onDeleteElement={handleDeleteElement}
+          isNavbarExpanded={isNavbarExpanded}
+          alcantarillasData={alcantarillasData}
+          badenesData={badenesData}
+          puentesData={puentesData}
+          murosData={murosData}
+          canterasData={canterasData}
+          fuentesData={fuentesData}
+          zonasCriticasData={zonasCriticasData}
+          interferenciasData={interferenciasData}
+          senalesInformativasData={senalesInformativasData}
+          senalesPreventivasData={senalesPreventivasData}
+          senalesReguladorasData={senalesReguladorasData}
+          hitosKilometricosData={hitosKilometricosData}
+        />
+      ) : (
+        viewMode === 'internal' && renderContent()
+      )}
+
+
       <DataManagementModal
         show={showExcelPreviewModal}
         onClose={handleCloseModal}
@@ -844,6 +1175,7 @@ const Vialds = ({ isNavbarExpanded }) => {
 
           if (activeTab === 'SEÑALIZACION') {
             if (activeSeñalizacionSubTab === 'S. INFORMATIVAS') return senalesInformativasData;
+            if (activeSeñalizacionSubTab === 'S. REGULADORAS') return senalesReguladorasData;
             if (activeSeñalizacionSubTab === 'S. PREVENTIVAS') return senalesPreventivasData;
             if (activeSeñalizacionSubTab === 'HITOS KILOMETRICOS') return hitosKilometricosData;
           }
@@ -871,6 +1203,7 @@ const Vialds = ({ isNavbarExpanded }) => {
 
           if (activeTab === 'SEÑALIZACION') {
             if (activeSeñalizacionSubTab === 'S. INFORMATIVAS') return 'senales_informativas';
+            if (activeSeñalizacionSubTab === 'S. REGULADORAS') return 'senales_reguladoras';
             if (activeSeñalizacionSubTab === 'S. PREVENTIVAS') return 'senales_preventivas';
             if (activeSeñalizacionSubTab === 'HITOS KILOMETRICOS') return 'hitos_kilometricos';
           }
@@ -885,10 +1218,19 @@ const Vialds = ({ isNavbarExpanded }) => {
           return 'alcantarillas';
         })()} // Pass type
         isNavbarExpanded={isNavbarExpanded}
+        onDeleteElement={handleDeleteElement}
+      />
+
+      {/* Detail View Modal for External Map */}
+      <DetailViewModal
+        show={showDetailModal}
+        onClose={handleCloseDetailModal}
+        elementData={detailElementData}
+        elementType={detailElementType}
+        projectId={projectId}
+        vialHeaderOption={vialHeaderOption}
       />
     </div>
-
   );
-
 };
 export default Vialds;

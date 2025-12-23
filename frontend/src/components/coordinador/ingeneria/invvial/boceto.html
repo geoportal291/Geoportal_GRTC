@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geovisor Moderno</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --primary-color: #0056b3;
+            /* Azul institucional */
+            --accent-color: #e63946;
+            /* Rojo para alertas */
+            --bg-panel: rgba(255, 255, 255, 0.95);
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- LAYOUT --- */
+        #map {
+            flex-grow: 1;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* --- PANELES LATERALES --- */
+        .sidebar {
+            width: 300px;
+            background: var(--bg-panel);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 15px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-content {
+            padding: 15px;
+        }
+
+        /* --- FORMULARIOS --- */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: #555;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            /* Importante para padding */
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .btn-search {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-search:hover {
+            background: #004494;
+        }
+
+        .btn-clear {
+            background: #f1f1f1;
+            color: #333;
+        }
+
+        .btn-clear:hover {
+            background: #e0e0e0;
+        }
+
+        /* --- CAPAS (Derecha) --- */
+        .layer-group {
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .layer-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #333;
+        }
+
+        .layer-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        /* --- RESPONSIVIDAD (Bóton flotante para móvil) --- */
+        .toggle-btn {
+            display: none;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 2000;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                height: 100%;
+            }
+
+            .sidebar-left {
+                transform: translateX(-100%);
+            }
+
+            .sidebar-right {
+                right: 0;
+                transform: translateX(100%);
+                position: absolute;
+            }
+
+            .sidebar-left.active {
+                transform: translateX(0);
+            }
+
+            .toggle-btn {
+                display: block;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <aside class="sidebar sidebar-left" id="sidebarLeft">
+        <div class="sidebar-header">
+            <span><i class="fa-solid fa-magnifying-glass"></i> Búsqueda</span>
+        </div>
+        <div class="panel-content">
+            <div class="form-group">
+                <input type="text" placeholder="Buscar código modular, local...">
+            </div>
+
+            <h4 style="margin-top: 0; color: #333; border-bottom: 2px solid #eee; padding-bottom:5px;">Ubicación
+                Administrativa</h4>
+
+            <div class="form-group">
+                <label>Departamento</label>
+                <select>
+                    <option>Seleccionar...</option>
+                    <option>Cusco</option>
+                    <option>Lima</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Provincia</label>
+                <select>
+                    <option>Seleccionar...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Distrito</label>
+                <select>
+                    <option>Seleccionar...</option>
+                </select>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn-search">Buscar</button>
+                <button class="btn-clear">Limpiar</button>
+            </div>
+        </div>
+    </aside>
+
+    <div id="map"></div>
+    <button class="toggle-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+
+    <aside class="sidebar sidebar-right">
+        <div class="sidebar-header" style="background: #D32F2F;"> <span><i class="fa-solid fa-layer-group"></i>
+                Capas</span>
+        </div>
+        <div class="panel-content">
+
+            <div class="layer-group">
+                <div class="layer-title"><i class="fa-solid fa-road"></i> Transportes</div>
+                <label class="layer-item">
+                    <input type="checkbox" checked> Red vial nacional
+                </label>
+                <label class="layer-item">
+                    <input type="checkbox"> Red vial departamental
+                </label>
+                <label class="layer-item">
+                    <input type="checkbox"> Puentes y Túneles
+                </label>
+            </div>
+
+            <div class="layer-group">
+                <div class="layer-title"><i class="fa-solid fa-graduation-cap"></i> Educación</div>
+                <label class="layer-item">
+                    <input type="checkbox"> Locales Escolares
+                </label>
+            </div>
+
+        </div>
+    </aside>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // 1. Inicializar el mapa (Coordenadas de ejemplo: Perú)
+        const map = L.map('map').setView([-12.58, -72.10], 10); // Cerca a Quellouno aprox
+
+        // 2. Añadir capa base (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // 3. Simular marcadores (Solución al amontonamiento)
+        // Nota: Para producción, usa el plugin "Leaflet.markercluster"
+        const locations = [
+            [-12.58, -72.10], [-12.59, -72.11], [-12.57, -72.09], [-12.585, -72.105]
+        ];
+
+        locations.forEach(coord => {
+            L.marker(coord).addTo(map)
+                .bindPopup("<b>Institución Educativa</b><br>Detalles aquí.");
+        });
+
+        // Función para móvil
+        function toggleSidebar() {
+            document.getElementById('sidebarLeft').classList.toggle('active');
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,6 @@
+<svg width="64px" height="64px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Red Octagon -->
+    <path d="M7.8 2.2L2.2 7.8V16.2L7.8 21.8H16.2L21.8 16.2V7.8L16.2 2.2H7.8Z" fill="#D32F2F" stroke="white" stroke-width="1.5"/>
+    <!-- Text "PARE" centered -->
+    <text x="50%" y="58%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="6" font-family="Arial, sans-serif" font-weight="bold">PARE</text>
+</svg>

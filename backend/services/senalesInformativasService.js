@@ -100,7 +100,7 @@ const createSenal = async (req, res) => {
     const {
         codigo, progresiva, lado, tipo, clasificacion, material,
         latitud, longitud, altitud, condicion, observaciones,
-        panel_fotografico_codigo, project_id
+        panel_fotografico_codigo, project_id, entregable
     } = req.body;
 
     try {
@@ -108,12 +108,12 @@ const createSenal = async (req, res) => {
             `INSERT INTO senales_informativas 
             (codigo, progresiva, lado, tipo, clasificacion, material, 
             latitud, longitud, altitud, observaciones, 
-            panel_fotografico_codigo, id_proyecto) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+            panel_fotografico_codigo, id_proyecto, entregable) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
             RETURNING *`,
             [codigo, progresiva, lado, tipo, clasificacion, material,
                 latitud, longitud, altitud, observaciones,
-                panel_fotografico_codigo, project_id]
+                panel_fotografico_codigo, project_id, entregable]
         );
         res.json(result.rows[0]);
     } catch (error) {
@@ -196,7 +196,8 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         latitud: -1,
         longitud: -1,
         altitud: -1,
-        foto: -1
+        foto: -1,
+        entregable: -1
     };
 
     for (let i = 0; i < Math.min(20, rawData.length); i++) {
@@ -234,6 +235,18 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
 
             colMap.foto = row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto')))
                 !== -1 ? row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto'))) : progIdx + 7;
+
+            // Search explicitly for Entregable
+            colMap.entregable = row.findIndex(c => typeof c === 'string' && c.toUpperCase().includes('ENTREGABLE'));
+            // If not found, guess it's after Foto? Or don't guess to be safe. 
+            if (colMap.entregable === -1) {
+                // Heuristic: check col M (index 12) if it looks like E-X
+                const valAtM = row[12];
+                if (typeof valAtM === 'string' && valAtM.toUpperCase().startsWith('E-')) {
+                    colMap.entregable = 12;
+                }
+            }
+
             break;
         }
     }
@@ -252,10 +265,11 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         colMap.longitud = 8;
         colMap.altitud = 9;
         colMap.foto = 10;
+        colMap.entregable = 12; // Fallback M
     }
 
     console.log('DEBUG: Column Map:', JSON.stringify(colMap));
-    const startRowIndex = headerRowIndex + 2;
+    const startRowIndex = headerRowIndex + 1; // Start right after header
 
     const client = await pool.connect();
 
@@ -265,6 +279,10 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         let insertedCount = 0;
         let notLocatedCount = 0;
 
+        // Clear existing data for this project to avoid duplicates/stale data
+        await client.query('DELETE FROM senales_informativas WHERE id_proyecto = $1', [projectId]);
+
+        // ...
         for (let i = startRowIndex; i < rawData.length; i++) {
             const row = rawData[i];
             if (!row || row.length === 0) continue;
@@ -290,6 +308,27 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
             let coord2 = row[colMap.longitud];
             let altitudVal = row[colMap.altitud];
             const panel_fotografico_codigo = row[colMap.foto];
+
+            // Entregable Logic
+            let entregableVal = colMap.entregable !== -1 ? row[colMap.entregable] : null;
+            if (!entregableVal && entregableNum) {
+                entregableVal = `E-${entregableNum}`;
+            }
+            // Normalize E-X prefix if needed, or trust user input
+            if (entregableVal && !String(entregableVal).toUpperCase().startsWith('E-') && !String(entregableVal).toUpperCase().startsWith('ENTREGABLE')) {
+                // Maybe just number?
+                if (!isNaN(entregableVal)) entregableVal = `E-${entregableVal}`;
+            }
+
+            if (insertedCount < 5) {
+                console.log(`DEBUG ROW (INF) ${i}: entregableVal=${entregableVal}, rawCell=${colMap.entregable !== -1 ? row[colMap.entregable] : 'N/A'}, fallback=${entregableNum}`);
+            }
+            // ... rest of loop
+
+            // ... inside replace_file_content I can't easily skip lines withoutcontext, so I will target specific blocks. 
+            // Wait, this is difficult with replace_file_content for non-contiguous blocks.
+            // I will do two Replace calls. One for loop logs, one for upload logs.
+
 
             // Normalize Altitud
             if (typeof altitudVal === 'string') {
@@ -372,11 +411,11 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
                 `INSERT INTO senales_informativas 
                 (codigo, progresiva, lado, tipo, clasificacion, material, 
                 latitud, longitud, altitud, observaciones, 
-                panel_fotografico_codigo, id_proyecto) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                panel_fotografico_codigo, id_proyecto, entregable) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
                 [codigo, progresivaStr, lado, tipo, clasificacion, material,
                     latitud || null, longitud || null, altitudVal, null,
-                    panel_fotografico_codigo, projectId]
+                    panel_fotografico_codigo, projectId, entregableVal]
             );
             insertedCount++;
         }
@@ -396,8 +435,12 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
 
 const uploadExcel = async (req, res) => {
     const { projectId, entregableNum, utmZone } = req.body;
+    console.log('DEBUG UPLOAD (INF): Received body:', req.body);
+    console.log('DEBUG UPLOAD (INF): entregableNum:', entregableNum);
+
     try {
         const result = await processExcel(req.file.buffer, projectId || 1, entregableNum, utmZone);
+        result.message = "PROCESADO CON DEBUG V2 (INFORMATIVAS) - CODIGO ACTUALIZADO";
         res.json(result);
     } catch (error) {
         res.status(500).json({ message: error.message });

@@ -554,6 +554,7 @@ const getEnsayosByTramoId = async (tramoId) => {
                 te.descripcion AS tipo_ensayo_descripcion,
                 te.config_key,
                 te.results_config,
+                te.config_calculos, /* <--- AÑADIDO: Configuración para calcular al vuelo */
                 est.orden AS estrato_orden
             FROM ensayos e
             LEFT JOIN tipo_ensayo te ON e.tipo_ensayo = te.id

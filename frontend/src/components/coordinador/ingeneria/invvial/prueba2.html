@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+       
+    <meta charset="UTF-8">
+        <title>Geoportal - Revisión y Aprobación</title>
+        <style>
+        :root {
+            --header-bg: #1e293b;
+            --sidebar-bg: #fff;
+            --primary: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #f1f5f9;
+            --text: #334155;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Superior */
+        .header {
+            background: var(--header-bg);
+            color: white;
+            padding: 0 25px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .project-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge {
+            background: #0ea5e9;
+            font-size: 0.75em;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        /* Contenedor Principal */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar (Igual que antes) */
+        .sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            font-weight: bold;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .discipline-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .discipline-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .discipline-item:hover,
+        .discipline-item.active {
+            background: #f8fafc;
+            border-left: 4px solid var(--primary);
+        }
+
+        .progress-circle {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 3px solid #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .done {
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        /* Área Central */
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 25px;
+        }
+
+        /* Paneles */
+        .panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 10px;
+        }
+
+        .panel-title {
+            font-weight: bold;
+            color: #1e293b;
+            font-size: 1.1em;
+        }
+
+        /* Archivos (Izquierda) */
+        .upload-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 6px;
+            padding: 30px;
+            text-align: center;
+            color: #64748b;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: #eff6ff;
+        }
+
+        .file-list {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .file-list th {
+            text-align: left;
+            color: #94a3b8;
+            font-size: 0.85em;
+            padding-bottom: 10px;
+        }
+
+        .file-list td {
+            padding: 10px 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.9em;
+        }
+
+        /* --- NUEVOS ESTILOS PARA EL PANEL DE APROBACIÓN (DERECHA) --- */
+
+        /* 1. Estado Actual */
+        .current-status {
+            background: #fff7ed;
+            border: 1px solid #ffedd5;
+            color: #c2410c;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* 2. Caja de Texto para Observaciones */
+        .feedback-area textarea {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            font-family: inherit;
+            resize: vertical;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .feedback-area textarea:focus {
+            outline: 2px solid var(--primary);
+            border-color: transparent;
+        }
+
+        /* 3. Botones de Acción */
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .btn-action {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            transition: 0.2s;
+        }
+
+        .btn-reject {
+            background: white;
+            border: 1px solid var(--danger);
+            color: var(--danger);
+        }
+
+        .btn-reject:hover {
+            background: #fef2f2;
+        }
+
+        .btn-approve {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-approve:hover {
+            background: #059669;
+        }
+
+        /* 4. Historial de Comentarios (Timeline) */
+        .history-section {
+            border-top: 1px solid var(--border);
+            padding-top: 15px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .history-title {
+            font-size: 0.85em;
+            color: #94a3b8;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+        }
+
+        .comment-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .comment-avatar {
+            width: 30px;
+            height: 30px;
+            background: #e2e8f0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75em;
+            font-weight: bold;
+            color: #64748b;
+            flex-shrink: 0;
+        }
+
+        .comment-content {
+            flex: 1;
+        }
+
+        .comment-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75em;
+            color: #94a3b8;
+            margin-bottom: 2px;
+        }
+
+        .comment-text {
+            font-size: 0.85em;
+            background: #f8fafc;
+            padding: 8px 12px;
+            border-radius: 0 8px 8px 8px;
+            color: #475569;
+            border: 1px solid #f1f5f9;
+        }
+
+        /* Estilos para diferenciar tipos de comentarios */
+        .comment-rejected .comment-text {
+            background: #fef2f2;
+            border-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        .comment-approved .comment-text {
+            background: #f0fdf4;
+            border-color: #dcfce7;
+            color: #166534;
+        }
+    </style>
+</head>
+
+<body>
+
+        <div class="header">
+                <div class="project-title">
+                        PROYECTO VIAL: TRAMO SUR - CUSCO
+                        <span class="badge">En Ejecución</span>
+                    </div>
+                <div>
+                        <button                
+                style="background:transparent; border:1px solid rgba(255,255,255,0.3); color:white; padding: 8px 15px; border-radius:4px;">Generar
+                                Reporte PDF</button>
+                        <span style="margin-left:15px;">👤 Ing. Coordinador</span>
+                    </div>
+            </div>
+
+        <div class="container">
+                <div class="sidebar">
+                        <div class="sidebar-header">Ingenierías del Proyecto</div>
+                        <ul class="discipline-list">
+                                <li class="discipline-item active">
+                                        <span>🌍 Topografía & Geodesia</span>
+                                        <div class="progress-circle done">✔</div>
+                                    </li>
+                                <li class="discipline-item">
+                                        <span>💧 Hidrología e Hidráulica</span>
+                                        <div class="progress-circle" style="border-color:orange; color:orange;">Revisión
+                    </div>
+                                    </li>
+                                <li class="discipline-item">
+                                        <span>🪨 Geología y Geotecnia</span>
+                                        <div class="progress-circle">10%</div>
+                                    </li>
+                            </ul>
+                    </div>
+
+                <div class="main-content">
+
+                        <div class="panel">
+                                <div class="panel-header">
+                                        <span class="panel-title">Entregables: Hidrología</span>
+                                        <span style="font-size:0.8em; color:gray;">Versión 2.0</span>
+                                    </div>
+
+                                <div class="upload-zone">
+                                        <div style="font-size: 2em; margin-bottom: 10px;">☁️</div>
+                                        <strong>Arrastra aquí nuevos archivos</strong><br>
+                                        <small>Solo si necesitas actualizar la entrega</small>
+                                    </div>
+
+                                <table class="file-list">
+                                        <thead>
+                                                <tr>
+                                                        <th>Archivo</th>
+                                                        <th>Tipo</th>
+                                                        <th>Subido por</th>
+                                                        <th>Fecha</th>
+                                                        <th></th>
+                                                    </tr>
+                                            </thead>
+                                        <tbody>
+                                                <tr>
+                                                        <td>📄 Informe_Hidrologico_V2.pdf</td>
+                                                        <td>PDF</td>
+                                                        <td>J. Lopez</td>
+                                                        <td>Hoy, 10:00 AM</td>
+                                                        <td><a href="#">⬇️</a></td>
+                                                    </tr>
+                                                <tr>
+                                                        <td>🗺️ Cuencas_Corregidas.dwg</td>
+                                                        <td>CAD</td>
+                                                        <td>J. Lopez</td>
+                                                        <td>Ayer</td>
+                                                        <td><a href="#">⬇️</a></td>
+                                                    </tr>
+                                                <tr>
+                                                        <td>🌍 Mapa_Isoyetas.tif</td>
+                                                        <td>Raster</td>
+                                                        <td>J. Lopez</td>
+                                                        <td>Ayer</td>
+                                                        <td><a href="#">👁️</a></td>
+                                                    </tr>
+                                            </tbody>
+                                    </table>
+                            </div>
+
+                        <div class="panel">
+                                <div class="panel-header">
+                                        <span class="panel-title">Evaluación & Cierre</span>
+                                    </div>
+
+                                <div class="current-status">
+                                        <span style="font-size:1.2em;">⚠️</span>
+                                        <div>
+                                                <strong>Estado: En Revisión</strong><br>
+                                                <small>El especialista ha subido correcciones. Esperando tu Visto
+                            Bueno.</small>
+                                            </div>
+                                    </div>
+
+                                <div class="feedback-area">
+                                        <label                        
+                        style="font-size:0.85em; font-weight:600; color:#475569; display:block; margin-bottom:5px;">Tu
+                                                Dictamen / Observaciones:</label>
+                                        <textarea rows="4"                        
+                        placeholder="Ej: Las curvas IDF siguen presentando inconsistencias en la estación 0+500..."></textarea>
+                                    </div>
+
+                                <div class="action-buttons">
+                                        <button class="btn-action btn-reject">Observar / Devolver</button>
+                                        <button class="btn-action btn-approve">✅ Aprobar Entrega</button>
+                                    </div>
+
+                                <div class="history-section">
+                                        <div class="history-title">Historial de Cambios</div>
+
+                                        <div class="comment-item">
+                                                <div class="comment-avatar" style="background:#3b82f6; color:white;">JL
+                        </div>
+                                                <div class="comment-content">
+                                                        <div class="comment-meta">
+                                                                <strong>Juan Lopez (Especialista)</strong>
+                                                                <span>Hace 2 horas</span>
+                                                            </div>
+                                                        <div class="comment-text">
+                                                                Ingeniero, he subido la versión 2.0 con las correcciones
+                                de cuencas que me pidió.
+                                                            </div>
+                                                    </div>
+                                            </div>
+
+                                        <div class="comment-item comment-rejected">
+                                                <div class="comment-avatar" style="background:#1e293b; color:white;">YO
+                        </div>
+                                                <div class="comment-    content">
+                                                        <div class="comment-meta">
+                                                                <strong>Tu (Coordinador)</strong>
+                                                                <span>Ayer, 4:30 PM</span>
+                                                            </div>
+                                                        <div class="comment-text">
+                                                                <strong>Observado:</strong> Los planos CAD no coinciden
+                                con las coordenadas del raster.
+                                                                Por favor corregir la georreferenciación.
+                                                            </div>
+                                                    </div>
+                                            </div>
+
+                                        <div class="comment-item">
+                                                <div class="comment-avatar" style="background:#3b82f6; color:white;">JL
+                        </div>
+                                                <div class="comment-content">
+                                                        <div class="comment-meta">
+                                                                <strong>Juan Lopez</strong>
+                                                                <span>01 Dic</span>
+                                                            </div>
+                                                        <div class="comment-text">
+                                                                Inicio de carga de información de Hidrología.
+                                                            </div>
+                                                    </div>
+                                            </div>
+
+                                    </div>
+                            </div>
+
+                    </div>
+            </div>
+</body>
+
+</html>

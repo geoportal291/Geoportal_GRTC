@@ -30,7 +30,8 @@ export default function Login() {
         login(user); // Llamar a la función login del contexto
         alertify.success('Inicio de sesión exitoso');
 
-        navigate('/eventos/amigo-secreto');
+        sessionStorage.setItem('showNewYearViz', 'true'); // Activar animación
+        navigate('/coordinador/cordinadords');
 
       } else {
         alertify.error(res.data.message || 'Credenciales inválidas');
@@ -47,14 +48,14 @@ export default function Login() {
     <div
       className="login-container"
       style={{
-        backgroundImage: `url(${fondoLogin})`,  
-        backgroundSize: 'cover',                
-        backgroundPosition: 'center',           
-        backgroundRepeat: 'no-repeat',          
+        backgroundImage: `url(${fondoLogin})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
       }}
     >
       <div className="contenido">
-      
+
         <div className="bloque-izquierdo">
           <h2 className="titulo-horizontal">UNIDAD FUNCIONAL DE ESTUDIOS</h2>
           <div className="logos">

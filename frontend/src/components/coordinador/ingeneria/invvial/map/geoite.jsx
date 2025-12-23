@@ -1285,6 +1285,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
     // Componente React para la galería de imágenes del popup
     const ImageGallery = ({ imageProp, onShowDetails }) => {
         const [currentIndex, setCurrentIndex] = useState(0);
+        const [isPaused, setIsPaused] = useState(false);
 
         // Normalize the input to always be an array of objects with a `url` property
         const images = (imageProp || []).map(item => {
@@ -1294,67 +1295,84 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             return item; // It's already an object
         }).filter(item => item && item.url); // Ensure we only have valid items
 
+        // Auto-rotation effect
+        useEffect(() => {
+            if (images.length <= 1 || isPaused) return;
+
+            const interval = setInterval(() => {
+                setCurrentIndex(prevIndex => (prevIndex + 1) % images.length);
+            }, 3000); // Change every 3 seconds
+
+            return () => clearInterval(interval);
+        }, [images.length, isPaused]);
+
         if (images.length === 0) {
             return (
                 <div style={{ marginTop: '5px', textAlign: 'center' }}>
                     <p style={{ margin: '5px 0', fontSize: '12px', color: '#666' }}>No hay imágenes.</p>
-                    <button
-                        onClick={onShowDetails}
-                        style={{
-                            display: 'block',
-                            marginTop: '5px',
-                            backgroundColor: '#007bff',
-                            color: 'white',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            width: '100%'
-                        }}
-                    >
-                        Ver detallado
-                    </button>
                 </div>
             );
         }
 
-        const goToPrevious = () => {
-            setCurrentIndex(prevIndex => (prevIndex > 0 ? prevIndex - 1 : 0));
+        const goToPrevious = (e) => {
+            e.stopPropagation();
+            setCurrentIndex(prevIndex => (prevIndex - 1 + images.length) % images.length);
+            setIsPaused(true); // Pause on manual interaction
         };
 
-        const goToNext = () => {
-            setCurrentIndex(prevIndex => (prevIndex < images.length - 1 ? prevIndex + 1 : prevIndex));
+        const goToNext = (e) => {
+            e.stopPropagation();
+            setCurrentIndex(prevIndex => (prevIndex + 1) % images.length);
+            setIsPaused(true); // Pause on manual interaction
         };
 
         return (
-            <div style={{ marginTop: '5px', textAlign: 'center' }}>
+            <div
+                className="popup-gallery-container"
+                style={{ position: 'relative', width: '100%', height: '100%' }}
+                onMouseEnter={() => setIsPaused(true)}
+                onMouseLeave={() => setIsPaused(false)}
+            >
                 <img
                     src={images[currentIndex].url}
-                    alt="Elemento del mapa"
+                    alt={`Imagen ${currentIndex + 1}`}
                     className="popup-image"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    onClick={() => setIsPaused(true)}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '5px' }}>
-                    <button onClick={goToPrevious} disabled={currentIndex === 0}>Anterior</button>
-                    <span>{`${currentIndex + 1} de ${images.length}`}</span>
-                    <button onClick={goToNext} disabled={currentIndex === images.length - 1}>Siguiente</button>
-                </div>
 
-                <button
-                    onClick={onShowDetails}
-                    style={{
-                        display: 'block',
-                        marginTop: '5px',
-                        backgroundColor: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        padding: '5px 10px',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        width: '100%'
-                    }}
-                >
-                    Ver detallado
-                </button>
+                {images.length > 1 && (
+                    <>
+                        <button
+                            onClick={goToPrevious}
+                            style={{
+                                position: 'absolute', left: '5px', top: '50%', transform: 'translateY(-50%)',
+                                background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%',
+                                width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '12px', zIndex: 10
+                            }}
+                        >
+                            &#10094;
+                        </button>
+                        <button
+                            onClick={goToNext}
+                            style={{
+                                position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)',
+                                background: 'rgba(0,0,0,0.5)', color: 'white', border: 'none', borderRadius: '50%',
+                                width: '24px', height: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '12px', zIndex: 10
+                            }}
+                        >
+                            &#10095;
+                        </button>
+                        <div style={{
+                            position: 'absolute', bottom: '5px', left: '0', right: '0', textAlign: 'center', color: 'white',
+                            fontSize: '10px', textShadow: '1px 1px 2px black', pointerEvents: 'none'
+                        }}>
+                            {currentIndex + 1} / {images.length}
+                        </div>
+                    </>
+                )}
             </div>
         );
     };
@@ -1468,8 +1486,22 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 html: iconSvg,
                 iconSize: [size, size],
                 iconAnchor: [size / 2, size],
-                popupAnchor: [0, -size]
+                popupAnchor: [0, -size + 10] // Adjust popup anchor relative to icon size
             });
+
+            // For image icons defined below
+            let iconUrl = '';
+            // ... (icon URL selection) ...
+
+            if (iconUrl) {
+                // If it's a standard image icon
+                return L.icon({
+                    iconUrl: iconUrl,
+                    iconSize: iconSize,
+                    iconAnchor: iconAnchor,
+                    popupAnchor: [0, -iconSize[1]] // Exact top-center of the icon
+                });
+            }
         }
         else if (type === 'senales_informativas') {
             iconUrl = '/imgs/senal_informativa_icon.svg';
@@ -1585,10 +1617,21 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                         // Bind the shared container to the marker
                         marker.bindPopup(popupContainer, {
                             maxWidth: 300,
-                            minWidth: 200
+                            minWidth: 200,
+                            offset: [0, 15] // Push popup down further as requested
                         });
 
                         marker.on('popupopen', () => {
+                            // Unconditional log to verify event firing and data availability
+                            console.log('DEBUG: POPUP OPENED', {
+                                id: alcantarilla.id,
+                                type: alcantarilla.type,
+                                hasGraphics: !!graphicsImages,
+                                graphicsCount: graphicsImages?.length,
+                                panelCode: alcantarilla.panel_fotografico_codigo,
+                                ent: alcantarilla.entregable
+                            });
+
                             // Calculate display values
                             let typeLabel = 'Elemento';
                             let idValue = alcantarilla.id;
@@ -1631,29 +1674,91 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                                 }
 
                                 // Lookup images for signals and hitos
-                                if (graphicsImages && alcantarilla.panel_fotografico_codigo) {
+                                if (graphicsImages && alcantarilla.panel_fotografico_codigo && elementImages.length === 0) {
                                     const code = String(alcantarilla.panel_fotografico_codigo).trim();
+                                    const entregable = alcantarilla.entregable ? String(alcantarilla.entregable).trim() : null;
+
+                                    console.log('DEBUG FILTER:', {
+                                        elId: alcantarilla.id,
+                                        elCode: code,
+                                        elEntregable: entregable
+                                    });
+
                                     elementImages = graphicsImages.filter(img => {
                                         const imgCode = String(img.panel_fotografico_codigo || '').trim();
                                         const imgIndex = img.index ? String(img.index).trim() : '';
 
-                                        // Extract filename from URL (e.g., "http://.../360.jpg" -> "360")
+                                        // Extract filename from URL
                                         let urlFileName = '';
                                         if (img.url) {
                                             const parts = img.url.split('/');
                                             const fileNameWithExt = parts[parts.length - 1];
-                                            urlFileName = fileNameWithExt.split('.')[0]; // Remove extension
+                                            urlFileName = fileNameWithExt.split('.')[0];
                                         }
 
-                                        // Use strict equality for all checks
-                                        return imgCode === code || imgIndex === code || urlFileName === code;
+                                        // 1. Name Match
+                                        const nameMatches = (imgCode === code || imgIndex === code || urlFileName === code);
+                                        if (!nameMatches) return false;
+
+                                        // 2. Entregable Logic (Strict/Hybrid)
+                                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+
+                                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                                        if (entregable) {
+                                            const normElement = normalize(entregable);
+                                            const normImage = normalize(imgEntregable);
+
+                                            // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                                            if (normElement === 'E1') {
+                                                return (!imgEntregable) || (normImage === 'E1');
+                                            }
+
+                                            // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
+                                            return normImage === normElement;
+                                        }
+
+                                        // Scenario 3: No Entregable on Element. loose match.
+                                        return true;
                                     });
+
+                                    console.log('--- FILTER SUMMARY ---');
+                                    console.log(`Element Entregable: ${entregable}`);
+                                    if (elementImages.length > 0) {
+                                        elementImages.forEach(img => {
+                                            console.log(`Image Found: ${img.url} | Index: ${img.index} | Entregable: ${img.entregable}`);
+                                        });
+                                    } else {
+                                        console.log('No matched images found.');
+                                    }
+                                    console.log('----------------------');
                                 }
+                            }
+
+                            // --- LOGIC FOR CARD TITLE ---
+                            let cardTitle = 'ELEMENTO';
+                            if (['alcantarilla', 'baden', 'puente', 'muro'].includes(alcantarilla.type)) {
+                                cardTitle = 'OBRAS DE ARTE';
+                            } else if (['senales_preventivas', 'senales_informativas'].includes(alcantarilla.type)) {
+                                cardTitle = 'SEÑALIZACIÓN';
+                            } else if (alcantarilla.type === 'hitos_kilometricos') {
+                                cardTitle = 'HITO KILOMÉTRICO';
+                            } else if (alcantarilla.type === 'cantera') {
+                                cardTitle = 'CANTERA';
+                            } else if (alcantarilla.type === 'fuente') {
+                                cardTitle = 'FUENTE';
+                            } else if (alcantarilla.type === 'zona_critica') {
+                                cardTitle = 'ZONA CRÍTICA';
+                            } else if (alcantarilla.type === 'interferencia_electrica') {
+                                cardTitle = 'INTERFERENCIA';
+                            } else if (alcantarilla.type === 'estructura_existente') {
+                                cardTitle = 'ESTRUCTURA EXISTENTE';
                             }
 
                             setActivePopup({
                                 ...alcantarilla,
-                                typeLabel,
+                                typeLabel, // Keep for fallback or other uses
+                                cardTitle, // New field for the header
                                 idValue,
                                 images: elementImages
                             });
@@ -1697,43 +1802,43 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                             /* LOGICA COMENTADA POR PERFORMANCE
                             const routeLayer = geoJsonLayerRef.current;
                             let slicedGeoJSON = null;
-
+    
                              if (routeLayer) {
                                 // Buscar en las capas del KML cuál contiene estos puntos (o está más cerca)
                                 // Para simplificar, iteramos y buscamos el tramo donde encajen mejor o simplemente el primero que funcione??
                                 // Mejor estrategia: Usar turf.lineSlice en cada LineString del KML y ver cuál tiene sentido?
                                 // O simplemente calcular la distancia de los puntos a la linea.
-
+    
                                 const startPt = turf.point([alcantarilla.longitud_inicio, alcantarilla.latitud_inicio]);
                                 const endPt = turf.point([alcantarilla.longitud_final, alcantarilla.latitud_final]);
-
+    
                                 routeLayer.eachLayer((layer) => {
                                     if (slicedGeoJSON) return; // Ya encontramos uno
-
+    
                                     if (layer.feature && (layer.feature.geometry.type === 'LineString' || layer.feature.geometry.type === 'MultiLineString')) {
                                         try {
                                             // Convert Leaflet latlngs to Turf LineString
                                             // layer.toGeoJSON() da el feature geojson
                                             const lineGeoJson = layer.toGeoJSON();
-
+    
                                             // Verificar si los puntos estan cerca de esta linea (opcional, por ahora slicing directo)
                                             // Nota: lineSlice recorta entre el punto inicial y final proyectados en la linea.
                                             // Si la linea es incorrecta (otro tramo), el resultado podría ser extraño o valido geometricamente pero erroneo.
                                             // Asumimos que los puntos caen "sobre" la linea correcta debido al calculo del backend.
-
+    
                                             // Calcular distancias minimas para confirmar que es el tramo correcto?
                                             // Por performance, vamos a intentar slicear. 
-
+    
                                             const sliced = turf.lineSlice(startPt, endPt, lineGeoJson);
                                             if (sliced) {
                                                 // Validar longitud? Si es demasiado largo quizas equivocamos de tramo? 
                                                 // Ojo: Si los puntos estan en tramos diferentes esto falahara.
                                                 // Asumimos mismo tramo.
-
+    
                                                 // Check if points are actually close to this line?
                                                 const d1 = turf.pointToLineDistance(startPt, lineGeoJson);
                                                 const d2 = turf.pointToLineDistance(endPt, lineGeoJson);
-
+    
                                                 if (d1 < 0.1 && d2 < 0.1) { // 100 metros tolerancia? (turf default units kilometers?) yes km. 0.1km = 100m.
                                                     slicedGeoJSON = sliced;
                                                 }
@@ -1744,7 +1849,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                                     }
                                 });
                             }
-
+    
                             // Dibujar la linea (Slice o Recta Fallback)
                             if (slicedGeoJSON) {
                                 const sliceLayer = L.geoJSON(slicedGeoJSON, {
@@ -1890,9 +1995,57 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
     return createPortal(
         activePopup ? (
-            <div>
-                <b>{activePopup.typeLabel}:</b> {activePopup.idValue}<br />
-                <ImageGallery imageProp={activePopup.images} onShowDetails={() => onShowDetails(activePopup)} />
+            <div className="invvial-map-popup-card">
+                <div className="popup-header">
+                    {activePopup.typeLabel?.toUpperCase() || 'DETALLE'}
+                </div>
+
+                <div className="popup-content">
+                    <div className="popup-image-container">
+                        <ImageGallery imageProp={activePopup.images} onShowDetails={() => onShowDetails(activePopup)} />
+                    </div>
+
+                    <div className="popup-details-grid">
+                        <div className="detail-row">
+                            <span className="label">CÓDIGO:</span>
+                            <span className="value">{activePopup.idValue}</span>
+                        </div>
+                        {activePopup.estado && (
+                            <div className="detail-row">
+                                <span className="label">ESTADO:</span>
+                                <span className="value">{activePopup.estado}</span>
+                            </div>
+                        )}
+                        <div className="detail-row">
+                            <span className="label">UBICACIÓN:</span>
+                            <span className="value">{activePopup.progresiva ? `KM ${activePopup.progresiva}` : (activePopup.km ? `KM ${activePopup.km}` : '---')}</span>
+                        </div>
+                        <div className="detail-row">
+                            <span className="label">COORDENADA:</span>
+                            <span className="value">
+                                {activePopup.latitud?.toFixed(6) || '0.000000'} E <br />
+                                {activePopup.longitud?.toFixed(6) || '0.000000'} N
+                            </span>
+                        </div>
+                        <div className="detail-row">
+                            <span className="label">CATEGORÍA:</span>
+                            <span className="value">{activePopup.cardTitle}</span>
+                        </div>
+                        {activePopup.entregable && (
+                            <div className="detail-row">
+                                <span className="label">ENTREGABLE:</span>
+                                <span className="value">{activePopup.entregable}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <button
+                    className="popup-footer-btn"
+                    onClick={() => onShowDetails(activePopup)}
+                >
+                    VER DETALLADO
+                </button>
             </div>
         ) : null,
         popupContainer
@@ -1904,12 +2057,18 @@ const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantaril
     const center = [-12, -75];
 
     return (
-        <div style={{ height: '500px', width: '100%', minHeight: 0 }}>
+        <div style={{ height: '700px', width: '100%', minHeight: 0 }}>
             <MapContainer center={center} zoom={6} style={{ height: '100%', width: '100%' }}>
-                <LayersControl position="topright">
-                    <LayersControl.BaseLayer name="Estándar"> <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' /> </LayersControl.BaseLayer>
-                    <LayersControl.BaseLayer checked name="Topográfico"> <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' /> </LayersControl.BaseLayer>
-                    <LayersControl.BaseLayer name="Satélite"> <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' /> </LayersControl.BaseLayer>
+                <LayersControl position="topright" key="layers-v2">
+                    <LayersControl.BaseLayer name="Estándar">
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
+                    </LayersControl.BaseLayer>
+                    <LayersControl.BaseLayer checked name="Topográfico">
+                        <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' />
+                    </LayersControl.BaseLayer>
+                    <LayersControl.BaseLayer name="Satélite">
+                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' />
+                    </LayersControl.BaseLayer>
                 </LayersControl>
                 <MapLogic
                     initialRoute={null}
