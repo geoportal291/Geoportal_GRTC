@@ -60,7 +60,8 @@ const whitelist = [
     'http://localhost:3001',
     'https://geoportalbeta.fly.dev',
     'https://frontend-morning-haze-4592.fly.dev',
-    'http://192.168.1.19:3000'];
+    'http://192.168.1.19:3000',
+    process.env.FRONTEND_URL];
 
 const corsOptions = {
     origin: function (origin, callback) {
