@@ -58,20 +58,23 @@ require('dotenv').config();
 const whitelist = [
     'http://localhost:3000',
     'http://localhost:3001',
-    'https://geoportalbeta.fly.dev',
-    'https://frontend-morning-haze-4592.fly.dev',
     'http://192.168.1.19:3000',
-    process.env.FRONTEND_URL];
+    'https://geoportalbetav2.fly.dev'
+];
 
 const corsOptions = {
     origin: function (origin, callback) {
-        if (!origin || whitelist.indexOf(origin) !== -1) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        if (whitelist.indexOf(origin) !== -1) {
             return callback(null, true);
         }
-        var msg = 'La política de CORS para este sitio no permite el acceso desde el origen especificado.';
+
+        const msg = 'La política de CORS para este sitio no permite el acceso desde el origen especificado.';
         return callback(new Error(msg), false);
     },
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'],
     credentials: true,
 };
 

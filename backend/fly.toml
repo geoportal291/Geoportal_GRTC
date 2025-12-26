@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for backend-weathered-silence-5682 on 2025-10-24T09:47:33-05:00
+# fly.toml app configuration file generated for backend-solitary-fire-911 on 2025-12-24T10:04:20-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'backend-blue-shape-6900'
+app = 'backend-solitary-fire-911'
 primary_region = 'gru'
 
 [build]
@@ -18,6 +18,6 @@ primary_region = 'gru'
   processes = ['app']
 
 [[vm]]
-  memory = '32gb'
+  memory = '16gb' 
   cpu_kind = 'performance'
-  cpus = 16
+  cpus = 8  

@@ -41,7 +41,7 @@
         background-color: var(--dashboard-bg-card);
         padding: 0;
         box-shadow: var(--dashboard-shadow-md);
-        height: 600px;
+        height: 500px;
         position: relative;
         overflow: hidden;
 
@@ -190,6 +190,8 @@
         border-radius: var(--dashboard-radius);
         padding: 1.5rem;
         box-shadow: var(--dashboard-shadow-sm);
+        border: 2px solid #56585b !important;
+        /* Nuevo borde para consistencia */
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -259,6 +261,8 @@
         border-radius: var(--dashboard-radius);
         padding: 1.5rem;
         box-shadow: var(--dashboard-shadow-sm);
+        border: 2px solid #b6b6b6 !important;
+        /* Nuevo borde */
         display: flex;
         flex-direction: column;
         height: 100%;
@@ -446,7 +450,7 @@
         /* Sobre Leaflet (usually 400-800) */
         padding: 24px;
         transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        border: 1px solid rgba(126, 126, 126, 0.5);
         display: flex;
         flex-direction: column;
         gap: 16px;
@@ -471,7 +475,7 @@
     .sidebar-header h3 {
         margin: 0;
         font-size: 1.1rem;
-        color: #0f172a;
+        color: #6e6e6e;
         font-weight: 800;
     }
 

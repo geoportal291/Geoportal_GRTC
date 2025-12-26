@@ -80,7 +80,7 @@ const styleFunction = (feature) => {
 };
 
 
-const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
+const MiniMap = ({ alcantarilla, route: geoJsonData, elementType }) => {
   const defaultCenter = [-12.046374, -77.042793]; // Centro de Lima, Perú, como fallback
 
   // Lógica para detectar si es un PUNTO o un SEGMENTO
@@ -146,14 +146,34 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
     : (alcantarillaPosition || defaultCenter);
 
   // Function to get custom icon based on element type
-  const getCustomIcon = (elementType, elementData) => {
+  const getCustomIcon = (type, elementData) => {
     let iconUrl;
     let iconSize = [32, 32];
     let iconAnchor = [16, 32];
     let popupAnchor = [0, -32];
     let popupText = '';
 
-    switch (elementType) {
+    // Normalize type to match switch cases (singular/plural handling)
+    let normalizedType = type;
+    if (type) {
+      if (type.endsWith('s') && !type.endsWith('ss')) {
+        // Simple singularization for common cases: alcantarillas -> alcantarilla
+        // But be careful with 'senales_informativas' which is used as plural in switch
+        if (['alcantarillas', 'badenes', 'puentes', 'muros', 'canteras', 'fuentes'].includes(type)) {
+          normalizedType = type.slice(0, -1);
+          if (type === 'badenes') normalizedType = 'baden'; // special case
+          if (type === 'alcantarillas') normalizedType = 'alcantarilla'; // special case
+          if (type === 'puentes') normalizedType = 'puente';
+          if (type === 'muros') normalizedType = 'muro';
+          if (type === 'canteras') normalizedType = 'cantera';
+          if (type === 'fuentes') normalizedType = 'fuente';
+        }
+        if (type === 'zonas_criticas') normalizedType = 'zona_critica';
+        if (type === 'interferencias') normalizedType = 'interferencia_electrica';
+      }
+    }
+
+    switch (normalizedType) {
       case 'alcantarilla':
         iconUrl = '/imgs/alcantarilla_icon.png';
         popupText = `Alcantarilla: ${elementData.codigo || 'N/A'}`;
@@ -194,6 +214,7 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
         popupText = `Zona Crítica: ${elementData.codigo || 'N/A'}`;
         break;
       case 'interferencia_electrica':
+      case 'interferencias':
         iconUrl = '/imgs/interferencia_icon.svg';
         popupText = `Interferencia: ${elementData.tipo_interferencia || elementData.tipo || 'N/A'}`;
         break;
@@ -205,6 +226,15 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
         iconUrl = '/imgs/senal_preventiva_icon.svg';
         popupText = `Señal: ${elementData.codigo || 'N/A'}`;
         break;
+      case 'senales_reguladoras': // Handle new case
+      case 'senales_reglamentarias':
+        iconUrl = '/imgs/senal_reguladora_icon.svg'; // Assuming this exists or mapping to preventive for now? 
+        // User didn't specify reguladora icon, usually similar to prohibitive/preventive but distinct. 
+        // Using generic or preventive if specific one missing? 
+        // Let's assume standard path:
+        iconUrl = '/imgs/senal_reguladora_icon.svg';
+        popupText = `Señal: ${elementData.codigo || 'N/A'}`;
+        break;
       case 'hitos_kilometricos':
         iconUrl = '/imgs/hito_icon.svg';
         popupText = `Hito: ${elementData.codigo || 'N/A'}`;
@@ -213,6 +243,7 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
         popupAnchor = [0, -40];
         break;
       case 'estructura_existente':
+      case 'estructuras_existentes':
         iconUrl = '/imgs/estructura_icon.svg';
         popupText = `Estructura: ${elementData.progresiva_inicio || 'N/A'}`;
         iconSize = [32, 32];
@@ -234,7 +265,7 @@ const MiniMap = ({ alcantarilla, route: geoJsonData }) => {
     });
   };
 
-  const currentIcon = alcantarilla && !isSegment ? getCustomIcon(alcantarilla.type, alcantarilla) : null;
+  const currentIcon = alcantarilla && !isSegment ? getCustomIcon(elementType || alcantarilla.type, alcantarilla) : null;
 
 
   return (

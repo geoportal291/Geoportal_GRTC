@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom'; // Import ReactDOM
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, useMap, LayersControl, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import 'leaflet/dist/leaflet.css';
 import './ExternalView.css';
 import './map/loading.css'; // Ensure loading styles are available
 import * as turf from '@turf/turf';
@@ -13,10 +12,58 @@ import { fromLatLon } from 'utm';
 import { GeoJSON, FeatureGroup } from 'react-leaflet'; // Import GeoJSON and FeatureGroup
 import { EditControl } from 'react-leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
+import 'leaflet-draw';
 import DataManagementModal from './DataManagementModal'; // Import modal
 
 // Reuse icons and map logic from DashboardMap if possible, or redefine here for independence
 // Since DashboardMap has good logic for projection, we'll try to reuse or inline simplified version.
+
+const DrawHandler = ({ activeTool, onCreated, onStop }) => {
+    const map = useMap();
+    const drawHandlerRef = useRef(null);
+
+    useEffect(() => {
+        if (!map) return;
+
+        // Cleanup existing handler if active
+        if (drawHandlerRef.current) {
+            drawHandlerRef.current.disable();
+            drawHandlerRef.current = null;
+        }
+
+        if (activeTool === 'marker') {
+            drawHandlerRef.current = new L.Draw.Marker(map);
+            drawHandlerRef.current.enable();
+        } else if (activeTool === 'polygon') {
+            drawHandlerRef.current = new L.Draw.Polygon(map, {
+                allowIntersection: false,
+                showArea: true,
+                metric: true
+            });
+            drawHandlerRef.current.enable();
+        }
+
+        // Event Listener
+        const handleCreated = (e) => {
+            const layer = e.layer;
+            if (onCreated) onCreated(layer, e.layerType);
+
+            if (onStop) onStop();
+        };
+
+        map.on(L.Draw.Event.CREATED, handleCreated);
+
+        return () => {
+            if (drawHandlerRef.current) {
+                drawHandlerRef.current.disable();
+                drawHandlerRef.current = null;
+            }
+            map.off(L.Draw.Event.CREATED, handleCreated);
+        };
+    }, [activeTool, map, onCreated, onStop]);
+
+    return null;
+};
 
 const isValidCoordinate = (lat, lng) => {
     return (
@@ -49,7 +96,7 @@ const getIcon = (type) => {
         case 'fuentes': iconUrl = '/imgs/fuente_icon.svg'; iconSize = [28, 28]; break;
         case 'zonas_criticas': iconUrl = '/imgs/zona_critica.svg'; iconSize = [28, 28]; break;
         case 'interferencias': iconUrl = '/imgs/interferencia_icon.svg'; iconSize = [28, 28]; break;
-        case 'estructuras_existentes': iconUrl = '/imgs/estructura_existente_icon.png'; iconSize = [28, 28]; break; // Placeholder
+        case 'estructuras_existentes': iconUrl = '/imgs/estructura_icon.svg'; iconSize = [28, 28]; break;
         default: break;
     }
 
@@ -124,7 +171,6 @@ const MapToolbar = ({ activeTool, setActiveTool, rightSidebarOpen, setRightSideb
             <button className={`map-tool-btn ${activeTool === 'line' ? 'active' : ''}`} onClick={() => toggle('line')} title="Línea"><i className="fa-solid fa-slash"></i></button>
             <button className={`map-tool-btn ${activeTool === 'polygon' ? 'active' : ''}`} onClick={() => toggle('polygon')} title="Polígono"><i className="fa-solid fa-draw-polygon"></i></button>
             <button className={`map-tool-btn ${activeTool === 'info' ? 'active' : ''}`} onClick={() => toggle('info')} title="Información"><i className="fa-solid fa-info"></i></button>
-            <button className={`map-tool-btn ${activeTool === 'coords' ? 'active' : ''}`} onClick={() => toggle('coords')} title="Coordenadas"><i className="fa-solid fa-location-crosshairs"></i></button>
             <button className="map-tool-btn" title="Borrar" onClick={() => setActiveTool('clear')}><i className="fa-solid fa-eraser"></i></button>
         </div>
     );
@@ -502,8 +548,84 @@ const RichPopupContent = ({ point, graphicsImages, onShowDetails }) => {
     );
 };
 
+// --- MAP LEGEND COMPONENT ---
+const MapLegend = ({ onClose }) => {
+    const legendItems = [
+        { icon: '/imgs/alcantarilla_icon.png', label: 'Alcantarillas' },
+        { icon: '/imgs/baden_icon.svg', label: 'Badenes' },
+        { icon: '/imgs/puente_icon.svg', label: 'Puentes' },
+        { icon: '/imgs/muro_icon.svg', label: 'Muros' },
+        { icon: '/imgs/estructura_icon.svg', label: 'Est. Existentes' },
+        { icon: '/imgs/senal_informativa_icon.svg', label: 'S. Informativas' },
+        { icon: '/imgs/senal_reglamentaria_icon.svg', label: 'S. Reglamentarias' },
+        { icon: '/imgs/senal_preventiva_icon.svg', label: 'S. Preventivas' },
+        { icon: '/imgs/hito_icon.svg', label: 'Hitos Km' },
+        { icon: '/imgs/zona_critica.svg', label: 'Zonas Críticas' },
+        { icon: '/imgs/cantera_icon.svg', label: 'Canteras' },
+        { icon: '/imgs/fuente_icon.svg', label: 'Fuentes de Agua' },
+        { icon: '/imgs/interferencia_icon.svg', label: 'Interferencias' },
+    ];
+
+    return (
+        <div className="map-legend-card">
+            <div className="legend-header">
+                <span>Leyenda</span>
+                <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#666' }}>&times;</button>
+            </div>
+            <div className="legend-grid">
+                {legendItems.map((item, index) => (
+                    <div key={index} className="legend-item">
+                        <img src={item.icon} alt="" width="24" height="24" />
+                        <span>{item.label}</span>
+                    </div>
+                ))}
+            </div>
+            <style jsx>{`
+                .map-legend-card {
+                    position: absolute;
+                    bottom: 30px;
+                    right: 80px; /* Left of layers button or similar */
+                    background: white;
+                    padding: 15px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                    z-index: 1000;
+                    width: 320px;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    font-family: 'Segoe UI', sans-serif;
+                }
+                .legend-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    border-bottom: 1px solid #eee;
+                    padding-bottom: 8px;
+                    margin-bottom: 10px;
+                    font-weight: bold;
+                    color: #333;
+                }
+                .legend-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 10px;
+                }
+                .legend-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 0.85rem;
+                    color: #555;
+                }
+            `}</style>
+        </div>
+    );
+};
+
 const ExternalView = ({
     onExit,
+    // ... (rest of props)
+
     data, // Object containing { alcantarillas: [], badenes: [], etc. }
     kmlUrl, // New prop
     graphicsImages, // New prop for generic image filtering
@@ -535,8 +657,8 @@ const ExternalView = ({
     senalesReguladorasData,
     hitosKilometricosData
 }) => {
-    const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-    const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+    const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
+    const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
     const [routeGeoJson, setRouteGeoJson] = useState(null); // State for KML route
     const [isLoading, setIsLoading] = useState(true); // NEW: Loading state starts true
     const [activeTool, setActiveTool] = useState(null); // Tools state
@@ -736,6 +858,7 @@ const ExternalView = ({
     // Load KML
     useEffect(() => {
         const fetchKml = async () => {
+            console.log("ExternalView: Start fetching KML...", kmlUrl);
             if (!kmlUrl) {
                 // Initial load only: if no KML, finish loading after a shorter delay
                 const timer = setTimeout(() => setIsLoading(false), 800);
@@ -748,12 +871,17 @@ const ExternalView = ({
 
             try {
                 const response = await fetch(kmlUrl);
+                console.log("ExternalView: KML fetch response status:", response.status);
                 if (response.ok) {
                     const text = await response.text();
+                    console.log("ExternalView: KML text received, length:", text.length);
                     const parser = new DOMParser();
                     const kmlDoc = parser.parseFromString(text, 'text/xml');
                     const geoJson = kml(kmlDoc);
+                    console.log("ExternalView: Converted GeoJSON:", geoJson);
                     setRouteGeoJson(geoJson);
+                } else {
+                    console.error("ExternalView: KML fetch failed not ok");
                 }
             } catch (error) {
                 console.error("ExternalView: Error loading KML:", error);
@@ -944,8 +1072,20 @@ const ExternalView = ({
 
 
                     <MouseCoordsListener isActive={activeTool === 'coords'} setCoords={setMouseCoords} />
+
+                    {/* LEGEND OVERLAY */}
+                    {activeTool === 'info' && <MapLegend onClose={() => setActiveTool(null)} />}
+
+                    <DrawHandler
+                        activeTool={activeTool}
+                        onCreated={(layer) => {
+                            if (drawnItems) drawnItems.addLayer(layer);
+                        }}
+                        onStop={() => setActiveTool(null)}
+                    />
+
                     <DistanceMeasurement
-                        isActive={activeTool === 'info'} // Map 'info' or a new tool to distance? Toolbar has 'info' icon for distance in some contexts. User calls it 'Regla' in geote.
+                        isActive={activeTool === 'line'}
                         measuredPoints={measuredPoints}
                         setMeasuredPoints={setMeasuredPoints}
                         measurementLayers={measurementLayers}
@@ -955,15 +1095,18 @@ const ExternalView = ({
                         <EditControl
                             position="topleft"
                             onCreated={(e) => {
-                                console.log('Created:', e);
+                                console.log('Created via Toolbar:', e);
                             }}
                             draw={{
                                 rectangle: false,
                                 circle: false,
                                 circlemarker: false,
-                                marker: activeTool === 'marker',
-                                polyline: activeTool === 'line',
-                                polygon: activeTool === 'polygon'
+                                marker: false,
+                                polyline: false,
+                                polygon: false
+                            }}
+                            edit={{
+                                featureGroup: drawnItems
                             }}
                         />
                     </FeatureGroup>

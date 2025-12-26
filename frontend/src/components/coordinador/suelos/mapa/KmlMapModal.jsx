@@ -4,13 +4,34 @@ import './KmlMapModal.css'; // We'll create this CSS file
 
 const KmlMapModal = ({ isOpen, onClose, progresiva, subProgresivas }) => {
   console.log('[DEBUG] KmlMapModal.jsx - Received props:', { isOpen, progresiva, subProgresivas });
-  if (!isOpen || !progresiva) return null;
 
-  // Extract KML Trazado ID and coordinates for map centering
-  const kmlTrazadoId = progresiva.kml_trazado_id;
-  const mapCenter = progresiva.coordenada_este && progresiva.coordenada_norte
-    ? [parseFloat(progresiva.coordenada_norte), parseFloat(progresiva.coordenada_este)] // Assuming Lat, Lon for Leaflet
-    : null; // Default center if no coordinates
+  // Extract KML Trazado ID and Puntos ID
+  const kmlTrazadoId = progresiva?.kml_trazado_id;
+  const kmlPuntosId = progresiva?.kml_puntos_id;
+
+  // Memoize props to prevent unnecessary re-renders of SuelosMap
+  // FIX: Do NOT use raw UTM coordinates for centering as SuelosMap expects Lat/Lng.
+  // Instead, pass null to let SuelosMap use its default center or fitBounds to the KML.
+  const mapCenter = React.useMemo(() => null, []);
+
+  const kmlIds = React.useMemo(() => {
+    const ids = [];
+    if (kmlTrazadoId) ids.push(kmlTrazadoId);
+    if (kmlPuntosId) ids.push(kmlPuntosId);
+    return ids;
+  }, [kmlTrazadoId, kmlPuntosId]);
+
+  // Lock body scroll when modal is open
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+  if (!isOpen || !progresiva) return null;
 
   return (
     <div className="kml-map-modal-overlay" onClick={onClose}>
@@ -20,16 +41,13 @@ const KmlMapModal = ({ isOpen, onClose, progresiva, subProgresivas }) => {
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
         <div className="kml-map-modal-body">
-          {kmlTrazadoId ? (
-            <SuelosMap
-              center={mapCenter}
-              zoom={14} // Adjust default zoom as needed
-              kmlTrazadoIds={kmlTrazadoId ? [kmlTrazadoId] : []} // Pass the KML Trazado ID as an array
-              progresivasData={subProgresivas} // Pass sub-progresivas data to map
-            />
-          ) : (
-            <p>No hay un archivo KML asociado a este tramo para mostrar en el mapa.</p>
-          )}
+          <SuelosMap
+            initialCoords={mapCenter}
+            initialZoom={14}
+            kmlTrazadoIds={kmlIds}
+            progresivasData={subProgresivas}
+            defaultZone={progresiva.linea}
+          />
         </div>
       </div>
     </div>

@@ -44,27 +44,41 @@
   background-color: rgba(0, 0, 0, 0.75);
   display: flex;
   justify-content: center;
-  align-items: flex-start; /* Align content to the top */
-  padding: 100px 50px 50px 50px; /* Add top padding to avoid navbar */
-  z-index: 2000;
-  overflow-y: auto; /* Allow vertical scroll for tall forms */
+  align-items: center;
+  /* Center vertically */
+  padding: 20px;
+  /* Uniform padding */
+  z-index: 2147483647;
+  /* Maximum z-index to cover Sidebar and Header */
+  overflow-y: auto;
+  /* Allow vertical scroll for tall forms */
 }
 
 .progresivas-form-container {
   background: #fff;
   padding: 30px;
   border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   width: 95%;
-  max-width: 850px; /* Default max-width for standard forms */
+  max-width: 850px;
   max-height: 90vh;
-  overflow-y: auto; /* Allow standard forms to scroll */
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+  margin-bottom: 50px;
+}
+
+.progresivas-form-container::-webkit-scrollbar {
+  display: none;
 }
 
 /* Specific layout for the Excel-style modal */
 .progresivas-form-container.excel-modal {
   max-width: 90vw;
-  overflow: hidden; /* Contains content within the modal boundaries */
+  overflow: hidden;
+  /* Contains content within the modal boundaries */
   display: flex;
   flex-direction: column;
 }
@@ -77,9 +91,12 @@
 }
 
 .modal-scroll-content {
-  flex-grow: 1; /* Allows this area to fill available space */
-  overflow-y: auto; /* Enables vertical scrolling for the content */
-  padding: 5px 15px 15px 15px; /* Adds some spacing */
+  flex-grow: 1;
+  /* Allows this area to fill available space */
+  overflow-y: auto;
+  /* Enables vertical scrolling for the content */
+  padding: 5px 15px 15px 15px;
+  /* Adds some spacing */
 }
 
 .progresivas-form .form-grid {
@@ -96,7 +113,8 @@
 }
 
 .modal-toolbar {
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
+  /* Prevent shrinking */
   display: flex;
   justify-content: flex-end;
   margin-bottom: 20px;
@@ -120,9 +138,11 @@
 }
 
 .excel-table-container {
-  flex-grow: 1; /* Allow this to take up available space */
+  flex-grow: 1;
+  /* Allow this to take up available space */
   width: 100%;
-  overflow: auto; /* Allow both horizontal and vertical scrolling */
+  overflow: auto;
+  /* Allow both horizontal and vertical scrolling */
   border: 1px solid #ccc;
   border-radius: 8px;
   /* REMOVED: max-height: 300px; The parent .modal-scroll-content now handles scrolling */
@@ -131,10 +151,12 @@
 .excel-style-table {
   width: 100%;
   border-collapse: collapse;
-  white-space: nowrap; /* Prevent wrapping */
+  white-space: nowrap;
+  /* Prevent wrapping */
 }
 
-.excel-style-table th, .excel-style-table td {
+.excel-style-table th,
+.excel-style-table td {
   border: 1px solid #ddd;
   padding: 8px 10px;
   text-align: center;
@@ -156,12 +178,14 @@
   background-color: #f8f9fa;
   font-weight: bold;
   z-index: 2;
-  min-width: 200px; /* Increased width */
+  min-width: 200px;
+  /* Increased width */
 }
 
 .estrato-cell {
   cursor: pointer;
-  min-width: 140px; /* Reduced width */
+  min-width: 140px;
+  /* Reduced width */
   transition: background-color 0.2s ease;
 }
 
@@ -200,7 +224,8 @@
 
 .empty-cell {
   background-color: #fafafa;
-  min-width: 140px; /* Reduced width */
+  min-width: 140px;
+  /* Reduced width */
 }
 
 .form-group {
@@ -237,11 +262,13 @@
 .form-actions {
   grid-column: 1 / -1;
   display: flex;
-  justify-content: space-between; /* Changed for wizard */
+  justify-content: space-between;
+  /* Changed for wizard */
   align-items: center;
   gap: 15px;
   margin-top: 25px;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
+  /* Prevent shrinking */
 }
 
 .wizard-nav-buttons {
@@ -249,7 +276,9 @@
   gap: 15px;
 }
 
-.close-btn, .submit-btn, .btn-secondary {
+.close-btn,
+.submit-btn,
+.btn-secondary {
   padding: 12px 25px;
   border-radius: 8px;
   border: none;
@@ -279,12 +308,12 @@
 }
 
 .btn-secondary {
-    background-color: #6c757d;
-    color: white;
+  background-color: #6c757d;
+  color: white;
 }
 
 .btn-secondary:hover {
-    background-color: #5a6268;
+  background-color: #5a6268;
 }
 
 .progresivas-table-container {
@@ -293,24 +322,29 @@
 
 .progresivas-table {
   width: 100%;
-  border-collapse: collapse; /* Changed from collapse */
+  border-collapse: collapse;
+  /* Changed from collapse */
   border-spacing: 0;
   margin-top: 20px;
   border-radius: 12px;
-  overflow: hidden; /* Ensures border-radius is respected */
+  overflow: hidden;
+  /* Ensures border-radius is respected */
   box-shadow: 0 4px 25px rgba(0, 0, 0, 0.1);
 }
 
-.progresivas-table th, .progresivas-table td {
+.progresivas-table th,
+.progresivas-table td {
   padding: 16px 20px;
   text-align: left;
   border-bottom: 1px solid #eaedf1;
 }
 
 .progresivas-table th {
-  background-color: #e8eaf6; /* Light blue header */
+  background-color: #e8eaf6;
+  /* Light blue header */
   font-weight: 600;
-  color: #1a237e; /* Dark blue text for contrast */
+  color: #1a237e;
+  /* Dark blue text for contrast */
   text-transform: uppercase;
   font-size: 0.85em;
   letter-spacing: 0.5px;
@@ -325,7 +359,8 @@
 }
 
 .progresivas-table tbody tr.selected {
-  background-color: #e8eaf6; /* A light blue/purple to indicate selection */
+  background-color: #e8eaf6;
+  /* A light blue/purple to indicate selection */
 }
 
 .caja-sombreada {
@@ -375,7 +410,9 @@
   align-items: center;
 }
 
-.edit-btn, .delete-btn, .view-btn {
+.edit-btn,
+.delete-btn,
+.view-btn {
   background-color: transparent;
   border: none;
   border-radius: 50%;
@@ -400,7 +437,8 @@
 }
 
 .view-btn {
-  color: #6c757d; /* Same as others */
+  color: #6c757d;
+  /* Same as others */
 }
 
 .view-btn:hover {
@@ -411,10 +449,13 @@
 .progresivas-actions-bottom {
   margin-top: 20px;
   display: flex;
-  flex-wrap: wrap; /* Allow groups to wrap on smaller screens */
-  justify-content: space-between; /* Pushes groups apart */
+  flex-wrap: wrap;
+  /* Allow groups to wrap on smaller screens */
+  justify-content: space-between;
+  /* Pushes groups apart */
   align-items: center;
-  gap: 20px; /* Gap between groups */
+  gap: 20px;
+  /* Gap between groups */
 }
 
 .button-group {
@@ -423,8 +464,8 @@
   gap: 12px;
 }
 
-.progresivas-actions-bottom .button-group > button,
-.progresivas-actions-bottom .button-group > label {
+.progresivas-actions-bottom .button-group>button,
+.progresivas-actions-bottom .button-group>label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -441,8 +482,8 @@
   text-align: center;
 }
 
-.progresivas-actions-bottom .button-group > button:hover,
-.progresivas-actions-bottom .button-group > label:hover {
+.progresivas-actions-bottom .button-group>button:hover,
+.progresivas-actions-bottom .button-group>label:hover {
   background-color: #1a237e;
   color: white;
   transform: translateY(-2px);
@@ -498,6 +539,7 @@
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -531,17 +573,22 @@
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  table-layout: fixed; /* Add this line */
-  width: 100%; /* Ensure it takes full width */
+  table-layout: fixed;
+  /* Add this line */
+  width: 100%;
+  /* Ensure it takes full width */
 }
 
 .batch-details-modal .progresivas-table th,
 .batch-details-modal .progresivas-table td {
   padding: 14px 18px;
   border-bottom: 1px solid #f0f0f0;
-  white-space: nowrap; /* Prevent text wrapping */
-  overflow: hidden; /* Hide overflow text */
-  text-overflow: ellipsis; /* Add ellipsis for overflow text */
+  white-space: nowrap;
+  /* Prevent text wrapping */
+  overflow: hidden;
+  /* Hide overflow text */
+  text-overflow: ellipsis;
+  /* Add ellipsis for overflow text */
 }
 
 .batch-details-modal .progresivas-table th {
@@ -621,7 +668,8 @@
   gap: 10px;
 }
 
-.intervalo-input, .intervalo-select {
+.intervalo-input,
+.intervalo-select {
   flex-grow: 1;
 }
 
@@ -669,13 +717,19 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .loading-overlay p {
   margin-top: 10px;
 }
+
 /* === Estratos Editor Redesign === */
 
 .estratos-editor-list {
@@ -696,18 +750,19 @@
   padding: 15px;
   background-color: #ffffff;
   border-radius: 6px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   transition: box-shadow 0.3s ease;
 }
 
 .estrato-editor-row:hover {
-  box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 
 .estrato-input-group {
   display: flex;
   flex-direction: column;
-  flex: 1; /* Makes input groups share space equally */
+  flex: 1;
+  /* Makes input groups share space equally */
 }
 
 .estrato-input-group label {
@@ -719,7 +774,8 @@
 
 .estrato-input-group input,
 .estrato-input-group textarea {
-  width: 100%; /* Ensures they fill the group container */
+  width: 100%;
+  /* Ensures they fill the group container */
   padding: 10px;
   border: 1px solid #ced4da;
   border-radius: 4px;
@@ -731,7 +787,7 @@
 .estrato-input-group textarea:focus {
   border-color: #80bdff;
   outline: 0;
-  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, .25);
 }
 
 .estrato-input-group input[readOnly] {
@@ -740,16 +796,18 @@
 }
 
 .estrato-descripcion-group {
-  flex: 2; /* Makes description wider */
+  flex: 2;
+  /* Makes description wider */
 }
 
 .estrato-input-group textarea {
-    resize: vertical;
-    min-height: 40px;
+  resize: vertical;
+  min-height: 40px;
 }
 
 .estrato-actions {
-  margin-bottom: 10px; /* Aligns button with inputs */
+  margin-bottom: 10px;
+  /* Aligns button with inputs */
 }
 
 .remove-estrato-btn {
@@ -777,10 +835,10 @@
 }
 
 .remove-estrato-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    border-color: #6c757d;
-    color: #6c757d;
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #6c757d;
+  color: #6c757d;
 }
 
 .add-estrato-btn-modern {
@@ -804,25 +862,30 @@
 }
 
 .add-estrato-btn-modern svg {
-    width: 16px;
-    height: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
   margin-top: 20px;
-  max-height: 400px; /* Altura fija para parecer Excel */
-  overflow-y: auto; /* Scroll vertical */
-  border: 1px solid #e0e0e0; /* Borde para el "Excel" */
+  max-height: 400px;
+  /* Altura fija para parecer Excel */
+  overflow-y: auto;
+  /* Scroll vertical */
+  border: 1px solid #e0e0e0;
+  /* Borde para el "Excel" */
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .progresivas-table.horizontal-estratos {
   white-space: nowrap;
-  table-layout: fixed; /* Ensure fixed layout */
-  width: 100%; /* Ensure it takes full width */
+  table-layout: fixed;
+  /* Ensure fixed layout */
+  width: 100%;
+  /* Ensure it takes full width */
 }
 
 .progresivas-table.horizontal-estratos th,
@@ -859,7 +922,8 @@
 }
 
 .view-strata-btn {
-  background-color: #673ab7; /* Deep Purple */
+  background-color: #673ab7;
+  /* Deep Purple */
   color: white;
   border: none;
   padding: 8px 12px;
@@ -873,7 +937,8 @@
 }
 
 .view-strata-btn:hover {
-  background-color: #5e35b1; /* Darker Deep Purple */
+  background-color: #5e35b1;
+  /* Darker Deep Purple */
   transform: translateY(-2px);
 }
 
@@ -929,44 +994,44 @@
 }
 
 .estratos-summary-table td {
-    background-color: #fff;
-    color: #555;
-    font-weight: 500;
+  background-color: #fff;
+  color: #555;
+  font-weight: 500;
 }
 
 .estratos-summary-table th:first-child {
-    border-top-left-radius: 10px;
+  border-top-left-radius: 10px;
 }
 
 .estratos-summary-table th:last-child {
-    border-top-right-radius: 10px;
+  border-top-right-radius: 10px;
 }
 
 .estratos-summary-table tr {
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-    border-radius: 10px;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .estratos-summary-table tr:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
 
 .estratos-summary-table td:first-child {
-    border-top-left-radius: 10px;
-    border-bottom-left-radius: 10px;
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
 }
 
 .estratos-summary-table td:last-child {
-    border-top-right-radius: 10px;
-    border-bottom-right-radius: 10px;
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
 }
 
 .estratos-summary-table .descripcion-cell {
-    white-space: normal;
-    max-width: 400px;
-    line-height: 1.5;
+  white-space: normal;
+  max-width: 400px;
+  line-height: 1.5;
 }
 
 /* Estilos para el contenedor de ensayos dentro del modal */
@@ -975,7 +1040,7 @@
   border-radius: 8px;
   padding: 20px;
   margin-top: 15px;
-  box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
 }
 
 .ensayos-header {
@@ -999,7 +1064,7 @@
   border: 1px solid #e0e0e0;
   border-radius: 10px;
   padding: 15px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
@@ -1007,7 +1072,7 @@
 
 .ensayo-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
 .ensayo-header {
@@ -1055,7 +1120,8 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: auto; /* Pushes actions to the bottom */
+  margin-top: auto;
+  /* Pushes actions to the bottom */
 }
 
 .ensayo-actions .action-btn {
@@ -1097,8 +1163,10 @@
 .profundidad-final-display {
   margin-top: 20px;
   padding: 15px;
-  background-color: #e8f5e9; /* Light green background */
-  border-left: 5px solid #4caf50; /* Green border */
+  background-color: #e8f5e9;
+  /* Light green background */
+  border-left: 5px solid #4caf50;
+  /* Green border */
   border-radius: 5px;
   display: flex;
   align-items: center;
@@ -1120,7 +1188,8 @@
 
 /* Estilos para el botón "Ver Ensayos" en la tabla de estratos */
 .view-strata-btn {
-  background-color: #673ab7; /* Deep Purple */
+  background-color: #673ab7;
+  /* Deep Purple */
   color: white;
   border: none;
   padding: 8px 12px;
@@ -1134,7 +1203,8 @@
 }
 
 .view-strata-btn:hover {
-  background-color: #5e35b1; /* Darker Deep Purple */
+  background-color: #5e35b1;
+  /* Darker Deep Purple */
   transform: translateY(-2px);
 }
 
@@ -1160,13 +1230,14 @@
 }
 
 .add-estrato-btn-modern svg {
-    width: 16px;
-    height: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 /* Estilos para el botón "Nuevo Ensayo" */
 .addEnsayosBtn {
-  background-color: #28a745; /* Green */
+  background-color: #28a745;
+  /* Green */
   color: white;
   border: none;
   padding: 8px 15px;
@@ -1194,6 +1265,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -1204,7 +1276,8 @@
   margin-top: 20px;
   padding: 15px;
   border: 1px solid #e0e0e0;
-  border-radius: 16px; /* More rounded */
+  border-radius: 16px;
+  /* More rounded */
   background-color: #f9f9f9;
   animation: slideInFade 0.5s ease-out;
 }
@@ -1238,8 +1311,10 @@
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 200px; /* Key property: fixed height */
-  overflow-y: auto; /* Key property: scrollbar */
+  max-height: 200px;
+  /* Key property: fixed height */
+  overflow-y: auto;
+  /* Key property: scrollbar */
   padding: 10px;
   background-color: #fff;
   border-radius: 6px;
@@ -1285,7 +1360,8 @@
   align-items: center;
   text-align: center;
   z-index: 2;
-  background-color: #fff; /* To cover the line */
+  background-color: #fff;
+  /* To cover the line */
   padding: 0 10px;
 }
 
@@ -1328,8 +1404,15 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* === Styles for CanteraFormModal specifics === */
@@ -1358,9 +1441,11 @@
 .ajs-message {
   z-index: 100001 !important;
 }
+
 .ajs-modal {
   z-index: 99999 !important;
 }
+
 .ajs-dimmer {
   z-index: 99998 !important;
 }
@@ -1368,98 +1453,110 @@
 
 /* === PROGRESS BAR MODAL === */
 .progress-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999; /* Ensure it's on top of everything */
-    backdrop-filter: blur(2px);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  /* Ensure it's on top of everything */
+  backdrop-filter: blur(2px);
 }
 
 .progress-modal-content {
-    background-color: white;
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-    width: 90%;
-    max-width: 500px;
-    text-align: center;
-    animation: scaleInData 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  background-color: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 500px;
+  text-align: center;
+  animation: scaleInData 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes scaleInData {
-    from { transform: scale(0.9); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .progress-modal-content h3 {
-    color: #1a237e;
-    margin-bottom: 20px;
-    font-size: 1.4em;
-    font-weight: 700;
+  color: #1a237e;
+  margin-bottom: 20px;
+  font-size: 1.4em;
+  font-weight: 700;
 }
 
 .progress-bar-container {
-    background-color: #e0e0e0;
-    border-radius: 20px;
-    height: 20px;
-    width: 100%;
-    margin-bottom: 15px;
-    overflow: hidden;
-    position: relative;
-    box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+  background-color: #e0e0e0;
+  border-radius: 20px;
+  height: 20px;
+  width: 100%;
+  margin-bottom: 15px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .progress-bar-fill {
-    background: linear-gradient(90deg, #1a237e, #3f51b5);
-    height: 100%;
-    transition: width 0.3s ease-in-out;
-    border-radius: 20px;
-    position: relative;
+  background: linear-gradient(90deg, #1a237e, #3f51b5);
+  height: 100%;
+  transition: width 0.3s ease-in-out;
+  border-radius: 20px;
+  position: relative;
 }
 
 /* Optional: Animated striped effect for the bar */
 .progress-bar-fill::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-    background-image: linear-gradient(
-        45deg,
-        rgba(255, 255, 255, 0.15) 25%,
-        transparent 25%,
-        transparent 50%,
-        rgba(255, 255, 255, 0.15) 50%,
-        rgba(255, 255, 255, 0.15) 75%,
-        transparent 75%,
-        transparent
-    );
-    background-size: 20px 20px;
-    animation: moveStripes 1s linear infinite;
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background-image: linear-gradient(45deg,
+      rgba(255, 255, 255, 0.15) 25%,
+      transparent 25%,
+      transparent 50%,
+      rgba(255, 255, 255, 0.15) 50%,
+      rgba(255, 255, 255, 0.15) 75%,
+      transparent 75%,
+      transparent);
+  background-size: 20px 20px;
+  animation: moveStripes 1s linear infinite;
 }
 
 @keyframes moveStripes {
-    0% { background-position: 0 0; }
-    100% { background-position: 40px 40px; }
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: 40px 40px;
+  }
 }
 
 .progress-text {
-    font-size: 1.2em;
-    font-weight: 600;
-    color: #333;
-    margin-bottom: 8px;
-    display: block;
+  font-size: 1.2em;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+  display: block;
 }
 
 .progress-detail {
-    font-size: 0.9em;
-    color: #666;
-    height: 1.2em; /* Reserve space for text lines */
+  font-size: 0.9em;
+  color: #666;
+  height: 1.2em;
+  /* Reserve space for text lines */
 }

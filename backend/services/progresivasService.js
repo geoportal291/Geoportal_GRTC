@@ -244,11 +244,11 @@ const createBulkProgresivas = async (parentProgresiva, generatedChildren) => {
     }
 };
 
-const getProgresivas = async (user, selectedProjectId) => {
+const getProgresivas = async (user, selectedProjectId, includeChildren = false) => {
     try {
         let query = `
             SELECT
-                p.id, p.codigo, COALESCE(p.nombre, '') AS nombre, p.descripcion,
+                p.id, p.parent_id, p.codigo, COALESCE(p.nombre, '') AS nombre, p.descripcion,
                 p.progresiva_inicial, p.progresiva_final,
                 p.estado, p.creado_en, p.actualizado_en,
                 pr.nombre_tramo AS proyecto_nombre,
@@ -258,14 +258,28 @@ const getProgresivas = async (user, selectedProjectId) => {
                 p.tipo_via,
                 p.intervalo_manual,
                 p.proyecto_id,
-                p.kml_trazado_id, kt.kml_filename, kt.kml_uploaded_at
+                p.es_principal,
+                p.kml_trazado_id, p.kml_puntos_id, 
+                kt.kml_filename, kt.kml_uploaded_at,
+                kp.kml_filename AS puntos_kml_filename, kp.kml_uploaded_at AS puntos_kml_uploaded_at,
+                (
+                    SELECT COALESCE(json_agg(json_build_object('id', e.id)), '[]')
+                    FROM estratos e
+                    WHERE e.parent_id = p.id AND e.parent_type = 'progresiva'
+                ) AS estratos_perfil
             FROM progresivas p
             LEFT JOIN proyectos pr ON p.proyecto_id = pr.id
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
+            -- Also fetch KML Points info if present
+            LEFT JOIN kml_trazados kp ON p.kml_puntos_id = kp.id
         `;
         const queryParams = [];
         let paramIndex = 1; // Start parameter index for dynamic query
-        let whereClauses = ['p.parent_id IS NULL'];
+
+        let whereClauses = [];
+        if (!includeChildren) {
+            whereClauses.push('p.parent_id IS NULL');
+        }
 
         if (user.rol_nombre !== 'ADMIN') {
             query += `
@@ -290,7 +304,22 @@ const getProgresivas = async (user, selectedProjectId) => {
             ORDER BY p.creado_en DESC
         `;
 
+        console.log('[DEBUG Backend] getProgresivas query params:', { userRole: user.rol_nombre, selectedProjectId, includeChildren });
+        // console.log('[DEBUG Backend] getProgresivas SQL:', query);
+        // console.log('[DEBUG Backend] getProgresivas Values:', queryParams);
+
         const result = await db.query(query, queryParams);
+
+        console.log('[DEBUG Backend] getProgresivas returned rows:', result.rows.length);
+
+        // DEBUG: Verificar si estratos_perfil está llegando
+        const sample = result.rows.find(r => r.estratos_perfil && r.estratos_perfil.length > 0);
+        if (sample) {
+            console.log('[DEBUG Backend] getProgresivas found sample with estratos:', sample.id, sample.estratos_perfil);
+        } else {
+            console.log('[DEBUG Backend] getProgresivas: No records with estratos_perfil found in this batch of ' + result.rows.length);
+        }
+
         return result.rows;
     } catch (err) {
         console.error('Error detallado al obtener progresivas por proyectoId en service:', err);
@@ -429,12 +458,19 @@ const getAllSubProgresivas = async (req, res) => {
                 p.coordenada_este, p.coordenada_norte,
                 p.linea,
                 p.lado,
+                p.longitud_total, p.tipo_via, p.intervalo_manual,
                 p.kml_trazado_id, kt.kml_filename, kt.kml_uploaded_at
             FROM progresivas p
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
             WHERE p.parent_id = $1
             ORDER BY p.id ASC
         `, [Number(id)]);
+
+        console.log(`[DEBUG Backend] getAllSubProgresivas parent=${id} found=${progresivasResult.rows.length}`);
+        if (progresivasResult.rows.length > 0) {
+            const sample = progresivasResult.rows[0];
+            console.log(`[DEBUG Backend] sample child: id=${sample.id} coords=(${sample.coordenada_este}, ${sample.coordenada_norte})`);
+        }
 
         const progresivas = progresivasResult.rows;
         if (progresivas.length === 0) {
@@ -520,7 +556,8 @@ const getProgresivaById = async (id) => {
         const result = await db.query(
             `SELECT
                 p.*,
-                kt.kml_filename, kt.kml_uploaded_at
+                kt.kml_filename, kt.kml_uploaded_at,
+                p.kml_puntos_id
             FROM progresivas p
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
             WHERE p.id = $1`,
@@ -1028,7 +1065,7 @@ const getParentProgresivasByProyectoId = async (id_proyecto) => {
 
                             p.id, p.codigo, p.nombre,
 
-                            p.kml_trazado_id, kt.kml_filename, kt.kml_uploaded_at
+                            p.kml_trazado_id, p.kml_puntos_id, kt.kml_filename, kt.kml_uploaded_at
 
                         FROM progresivas p
 
@@ -1070,7 +1107,7 @@ const getTramosByUserId = async (user, projectId) => {
             query = `
                 SELECT DISTINCT
                     p.id, p.codigo, p.nombre, p.proyecto_id,
-                    p.kml_trazado_id, kt.kml_filename, kt.kml_uploaded_at
+                    p.kml_trazado_id, p.kml_puntos_id, kt.kml_filename, kt.kml_uploaded_at
                 FROM progresivas p
                 LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
                 WHERE p.parent_id IS NULL
@@ -1081,7 +1118,7 @@ const getTramosByUserId = async (user, projectId) => {
             query = `
                 SELECT DISTINCT
                     p.id, p.codigo, p.nombre, p.proyecto_id,
-                    p.kml_trazado_id, kt.kml_filename, kt.kml_uploaded_at
+                    p.kml_trazado_id, p.kml_puntos_id, kt.kml_filename, kt.kml_uploaded_at
                 FROM progresivas p
                 JOIN proyecto_usuarios pu ON p.proyecto_id = pu.proyecto_id
                 LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
@@ -1101,7 +1138,7 @@ const getTramosByUserId = async (user, projectId) => {
     }
 };
 
-const uploadKmlToProgresiva = async (progresivaId, file, userId) => {
+const uploadKmlToProgresiva = async (progresivaId, file, userId, type = 'trazado') => {
     const client = await db.connect();
     try {
         await client.query('BEGIN');
@@ -1110,14 +1147,19 @@ const uploadKmlToProgresiva = async (progresivaId, file, userId) => {
         const kmlTrazado = await kmlService.createKmlTrazado(file, userId);
         const newKmlTrazadoId = kmlTrazado.id;
 
-        // 2. Update progresiva with kml_trazado_id
-        const result = await client.query(
-            `UPDATE progresivas
-             SET kml_trazado_id = $1, actualizado_en = NOW()
+        // 2. Update progresiva with properly column based on type
+        let columnToUpdate = 'kml_trazado_id';
+        if (type === 'puntos') {
+            columnToUpdate = 'kml_puntos_id';
+        }
+
+        const query = `
+             UPDATE progresivas
+             SET ${columnToUpdate} = $1, actualizado_en = NOW()
              WHERE id = $2
-             RETURNING id, kml_trazado_id;`,
-            [newKmlTrazadoId, progresivaId]
-        );
+             RETURNING id, kml_trazado_id, kml_puntos_id;`;
+
+        const result = await client.query(query, [newKmlTrazadoId, progresivaId]);
 
         if (result.rows.length === 0) {
             const error = new Error('Progresiva no encontrada para actualizar el KML.');

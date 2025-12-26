@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import ImageCarousel from './ImageCarousel';
 import MiniMap from './MiniMap';
 
-const DetalleBadenView = ({ alcantarilla: baden, images, route, onCloseDetail }) => {
+const DetalleBadenView = ({ baden, images, route, onCloseDetail }) => {
     const modalRef = useRef(null);
     const mapRef = useRef(null);
     const dataRef = useRef(null);

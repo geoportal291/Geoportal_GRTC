@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import alertify from 'alertifyjs';
 import axios from 'axios';
 import { useAuth } from '../../data/contexts/AuthContext'; // Import useAuth
+import './navbar.css'; // Direct import of styles
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE || '';
 
@@ -67,7 +68,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
         alertify.success('Sesión cerrada exitosamente');
         navigate('/');
       },
-      () => {}
+      () => { }
     ).set('labels', { ok: 'Sí, cerrar sesión', cancel: 'Cancelar' });
   };
 
@@ -75,6 +76,34 @@ export default function Navbar({ onToggle, isCollapsed }) {
 
   const isNavItemVisible = (linkKey) => {
     return navbarVisibility[linkKey] === true;
+  };
+
+  const getActiveChildTitle = (menu) => {
+    if (menu === 'ingenieria') {
+      if (isActiveLink('/ingenieria/basica')) return 'Geoportal';
+      if (isActiveLink('/ingenieria/topografia')) return 'Topografía';
+      if (isActiveLink('/ingenieria/geologia')) return 'Geología';
+      if (isActiveLink('/ingenieria/hidrologia')) return 'Hidrología';
+      if (isActiveLink('/coordinador/ingenieria/trafico/trafico')) return 'Tráfico';
+      if (isActiveLink('/ingenieria/seguridad-vial')) return 'Seguridad Vial';
+      if (isActiveLink('/ingenieria/inventario-vial')) return 'Inventario Vial';
+      if (isActiveLink('/coordinador/recoleccion-datos')) return 'Mecánica de Suelos';
+    }
+    if (menu === 'configuracion') {
+      if (isActiveLink('/coordinador/config/frmusuarios2')) return 'Usuarios';
+      if (isActiveLink('/coordinador/config/PermisosManagement')) return 'Permisos';
+      if (isActiveLink('/coordinador/config/UserProjectAssignment')) return 'Asignación de Proyectos';
+      if (isActiveLink('/coordinador/config/NavbarVisibility')) return 'Visibilidad Navbar';
+      if (isActiveLink('/coordinador/config/ChangelogManagement')) return 'Gestión de Novedades';
+      if (isActiveLink('/coordinador/config/auditoria')) return 'Auditoría';
+    }
+    if (menu === 'eventos') {
+      if (isActiveLink('/eventos/amigo-secreto')) return 'Amigo Secreto';
+    }
+    if (menu === 'progresivas') {
+      if (isActiveLink('/coordinador/Progresivas')) return 'Gestionar Progresivas';
+    }
+    return null;
   };
 
   return (
@@ -100,42 +129,57 @@ export default function Navbar({ onToggle, isCollapsed }) {
           )}
 
           {/* INGENIERÍA BÁSICA */}
-          {isNavItemVisible('ingenieria_basica') && ( // Assuming 'ingenieria_basica' is the key for the main menu item
-            <li className={`has-submenu ${openMenu.ingenieria ? 'open' : ''}`}>
+          {isNavItemVisible('ingenieria_basica') && (
+            <li className={`has-submenu ${openMenu.ingenieria ? 'open' : ''} ${[
+              '/ingenieria/basica',
+              '/ingenieria/topografia',
+              '/ingenieria/geologia',
+              '/ingenieria/hidrologia',
+              '/coordinador/ingenieria/trafico/trafico',
+              '/ingenieria/seguridad-vial',
+              '/ingenieria/inventario-vial',
+              '/coordinador/recoleccion-datos'
+            ].some(path => isActiveLink(path)) ? 'active' : ''
+              }`}>
               <div
                 className="nav-link"
                 onClick={() => toggleSubmenu('ingenieria')}
               >
                 <i className="fas fa-project-diagram"></i>
-                <span>Ingeniería Básica</span>
+                <div className="nav-text">
+                  <span>Ingeniería Básica</span>
+                  {!isCollapsed && !openMenu.ingenieria && getActiveChildTitle('ingenieria') && (
+                    <span className="active-subtitle">{getActiveChildTitle('ingenieria')}</span>
+                  )}
+                </div>
                 {!isCollapsed && (
                   <div className={`submenu-arrow ${openMenu.ingenieria ? 'open' : ''}`} />
                 )}
               </div>
               <ul className={`submenu ${openMenu.ingenieria && !isCollapsed ? 'show' : ''}`}>
                 {isNavItemVisible('/ingenieria/basica') && (
-                  <li className={isActiveLink('/ingenieria/basica') ? 'active' : ''}>
+                  <li className={`${isActiveLink('/ingenieria/basica') ? 'active' : ''} wip-item`}>
                     <Link to="/ingenieria/basica">
                       <i className="fas fa-drafting-compass"></i><span>Geoportal</span>
                     </Link>
                   </li>
                 )}
                 {isNavItemVisible('/ingenieria/topografia') && (
-                  <li className={isActiveLink('/ingenieria/topografia') ? 'active' : ''}>
+                  <li className={`${isActiveLink('/ingenieria/topografia') ? 'active' : ''} wip-item`}>
                     <Link to="/ingenieria/topografia">
                       <i className="fas fa-map-marked-alt"></i><span>Topografía</span>
                     </Link>
                   </li>
                 )}
                 {isNavItemVisible('/ingenieria/geologia') && (
-                  <li className={isActiveLink('/ingenieria/geologia') ? 'active' : ''}>
+                  <li className={`${isActiveLink('/ingenieria/geologia') ? 'active' : ''} wip-item`}>
                     <Link to="/ingenieria/geologia">
                       <i className="fas fa-mountain"></i><span>Geología</span>
                     </Link>
                   </li>
                 )}
                 {isNavItemVisible('/ingenieria/hidrologia') && (
-                  <li className={isActiveLink('/ingenieria/hidrologia') ? 'active' : ''}>
+                  <li className={`${isActiveLink('/ingenieria/hidrologia') ? 'active' : ''} wip-item`}>
                     <Link to="/ingenieria/hidrologia">
                       <i className="fas fa-water"></i><span>Hidrología</span>
                     </Link>
@@ -149,7 +193,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
                   </li>
                 )}
                 {isNavItemVisible('/ingenieria/seguridad-vial') && (
-                  <li className={isActiveLink('/ingenieria/seguridad-vial') ? 'active' : ''}>
+                  <li className={`${isActiveLink('/ingenieria/seguridad-vial') ? 'active' : ''} wip-item`}>
                     <Link to="/ingenieria/seguridad-vial">
                       <i className="fas fa-traffic-light"></i><span>Seguridad Vial</span>
                     </Link>
@@ -175,13 +219,19 @@ export default function Navbar({ onToggle, isCollapsed }) {
 
           {/* EVENTOS */}
           {isNavItemVisible('eventos') && (
-            <li className={`has-submenu ${openMenu.eventos ? 'open' : ''}`}>
+            <li className={`has-submenu ${openMenu.eventos ? 'open' : ''} ${['/eventos/amigo-secreto'].some(path => isActiveLink(path)) ? 'active' : ''
+              }`}>
               <div
                 className="nav-link"
                 onClick={() => toggleSubmenu('eventos')}
               >
                 <i className="fas fa-calendar-check"></i>
-                <span>Eventos</span>
+                <div className="nav-text">
+                  <span>Eventos</span>
+                  {!isCollapsed && !openMenu.eventos && getActiveChildTitle('eventos') && (
+                    <span className="active-subtitle">{getActiveChildTitle('eventos')}</span>
+                  )}
+                </div>
                 {!isCollapsed && (
                   <div className={`submenu-arrow ${openMenu.eventos ? 'open' : ''}`} />
                 )}
@@ -199,14 +249,20 @@ export default function Navbar({ onToggle, isCollapsed }) {
           )}
 
           {/* PROGRESIVAS */}
-          {isNavItemVisible('progresivas') && ( // Assuming 'progresivas' is the key for the main menu item
-            <li className={`has-submenu ${openMenu.progresivas ? 'open' : ''}`}>
+          {isNavItemVisible('progresivas') && (
+            <li className={`has-submenu ${openMenu.progresivas ? 'open' : ''} ${['/coordinador/Progresivas'].some(path => isActiveLink(path)) ? 'active' : ''
+              }`}>
               <div
                 className="nav-link"
                 onClick={() => toggleSubmenu('progresivas')}
               >
                 <i className="fas fa-road"></i>
-                <span>Progresivas</span>
+                <div className="nav-text">
+                  <span>Progresivas</span>
+                  {!isCollapsed && !openMenu.progresivas && getActiveChildTitle('progresivas') && (
+                    <span className="active-subtitle">{getActiveChildTitle('progresivas')}</span>
+                  )}
+                </div>
                 {!isCollapsed && (
                   <div className={`submenu-arrow ${openMenu.progresivas ? 'open' : ''}`} />
                 )}
@@ -252,13 +308,26 @@ export default function Navbar({ onToggle, isCollapsed }) {
 
           {/* CONFIGURACIÓN */}
           {isNavItemVisible('configuracion') && (
-            <li className={`has-submenu ${openMenu.configuracion ? 'open' : ''}`}>
+            <li className={`has-submenu ${openMenu.configuracion ? 'open' : ''} ${[
+              '/coordinador/config/frmusuarios2',
+              '/coordinador/config/PermisosManagement',
+              '/coordinador/config/UserProjectAssignment',
+              '/coordinador/config/NavbarVisibility',
+              '/coordinador/config/ChangelogManagement',
+              '/coordinador/config/auditoria'
+            ].some(path => isActiveLink(path)) ? 'active' : ''
+              }`}>
               <div
                 className="nav-link"
                 onClick={() => toggleSubmenu('configuracion')}
               >
                 <i className="fas fa-cog"></i>
-                <span>Configuración</span>
+                <div className="nav-text">
+                  <span>Configuración</span>
+                  {!isCollapsed && !openMenu.configuracion && getActiveChildTitle('configuracion') && (
+                    <span className="active-subtitle">{getActiveChildTitle('configuracion')}</span>
+                  )}
+                </div>
                 {!isCollapsed && (
                   <div className={`submenu-arrow ${openMenu.configuracion ? 'open' : ''}`} />
                 )}
@@ -306,7 +375,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
                     </Link>
                   </li>
                 )}
-               
+
               </ul>
             </li>
           )}

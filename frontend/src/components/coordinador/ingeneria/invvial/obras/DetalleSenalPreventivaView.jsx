@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import ImageCarousel from './ImageCarousel';
 import MiniMap from './MiniMap';
 
-const DetalleSenalPreventivaView = ({ senal, images, onBack }) => {
+const DetalleSenalPreventivaView = ({ senalPreventiva: senal, images, route, onCloseDetail }) => {
     const modalRef = useRef(null);
     const mapRef = useRef(null);
     const dataRef = useRef(null);
@@ -347,7 +347,7 @@ const DetalleSenalPreventivaView = ({ senal, images, onBack }) => {
                 {/* Encabezado */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '2px' }}>
                     <h2 style={{ margin: 0, color: '#333', fontSize: '1.1rem' }}>Señal Preventiva: {senal.codigo || 'Sin Código'}</h2>
-                    <button onClick={onBack} style={{
+                    <button onClick={onCloseDetail} style={{
                         background: 'none',
                         border: 'none',
                         fontSize: '1.5rem',
@@ -423,7 +423,7 @@ const DetalleSenalPreventivaView = ({ senal, images, onBack }) => {
                         transition: 'background-color 0.2s ease'
                     }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#218838'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#28a745'}>Exportar a PDF</button>
 
-                    <button onClick={onBack} style={{
+                    <button onClick={onCloseDetail} style={{
                         backgroundColor: '#007bff',
                         color: 'white',
                         padding: '8px 20px',

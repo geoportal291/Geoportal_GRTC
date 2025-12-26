@@ -1,3 +1,4 @@
+/* Modal Overlay - Fixed, Centered, High Z-Index */
 .kml-map-modal-overlay {
     position: fixed;
     top: 0;
@@ -8,19 +9,26 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 1000; /* Ensure it's above other content */
+    z-index: 10000;
 }
 
+/* Modal Content - CSS Grid Layout */
+/* Using Grid is more robust for "Header + Content" layouts than Flex */
 .kml-map-modal-content {
-    background-color: var(--background-color);
+    background-color: var(--background-color, #fff);
     border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    width: 90%; /* Make it large */
-    max-width: 1200px; /* Max width */
-    height: 90%; /* Make it large */
-    display: flex;
-    flex-direction: column;
-    overflow: hidden; /* Hide overflow from map */
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5);
+
+    /* Responsive Size */
+    width: 90vw;
+    height: 85vh;
+    /* Reduced slightly to ensure it fits well on most screens */
+    max-width: 1200px;
+
+    display: grid;
+    grid-template-rows: auto 1fr;
+    /* Header takes auto, Body takes rest */
+    overflow: hidden;
 }
 
 .kml-map-modal-header {
@@ -28,35 +36,49 @@
     justify-content: space-between;
     align-items: center;
     padding: 15px 20px;
-    border-bottom: 1px solid var(--border-color);
-    background-color: var(--primary-light);
-    color: var(--text-color-dark);
+    border-bottom: 1px solid var(--border-color, #ddd);
+    background-color: var(--primary-light, #f8f9fa);
+    color: var(--text-color-dark, #333);
+    z-index: 2;
+    /* Ensure header stays above map if map overflows */
 }
 
 .kml-map-modal-header h3 {
     margin: 0;
-    font-size: 1.2em;
+    font-size: 1.25rem;
+    font-weight: 600;
 }
 
 .kml-map-modal-header .close-btn {
     background: none;
     border: none;
-    font-size: 1.5em;
+    font-size: 1.75rem;
     cursor: pointer;
-    color: var(--text-color-dark);
-    padding: 5px;
+    color: var(--text-color-dark, #333);
+    line-height: 1;
+    padding: 0 5px;
+    transition: color 0.2s;
 }
 
+.kml-map-modal-header .close-btn:hover {
+    color: #ff0000;
+}
+
+/* Body acts as the Grid Item for the map */
 .kml-map-modal-body {
-    flex-grow: 1;
-    padding: 15px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative; /* Needed for map to fill */
-}
-
-.kml-map-modal-body .map-container { /* Assuming SuelosMap uses a container with this class */
+    position: relative;
     width: 100%;
     height: 100%;
+    overflow: hidden;
+    padding: 0;
+    background-color: #eee;
+    /* Placeholder bg */
+}
+
+/* Force map container to fill the grid cell exactly */
+.kml-map-modal-body .suelos-map-container,
+.kml-map-modal-body>div {
+    width: 100% !important;
+    height: 100% !important;
+    border: none;
 }

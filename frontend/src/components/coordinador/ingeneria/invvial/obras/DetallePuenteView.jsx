@@ -5,7 +5,7 @@ import Swal from 'sweetalert2';
 import ImageCarousel from './ImageCarousel';
 import MiniMap from './MiniMap';
 
-const DetallePuenteView = ({ alcantarilla: puente, images, route, onCloseDetail }) => {
+const DetallePuenteView = ({ puente, images, route, onCloseDetail }) => {
     const modalRef = useRef(null);
     const mapRef = useRef(null);
     const dataRef = useRef(null);

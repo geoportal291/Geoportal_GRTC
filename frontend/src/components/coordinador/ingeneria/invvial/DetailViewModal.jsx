@@ -1,210 +1,112 @@
 import React, { useState, useEffect } from 'react';
-import DetalleAlcantarillaView from './obras/DetalleAlcantarillaView';
-import DetalleBadenView from './obras/DetalleBadenView';
-import DetallePuenteView from './obras/DetallePuenteView';
-import DetalleMuroView from './obras/DetalleMuroView';
-import DetalleZonaCriticaView from './obras/DetalleZonaCriticaView';
-import DetalleSenalInformativaView from './obras/DetalleSenalInformativaView';
-import DetalleSenalPreventivaView from './obras/DetalleSenalPreventivaView';
-import DetalleInterferenciaView from './obras/DetalleInterferenciaView';
+import ReactDOM from 'react-dom';
+import GeneralDetailView from './obras/GeneralDetailView';
 import axiosInstance from '../../../../api/axios';
 
 /**
  * Modal independiente para mostrar vista detallada de elementos desde el mapa externo
+ * Actúa como controlador para fetching de imágenes y delegación a GeneralDetailView
  */
-const DetailViewModal = ({ show, onClose, elementData, elementType, projectId, vialHeaderOption }) => {
-    const [images, setImages] = useState([]);
-    const [isLoadingImages, setIsLoadingImages] = useState(false);
+const DetailViewModal = ({ show, onClose, elementData, elementType, projectId, vialHeaderOption, route, graphicsImages }) => {
 
-    useEffect(() => {
-        if (show && elementData && projectId) {
-            fetchImages();
+    // --- FILTER IMAGES LOGIC (Matches Alcantarillas/Geoite/ExternalView) ---
+    const elementImages = React.useMemo(() => {
+        if (!show || !elementData) return [];
+
+        // If specific images are already attached, use them (fallback)
+        if (elementData.images && elementData.images.length > 0) return elementData.images;
+
+        let code = elementData.panel_fotografico_codigo || elementData.panel_fotografico || elementData.cod_panel;
+
+        // Fallback: If no panel code, try matching by the Element Code (e.g. "KM 25+000")
+        if (!code && elementData.codigo) {
+            code = elementData.codigo;
         }
-    }, [show, elementData, projectId, vialHeaderOption]);
 
-    const fetchImages = async () => {
-        setIsLoadingImages(true);
-        try {
-            const entregableMatch = vialHeaderOption?.match(/(\d+)/);
-            const entregableNum = entregableMatch ? entregableMatch[1] : null;
+        if (!graphicsImages || !code) return [];
 
-            const response = await axiosInstance.get(
-                `/api/alcantarillas/graphics/${projectId}`,
-                {
-                    params: entregableNum ? { entregable: `E-${entregableNum}` } : {}
+        const targetCode = String(code).trim();
+        const targetCodeClean = targetCode.replace(/^KM\s*/i, '').trim();
+
+        // 1. Try parsing Range Pattern: "538-543 - 1" -> Start: 538, End: 543, Suffix: 1
+        const rangeMatch = targetCode.match(/^(\d+)\s*-\s*(\d+)\s*-\s*(\d+)$/);
+        let validRangeCodes = [];
+
+        if (rangeMatch) {
+            const start = parseInt(rangeMatch[1], 10);
+            const end = parseInt(rangeMatch[2], 10);
+            const suffix = rangeMatch[3];
+
+            if (!isNaN(start) && !isNaN(end) && start <= end) {
+                for (let i = start; i <= end; i++) {
+                    validRangeCodes.push(`${i}-${suffix}`);
                 }
-            );
-
-            if (response.data && response.data.images) {
-                setImages(response.data.images);
             }
-        } catch (error) {
-            console.error('Error fetching images:', error);
-            setImages([]);
-        } finally {
-            setIsLoadingImages(false);
         }
-    };
+
+        // 2. Aggressive numeric extraction (Fallback)
+        const numberMatch = targetCode.match(/(\d+)/);
+        const firstNumber = numberMatch ? numberMatch[0] : null;
+
+        const elEntregableRaw = elementData.entregable ? String(elementData.entregable).trim() : 'E-1';
+
+        // Filter global images
+        return graphicsImages.filter(img => {
+            const imgCode = String(img.panel_fotografico_codigo || '').trim();
+            const imgIndex = img.index ? String(img.index).trim() : '';
+            const imgEntregableRaw = img.entregable ? String(img.entregable).trim() : 'E-1';
+
+            // Extract filename from URL
+            let urlFileName = '';
+            if (img.url) {
+                const parts = img.url.split('/');
+                const fileNameWithExt = parts[parts.length - 1];
+                urlFileName = fileNameWithExt.split('.')[0];
+            }
+
+            // Logic 1: Range Match
+            if (validRangeCodes.length > 0) {
+                const isRangeMatch = validRangeCodes.includes(imgIndex) ||
+                    validRangeCodes.includes(imgCode) ||
+                    validRangeCodes.includes(urlFileName);
+
+                if (isRangeMatch) {
+                    return elEntregableRaw === imgEntregableRaw;
+                }
+            }
+
+            // Standard Match Logic (Fallback if Range is empty)
+            if (validRangeCodes.length === 0) {
+                const strictMatch = imgCode === targetCode || imgIndex === targetCode || urlFileName === targetCode;
+                const cleanMatch = targetCodeClean && (imgCode === targetCodeClean || imgIndex === targetCodeClean || urlFileName === targetCodeClean);
+                const numberMetricMatch = firstNumber && (imgIndex === firstNumber || urlFileName === firstNumber);
+
+                const codeMatches = strictMatch || cleanMatch || numberMetricMatch;
+
+                return codeMatches && (elEntregableRaw === imgEntregableRaw);
+            }
+
+            return false;
+        });
+    }, [show, elementData, graphicsImages]);
 
     if (!show) {
         return null;
     }
 
-    const renderDetailView = () => {
-        if (!elementData) {
-            return (
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                    <p>No hay datos disponibles para mostrar.</p>
-                </div>
-            );
-        }
+    if (!elementData) {
+        return null;
+    }
 
-        switch (elementType) {
-            case 'alcantarillas':
-                return (
-                    <DetalleAlcantarillaView
-                        alcantarilla={elementData}
-                        images={images}
-                        onBack={onClose}
-                    />
-                );
-            case 'badenes':
-                return (
-                    <DetalleBadenView
-                        baden={elementData}
-                        images={images}
-                        onBack={onClose}
-                    />
-                );
-            case 'puentes':
-                return (
-                    <DetallePuenteView
-                        puente={elementData}
-                        images={images}
-                        onBack={onClose}
-                    />
-                );
-            case 'muros':
-                return (
-                    <DetalleMuroView
-                        muro={elementData}
-                        images={images}
-                        onBack={onClose}
-                    />
-                );
-            case 'zonas_criticas':
-                return (
-                    <DetalleZonaCriticaView
-                        zonaCritica={elementData}
-                        images={images}
-                        onBack={onClose}
-                    />
-                );
-            case 'senales_informativas':
-                return (
-                    <DetalleSenalInformativaView
-                        senalInformativa={elementData}
-                        images={images}
-                        onBack={onClose}
-                    />
-                );
-            case 'senales_preventivas':
-                return (
-                    <DetalleSenalPreventivaView
-                        senalPreventiva={elementData}
-                        images={images}
-                        onBack={onClose}
-                    />
-                );
-            case 'interferencias':
-                return (
-                    <DetalleInterferenciaView
-                        interferencia={elementData}
-                        images={images}
-                        onBack={onClose}
-                    />
-                );
-            default:
-                return (
-                    <div style={{ padding: '20px', textAlign: 'center' }}>
-                        <p>Vista de detalle no disponible para este tipo de elemento: {elementType}</p>
-                        <button
-                            onClick={onClose}
-                            style={{
-                                padding: '10px 20px',
-                                backgroundColor: '#007bff',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '5px',
-                                cursor: 'pointer',
-                                marginTop: '10px'
-                            }}
-                        >
-                            Cerrar
-                        </button>
-                    </div>
-                );
-        }
-    };
-
-    return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 200000,
-            fontFamily: 'Arial, sans-serif',
-        }}>
-            <div style={{
-                backgroundColor: '#ffffff',
-                padding: '20px',
-                borderRadius: '10px',
-                boxShadow: '0 8px 25px rgba(0, 0, 0, 0.3)',
-                maxWidth: '900px',
-                width: '95%',
-                zIndex: 200001,
-                position: 'relative',
-                maxHeight: '90vh',
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '15px',
-            }}>
-                <button onClick={onClose} style={{
-                    position: 'absolute',
-                    top: '15px',
-                    right: '15px',
-                    background: 'none',
-                    border: 'none',
-                    fontSize: '1.8rem',
-                    cursor: 'pointer',
-                    color: '#555',
-                    transition: 'color 0.2s ease',
-                    zIndex: 10
-                }}
-                    onMouseOver={(e) => e.currentTarget.style.color = '#333'}
-                    onMouseOut={(e) => e.currentTarget.style.color = '#555'}
-                >
-                    &times;
-                </button>
-
-                <div className="detail-modal-body">
-                    {isLoadingImages ? (
-                        <div style={{ padding: '40px', textAlign: 'center' }}>
-                            <p>Cargando imágenes...</p>
-                        </div>
-                    ) : (
-                        renderDetailView()
-                    )}
-                </div>
-            </div>
-        </div>
+    return ReactDOM.createPortal(
+        <GeneralDetailView
+            data={elementData}
+            elementType={elementType}
+            images={elementImages}
+            route={route}
+            onClose={onClose}
+        />,
+        document.body
     );
 };
 

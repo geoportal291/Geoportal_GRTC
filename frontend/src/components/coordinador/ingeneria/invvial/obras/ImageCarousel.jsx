@@ -37,7 +37,7 @@ const ImageCarousel = ({ images, metadata, alcantarillaId }) => {
         color: '#999',
         fontSize: '1.2em'
       }}>
-        <img src="https://via.placeholder.com/600x337?text=No+Image" alt="No hay imagen disponible" style={{
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iMzM3IiB2aWV3Qm94PSIwIDAgNjAwIDMzNyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiM5OTkiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPk5vIGhheSBpbWFnZW4gZGlzcG9uaWJsZTwvdGV4dD48L3N2Zz4=" alt="No hay imagen disponible" style={{
           position: 'absolute',
           top: 0,
           left: 0,

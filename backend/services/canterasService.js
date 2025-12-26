@@ -9,17 +9,17 @@ const createCantera = async (canteraData, userId) => {
     try {
         await client.query('BEGIN');
 
-        const { 
-            nombre, material, estado, accesibilidad, descripcion, 
-            coordenada_este, coordenada_norte, 
-            id_progresiva_referencia, desplazamiento_km, lado, 
+        const {
+            nombre, material, estado, accesibilidad, descripcion,
+            coordenada_este, coordenada_norte,
+            id_progresiva_referencia, desplazamiento_km, lado,
             kml_id, latitud, longitud, tramo_id, id_proyecto
         } = canteraData;
 
         if (!tramo_id) {
             throw new Error('El campo tramo_id es obligatorio para crear una cantera.');
         }
-         if (!id_proyecto) {
+        if (!id_proyecto) {
             throw new Error('El campo id_proyecto es obligatorio para crear una cantera.');
         }
 
@@ -48,7 +48,7 @@ const createCantera = async (canteraData, userId) => {
             tramo_id, String(nextCodigo), id_proyecto
         ];
         const result = await client.query(query, values);
-        
+
         await client.query('COMMIT');
         return result.rows[0];
     } catch (err) {
@@ -61,10 +61,10 @@ const createCantera = async (canteraData, userId) => {
 };
 
 const updateCantera = async (id, canteraData) => {
-    const { 
-        nombre, material, estado, accesibilidad, descripcion, 
-        coordenada_este, coordenada_norte, 
-        id_progresiva_referencia, desplazamiento_km, lado, 
+    const {
+        nombre, material, estado, accesibilidad, descripcion,
+        coordenada_este, coordenada_norte,
+        id_progresiva_referencia, desplazamiento_km, lado,
         kml_id, latitud, longitud, tramo_id, id_proyecto
     } = canteraData;
 
@@ -180,44 +180,55 @@ const deleteCantera = async (id) => {
 // --- Funciones de Imágenes de Cantera ---
 
 const uploadImage = async (file, userId) => {
-  if (!file) {
-    throw new Error('No se proporcionó ningún archivo para subir.');
-  }
-  if (!userId) {
-    throw new Error('ID de usuario es requerido para la subida de imagen.');
-  }
+    if (!file) {
+        throw new Error('No se proporcionó ningún archivo para subir.');
+    }
+    if (!userId) {
+        throw new Error('ID de usuario es requerido para la subida de imagen.');
+    }
 
-  let blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS;
+    let blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS;
 
-  if (!blobToken) {
-    // Fallback al token original si BLOB_READ_WRITE_TOKEN_SUELOS no está configurado
-    blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-  }
+    if (!blobToken) {
+        // Fallback al token original si BLOB_READ_WRITE_TOKEN_SUELOS no está configurado
+        blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+    }
 
-  if (!blobToken) {
-    throw new Error(`Ningún token de Vercel Blob configurado (BLOB_READ_WRITE_TOKEN_SUELOS o BLOB_READ_WRITE_TOKEN).`);
-  }
+    if (!blobToken) {
+        throw new Error(`Ningún token de Vercel Blob configurado (BLOB_READ_WRITE_TOKEN_SUELOS o BLOB_READ_WRITE_TOKEN).`);
+    }
 
-  const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
-  const filename = `canteras/${userId}/${Date.now()}_${cleanFilename}`;
+    const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
+    const filename = `canteras/${userId}/${Date.now()}_${cleanFilename}`;
 
-  try {
-    // Leer el archivo del disco ya que multer.diskStorage no llena el buffer
-    const fileBuffer = await fsp.readFile(file.path);
+    try {
+        let fileBuffer;
+        if (file.buffer) {
+            fileBuffer = file.buffer; // Multer memoryStorage
+        } else if (file.path) {
+            fileBuffer = await fsp.readFile(file.path); // Multer diskStorage
+        } else {
+            throw new Error('El archivo no tiene contenido válido (ni buffer ni path).');
+        }
 
-    const blob = await put(filename, fileBuffer, { access: 'public', token: blobToken });
-    
-    return blob.url;
-  } finally {
-    // Eliminar el archivo temporal después de la subida (o si falla)
-    if (file && file.path) {
-        try {
-            await fsp.unlink(file.path);
-        } catch (unlinkErr) {
-            console.error(`Error al eliminar el archivo temporal ${file.path}:`, unlinkErr);
+        const blob = await put(filename, fileBuffer, { access: 'public', token: blobToken });
+
+        return blob.url;
+    } finally {
+        // Eliminar el archivo temporal SOLO si se usó diskStorage
+        if (file && file.path) {
+            try {
+                if (await fsp
+                    .access(file.path)
+                    .then(() => true)
+                    .catch(() => false)) {
+                    await fsp.unlink(file.path);
+                }
+            } catch (unlinkErr) {
+                console.error(`Error al eliminar el archivo temporal ${file.path}:`, unlinkErr);
+            }
         }
     }
-  }
 };
 
 const addImagenToCantera = async (canteraId, imagenUrl, descripcion, nombreArchivo) => {
@@ -284,7 +295,7 @@ const createCanteraEstrato = async (canteraId, estratoData) => {
         `;
         const values = ['cantera', canteraId, nombre, descripcion, cota_inicial, cota_final, nextOrden]; // Use nextOrden
         const result = await client.query(query, values);
-        
+
         await client.query('COMMIT');
         return result.rows[0];
     } catch (err) {

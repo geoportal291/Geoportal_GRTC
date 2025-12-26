@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for frontend-morning-haze-4592 on 2025-10-24T10:02:06-05:00
+# fly.toml app configuration file generated for geoportalbetav2 on 2025-12-24T09:04:29-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'geoportalbeta2'
+app = 'geoportalbetav2'
 primary_region = 'gru'
 
 [build]
@@ -20,3 +20,4 @@ primary_region = 'gru'
   memory = '32gb'
   cpu_kind = 'performance'
   cpus = 16
+  memory_mb = 32768

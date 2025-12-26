@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Progresivas.css';
@@ -261,7 +262,7 @@ const Progresivas = () => {
     // Fetch sub-progresivas fresh to ensure data is there for map coloring
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/progresivas/${progresiva.id}/children/all`, { headers });
+      const res = await axios.get(`${API_URL}/api/progresivas/${progresiva.id}/children/all`, { headers });
       const subProgs = Array.isArray(res.data) ? res.data : [];
       setSubProgresivas(subProgs);
     } catch (err) {
@@ -314,6 +315,10 @@ const Progresivas = () => {
 
   // --- AUTO-OPEN LOGIC FROM DASHBOARD ---
   useEffect(() => {
+    if (location.state?.openTramoId) {
+      console.log('[DEBUG Progresivas] Received openTramoId:', location.state.openTramoId, 'Progresivas loaded:', progresivas.length, 'ViewingDetails:', viewingDetails);
+    }
+
     if (location.state?.openTramoId && progresivas.length > 0 && !viewingDetails) {
       const tramoId = Number(location.state.openTramoId);
       const tramo = progresivas.find(p => p.id === tramoId);
@@ -487,7 +492,7 @@ const Progresivas = () => {
         };
 
         const headers = getAuthHeaders();
-        await axios.put(`${API_URL}/progresivas/${editingId}`, updatedProgresiva, {
+        await axios.put(`${API_URL}/api/progresivas/${editingId}`, updatedProgresiva, {
           headers: { 'Content-Type': 'application/json', ...headers },
         });
         alertify.success('Tramo actualizado.');
@@ -525,7 +530,7 @@ const Progresivas = () => {
         const headers = getAuthHeaders();
         const requestHeaders = { 'Content-Type': 'application/json', ...headers };
         const createRes = await axios.post(
-          `${API_URL}/progresivas/importar-con-ensayos`,
+          `${API_URL}/api/progresivas/importar-con-ensayos`,
           { parentProgresiva, generationParams, generatedChildren: generatedSubProgresivas },
           { headers: requestHeaders }
         );
@@ -578,13 +583,24 @@ const Progresivas = () => {
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
 
+    // VALIDACIÓN: Proteger el Tramo Principal
+    const tramosPrincipales = selectedIds.filter(id => {
+      const p = progresivas.find(prog => prog.id === id);
+      return p && p.es_principal;
+    });
+
+    if (tramosPrincipales.length > 0) {
+      alertify.error('Operación bloqueada: No se puede eliminar el Tramo Principal de un proyecto.');
+      return;
+    }
+
     alertify.confirm(
       'Eliminar Tramos',
       `¿Eliminar ${selectedIds.length} tramos?`,
       async () => {
         try {
           const headers = getAuthHeaders();
-          await axios.post(`${API_URL}/progresivas/bulk-delete`,
+          await axios.post(`${API_URL}/api/progresivas/bulk-delete`,
             { ids: selectedIds },
             { headers: { ...headers } }
           );
@@ -706,7 +722,7 @@ const Progresivas = () => {
         estratos_perfil: estratosPerfil,
       };
       // Assumption: API endpoint to update a single sub-progresiva
-      await axios.put(`${API_URL}/progresivas/child/${progresivaFormData.id}`, payload, { headers });
+      await axios.put(`${API_URL}/api/progresivas/child/${progresivaFormData.id}`, payload, { headers });
       alertify.success('Progresiva actualizada.');
       setManagingProgresiva(null);
       // Refresh the details view
@@ -1097,13 +1113,13 @@ const Progresivas = () => {
 
       if (mode === 'new') {
         console.log('DEBUG: Sending to backend (new with assays):', payload);
-        await axios.post(`${API_URL}/progresivas/importar-con-ensayos`, payload, {
+        await axios.post(`${API_URL}/api/progresivas/importar-con-ensayos`, payload, {
           headers: { 'Content-Type': 'application/json', ...headers }
         });
         alertify.success('Tramo importado y ensayos creados correctamente.');
       } else if (mode === 'overwrite') {
         console.log('DEBUG: Sending to backend (overwrite with assays):', payload);
-        await axios.put(`${API_URL}/progresivas/importar-con-ensayos/${overwriteProgresivaId}`, payload, {
+        await axios.put(`${API_URL}/api/progresivas/importar-con-ensayos/${overwriteProgresivaId}`, payload, {
           headers: { 'Content-Type': 'application/json', ...headers }
         });
         alertify.success('Tramo actualizado y ensayos creados correctamente.');
@@ -1397,8 +1413,18 @@ const Progresivas = () => {
 
             // 1. SUBIR EL ARCHIVO KML AL BACKEND (Para visualización)
             // Progress 0% -> 40% reserved for upload
+            // 1. SUBIR EL ARCHIVO KML AL BACKEND (Para visualización)
+            // NEW LOGIC: Support both Trazado (Line) and Puntos (Points) KMLs.
+            let uploadType = 'trazado';
+            if (progresivaDetails.kml_trazado_id) {
+              console.log('El tramo ya tiene un KML de trazado. Subiendo este archivo como Puntos de Referencia (kml_puntos_id).');
+              uploadType = 'puntos';
+            }
+
+            // Always upload the file, either as main layout or secondary points
             const formData = new FormData();
-            formData.append('kmlFile', file); // Enviar el archivo original (KML o KMZ)
+            formData.append('kmlFile', file);
+            formData.append('type', uploadType);
 
             // Usamos un endpoint específico para el TRAMO (progresiva padre)
             await axios.post(`${API_URL}/api/progresivas/${progresivaDetails.id}/upload-kml`, formData, {
@@ -1408,7 +1434,7 @@ const Progresivas = () => {
                 // Map 0-100 upload to 0-40 total progress
                 const mappedProgress = Math.round(percentCompleted * 0.4);
                 setProgress(mappedProgress);
-                setProgressMessage(`Subiendo archivo (${percentCompleted}%)...`);
+                setProgressMessage(`Subiendo archivo de ${uploadType} (${percentCompleted}%)...`);
               }
             });
 
@@ -1440,7 +1466,7 @@ const Progresivas = () => {
 
                 // Hacer la petición PUT para actualizar cada sub-progresiva
                 try {
-                  await axios.put(`${API_URL}/progresivas/child/${updatedProg.id}`, {
+                  await axios.put(`${API_URL}/api/progresivas/child/${updatedProg.id}`, {
                     coordenada_este: updatedProg.coordenada_este,
                     coordenada_norte: updatedProg.coordenada_norte,
                     lado: updatedProg.lado,
@@ -1547,7 +1573,7 @@ const Progresivas = () => {
         </button>
       </div>
 
-      {showForm && (
+      {showForm && createPortal(
         <div className="overlay">
           <div className="progresivas-form-container">
             <form className="progresivas-form">
@@ -1641,9 +1667,10 @@ const Progresivas = () => {
                     <div className="sub-progresivas-container">
                       <h4>Progresivas Generadas ({generatedSubProgresivas.length})</h4>
                       <ul className="sub-progresivas-list">
-                        {generatedSubProgresivas.map((prog, index) => (
-                          <li key={index}>{formatCodigoForDisplay(prog.codigo)}</li>
-                        ))}
+                        {generatedSubProgresivas.map((prog, index) => {
+                          const cleanCode = prog.codigo.includes('-') ? prog.codigo.substring(prog.codigo.lastIndexOf('-') + 1) : prog.codigo;
+                          return <li key={index}>{formatCodigoForDisplay(cleanCode)}</li>;
+                        })}
                       </ul>
                     </div>
                   )}
@@ -1733,7 +1760,8 @@ const Progresivas = () => {
               {componentError && <div className="error-message">{componentError}</div>}
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {viewingDetails && progresivaDetails && (
@@ -2089,8 +2117,18 @@ const Progresivas = () => {
             <tbody>
               {progresivas.map((p) => (
                 <tr key={p.id} className={selectedIds.includes(p.id) ? 'selected' : ''}>
-                  <td><input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => handleSelect(p.id)} /></td>
-                  <td><div className="caja-sombreada">{p.nombre}</div></td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(p.id)}
+                      onChange={() => handleSelect(p.id)}
+                      disabled={p.es_principal}
+                      title={p.es_principal ? "Tramo Principal (Indestructible)" : "Seleccionar"}
+                    />
+                  </td>
+                  <td><div className="caja-sombreada" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    {p.nombre} {p.es_principal && <span style={{ color: 'gold', cursor: 'help' }} title="Tramo Principal">⭐</span>}
+                  </div></td>
                   <td><div className="caja-sombreada">{p.descripcion}</div></td>
                   <td><div className="caja-sombreada">{p.longitud_total}</div></td>
                   <td><div className="caja-sombreada">{p.intervalo_manual || p.tipo_via}</div></td>

@@ -72,15 +72,15 @@ const getProyectoById = async (id) => {
                 p.distrito, p.localidad, p.longitud_total, p.progresiva_inicial, p.tipo_via,
                 p.intervalo_manual, p.is_interval_manual, p.descripcion_larga, p.create_at, p.update_at,
                 p.kml_trazado_id, 
-                COALESCE(v.kml_url, p.url_kml) as url_kml, 
+                COALESCE(i.kml_url, p.url_kml) as url_kml, -- Prioritize invvial.kml_url
                 kt.kml_filename, kt.kml_uploaded_at,
                 COALESCE(json_agg(pr) FILTER (WHERE pr.id IS NOT NULL), '[]'::json) as progresivas
             FROM proyectos p
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
-            LEFT JOIN invvial v ON v.id_proyecto = p.id
+            LEFT JOIN invvial i ON p.id = i.id_proyecto -- New Join
             LEFT JOIN progresivas pr ON pr.proyecto_id = p.id AND pr.parent_id IS NULL
             WHERE p.id = $1
-            GROUP BY p.id, kt.id, v.kml_url
+            GROUP BY p.id, kt.id, i.kml_url -- Add i.kml_url to Group By
         `, [id]);
 
         const project = result.rows[0];
@@ -208,8 +208,8 @@ const createProyectoAndProgresiva = async (projectData, progresivaData, actorId)
 
         const parentInsertQuery = `
             INSERT INTO progresivas
-            (proyecto_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, longitud_total, tipo_via, intervalo_manual)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            (proyecto_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, longitud_total, tipo_via, intervalo_manual, es_principal)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, TRUE)
             RETURNING id;
         `;
         const parentInsertParams = [
@@ -829,18 +829,6 @@ const getProjectStatistics = async (projectId) => {
                         UNION ALL
                         SELECT progresiva FROM alcantarillas WHERE id_proyecto = $1
                     ) as progs
-                `,
-
-                // Debug: Unassigned Breakdown
-                unassigned_breakdown: `
-                    SELECT 'Alcantarillas' as source, count(*) as count FROM alcantarillas WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
-                    UNION ALL SELECT 'Badenes', count(*) FROM badenes WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
-                    UNION ALL SELECT 'Puentes', count(*) FROM puentes WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
-                    UNION ALL SELECT 'Muros', count(*) FROM muros WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
-                    UNION ALL SELECT 'Senales Informativas', count(*) FROM senales_informativas WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
-                    UNION ALL SELECT 'Senales Preventivas', count(*) FROM senales_preventivas WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
-                    UNION ALL SELECT 'Hitos', count(*) FROM hitos_kilometricos WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
-                    UNION ALL SELECT 'Zonas Criticas', count(*) FROM zonas_criticas WHERE id_proyecto = $1 AND (entregable IS NULL OR entregable = '')
                 `
             };
 
@@ -917,10 +905,6 @@ const getProjectStatistics = async (projectId) => {
                 zonas_criticas: data.zonas_criticas_tipos,
                 entregables: data.entregables.reduce((acc, r) => {
                     acc[r.entregable || 'Sin Asignar'] = parseInt(r.count);
-                    return acc;
-                }, {}),
-                debug_unassigned: data.unassigned_breakdown.reduce((acc, r) => {
-                    if (parseInt(r.count) > 0) acc[r.source] = parseInt(r.count);
                     return acc;
                 }, {})
             };

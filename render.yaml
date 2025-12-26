@@ -22,16 +22,11 @@ services:
           property: connectionString
       - key: ACCESS_TOKEN_SECRET
         generateValue: true
-      - key: FRONTEND_URL
-        fromService:
-          type: static
-          name: geoportal-frontend
-          property: url
       - key: NODE_ENV
         value: production
 
   # Frontend (Static Site)
-  - type: static
+  - type: site
     name: geoportal-frontend
     env: static
     plan: free

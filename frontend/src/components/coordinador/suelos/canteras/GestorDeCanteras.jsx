@@ -91,8 +91,9 @@ export default function GestorDeCanteras() {
   const mapKmlIds = useMemo(() => {
     const tramo = userTramos.find(t => t.id === selectedTramoId);
     const tramoKmlId = tramo?.kml_trazado_id;
+    const tramoPuntosId = tramo?.kml_puntos_id;
     const canteraKmlId = canteraSeleccionada?.kml_id;
-    return [tramoKmlId, canteraKmlId].filter(Boolean);
+    return [tramoKmlId, tramoPuntosId, canteraKmlId].filter(Boolean);
   }, [selectedTramoId, userTramos, canteraSeleccionada]);
 
   const getAuthHeaders = useCallback(() => {
@@ -137,13 +138,13 @@ export default function GestorDeCanteras() {
   useEffect(() => {
     const { tramoId } = location.state || {};
     if (tramoId && userTramos.length > 0 && tramoId !== selectedTramoId) {
-        handleTramoSelect(tramoId);
+      handleTramoSelect(tramoId);
     } else if (userTramos.length > 0 && !selectedTramoId && !location.state) {
-        if (userTramos.length === 1) {
-            handleTramoSelect(userTramos[0].id);
-        } else {
-            setShowTramoModal(true);
-        }
+      if (userTramos.length === 1) {
+        handleTramoSelect(userTramos[0].id);
+      } else {
+        setShowTramoModal(true);
+      }
     }
   }, [userTramos, location.state, selectedTramoId, handleTramoSelect]);
 
@@ -181,13 +182,13 @@ export default function GestorDeCanteras() {
   useEffect(() => {
     const { canteraId, estratoId } = location.state || {};
     if (canteraId && estratoId && canteras.length > 0) {
-        const canteraToSelect = canteras.find(c => c.id === canteraId);
-        if (canteraToSelect) {
-            setCanteraSeleccionada(canteraToSelect);
-            setExpandedEstratos(prev => ({ ...prev, [estratoId]: true }));
-            // Clear state to prevent re-triggering
-            navigate(location.pathname, { replace: true });
-        }
+      const canteraToSelect = canteras.find(c => c.id === canteraId);
+      if (canteraToSelect) {
+        setCanteraSeleccionada(canteraToSelect);
+        setExpandedEstratos(prev => ({ ...prev, [estratoId]: true }));
+        // Clear state to prevent re-triggering
+        navigate(location.pathname, { replace: true });
+      }
     }
   }, [canteras, location.state, navigate, location.pathname]);
 
@@ -443,10 +444,12 @@ export default function GestorDeCanteras() {
                     kmlTrazadoIds={mapKmlIds}
                     cantera={canteraSeleccionada} // <-- Pasar la cantera completa
                     onMarkerClick={() => handleOpenGallery(canteraSeleccionada)}
+                    layerContext="gestor-canteras" // Contexto aislado
+                    hideKmlPoints={true} // Ocultar puntos KML (progresivas)
                   />
                 </div>
 
-                <CanteraImageThumbnails 
+                <CanteraImageThumbnails
                   imagenes={canteraSeleccionada.imagenes}
                   onContainerClick={() => handleOpenGallery(canteraSeleccionada)}
                 />
@@ -558,7 +561,7 @@ export default function GestorDeCanteras() {
           onSave={fetchCanteras} // Simpler callback
         />
       )}
-      <CanteraImageGalleryModal 
+      <CanteraImageGalleryModal
         isOpen={showImageGallery}
         onClose={() => { setShowImageGallery(false); fetchCanteras(); }}
         cantera={galleryCantera}

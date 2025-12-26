@@ -13,7 +13,7 @@ const FormularioProyecto = ({ onClose, onSave, proyectoData }) => {
         distrito: '',
         localidad: '',
         descripcion_larga: '',
-        estado: 'Activo', 
+        estado: 'Activo',
         longitud_total: '',
         progresiva_inicial: '0+000',
         tipo_via: '500',
@@ -114,12 +114,12 @@ const FormularioProyecto = ({ onClose, onSave, proyectoData }) => {
 
     const toggleProyectoNomManual = () => {
         setIsProyectoNomManual(prev => !prev);
-        setFormData(prev => ({ ...prev, proyecto_nom: '' })); 
+        setFormData(prev => ({ ...prev, proyecto_nom: '' }));
     };
 
     const toggleSolicitanteManual = () => {
         setIsSolicitanteManual(prev => !prev);
-        setFormData(prev => ({ ...prev, solicitante: '' })); 
+        setFormData(prev => ({ ...prev, solicitante: '' }));
     };
 
     const handleSubmit = async (e) => {
@@ -311,6 +311,7 @@ const FormularioProyecto = ({ onClose, onSave, proyectoData }) => {
                                 accept=".kml,.kmz"
                                 onChange={handleKmlFileChange}
                                 disabled={isUploadingKml}
+                                required={!proyectoData}
                             />
                             {kmlFile && (
                                 <p className="file-info">Archivo seleccionado: {kmlFile.name}</p>
@@ -318,7 +319,7 @@ const FormularioProyecto = ({ onClose, onSave, proyectoData }) => {
                             {proyectoData?.kml_filename && (
                                 <p className="file-info">
                                     KML actual: {proyectoData.kml_filename} (cargado el {new Date(proyectoData.kml_uploaded_at).toLocaleDateString()})
-                                    <br/>
+                                    <br />
                                     <small>Selecciona un nuevo archivo para reemplazarlo.</small>
                                 </p>
                             )}

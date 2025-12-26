@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import SuelosMap from '../mapa/SuelosMap'; // Mapa de suelos
@@ -28,7 +28,7 @@ const initialFormData = {
 
 export default function CanteraFormModal({
   showModal, onClose, onSave, onSaveComplete, projectId, isSubmitting, selectedTramoId, selectedTramoName, canteraToEdit
-}) {  
+}) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(canteraToEdit ? {
     nombre: canteraToEdit.nombre || '',
@@ -125,7 +125,7 @@ export default function CanteraFormModal({
           alertify.error('Sesión expirada. Por favor, inicia sesión de nuevo.');
           return;
         }
-        const response = await axios.get(`${API_URL}/progresivas/${selectedTramoId}/children/all`, {
+        const response = await axios.get(`${API_URL}/api/progresivas/${selectedTramoId}/children/all`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setProgresivas(response.data);
@@ -209,7 +209,7 @@ export default function CanteraFormModal({
         if (kmlFileInZip) {
           kmlText = await kmlFileInZip.async('string');
         } else {
-        alertify.error('El archivo KMZ no contiene ningún archivo KML en su interior.');
+          alertify.error('El archivo KMZ no contiene ningún archivo KML en su interior.');
           return;
         }
       } else {
@@ -267,6 +267,7 @@ export default function CanteraFormModal({
 
   // ✅ Click en el mapa
   const handleMapClick = (e) => { // Leaflet pasa el objeto de evento completo
+    if (!isSelecting) return; // Prevent selection if not in active mode
     if (!e.latlng) return;
     const { lat, lng } = e.latlng;
     setCanteraMarkerPosition([lat, lng]); // Guardamos la posición para el marcador
@@ -287,6 +288,9 @@ export default function CanteraFormModal({
     }
     setIsSelecting(false); // Desactivar el modo de selección después de hacer clic
   };
+
+  // Memoize KML IDs to prevent map reload/flicker
+  const kmlIdsMemo = useMemo(() => tramoKmlTrazadoId ? [tramoKmlTrazadoId] : [], [tramoKmlTrazadoId]);
 
   const handleNextStep = () => setStep((prev) => prev + 1);
   const handlePrevStep = () => setStep((prev) => prev - 1);
@@ -348,7 +352,7 @@ export default function CanteraFormModal({
 
     // ... (resto de la lógica de KML)
     if (savedCantera) {
-        onSaveComplete();
+      onSaveComplete();
     }
   };
 
@@ -425,10 +429,10 @@ export default function CanteraFormModal({
 
                 {/* Botón para seleccionar en mapa */}
                 <div className="form-group full-width">
-                    <button type="button" className={`btn-secondary ${isSelecting ? 'active' : ''}`} onClick={() => setIsSelecting(!isSelecting)}>
-                        <i className="fas fa-map-marker-alt"></i>
-                        {isSelecting ? 'Seleccionando... (clic en el mapa)' : 'Seleccionar en Mapa'}
-                    </button>
+                  <button type="button" className={`btn-secondary ${isSelecting ? 'active' : ''}`} onClick={() => setIsSelecting(!isSelecting)}>
+                    <i className="fas fa-map-marker-alt"></i>
+                    {isSelecting ? 'Seleccionando... (clic en el mapa)' : 'Seleccionar en Mapa'}
+                  </button>
                 </div>
 
                 {/* Archivo KML */}
@@ -439,14 +443,17 @@ export default function CanteraFormModal({
 
                 {/* Mapa */}
                 <div className="form-group full-width" style={{ height: '400px', marginBottom: '20px' }}>
-                  <SuelosMap
+                  <SuelosMap // Renderizar mapa
                     displayMode="form"
-                    kmlTrazadoIds={tramoKmlTrazadoId ? [tramoKmlTrazadoId] : []}
+                    kmlTrazadoIds={kmlIdsMemo}
                     markerPosition={canteraMarkerPosition}
                     onMapClick={handleMapClick}
                     center={mapCenter}
                     transientGeoJson={uploadedKmlGeoJson} // Pasar el GeoJSON para renderizar
                     isSelecting={isSelecting} // Pasar el estado de selección
+                    layerContext="modal" // Isolate map layers from global dashboard
+                    hideKmlPoints={true} // Clean view: only show tramo line, no points
+                    hideToolbar={true} // Hide toolbar in modal
                   />
                 </div>
 

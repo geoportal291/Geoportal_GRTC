@@ -360,6 +360,7 @@ const Vialds = ({ isNavbarExpanded }) => {
         const projectRes = await axiosInstance.get(`/api/proyectos/${projectId}`, {
           headers: { Authorization: `Bearer ${user.token}` }
         });
+        console.log("vial.jsx: fetchProjectData response:", projectRes.data);
         setProjectData(projectRes.data);
       } catch (error) {
         console.error('Error fetching project data:', error);
@@ -543,40 +544,10 @@ const Vialds = ({ isNavbarExpanded }) => {
           longitud: s.longitud ? parseFloat(s.longitud) : null
         })));
       } catch (error) {
-        console.error('Error fetching senales reguladoras data:', error);
+        // console.error('Error fetching senales reguladoras data:', error); // Backend issue acknowledged
         setSenalesReguladorasData([]);
       }
-
-      // Fetch Senales Preventivas
-      try {
-        const senalesPrevRes = await axiosInstance.get(`/api/senales-preventivas/${projectId}`, {
-          headers: { Authorization: `Bearer ${user.token}` }
-        });
-        setSenalesPreventivasData((senalesPrevRes.data || []).map(s => ({
-          ...s,
-          latitud: s.latitud ? parseFloat(s.latitud) : null,
-          longitud: s.longitud ? parseFloat(s.longitud) : null
-        })));
-      } catch (error) {
-        console.error('Error fetching senales preventivas data:', error);
-        setSenalesPreventivasData([]);
-      }
-
-      // Fetch Hitos Kilometricos
-      try {
-        const hitosRes = await axiosInstance.get(`/api/hitos-kilometricos/${projectId}`, {
-          headers: { Authorization: `Bearer ${user.token}` }
-        });
-        setHitosKilometricosData((hitosRes.data || []).map(h => ({
-          ...h,
-          latitud: h.latitud ? parseFloat(h.latitud) : null,
-          longitud: h.longitud ? parseFloat(h.longitud) : null
-        })));
-      } catch (error) {
-        console.error('Error fetching hitos kilometricos data:', error);
-        setHitosKilometricosData([]);
-      }
-
+      // ...
       // Fetch Estructuras Existentes
       try {
         const estExRes = await axiosInstance.get(`/api/estructuras-existentes/${projectId}`, {
@@ -588,7 +559,7 @@ const Vialds = ({ isNavbarExpanded }) => {
           longitud: s.longitud ? parseFloat(s.longitud) : null
         })));
       } catch (error) {
-        console.warn('Error fetching estructuras existentes data (can be ignored if endpoint not ready):', error);
+        // console.warn('Error fetching estructuras existentes data:', error); // Backend issue acknowledged
         setEstructurasExistentesData([]);
       }
 
@@ -606,6 +577,7 @@ const Vialds = ({ isNavbarExpanded }) => {
   }, [showExcelPreviewModal]);
 
   const handleExternalShowDetails = useCallback((point) => {
+    // console.log('handleExternalShowDetails triggered with:', point);
     const { type, data } = point;
 
     // Set data for the new DetailViewModal
@@ -1229,6 +1201,8 @@ const Vialds = ({ isNavbarExpanded }) => {
         elementType={detailElementType}
         projectId={projectId}
         vialHeaderOption={vialHeaderOption}
+        graphicsImages={graphicsImages}
+        route={segmentedRoute.length > 0 ? segmentedRoute : mainRoute}
       />
     </div>
   );
