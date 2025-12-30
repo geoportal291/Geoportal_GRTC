@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './visualizacionamigo.css';
 import './ChatAnonimo.css'; // Importar los estilos del modal unificado
-import { Helmet } from "react-helmet";
+import { Helmet } from "react-helmet-async";
 import { getMiAmigoAsignado } from '../../api/amigoSecretoAPI';
 import { getWishlistByUserId } from '../../api/wishlistAPI';
 import axios from '../../api/axios'; // Importar axios

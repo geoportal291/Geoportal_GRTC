@@ -8,7 +8,9 @@ import ListaZonasCriticasModal from './obras/ListaZonasCriticasModal'; // Correc
 import ExportarMapaModal from './obras/ExportarMapaModal'; // Corrected path
 import axiosInstance from '../../../../api/axios'; // Corrected path (4 levels up to src)
 import { saveAs } from 'file-saver';
-import ImagePreviewModal from './obras/ImagePreviewModal'; // Corrected path
+import ImagePreviewModal from './obras/ImagePreviewModal';
+import ObservationsSidebar from './obras/ObservationsSidebar';
+import { fromLatLon } from 'utm'; // Corrected path
 
 // Estructura de datos de ejemplo
 const tramoData = {
@@ -26,7 +28,7 @@ const tramoData = {
     }
 };
 
-const ZonasCriticas = ({ onEditElementSelect, zonasCriticasData, graphicsImages, canUpload, showModal }) => {
+const ZonasCriticas = ({ onEditElementSelect, zonasCriticasData, graphicsImages, canUpload, showModal, canComment }) => {
 
     const [highlightedTramoId, setHighlightedTramoId] = useState('TRAMO 1');
     const [kmlRoute, setKmlRoute] = useState([]); // Estado para la ruta del KML
@@ -370,7 +372,18 @@ const ZonasCriticas = ({ onEditElementSelect, zonasCriticasData, graphicsImages,
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Tipo:</strong> {selectedZona.tipo || 'datos sin encontrar'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Condición:</strong> {selectedZona.condicion || 'datos sin encontrar'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Clase Daño:</strong> {selectedZona.clase_dano || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Coordenadas:</strong> {selectedZona.latitud ? selectedZona.latitud.toFixed(6) : 'N/A'}, {selectedZona.longitud ? selectedZona.longitud.toFixed(6) : 'N/A'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}>
+                                                        <strong>Coordenadas:</strong>{' '}
+                                                        {(() => {
+                                                            if (selectedZona.latitud && selectedZona.longitud) {
+                                                                try {
+                                                                    const { easting, northing, zoneNum, zoneLetter } = fromLatLon(selectedZona.latitud, selectedZona.longitud);
+                                                                    return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
+                                                                } catch (e) { return `${selectedZona.latitud}, ${selectedZona.longitud}`; }
+                                                            }
+                                                            return '---';
+                                                        })()}
+                                                    </p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Observaciones:</strong> {selectedZona.observaciones || 'datos sin encontrar'}</p>
                                                     <button
                                                         onClick={() => handleEditElement(selectedZona)}
@@ -416,6 +429,16 @@ const ZonasCriticas = ({ onEditElementSelect, zonasCriticasData, graphicsImages,
                         </CSSTransition>
                     </div>
 
+                    <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginTop: '20px' }}>
+                        {selectedZona && (
+                            <ObservationsSidebar
+                                projectId={selectedZona.id_proyecto}
+                                elementId={selectedZona.id_zona_critica || selectedZona.id || selectedZona.codigo}
+                                elementType="zonas_criticas"
+                                canComment={canComment}
+                            />
+                        )}
+                    </div>
                 </div>
             </div>
             <ImagePreviewModal

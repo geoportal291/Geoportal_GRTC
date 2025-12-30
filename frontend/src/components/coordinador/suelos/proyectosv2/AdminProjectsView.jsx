@@ -4,6 +4,7 @@ import alertify from 'alertifyjs';
 import ProjectTable from './components/ProjectTable';
 import SimpleCreateModal from './components/SimpleCreateModal';
 import AssignModal from './components/AssignModal';
+import FullProjectForm from './components/FullProjectForm';
 import { Button } from './components/SharedComponents';
 import { useAuth } from '../../../../data/contexts/AuthContext';
 
@@ -19,7 +20,9 @@ const AdminProjectsView = () => {
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState(null);
+    const [projectToEdit, setProjectToEdit] = useState(null);
 
     const fetchProjects = useCallback(async () => {
         try {
@@ -85,6 +88,10 @@ const AdminProjectsView = () => {
                 tipo_via: null,
                 progresiva_inicial: '0+000',
                 descripcion_larga: '',
+                // Auto-fill new fields
+                nombre_proyecto: formData.nombre_tramo, // Default to tramo name
+                codigo: `PROJ-${Date.now().toString().slice(-4)}`, // Temp code
+                descripcion_proyecto: '',
             };
 
             const parentProgresiva = {
@@ -139,6 +146,16 @@ const AdminProjectsView = () => {
         setIsAssignModalOpen(true);
     };
 
+    const handleEdit = (project) => {
+        setProjectToEdit(project);
+        setIsEditModalOpen(true);
+    };
+
+    const handleEditSave = () => {
+        setIsEditModalOpen(false);
+        fetchProjects();
+    };
+
     // Filter users for coordinator dropdown (e.g. users with 'coordinador' role)
     // Assuming rol_nombre has 'Coordinador' or dealing with 'admin' logic. 
     // I'll pass all users for now or filter if I knew the rigorous role name.
@@ -152,7 +169,7 @@ const AdminProjectsView = () => {
 
             <ProjectTable
                 projects={projects}
-                onEdit={(p) => { alertify.message("Edición rápida no disponible aun. Use 'Detalles' si es necesario."); }} // Admin doesn't necessarily complete tech info here in this flow?
+                onEdit={handleEdit}
                 onDelete={handleDelete}
                 onAssign={openAssign}
                 showAssignAction={true}
@@ -171,6 +188,13 @@ const AdminProjectsView = () => {
                 onClose={() => setIsAssignModalOpen(false)}
                 project={selectedProject}
                 allUsers={users}
+            />
+
+            <FullProjectForm
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                onSave={handleEditSave}
+                projectData={projectToEdit}
             />
         </div>
     );

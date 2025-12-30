@@ -7,7 +7,7 @@ import axiosInstance from '../../../../api/axios';
  * Modal independiente para mostrar vista detallada de elementos desde el mapa externo
  * Actúa como controlador para fetching de imágenes y delegación a GeneralDetailView
  */
-const DetailViewModal = ({ show, onClose, elementData, elementType, projectId, vialHeaderOption, route, graphicsImages }) => {
+const DetailViewModal = ({ show, onClose, elementData, elementType, projectId, vialHeaderOption, route, graphicsImages, canComment }) => {
 
     // --- FILTER IMAGES LOGIC (Matches Alcantarillas/Geoite/ExternalView) ---
     const elementImages = React.useMemo(() => {
@@ -105,6 +105,8 @@ const DetailViewModal = ({ show, onClose, elementData, elementType, projectId, v
             images={elementImages}
             route={route}
             onClose={onClose}
+            projectId={projectId}
+            canComment={canComment}
         />,
         document.body
     );

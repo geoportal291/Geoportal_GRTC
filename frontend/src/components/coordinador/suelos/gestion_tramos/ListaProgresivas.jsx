@@ -22,11 +22,11 @@ const ListaProgresivas = ({ proyecto, refreshTrigger }) => {
         setLoading(true);
         setError(null);
         try {
-            const res = await axios.get(`${API_URL}/progresivas/proyecto/${proyecto.id}`, {
+            const res = await axios.get(`${API_URL}/api/progresivas/proyecto/${proyecto.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             setProgresivas(res.data);
-            
+
         } catch (err) {
             console.error("Error al cargar progresivas:", err);
             setError('No se pudieron cargar las progresivas para este proyecto.');
@@ -50,10 +50,10 @@ const ListaProgresivas = ({ proyecto, refreshTrigger }) => {
     };
 
     const handleDeleteProgresiva = async (progresivaId) => {
-        alertify.confirm('Eliminar Progresiva', '¿Está seguro que desea eliminar esta progresiva y todas sus sub-progresivas?', 
+        alertify.confirm('Eliminar Progresiva', '¿Está seguro que desea eliminar esta progresiva y todas sus sub-progresivas?',
             async () => {
                 try {
-                    await axios.delete(`${API_URL}/progresivas/${progresivaId}`, {
+                    await axios.delete(`${API_URL}/api/progresivas/${progresivaId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     alertify.success('Progresiva eliminada correctamente.');
@@ -84,7 +84,7 @@ const ListaProgresivas = ({ proyecto, refreshTrigger }) => {
         console.log("showProgresivaForm after setShowProgresivaForm(true):", true); // Log after setting
     };
 
-    
+
 
     if (loading) {
         return <div className="loading-message">Cargando progresivas...</div>;
@@ -106,64 +106,64 @@ const ListaProgresivas = ({ proyecto, refreshTrigger }) => {
                 </button>
             </div>
             <div className="progressiva-list">
-            {progresivas.map(prog => (
-                <div className="progressiva-item" key={prog.id}>
-                    <div className="progressiva-header" onClick={() => handleToggleExpand(prog.id)}>
-                    <div className="progressiva-toggle-icon">
-                        <i className={`fas ${expandedProgresiva === prog.id ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
-                    </div>
-                        <div className="progressiva-info">
-                            <div className="progressiva-icon">
-                                <i className="fas fa-map-pin"></i>
+                {progresivas.map(prog => (
+                    <div className="progressiva-item" key={prog.id}>
+                        <div className="progressiva-header" onClick={() => handleToggleExpand(prog.id)}>
+                            <div className="progressiva-toggle-icon">
+                                <i className={`fas ${expandedProgresiva === prog.id ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
                             </div>
-                            <div className="progressiva-details">
-                                <h3>{prog.codigo}</h3>
-                                <p>
-                                    <span><i className="fas fa-calendar"></i> {new Date(prog.creado_en).toLocaleDateString()}</span>
-                                    <span><i className="fas fa-map"></i> {prog.coordenada_este}, {prog.coordenada_norte}</span>
-                                </p>
+                            <div className="progressiva-info">
+                                <div className="progressiva-icon">
+                                    <i className="fas fa-map-pin"></i>
+                                </div>
+                                <div className="progressiva-details">
+                                    <h3>{prog.codigo}</h3>
+                                    <p>
+                                        <span><i className="fas fa-calendar"></i> {new Date(prog.creado_en).toLocaleDateString()}</span>
+                                        <span><i className="fas fa-map"></i> {prog.coordenada_este}, {prog.coordenada_norte}</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="progressiva-meta">
+                                <div className="meta-item">
+                                    <div className="meta-value">{prog.estratos_perfil ? prog.estratos_perfil.length : 0}</div>
+                                    <div className="meta-label">Estratos</div>
+                                </div>
+                                <div className="meta-item">
+                                    <div className="meta-value">0</div> {/* Placeholder para ensayos */}
+                                    <div className="meta-label">Ensayos</div>
+                                </div>
+                                <div className="meta-item">
+                                    <div className="meta-value">0</div> {/* Placeholder para fotos */}
+                                    <div className="meta-label">Fotos</div>
+                                </div>
+                                <div className="meta-item">
+                                    <button className="action-btn edit" onClick={() => handleEditProgresiva(prog)}>
+                                        <i className="fas fa-edit"></i>
+                                    </button>
+                                    <button className="action-btn delete" onClick={() => handleDeleteProgresiva(prog.id)}>
+                                        <i className="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div className="progressiva-meta">
-                            <div className="meta-item">
-                                <div className="meta-value">{prog.estratos_perfil ? prog.estratos_perfil.length : 0}</div>
-                                <div className="meta-label">Estratos</div>
-                            </div>
-                            <div className="meta-item">
-                                <div className="meta-value">0</div> {/* Placeholder para ensayos */}
-                                <div className="meta-label">Ensayos</div>
-                            </div>
-                            <div className="meta-item">
-                                <div className="meta-value">0</div> {/* Placeholder para fotos */}
-                                <div className="meta-label">Fotos</div>
-                            </div>
-                            <div className="meta-item">
-                                <button className="action-btn edit" onClick={() => handleEditProgresiva(prog)}>
-                                    <i className="fas fa-edit"></i>
-                                </button>
-                                <button className="action-btn delete" onClick={() => handleDeleteProgresiva(prog.id)}>
-                                    <i className="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    {expandedProgresiva === prog.id && (
-                        <div className="estratos-container">
-                            
-                            <ListaEstratos progresiva={prog} />
-                        </div>
-                    )}
-                </div>
-            ))}
+                        {expandedProgresiva === prog.id && (
+                            <div className="estratos-container">
 
-            {showProgresivaForm && (
-                <FormularioProgresiva 
-                    onClose={handleCloseProgresivaForm} 
-                    onSave={handleSaveProgresiva} 
-                    proyectoId={proyecto.id} 
-                    progresivaData={progresivaToEdit} // Pasar datos si es edición
-                />
-            )}
+                                <ListaEstratos progresiva={prog} />
+                            </div>
+                        )}
+                    </div>
+                ))}
+
+                {showProgresivaForm && (
+                    <FormularioProgresiva
+                        onClose={handleCloseProgresivaForm}
+                        onSave={handleSaveProgresiva}
+                        proyectoId={proyecto.id}
+                        progresivaData={progresivaToEdit} // Pasar datos si es edición
+                    />
+                )}
             </div> {/* Close progressiva-list-wrapper */}
         </div>
     );

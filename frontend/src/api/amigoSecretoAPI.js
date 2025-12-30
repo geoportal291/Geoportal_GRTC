@@ -25,7 +25,9 @@ export const getMiAmigoAsignado = async (eventoId) => {
         const response = await axios.get(`/api/eventos/${eventoId}/asignacion`);
         return response.data;
     } catch (error) {
-        console.error('Error fetching assigned friend:', error);
+        if (error.response) {
+            console.error('Server response error:', error.response.data);
+        }
         throw error;
     }
 };

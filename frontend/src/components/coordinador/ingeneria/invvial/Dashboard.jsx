@@ -91,20 +91,20 @@ const Dashboard = ({ projectId }) => {
                 label: 'Cantidad',
                 data: [activos?.alcantarillas || 0, activos?.badenes || 0, activos?.puentes || 0, activos?.muros || 0],
                 backgroundColor: [palette.blue, palette.red, palette.purple, palette.orange],
-                borderRadius: 4, barThickness: 20
+                borderRadius: 4, barThickness: 30
             }]
         },
         zc: {
             labels: zcLabels,
-            datasets: [{ data: zcValues, backgroundColor: [palette.orange, '#d35400', '#c0392b'], borderWidth: 0 }]
+            datasets: [{ data: zcValues, backgroundColor: [palette.orange, '#d35400', '#c0392b', palette.red, palette.purple], borderWidth: 1, borderColor: '#fff' }]
         },
         senales: {
-            labels: ['Informativas', 'Preventivas', 'Hitos'],
-            datasets: [{ data: [senalizacion?.informativas || 0, senalizacion?.preventivas || 0, senalizacion?.hitos || 0], backgroundColor: [palette.teal, palette.orange, palette.dark], borderWidth: 1, borderColor: '#fff' }]
+            labels: ['Informativas', 'Preventivas', 'Reguladoras', 'Hitos'],
+            datasets: [{ data: [senalizacion?.informativas || 0, senalizacion?.preventivas || 0, senalizacion?.reguladoras || 0, senalizacion?.hitos || 0], backgroundColor: [palette.teal, palette.orange, palette.purple, palette.dark], borderWidth: 1, borderColor: '#fff' }]
         },
         entregables: {
             labels: entLabels,
-            datasets: [{ label: 'Elementos', data: entValues, backgroundColor: palette.teal, borderRadius: 4, barThickness: 15 }]
+            datasets: [{ label: 'Elementos', data: entValues, backgroundColor: 'rgba(26, 188, 156, 0.8)', borderRadius: 4, barThickness: 18 }]
         }
     };
 
@@ -147,39 +147,27 @@ const Dashboard = ({ projectId }) => {
 
                 {/* ROW 1: KPIs */}
                 <div className="kpi-row">
-                    {/* KPI 1: LONGITUD */}
                     <div className="kpi-modern blue-theme">
                         <div className="kpi-flex-row">
                             <div className="kpi-content-main">
                                 <div className="kpi-top-label">LONGITUD TOTAL</div>
-                                <div className="kpi-metric-huge">
-                                    {(kpis?.totalCalibratedKm || 0)}<span className="kpi-unit-small">km</span>
-                                </div>
+                                <div className="kpi-metric-huge">{(kpis?.totalCalibratedKm || 0)}<span className="kpi-unit-small">km</span></div>
                                 <div className="kpi-sub-text">Max Progresiva: {(kpis?.maxRegisteredMeters / 1000).toFixed(2)} km</div>
                             </div>
-                            <div className="kpi-visual-container">
-                                <div className="icon-circle-glass">🌐</div>
-                            </div>
+                            <div className="kpi-visual-container"><div className="icon-circle-glass">🌐</div></div>
                         </div>
-                        <div className="kpi-progress-bar-container">
-                            <div className="kpi-progress-track">
-                                <div className="kpi-progress-fill" style={{ width: '100%' }}></div>
-                            </div>
-                        </div>
+                        <div className="kpi-progress-bar-container"><div className="kpi-progress-track"><div className="kpi-progress-fill" style={{ width: '100%' }}></div></div></div>
                     </div>
 
-                    {/* KPI 2: AVANCE */}
                     <div className="kpi-modern teal-theme">
                         <div className="kpi-flex-row">
                             <div className="kpi-content-main">
                                 <div className="kpi-top-label">AVANCE GEOGRÁFICO</div>
-                                <div className="kpi-metric-huge">
-                                    {kpis?.avanceGeograficoPct || 0}<span className="kpi-unit-small">%</span>
-                                </div>
+                                <div className="kpi-metric-huge">{kpis?.avanceGeograficoPct || 0}<span className="kpi-unit-small">%</span></div>
                                 <div className="kpi-sub-text">Progreso del proyecto</div>
                             </div>
                             <div className="kpi-visual-container">
-                                <svg width="64" height="64" viewBox="0 0 60 60" style={{ transform: 'rotate(-90deg)' }}>
+                                <svg width="60" height="60" viewBox="0 0 60 60" style={{ transform: 'rotate(-90deg)' }}>
                                     <circle cx="30" cy="30" r="26" stroke="rgba(255,255,255,0.2)" strokeWidth="6" fill="none" />
                                     <circle cx="30" cy="30" r="26" stroke="white" strokeWidth="6" fill="none" strokeDasharray={163} strokeDashoffset={163 - ((kpis?.avanceGeograficoPct || 0) / 100) * 163} strokeLinecap="round" />
                                 </svg>
@@ -187,201 +175,176 @@ const Dashboard = ({ projectId }) => {
                         </div>
                     </div>
 
-                    {/* KPI 3: ELEMENTOS */}
                     <div className="kpi-modern orange-theme">
                         <div className="kpi-flex-row">
                             <div className="kpi-content-main">
                                 <div className="kpi-top-label">TOTAL ELEMENTOS</div>
-                                <div className="kpi-metric-huge">
-                                    {kpis?.totalElementos || 0}
-                                </div>
+                                <div className="kpi-metric-huge">{kpis?.totalElementos || 0}</div>
                                 <div className="kpi-sub-text-list">
-                                    <span>• {activos?.alcantarillas + activos?.badenes + activos?.puentes + activos?.muros || 0} Obras</span>
-                                    <span>• {senalizacion?.informativas + senalizacion?.preventivas + senalizacion?.hitos || 0} Señales</span>
+                                    <span>• {activos?.alcantarillas + activos?.badenes + activos?.puentes + activos?.muros || 0} Estructuras</span>
+                                    <span>• {senalizacion?.informativas + senalizacion?.preventivas + senalizacion?.reguladoras + senalizacion?.hitos || 0} Señales/Hitos</span>
                                 </div>
                             </div>
-                            <div className="kpi-visual-container" style={{ width: '60px', height: '60px' }}>
-                                <Doughnut data={{ labels: ['Obs', 'Señ'], datasets: [{ data: [70, 30], backgroundColor: ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.3)'], borderWidth: 0, cutout: '75%' }] }} options={{ maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } } }} />
-                            </div>
+                            <div className="kpi-visual-container"><div className="icon-circle-glass">📊</div></div>
                         </div>
                     </div>
                 </div>
 
-                {/* ROW 2: Activos / Zonas */}
-                <div className="charts-row-1">
-                    <div className="dashboard-card compact-chart-card wide">
+                {/* ROW 2: Activos / Señales / Zonas */}
+                <div className="dashboard-main-row-3col">
+                    <div className="dashboard-card main-card">
                         <h5 className="card-title-small">Distribución de Activos</h5>
-                        <div className="chart-area-h120">
+                        <div className="chart-area-main">
                             <Bar data={datasets.activos} options={commonChartOptions} />
                         </div>
                     </div>
-                    <div className="dashboard-card compact-chart-card narrow">
-                        <h5 className="card-title-small">Estado de Zonas Críticas</h5>
-                        <div className="chart-area-h120 flex-center">
-                            {zcValues.length > 0 ? (
-                                <div style={{ width: '90px', height: '90px', flexShrink: 0 }}>
-                                    <Pie data={datasets.zc} options={{ ...commonChartOptions, plugins: { legend: { display: false } } }} />
-                                </div>
-                            ) : <span className="no-data-text">Sin datos</span>}
-                            <div className="legend-vertical scrollable-legend">
-                                {datasets.zc.labels.map((l, i) => (
-                                    <div key={i} className="legend-item" title={l}>
-                                        <span className="dot" style={{ background: datasets.zc.datasets[0].backgroundColor[i], flexShrink: 0 }}></span>
-                                        <span className="legend-text">{l}</span>
-                                    </div>
-                                ))}
+
+                    <div className="dashboard-card main-card">
+                        <h5 className="card-title-small">Tipos de Señales</h5>
+                        <div className="chart-area-main flex-center">
+                            <div className="chart-container-pie"><Pie data={datasets.senales} options={{ ...commonChartOptions, plugins: { legend: { display: false } } }} /></div>
+                            <div className="legend-grid">
+                                <div className="lg-item"><span className="lg-dot" style={{ background: palette.teal }}></span> Inf: {senalizacion?.informativas}</div>
+                                <div className="lg-item"><span className="lg-dot" style={{ background: palette.orange }}></span> Prev: {senalizacion?.preventivas}</div>
+                                <div className="lg-item"><span className="lg-dot" style={{ background: palette.purple }}></span> Reg: {senalizacion?.reguladoras}</div>
+                                <div className="lg-item"><span className="lg-dot" style={{ background: palette.dark }}></span> Hit: {senalizacion?.hitos}</div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {/* ROW 3: Bottom Cols */}
-                <div className="charts-row-2">
-                    <div className="dashboard-card compact-chart-card">
-                        <h5 className="card-title-small" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            Distribución por Entregable
-                            {hasUnassigned && (
-                                <span className="warning-badge" title={Object.entries(debug_unassigned).map(([k, v]) => `${k}: ${v}`).join('\n')}>
-                                    ⚠️ {unassignedCount} Sin Asignar
-                                </span>
-                            )}
-                        </h5>
-                        <div className="chart-area-h120" style={{ position: 'relative' }}>
-                            <Bar data={datasets.entregables} options={{ ...commonChartOptions, indexAxis: 'y' }} />
-                            {hasUnassigned && (
-                                <div className="unassigned-breakdown-overlay">
-                                    <div className="ub-title">Detalle Sin Asignar:</div>
-                                    <div className="ub-list">
-                                        {Object.entries(debug_unassigned).map(([key, val]) => (
-                                            <div key={key} className="ub-item"><span>{key}:</span> <strong>{val}</strong></div>
+                    <div className="dashboard-card main-card">
+                        <h5 className="card-title-small">Zonas Críticas</h5>
+                        <div className="chart-area-main flex-center">
+                            {zcValues.length > 0 ? (
+                                <>
+                                    <div className="chart-container-pie"><Pie data={datasets.zc} options={{ ...commonChartOptions, plugins: { legend: { display: false } } }} /></div>
+                                    <div className="legend-column">
+                                        {datasets.zc.labels.slice(0, 4).map((l, i) => (
+                                            <div key={i} className="lg-item-small" title={l}>
+                                                <span className="lg-dot" style={{ background: datasets.zc.datasets[0].backgroundColor[i] }}></span>
+                                                <span className="lg-text">{l}</span>
+                                            </div>
                                         ))}
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="dashboard-card compact-chart-card">
-                        <h5 className="card-title-small">Tipos de Señales</h5>
-                        <div className="chart-area-h120 flex-center">
-                            <div style={{ width: '80px', height: '80px', flexShrink: 0 }}>
-                                <Pie data={datasets.senales} options={{ ...commonChartOptions, plugins: { legend: { display: false } } }} />
-                            </div>
-                            <div className="legend-vertical">
-                                <div className="legend-item"><span className="dot-teal"></span> Inf: {senalizacion?.informativas}</div>
-                                <div className="legend-item"><span className="dot-orange"></span> Prev: {senalizacion?.preventivas}</div>
-                                <div className="legend-item"><span className="dot-dark" style={{ background: '#34495e' }}></span> Hit: {senalizacion?.hitos}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="dashboard-card compact-chart-card">
-                        <h5 className="card-title-small">Recursos</h5>
-                        <div className="resources-list-compact">
-                            <div className="res-item-compact"><div className="icon-box-small">⛰️</div><div className="res-info"><span className="res-num">{recursos?.canteras || 0}</span><span className="res-name">Canteras</span></div></div>
-                            <div className="res-item-compact"><div className="icon-box-small">💧</div><div className="res-info"><span className="res-num">{recursos?.fuentes || 0}</span><span className="res-name">Fuentes</span></div></div>
+                                </>
+                            ) : <div className="no-data-placeholder">Sin zonas registradas</div>}
                         </div>
                     </div>
                 </div>
 
+                {/* ROW 3: Entregables & Recursos */}
+                <div className="dashboard-bottom-row">
+                    <div className="dashboard-card wide-card">
+                        <h5 className="card-title-small flex-between">
+                            Distribución por Entregable
+                            {hasUnassigned && <span className="unassigned-badge">⚠️ {unassignedCount} Sin Asignar</span>}
+                        </h5>
+                        <div className="chart-area-h150">
+                            <Bar data={datasets.entregables} options={{ ...commonChartOptions, indexAxis: 'y' }} />
+                        </div>
+                    </div>
+
+                    <div className="dashboard-card resources-card">
+                        <h5 className="card-title-small">Recursos Disponibles</h5>
+                        <div className="resources-grid-compact">
+                            <div className="res-card-mini">
+                                <div className="res-icon">⛰️</div>
+                                <div className="res-data"><span className="res-val">{recursos?.canteras || 0}</span><span className="res-lbl">Canteras</span></div>
+                            </div>
+                            <div className="res-card-mini">
+                                <div className="res-icon">💧</div>
+                                <div className="res-data"><span className="res-val">{recursos?.fuentes || 0}</span><span className="res-lbl">Fuentes</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <style>{`
-                .invvial-dashboard-wrapper { padding: 0; background-color: #f0f2f5; display: flex; flex-direction: column; gap: 10px; font-family: 'Inter', sans-serif; }
-                .invvial-map-section { position: relative; width: 100%; height: 50vh; min-height: 400px; border-radius: 0 0 12px 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+                .invvial-dashboard-wrapper { padding: 0 0 20px 0; background-color: #f4f7fa; display: flex; flex-direction: column; gap: 12px; font-family: 'Inter', system-ui, sans-serif; }
+                .invvial-map-section { position: relative; width: 100%; height: 48vh; min-height: 400px; border-radius: 0 0 20px 20px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
                 .map-card-container { width: 100%; height: 100%; }
-                .filter-toggle-btn { position: absolute; top: 15px; right: 15px; background: white; border-radius: 8px; border:none; display:flex; align-items:center; gap: 8px; padding: 8px 12px; cursor:pointer; color:#333; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:2002; font-weight: 600; font-size: 0.85rem; transition: transform 0.2s; }
-                .filter-toggle-btn:hover { transform: translateY(-2px); }
-                .filter-panel { position: absolute; top: 60px; right: 15px; width: 220px; max-height: calc(100% - 80px); overflow-y: auto; padding: 15px; background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); border-radius: 12px; font-size: 0.75rem; z-index:2001; box-shadow:0 8px 32px rgba(0,0,0,0.1); border: 1px solid rgba(255,255,255,0.5); animation: fadeIn 0.3s ease; }
-                /* Custom Scrollbar for panel */
-                .filter-panel::-webkit-scrollbar { width: 4px; }
-                .filter-panel::-webkit-scrollbar-track { background: transparent; }
-                .filter-panel::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 4px; }
-                @keyframes fadeIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
-                .filter-header { display:flex; justify-content:space-between; margin-bottom:10px; font-weight:700; color:#2c3e50; text-transform: uppercase; letter-spacing: 0.5px; }
-                .close-panel-btn { border:none; background:none; cursor:pointer; font-size:1.2rem; line-height:0.5; color: #999; }
-                .filter-group-title { font-weight:bold; margin-top:8px; color:#7f8c8d; font-size:0.7rem; letter-spacing: 0.5px; margin-bottom: 4px; }
-                .toggle-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.85rem; color: #34495e; }
-                .switch { position: relative; display: inline-block; width: 20px; height: 12px; }
+                
+                .filter-toggle-btn { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); border-radius: 10px; border: 1px solid rgba(0,0,0,0.05); display:flex; align-items:center; gap: 8px; padding: 10px 16px; cursor:pointer; color:#1a202c; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1); z-index:2002; font-weight: 700; font-size: 0.85rem; transition: all 0.2s ease; }
+                .filter-toggle-btn:hover { transform: translateY(-2px); background: white; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+                
+                .filter-panel { position: absolute; top: 75px; right: 20px; width: 240px; max-height: calc(100% - 100px); overflow-y: auto; padding: 20px; background: rgba(255,255,255,0.95); backdrop-filter: blur(12px); border-radius: 16px; font-size: 0.8rem; z-index:2001; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.6); animation: slideIn 0.3s ease-out; }
+                @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+                
+                .filter-header { display:flex; justify-content:space-between; margin-bottom:12px; font-weight:800; color:#2c3e50; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 8px; }
+                .filter-group-title { font-weight:800; margin-top:12px; color:#718096; font-size:0.7rem; letter-spacing: 0.5px; margin-bottom: 8px; text-transform: uppercase; }
+                .toggle-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.85rem; color: #2d3748; font-weight: 600; }
+                
+                .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
                 .switch input { opacity: 0; width: 0; height: 0; }
-                .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #bdc3c7; transition: .2s; border-radius: 34px; }
-                .slider:before { position: absolute; content: ""; height: 8px; width: 8px; left: 2px; bottom: 2px; background-color: white; transition: .2s; border-radius: 50%; }
-                input:checked + .slider { background-color: #3498db; }
-                input:checked + .slider:before { transform: translateX(8px); }
-                
-                /* GRID */
-                .dashboard-content-grid { padding: 0 15px 15px 15px; display: flex; flex-direction: column; gap: 10px; }
-                .kpi-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-                
-                /* KPI NEW PREMIUM STYLES */
-                .kpi-modern { border-radius: 12px; color: white; padding: 16px; position: relative; min-height: 120px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.2s; }
-                .kpi-modern:hover { transform: translateY(-2px); }
-                .blue-theme { background: linear-gradient(135deg, #2980b9, #2c3e50) !important; }
-                .teal-theme { background: linear-gradient(135deg, #1abc9c, #16a085) !important; }
-                .orange-theme { background: linear-gradient(135deg, #e67e22, #d35400) !important; }
+                .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e0; transition: .3s; border-radius: 34px; }
+                .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+                input:checked + .slider { background-color: #48bb78; }
+                input:checked + .slider:before { transform: translateX(16px); }
+                .close-panel-btn { border:none; background:none; cursor:pointer; font-size:1.5rem; line-height:0.5; color: #a0aec0; transition: color 0.2s; }
+                .close-panel-btn:hover { color: #e53e3e; }
 
-                .kpi-flex-row { display: flex; justify-content: space-between; align-items: center; width: 100%; height: 100%; }
-                .kpi-content-main { display: flex; flex-direction: column; z-index: 2; }
-                .kpi-top-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; font-weight: 700; margin-bottom: 2px; }
-                .kpi-metric-huge { font-size: 2.6rem; font-weight: 800; line-height: 1.1; letter-spacing: -1px; text-shadow: 0 2px 10px rgba(0,0,0,0.15); }
-                .kpi-unit-small { font-size: 1rem; font-weight: 500; margin-left: 2px; opacity: 0.8; }
-                .kpi-sub-text { font-size: 0.7rem; opacity: 0.8; margin-top: 4px; font-weight: 500; }
-                .kpi-sub-text-list { display:flex; flex-direction:column; font-size:0.65rem; opacity:0.85; margin-top:4px; gap:2px; }
-
-                .kpi-visual-container { display: flex; align-items: center; justify-content: center; z-index: 1; }
-                .icon-circle-glass { width: 50px; height: 50px; background: rgba(255,255,255,0.15); backdrop-filter: blur(4px); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; border: 1px solid rgba(255,255,255,0.2); }
+                .dashboard-content-grid { padding: 0 20px; display: flex; flex-direction: column; gap: 15px; }
                 
-                .kpi-progress-bar-container { margin-top: 10px; width: 100%; }
-                .kpi-progress-track { background: rgba(255,255,255,0.2); height: 6px; border-radius: 3px; overflow: hidden; }
-                .kpi-progress-fill { background: rgba(255,255,255,0.95); height: 100%; border-radius: 3px; box-shadow: 0 0 10px rgba(255,255,255,0.5); }
-
-                .teal-theme { background: linear-gradient(135deg, #16a085, #1abc9c) !important; }
-                .orange-theme { background: linear-gradient(135deg, #d35400, #e67e22) !important; }
-
-                .kpi-top { display: flex; justify-content: space-between; font-size: 0.65rem; font-weight: 700; opacity: 0.9; margin-bottom: 5px; }
-                .kpi-big-num { font-size: 1.8rem; font-weight: 700; line-height: 1; }
-                .kpi-unit { font-size: 0.8rem; margin-left: 5px; opacity: 0.8; }
-                .progresiva-info { display:flex; justify-content:space-between; font-size:0.65rem; margin-bottom:4px; margin-top:5px; }
-                .linear-progress-bg { background: rgba(255,255,255,0.2); height: 5px; border-radius:3px; overflow:hidden; }
-                .linear-progress-fill { background: #3498db; height: 100%; }
-                .kpi-mid-radial { display: flex; align-items: center; justify-content: space-between; }
-                .radial-circle { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; }
-                .mini-map-placeholder { width: 70px; height: 40px; opacity: 0.6; }
-                .kpi-mid-row { display: flex; align-items: center; gap: 8px; }
-                .kpi-donut-container { position: relative; width: 50px; height: 50px; }
-                .donut-center-text { position: absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:0.7rem; font-weight:bold; }
-                .kpi-list-right { font-size: 0.65rem; }
-                .kpi-list-item { margin-bottom: 2px; display:flex; align-items:center; gap:4px; }
-                .dot-white { width:5px; height:5px; background:white; border-radius:50%; }
-                .dot-white-50 { width:5px; height:5px; background:rgba(255,255,255,0.5); border-radius:50%; }
-
-                /* CHARTS */
-                .charts-row-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
-                .charts-row-2 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-                .dashboard-card { background: white; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); padding: 10px; }
-                .card-title-small { margin: 0 0 8px 0; font-size: 0.8rem; color: #333; border-left: 3px solid #3498db; padding-left: 6px; font-weight: 700; }
-                .chart-area-h120 { height: 120px; position:relative; width: 100%; overflow: hidden; }
-                .flex-center { display: flex; align-items: center; justify-content: center; gap: 8px; }
-                .legend-vertical { display: flex; flex-direction: column; gap: 2px; font-size: 0.7rem; color: #666; overflow-y: auto; max-height: 110px; }
-                .legend-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-                .legend-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .dot { width: 6px; height: 6px; border-radius: 50%; }
-                .dot-teal { background: #1abc9c; } .dot-orange { background: #e67e22; }
-                .resources-list-compact { display: flex; flex-direction: column; gap: 6px; }
-                .res-item-compact { display: flex; align-items: center; gap: 8px; background: #f9f9f9; padding: 6px; border-radius: 6px; }
-                .icon-box-small { width: 26px; height: 26px; background: #e1e4e8; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
-                .res-info { display: flex; flex-direction: column; line-height: 1; overflow: hidden; }
-                .res-num { font-weight: 700; color: #333; font-size: 0.85rem; }
-                .res-name { font-size: 0.65rem; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                /* KPIs */
+                .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+                .kpi-modern { border-radius: 16px; color: white; padding: 20px; position: relative; min-height: 130px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.3s ease; }
+                .kpi-modern:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); }
                 
+                .blue-theme { background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%) !important; }
+                .teal-theme { background: linear-gradient(135deg, #38b2ac 0%, #2c7a7b 100%) !important; }
+                .orange-theme { background: linear-gradient(135deg, #ed8936 0%, #c05621 100%) !important; }
+
+                .kpi-metric-huge { font-size: 2.8rem; font-weight: 800; line-height: 1; letter-spacing: -2px; }
+                .kpi-top-label { font-size: 0.75rem; font-weight: 700; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.05em; }
+                .icon-circle-glass { width: 56px; height: 56px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; }
+
+                /* MAIN GRID ROWS */
+                .dashboard-main-row-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+                .dashboard-bottom-row { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; }
                 
-                .warning-badge { background: #f1c40f; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; cursor:help; }
-                .unassigned-breakdown-overlay { position: absolute; right: 0; top: 0; background: rgba(255,255,255,0.95); padding: 5px; border: 1px solid #eee; border-radius: 4px; font-size: 0.65rem; max-height: 100%; overflow-y: auto; box-shadow: -2px 2px 5px rgba(0,0,0,0.1); pointer-events: none; }
-                .ub-title { font-weight: bold; margin-bottom: 2px; color: #e74c3c; border-bottom: 1px solid #eee; }
-                .ub-list { display: flex; flex-direction: column; gap: 1px; }
-                .ub-item { display: flex; justify-content: space-between; gap: 8px; color: #555; }
+                /* CARDS */
+                .dashboard-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); border: 1px solid rgba(0,0,0,0.05); transition: all 0.2s; }
+                .dashboard-card:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); }
                 
-                @media (max-width: 1000px) { .kpi-row, .charts-row-1, .charts-row-2 { grid-template-columns: 1fr; } }
+                .card-title-small { margin: 0 0 15px 0; font-size: 0.9rem; font-weight: 800; color: #2d3748; display: flex; align-items: center; gap: 8px; }
+                .card-title-small::before { content: ''; width: 4px; height: 16px; background: #3182ce; border-radius: 2px; }
+
+                /* CHART AREAS */
+                .chart-area-main { height: 160px; width: 100%; position: relative; }
+                .chart-area-h150 { height: 200px; width: 100%; position: relative; }
+                .chart-container-pie { width: 110px; height: 110px; flex-shrink: 0; }
+
+                /* LEGENDS */
+                .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.75rem; color: #4a5568; }
+                .legend-column { display: flex; flex-direction: column; gap: 5px; font-size: 0.7rem; color: #4a5568; max-height: 140px; overflow-y: auto; padding-right: 5px; }
+                .lg-item { display: flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; }
+                .lg-item-small { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+                .lg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+                .lg-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+                /* RESOURCES */
+                .resources-grid-compact { display: grid; grid-template-columns: 1fr; gap: 10px; }
+                .res-card-mini { display: flex; align-items: center; gap: 15px; padding: 12px 15px; background: #f7fafc; border-radius: 12px; border: 1px solid #edf2f7; }
+                .res-icon { font-size: 1.5rem; }
+                .res-data { display: flex; flex-direction: column; }
+                .res-val { font-size: 1.25rem; font-weight: 800; color: #2d3748; line-height: 1; }
+                .res-lbl { font-size: 0.75rem; font-weight: 600; color: #718096; }
+
+                /* BADGES */
+                .unassigned-badge { background: #fff5f5; color: #c53030; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; border: 1px solid #feb2b2; }
+                .flex-between { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+                .no-data-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 0.85rem; color: #a0aec0; font-style: italic; }
+
+                @media (max-width: 1200px) { 
+                    .dashboard-main-row-3col { grid-template-columns: 1fr 1fr; }
+                    .dashboard-bottom-row { grid-template-columns: 1fr; }
+                }
+                @media (max-width: 800px) {
+                    .kpi-row, .dashboard-main-row-3col { grid-template-columns: 1fr; }
+                }
             `}</style>
-        </div>
+        </div >
     );
 };
 export default Dashboard;

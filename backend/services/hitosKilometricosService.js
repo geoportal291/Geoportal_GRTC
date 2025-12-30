@@ -192,7 +192,8 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
         altitud: -1,
         altitud: -1,
         foto: -1,
-        entregable: -1
+        entregable: -1,
+        clasificacion: -1
     };
 
     for (let i = 0; i < Math.min(20, rawData.length); i++) {
@@ -212,6 +213,12 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
             colMap.longitud = row.findIndex(c => typeof c === 'string' && (c.includes('Longitud') || c.includes('LONGITUD'))) !== -1 ? row.findIndex(c => typeof c === 'string' && (c.includes('Longitud') || c.includes('LONGITUD'))) : progIdx + 5;
             colMap.altitud = row.findIndex(c => typeof c === 'string' && (c.includes('Altitud') || c.includes('ALTITUD'))) !== -1 ? row.findIndex(c => typeof c === 'string' && (c.includes('Altitud') || c.includes('ALTITUD'))) : progIdx + 6;
             colMap.foto = row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto'))) !== -1 ? row.findIndex(c => typeof c === 'string' && (c.includes('Código Fotografía') || c.includes('Foto'))) : progIdx + 7;
+
+            // Explicitly search for Clasificación
+            colMap.clasificacion = row.findIndex(c => typeof c === 'string' && (c.includes('Clasificación') || c.includes('Clasificacion') || c.includes('CLASIFICACION')));
+            if (colMap.clasificacion === -1) {
+                colMap.clasificacion = progIdx - 1; // Fallback
+            }
 
             // Search explicitly for Entregable
             colMap.entregable = row.findIndex(c => typeof c === 'string' && c.toUpperCase().includes('ENTREGABLE'));
@@ -263,7 +270,7 @@ const processExcel = async (fileBuffer, projectId, entregableNum, utmZone) => {
             const codigo = row[colMap.codigo];
             if (!codigo) continue;
 
-            const clasificacion = colMap.progresiva > 0 ? row[colMap.progresiva - 1] : '-';
+            const clasificacion = colMap.clasificacion !== -1 ? row[colMap.clasificacion] : (colMap.progresiva > 0 ? row[colMap.progresiva - 1] : '-');
 
             // *** CRITICAL FILTER: ONLY HITOS KILOMETRICOS ***
             if (!clasificacion || typeof clasificacion !== 'string' || !clasificacion.toLowerCase().includes('hito kilométrico') && !clasificacion.toLowerCase().includes('hito kilometrico')) {

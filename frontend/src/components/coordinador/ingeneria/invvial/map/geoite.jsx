@@ -11,6 +11,7 @@ import { kml } from '@tmcw/togeojson';
 import { DOMParser } from 'xmldom';
 import * as turf from '@turf/turf';
 import alertify from 'alertifyjs'; // Add this line
+import { fetchNearbyPlaces } from './mapUtils'; // NEW
 import './geoite.css';
 import axiosInstance from '../../../../../api/axios';
 import { saveAs } from 'file-saver';
@@ -20,10 +21,21 @@ import { saveAs } from 'file-saver';
 const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails, graphicsImages }) => {
     const map = useMap();
     const geoJsonLayerRef = React.useRef(null);
+    const poiLayerRef = React.useRef(new L.FeatureGroup()); // NEW: FeatureGroup para POIs (Start/End/Cities)
+    const citiesLayerRef = React.useRef(new L.FeatureGroup()); // NEW: Cities only
     const alcantarillasLayerRef = React.useRef(new L.FeatureGroup()); // FeatureGroup para alcantarillas
     const [calibrationData, setCalibrationData] = useState(null); // NEW: State for calibration
     const calibrationDataRef = useRef(null); // NEW: Ref to avoid stale closures
     const [activePopup, setActivePopup] = useState(null);
+    const [showCities, setShowCities] = useState(true); // Toggle state for cities
+    const showCitiesRef = useRef(true); // NEW: Ref to avoid stale closures in listeners
+    showCitiesRef.current = showCities; // Always sync with state
+
+    // NEW: Refs for dynamic loading moved to top level
+    // Map<Key, { marker: L.Marker, type: string }>
+    const allDynamicCitiesRef = useRef(new Map());
+    const debounceTimerRef = useRef(null);
+
     const popupContainer = React.useMemo(() => {
         const div = document.createElement('div');
         div.className = "leaflet-popup-content-wrapper-react";
@@ -41,7 +53,173 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
         // --- Variables de estado internas ---
         const drawnItems = new L.FeatureGroup().addTo(map);
+        poiLayerRef.current.addTo(map); // Añadir POIs estáticos al mapa
+        // citiesLayerRef managed by zoom logic (citiesLayerRef is defined at top level)
         alcantarillasLayerRef.current.addTo(map); // Añadir el FeatureGroup de alcantarillas al mapa
+
+        // --- LOGIC FOR ZOOM-DEPENDENT CITIES ---
+
+        // Defined BEFORE usage in handleZoomChange
+        const updateVisibleCities = () => {
+            if (!map || !showCitiesRef.current) return;
+
+            const zoom = map.getZoom();
+            const citiesLayer = citiesLayerRef.current;
+
+            // thresholds (PERMANENT VISIBILITY): 
+            // All zoom levels allowed.
+            allDynamicCitiesRef.current.forEach((item, key) => {
+                const { marker, type } = item;
+                // ALWAYS SHOW.
+                let shouldShow = true;
+
+                if (shouldShow) {
+                    if (!citiesLayer.hasLayer(marker)) {
+                        marker.setZIndexOffset(10000); // FORCE TOP VISIBILITY
+                        citiesLayer.addLayer(marker);
+                    }
+                } else {
+                    if (citiesLayer.hasLayer(marker)) {
+                        citiesLayer.removeLayer(marker);
+                    }
+                }
+            });
+        };
+        const handleZoomChange = () => {
+            const isEnabled = showCitiesRef.current; // Use Ref for latest state
+
+            if (isEnabled) {
+                // Ensure layer is on map if any are visible (optimization: always add group, manage children)
+                if (!map.hasLayer(citiesLayerRef.current)) {
+                    map.addLayer(citiesLayerRef.current);
+                }
+                // Update which children are visible
+                updateVisibleCities();
+            } else {
+                if (map.hasLayer(citiesLayerRef.current)) {
+                    map.removeLayer(citiesLayerRef.current);
+                }
+            }
+        };
+
+        map.on('zoomend', handleZoomChange);
+        handleZoomChange(); // Initial check
+
+        // --- DYNAMIC CITY LOADING (SEMANTIC ZOOMING) ---
+        // Map<Key, { marker: L.Marker, type: string }>
+        // allDynamicCitiesRef is defined at top level
+        // debounceTimerRef is defined at top level
+
+        // Function to update visibility based on zoom level and place type
+        /* const updateVisibleCities_DUPLICATE = () => {
+            if (!map || !showCitiesRef.current) return;
+
+            const zoom = map.getZoom();
+            const citiesLayer = citiesLayerRef.current;
+
+            // thresholds (Extreme visibility for all discovered places): 
+            // All types > 5 to ensure they remain visible when zooming out
+            allDynamicCitiesRef.current.forEach((item, key) => {
+                const { marker, type } = item;
+                let shouldShow = false;
+                
+                // FORCE SHOW for manually added KML points (type === 'city' default)
+                // or if zoom is decent (> 5)
+                if (type === 'city' || zoom > 5) shouldShow = true;
+
+                if (shouldShow) {
+                    if (!citiesLayer.hasLayer(marker)) {
+                        marker.setZIndexOffset(10000); // FORCE TOP VISIBILITY
+                        citiesLayer.addLayer(marker);
+                    }
+                } else {
+                    if (citiesLayer.hasLayer(marker)) {
+                        citiesLayer.removeLayer(marker);
+                    }
+                }
+            });
+        }; */
+
+        const loadDynamicCities = async () => {
+            const zoom = map.getZoom();
+            const isEnabled = showCitiesRef.current; // Use Ref for latest state
+
+            if (!isEnabled || zoom <= 3) return; // Fetch if > 3 (Broader visibility)
+
+            const bounds = map.getBounds();
+
+            try {
+                const places = await fetchNearbyPlaces(bounds);
+                if (places && places.length > 0) {
+                    let addedCount = 0;
+                    places.forEach(p => {
+                        const key = `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+                        if (!allDynamicCitiesRef.current.has(key)) {
+                            // console.log("Adding new place:", p.name, p.type); // Debug log
+
+                            const marker = L.marker([p.lat, p.lng], { icon: getPoiIcon('city') })
+                                .bindPopup(`<b>${p.name}</b><br><small>Tipo: ${p.type || 'Lugar'}</small>${p.desc ? '<br>' + p.desc : ''}`)
+                                .bindTooltip(p.name, { permanent: true, direction: 'right', className: 'poi-tooltip', offset: [10, 0] });
+
+                            // Store in Map, don't add to layer yet (let updateVisibleCities handle it)
+                            allDynamicCitiesRef.current.set(key, { marker, type: p.type });
+
+                            addedCount++;
+                        }
+                    });
+
+                    if (addedCount > 0) {
+                        updateVisibleCities(); // Update visibility for new markers
+                    }
+                }
+            } catch (e) {
+                console.warn("Dynamic city load failed", e);
+            }
+        };
+
+        const handleMoveEnd = () => {
+            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = setTimeout(() => {
+                loadDynamicCities();
+            }, 2000); // 2 seconds debounce
+        };
+
+        map.on('moveend', handleMoveEnd);
+
+        // --- TOGGLE BUTTON UI ---
+        const toggleContainer = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        toggleContainer.style.backgroundColor = showCities ? 'white' : '#eee';
+        toggleContainer.style.padding = '5px';
+        toggleContainer.style.cursor = 'pointer';
+        toggleContainer.title = 'Mostrar/Ocultar Ciudades (Auto)';
+        toggleContainer.innerHTML = `<i class="fa-solid fa-city" style="font-size:16px; color:${showCities ? '#333' : '#aaa'};"></i>`;
+
+        const toggleControl = new L.Control({ position: 'topright' });
+        toggleControl.onAdd = function () { return toggleContainer; };
+        toggleControl.addTo(map);
+
+        toggleContainer.onclick = () => {
+            const newState = !showCitiesRef.current;
+            showCitiesRef.current = newState; // Immediate Ref update
+            setShowCities(newState); // State update for React (eventual consistency)
+
+            // Imperative UI Update
+            toggleContainer.style.backgroundColor = newState ? 'white' : '#eee';
+            toggleContainer.querySelector('i').style.color = newState ? '#333' : '#aaa';
+
+            // Immediate Map Layer Update
+            if (newState) {
+                if (!map.hasLayer(citiesLayerRef.current)) {
+                    map.addLayer(citiesLayerRef.current);
+                }
+                loadDynamicCities(); // Fetch data immediately if needed
+                updateVisibleCities();
+            } else {
+                if (map.hasLayer(citiesLayerRef.current)) {
+                    map.removeLayer(citiesLayerRef.current);
+                }
+            }
+        };
 
 
         let isDrawing = false;
@@ -428,6 +606,46 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         uploadModal.id = 'invvial-menu-kml-carga';
         L.DomEvent.disableClickPropagation(uploadModal);
 
+        // --- Helper de Iconos POI ---
+        const getPoiIcon = (type) => {
+            let html = '';
+            let className = 'poi-marker';
+            let size = [30, 30];
+            let anchor = [15, 30];
+
+            if (type === 'start') {
+                html = '<i class="fa-solid fa-play" style="color:white; font-size:14px;"></i>';
+                className = 'poi-marker start';
+            } else if (type === 'end') {
+                html = '<i class="fa-solid fa-flag-checkered" style="color:white; font-size:14px;"></i>';
+                className = 'poi-marker end';
+            } else if (type === 'city') {
+                html = '<i class="fa-solid fa-city" style="color:white; font-size:12px;"></i>';
+                className = 'poi-marker city';
+                size = [24, 24];
+                anchor = [12, 12];
+            }
+
+            return L.divIcon({
+                className: `custom-div-icon ${className}`,
+                html: `<div style="
+                    display:flex; 
+                    align-items:center; 
+                    justify-content:center; 
+                    width:100%; 
+                    height:100%; 
+                    background-color: ${type === 'start' ? '#28a745' : (type === 'end' ? '#dc3545' : '#17a2b8')}; 
+                    border-radius: 50%; 
+                    border: 2px solid white; 
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
+                    ${html}
+                </div>`,
+                iconSize: size,
+                iconAnchor: anchor,
+                popupAnchor: [0, -anchor[1]]
+            });
+        };
+
         const loadKmlFromUrl = async (url, showAlerts = true) => {
             try {
                 if (showAlerts) alertify.message(`Descargando KML desde la URL...`);
@@ -440,6 +658,122 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 const parser = new DOMParser();
                 const kmlDoc = parser.parseFromString(kmlText, 'text/xml');
                 const convertedGeoJson = kml(kmlDoc);
+
+                // --- PROCESS POIS (Start/End/Cities) ---
+                poiLayerRef.current.clearLayers();
+                citiesLayerRef.current.clearLayers();
+                allDynamicCitiesRef.current.clear(); // Clear semantic zoom cache too
+
+                if (convertedGeoJson && convertedGeoJson.features) {
+                    // 1. Find Route Line(s) for Start/End
+                    const lineFeatures = convertedGeoJson.features.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
+
+                    if (lineFeatures.length > 0) {
+                        // SORT FEATURES BY NAME (TRAMO 1, TRAMO 2, ...)
+                        lineFeatures.sort((a, b) => {
+                            const nameA = a.properties?.name || '';
+                            const nameB = b.properties?.name || '';
+                            const numA = parseInt(nameA.replace(/[^0-9]/g, ''), 10);
+                            const numB = parseInt(nameB.replace(/[^0-9]/g, ''), 10);
+                            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                            return nameA.localeCompare(nameB);
+                        });
+
+                        try {
+                            // Start
+                            const firstLine = lineFeatures[0];
+                            const firstCoords = firstLine.geometry.type === 'LineString'
+                                ? firstLine.geometry.coordinates
+                                : firstLine.geometry.coordinates[0];
+
+                            if (firstCoords && firstCoords.length > 0) {
+                                // GeoJSON [lng, lat] -> Leaflet [lat, lng]
+                                const startLL = [firstCoords[0][1], firstCoords[0][0]];
+                                L.marker(startLL, { icon: getPoiIcon('start') })
+                                    .bindPopup('<b>Inicio del Tramo</b>')
+                                    .bindTooltip('Inicio', { permanent: true, direction: 'right', className: 'poi-tooltip', offset: [15, 0] })
+                                    .addTo(poiLayerRef.current);
+                            }
+
+                            // End
+                            const lastLine = lineFeatures[lineFeatures.length - 1];
+                            let finalPointArr = null;
+                            if (lastLine.geometry.type === 'LineString') {
+                                finalPointArr = lastLine.geometry.coordinates[lastLine.geometry.coordinates.length - 1];
+                            } else {
+                                const segments = lastLine.geometry.coordinates;
+                                const lastSegment = segments[segments.length - 1];
+                                finalPointArr = lastSegment[lastSegment.length - 1];
+                            }
+
+                            if (finalPointArr) {
+                                const endLL = [finalPointArr[1], finalPointArr[0]];
+                                L.marker(endLL, { icon: getPoiIcon('end') })
+                                    .bindPopup('<b>Fin del Tramo</b>')
+                                    .bindTooltip('Fin', { permanent: true, direction: 'right', className: 'poi-tooltip', offset: [15, 0] })
+                                    .addTo(poiLayerRef.current);
+                            }
+                        } catch (err) {
+                            console.warn("Error extracting start/end from KML", err);
+                        }
+                    }
+
+                    // 2. Find Cities/Points
+                    convertedGeoJson.features.forEach(f => {
+                        if (f.geometry.type === 'Point') {
+                            const lat = f.geometry.coordinates[1];
+                            const lng = f.geometry.coordinates[0];
+                            const name = f.properties.name || 'Punto Notable';
+                            const desc = f.properties.description || '';
+
+                            // Create marker but DO NOT add to layer yet
+                            const marker = L.marker([lat, lng], { icon: getPoiIcon('city') })
+                                .bindPopup(`<b>${name}</b>${desc ? '<br>' + desc : ''}`)
+                                .bindTooltip(name, { permanent: true, direction: 'right', className: 'poi-tooltip', offset: [10, 0] });
+
+                            // Add to semantic map (default to 'city' visibility for manual KML points)
+                            const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+                            allDynamicCitiesRef.current.set(key, { marker, type: 'city' });
+
+                            // Let updateVisibleCities handle adding it to the layer
+                        }
+                    });
+
+                    // 3. AUTO-DETECT Cities via Overpass API
+                    try {
+                        const tempLayer = L.geoJSON(convertedGeoJson);
+                        const bounds = tempLayer.getBounds();
+                        if (bounds.isValid()) {
+                            // alertify.message('Buscando ciudades cercanas (Auto)...', 2);
+                            // Pad bounds by 50%
+                            const paddedBounds = bounds.pad(0.5);
+                            fetchNearbyPlaces(paddedBounds).then(places => {
+                                if (places.length > 0) {
+                                    alertify.success(`Detectados ${places.length} poblados cercanos.`);
+                                    let addedCount = 0;
+                                    places.forEach(p => {
+                                        const key = `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+                                        if (!allDynamicCitiesRef.current.has(key)) {
+                                            const marker = L.marker([p.lat, p.lng], { icon: getPoiIcon('city') })
+                                                .bindPopup(`<b>${p.name}</b><br><small>Tipo: ${p.type || 'Lugar'}</small>${p.desc ? '<br>' + p.desc : ''}`)
+                                                .bindTooltip(p.name, { permanent: true, direction: 'right', className: 'poi-tooltip', offset: [10, 0] });
+
+                                            // Store in Map for semantic zoom logic
+                                            allDynamicCitiesRef.current.set(key, { marker, type: p.type });
+                                            addedCount++;
+                                        }
+                                    });
+
+                                    if (addedCount > 0) {
+                                        updateVisibleCities();
+                                    }
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('Error auto-detecting cities:', e);
+                    }
+                }
 
                 // --- START: Pass GeoJSON to parent ---
                 if (onRouteLoaded) {
@@ -528,8 +862,10 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 uploadModal.style.display = 'none';
 
                 // Clear existing layers before loading the new one
+                // Clear existing layers before loading the new one
                 drawnItems.clearLayers();
                 measurementLayers.clearLayers();
+                poiLayerRef.current.clearLayers();
 
                 if (newUrl) {
                     await loadKmlFromUrl(newUrl);
@@ -1240,6 +1576,13 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         map.on('click', () => map.closePopup());     // ensure click anywhere on map closes popup
 
         return () => {
+            if (map) {
+                map.off('zoomend', handleZoomChange);
+                map.off('moveend', handleMoveEnd);
+                if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                // toggleControl is within scope
+                try { toggleControl.remove(); } catch (e) { }
+            }
             isComponentMounted = false;
             // Remove global click listener
             document.removeEventListener('click', handleDocumentClick);
@@ -2023,8 +2366,17 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                         <div className="detail-row">
                             <span className="label">COORDENADA:</span>
                             <span className="value">
-                                {activePopup.latitud?.toFixed(6) || '0.000000'} E <br />
-                                {activePopup.longitud?.toFixed(6) || '0.000000'} N
+                                {(() => {
+                                    if (typeof activePopup.latitud === 'number' && typeof activePopup.longitud === 'number') {
+                                        try {
+                                            const { easting, northing, zoneNum, zoneLetter } = fromLatLon(activePopup.latitud, activePopup.longitud);
+                                            return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
+                                        } catch (e) {
+                                            return `${activePopup.latitud.toFixed(6)}, ${activePopup.longitud.toFixed(6)}`;
+                                        }
+                                    }
+                                    return '---';
+                                })()}
                             </span>
                         </div>
                         <div className="detail-row">

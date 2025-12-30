@@ -226,16 +226,28 @@ const Vialds = ({ isNavbarExpanded }) => {
   const [estructurasExistentesData, setEstructurasExistentesData] = useState([]); // NEW
   const [projectData, setProjectData] = useState(null); // NEW: State for project metadata
   const [isSwitchingTab, setIsSwitchingTab] = useState(false); // NEW: State for tab switching
-  const canUpload = user && (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'COORDINADOR');
+  const canUpload = user && (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'COORDINADOR PROYECTO' || parseInt(user.codigo_esp, 10) === 5);
+  const canComment = user && (
+    user.role?.toUpperCase() === 'ADMIN' ||
+    user.role?.toUpperCase() === 'COORDINADOR PROYECTO' ||
+    user.role?.toUpperCase() === 'EVALUADOR' ||
+    user.role?.toUpperCase() === 'COORDINADOR DE EVALUACION' ||
+    parseInt(user.codigo_esp, 10) === 5
+  );
 
 
   // Decide initial view mode
   useEffect(() => {
     if (user) {
-      if (user.role?.toUpperCase() === 'ADMIN') {
-        setShowSelection(true);
+      const role = user.role?.toUpperCase() || '';
+      const specialtyId = parseInt(user.codigo_esp, 10);
+
+      if (role === 'ADMIN') {
+        setShowSelection(true); // Admin chooses
+      } else if (role === 'COORDINADOR PROYECTO' || specialtyId === 5) {
+        setViewMode('internal'); // Coordinator/InvVial goes straight to internal
       } else {
-        setViewMode('internal');
+        setViewMode('external'); // Others go straight to external
       }
     }
   }, [user]);
@@ -547,6 +559,36 @@ const Vialds = ({ isNavbarExpanded }) => {
         // console.error('Error fetching senales reguladoras data:', error); // Backend issue acknowledged
         setSenalesReguladorasData([]);
       }
+
+      // Fetch Senales Preventivas
+      try {
+        const senalesPrevRes = await axiosInstance.get(`/api/senales-preventivas/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setSenalesPreventivasData((senalesPrevRes.data || []).map(s => ({
+          ...s,
+          latitud: s.latitud ? parseFloat(s.latitud) : null,
+          longitud: s.longitud ? parseFloat(s.longitud) : null
+        })));
+      } catch (error) {
+        console.error('Error fetching senales preventivas data:', error);
+        setSenalesPreventivasData([]);
+      }
+
+      // Fetch Hitos Kilometricos
+      try {
+        const hitosRes = await axiosInstance.get(`/api/hitos-kilometricos/${projectId}`, {
+          headers: { Authorization: `Bearer ${user.token}` }
+        });
+        setHitosKilometricosData((hitosRes.data || []).map(s => ({
+          ...s,
+          latitud: s.latitud ? parseFloat(s.latitud) : null,
+          longitud: s.longitud ? parseFloat(s.longitud) : null
+        })));
+      } catch (error) {
+        console.error('Error fetching hitos kilometricos data:', error);
+        setHitosKilometricosData([]);
+      }
       // ...
       // Fetch Estructuras Existentes
       try {
@@ -602,6 +644,10 @@ const Vialds = ({ isNavbarExpanded }) => {
   const handleSaveManualAlcantarilla = useCallback(async (newElementData) => {
     if (!user || !user.token) {
       console.warn('Usuario no autenticado o token no disponible.');
+      return;
+    }
+    if (!canUpload) {
+      Swal.fire('Acceso Denegado', 'No tienes permisos para modificar información.', 'error');
       return;
     }
     setIsLoadingData(true);
@@ -674,11 +720,15 @@ const Vialds = ({ isNavbarExpanded }) => {
     }
 
 
-  }, [user, fetchVialData, handleCloseModal, activeObrasSubTab]);
+  }, [user, fetchVialData, handleCloseModal, activeObrasSubTab, canUpload]);
 
   const handleDeleteElement = useCallback(async (elementToDelete, type) => {
     if (!user || !user.token) {
       console.warn('Usuario no autenticado.');
+      return;
+    }
+    if (!canUpload) {
+      Swal.fire('Acceso Denegado', 'No tienes permisos para eliminar información.', 'error');
       return;
     }
 
@@ -749,7 +799,7 @@ const Vialds = ({ isNavbarExpanded }) => {
     } finally {
       setIsLoadingData(false);
     }
-  }, [user, fetchVialData]);
+  }, [user, fetchVialData, canUpload]);
 
   const handleUploadExcelData = useCallback(async () => {
     fetchVialData();
@@ -783,6 +833,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             selectedAlcantarilla={selectedAlcantarilla}
             onAlcantarillaSelect={setSelectedAlcantarilla}
+            canComment={canComment}
           />
         )}
         {activeObrasSubTab === 'BADENES' && (
@@ -796,6 +847,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             selectedBaden={selectedBaden}
             onBadenSelect={setSelectedBaden}
+            canComment={canComment}
           />
         )}
         {activeObrasSubTab === 'PUENTES' && (
@@ -809,6 +861,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             selectedPuente={selectedPuente}
             onPuenteSelect={setSelectedPuente}
+            canComment={canComment}
           />
         )}
         {activeObrasSubTab === 'MUROS DE CONTENCION' && (
@@ -822,6 +875,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             selectedMuro={selectedMuro}
             onMuroSelect={setSelectedMuro}
+            canComment={canComment}
           />
         )}
       </>
@@ -846,6 +900,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             vialHeaderOption={vialHeaderOption}
             type="senales_informativas"
+            canComment={canComment}
           />
         );
       case 'S. REGULADORAS':
@@ -859,6 +914,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             vialHeaderOption={vialHeaderOption}
             type="senales_reguladoras"
+            canComment={canComment}
           />
         );
       case 'S. PREVENTIVAS':
@@ -872,6 +928,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             vialHeaderOption={vialHeaderOption}
             type="senales_preventivas"
+            canComment={canComment}
           />
         );
       case 'HITOS KILOMETRICOS':
@@ -885,6 +942,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             vialHeaderOption={vialHeaderOption}
             type="hitos_kilometricos"
+            canComment={canComment}
           />
         );
       default:
@@ -934,6 +992,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             showModal={handleShowModal}
             onEditElementSelect={handleEditElementSelect}
+            canComment={canComment}
           />
         );
 
@@ -943,6 +1002,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             isVisible={activeTab === 'ESTRUCTURA EXISTENTE'}
             graphicsImages={graphicsImages}
+            canComment={canComment}
           />
         );
 
@@ -955,6 +1015,7 @@ const Vialds = ({ isNavbarExpanded }) => {
             projectId={projectId}
             showModal={handleShowModal}
             onEditElementSelect={handleEditElementSelect}
+            canComment={canComment}
           />
         );
 
@@ -1078,6 +1139,8 @@ const Vialds = ({ isNavbarExpanded }) => {
     interferenciasData, estructurasExistentesData
   ]);
 
+
+
   if (!projectId) {
     return <div className="no-project-selected">Por favor seleccione un proyecto</div>
   }
@@ -1133,6 +1196,7 @@ const Vialds = ({ isNavbarExpanded }) => {
 
 
       <DataManagementModal
+        canUpload={canUpload}
         show={showExcelPreviewModal}
         onClose={handleCloseModal}
         listData={(() => {
@@ -1203,6 +1267,7 @@ const Vialds = ({ isNavbarExpanded }) => {
         vialHeaderOption={vialHeaderOption}
         graphicsImages={graphicsImages}
         route={segmentedRoute.length > 0 ? segmentedRoute : mainRoute}
+        canComment={canComment}
       />
     </div>
   );

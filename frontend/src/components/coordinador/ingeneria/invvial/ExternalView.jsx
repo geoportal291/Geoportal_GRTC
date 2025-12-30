@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom'; // Import ReactDOM
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl, useMap, LayersControl, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, ZoomControl, useMap, LayersControl, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import alertify from 'alertifyjs'; // Added missing import
+import 'alertifyjs/build/css/alertify.css'; // Optional: ensure CSS is there if needed, usually global, but safe to add
 import './ExternalView.css';
 import './map/loading.css'; // Ensure loading styles are available
 import * as turf from '@turf/turf';
@@ -14,6 +16,7 @@ import { EditControl } from 'react-leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
 import DataManagementModal from './DataManagementModal'; // Import modal
+import { fetchNearbyPlaces } from './map/mapUtils'; // NEW
 
 // Reuse icons and map logic from DashboardMap if possible, or redefine here for independence
 // Since DashboardMap has good logic for projection, we'll try to reuse or inline simplified version.
@@ -105,6 +108,46 @@ const getIcon = (type) => {
         iconSize,
         iconAnchor,
         popupAnchor: [0, -12]
+    });
+};
+
+// --- SPECIAL POI ICONS ---
+const getPoiIcon = (type) => {
+    let html = '';
+    let className = 'poi-marker';
+    let size = [30, 30];
+    let anchor = [15, 30];
+
+    if (type === 'start') {
+        html = '<i class="fa-solid fa-play" style="color:white; font-size:14px;"></i>';
+        className = 'poi-marker start';
+    } else if (type === 'end') {
+        html = '<i class="fa-solid fa-flag-checkered" style="color:white; font-size:14px;"></i>';
+        className = 'poi-marker end';
+    } else if (type === 'city') {
+        html = '<i class="fa-solid fa-city" style="color:white; font-size:12px;"></i>';
+        className = 'poi-marker city';
+        size = [24, 24];
+        anchor = [12, 12];
+    }
+
+    return L.divIcon({
+        className: `custom-div-icon ${className}`,
+        html: `<div style="
+            display:flex; 
+            align-items:center; 
+            justify-content:center; 
+            width:100%; 
+            height:100%; 
+            background-color: ${type === 'start' ? '#28a745' : (type === 'end' ? '#dc3545' : '#17a2b8')}; 
+            border-radius: 50%; 
+            border: 2px solid white; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
+            ${html}
+        </div>`,
+        iconSize: size,
+        iconAnchor: anchor,
+        popupAnchor: [0, -anchor[1]]
     });
 };
 
@@ -668,6 +711,7 @@ const ExternalView = ({
     const [selectedStatus, setSelectedStatus] = useState(''); // NEW: Status filter
     const [filterMin, setFilterMin] = useState(''); // NEW: Min Progresiva
     const [filterMax, setFilterMax] = useState(''); // NEW: Max Progresiva
+    const [autoCities, setAutoCities] = useState([]); // NEW: Ciudades detectadas automáticamente
 
     // NEW: Expanded sections state for right sidebar (collapsed by default)
     const [expandedSections, setExpandedSections] = useState({
@@ -827,6 +871,116 @@ const ExternalView = ({
         const latLngs = filteredPoints.map(p => [p.lat, p.lng]);
         return L.latLngBounds(latLngs);
     }, [filteredPoints]); // Dep on filteredPoints
+
+
+    // NEW: Extract Route POIs (Start, End, Cities)
+    const routePOIs = useMemo(() => {
+        if (!routeGeoJson || !routeGeoJson.features) return { start: null, end: null, cities: [] };
+
+        let start = null;
+        let end = null;
+        const cities = [];
+
+        // 1. Find Route Line(s) for Start/End
+        const lineFeatures = routeGeoJson.features.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
+
+        if (lineFeatures.length > 0) {
+            // SEGMENT SORTING: Ensure "TRAMO 1" is first and "TRAMO N" is last
+            lineFeatures.sort((a, b) => {
+                const nameA = a.properties?.name || '';
+                const nameB = b.properties?.name || '';
+                const numA = parseInt(nameA.replace(/[^0-9]/g, ''), 10);
+                const numB = parseInt(nameB.replace(/[^0-9]/g, ''), 10);
+                if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                return nameA.localeCompare(nameB);
+            });
+
+            // First Point of First Line (Lowest Tramo)
+            const firstLine = lineFeatures[0];
+            const firstCoords = firstLine.geometry.type === 'LineString'
+                ? firstLine.geometry.coordinates
+                : firstLine.geometry.coordinates[0];
+
+            if (firstCoords && firstCoords.length > 0) {
+                // GeoJSON is [lng, lat], Leaflet wants [lat, lng]
+                const c = firstCoords[0];
+                // Careful with dimension (lng, lat, alt)
+                start = { lat: c[1], lng: c[0] };
+            }
+
+            // Last Point of Last Line
+            const lastLine = lineFeatures[lineFeatures.length - 1];
+            const lastCoords = lastLine.geometry.type === 'LineString'
+                ? lastLine.geometry.coordinates
+                : lastLine.geometry.coordinates[lastLine.geometry.coordinates.length - 1]; // Last segment if Multi
+
+            // Actually, for MultiLineString "coordinates" is array of lines. 
+            // Simplified logic: assume standard single route split in segments
+            // Better: Get strict last coord of the geometry
+
+            let finalPointArr = null;
+            if (lastLine.geometry.type === 'LineString') {
+                finalPointArr = lastLine.geometry.coordinates[lastLine.geometry.coordinates.length - 1];
+            } else {
+                const segments = lastLine.geometry.coordinates;
+                const lastSegment = segments[segments.length - 1];
+                finalPointArr = lastSegment[lastSegment.length - 1];
+            }
+
+            if (finalPointArr) {
+                end = { lat: finalPointArr[1], lng: finalPointArr[0] };
+            }
+        }
+
+        // 2. Find Cities/Points (Manual from KML)
+        routeGeoJson.features.forEach(f => {
+            if (f.geometry.type === 'Point') {
+                cities.push({
+                    lat: f.geometry.coordinates[1],
+                    lng: f.geometry.coordinates[0],
+                    name: f.properties.name || 'Punto Notable',
+                    desc: f.properties.description || ''
+                });
+            }
+        });
+
+        // 3. Merge with Auto-Detected Cities
+        if (autoCities.length > 0) {
+            autoCities.forEach(city => {
+                // Avoid duplicates if KML already has it (simple check by name/proximity?)
+                // For now just add them, visually they might overlap but that's better than missing.
+                cities.push(city);
+            });
+        }
+
+        return { start, end, cities };
+    }, [routeGeoJson, autoCities]); // Add autoCities dependency
+
+    // NEW: Effect to fetch nearby places when route loads
+    useEffect(() => {
+        if (!routeGeoJson || !routeGeoJson.features) return;
+
+        const bounds = (() => {
+            try {
+                const layer = L.geoJSON(routeGeoJson);
+                return layer.getBounds();
+            } catch (e) { return null; }
+        })();
+
+        if (bounds && bounds.isValid()) {
+            // alertify.message('Buscando ciudades cercanas...');
+            // Pad bounds by 50% to find context cities when zooming out
+            const paddedBounds = bounds.pad(0.5);
+            fetchNearbyPlaces(paddedBounds).then(places => {
+                if (places.length > 0) {
+                    setAutoCities(places);
+                    alertify.success(`Se encontraron ${places.length} poblados cercanos.`);
+                } else {
+                    // alertify.message('No se encontraron poblados adicionales.');
+                }
+            });
+        }
+    }, [routeGeoJson]);
 
     const toggleLayer = (layer) => {
         setVisibleLayers(prev => ({ ...prev, [layer]: !prev[layer] }));
@@ -1123,6 +1277,45 @@ const ExternalView = ({
                     ))}
 
                     {routeGeoJson && <GeoJSON data={routeGeoJson} style={routeStyle} />}
+
+                    {/* ROUTE POIs (Start/End/Cities) */}
+                    <LayersControl.Overlay checked name="Puntos de Ruta (Inicio/Fin)">
+                        <FeatureGroup>
+                            {routePOIs.start && (
+                                <Marker position={[routePOIs.start.lat, routePOIs.start.lng]} icon={getPoiIcon('start')}>
+                                    <Tooltip direction="right" offset={[10, 0]} permanent className="poi-tooltip">
+                                        Inicio
+                                    </Tooltip>
+                                    <Popup>
+                                        <b>Inicio del Tramo</b><br />
+                                        Coordenadas: {routePOIs.start.lat.toFixed(5)}, {routePOIs.start.lng.toFixed(5)}
+                                    </Popup>
+                                </Marker>
+                            )}
+                            {routePOIs.end && (
+                                <Marker position={[routePOIs.end.lat, routePOIs.end.lng]} icon={getPoiIcon('end')}>
+                                    <Tooltip direction="right" offset={[10, 0]} permanent className="poi-tooltip">
+                                        Fin
+                                    </Tooltip>
+                                    <Popup>
+                                        <b>Fin del Tramo</b><br />
+                                        Coordenadas: {routePOIs.end.lat.toFixed(5)}, {routePOIs.end.lng.toFixed(5)}
+                                    </Popup>
+                                </Marker>
+                            )}
+                            {routePOIs.cities.map((city, idx) => (
+                                <Marker key={`city-${idx}`} position={[city.lat, city.lng]} icon={getPoiIcon('city')}>
+                                    <Tooltip direction="right" offset={[5, 0]} permanent className="poi-tooltip">
+                                        {city.name}
+                                    </Tooltip>
+                                    <Popup>
+                                        <b>{city.name}</b>
+                                        {city.desc && <p>{city.desc}</p>}
+                                    </Popup>
+                                </Marker>
+                            ))}
+                        </FeatureGroup>
+                    </LayersControl.Overlay>
                     <RouteFitter geoJson={routeGeoJson} />
 
                     <MapFitter bounds={mapBounds} />

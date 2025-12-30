@@ -179,11 +179,15 @@ const FormularioProgresiva = ({ onClose, onSave, proyectoId, progresivaData }) =
                 profundidad_final: Number(ep.profundidad_final),
                 descripcion: ep.descripcion,
             })),
+            longitud_total: formData.longitud_total,
+            tipo_via: formData.tipo_via,
+            intervalo_manual: formData.intervalo_manual,
+            proyecto_id: proyectoId,
         };
 
         try {
             if (progresivaData) { // Estamos editando una progresiva existente
-                const url = `${API_URL}/progresivas/${progresivaData.id}`;
+                const url = `${API_URL}/api/progresivas/${progresivaData.id}`;
                 const dataToSend = {
                     ...commonData,
                     // No se necesitan generationParams para la edición
@@ -320,7 +324,7 @@ const FormularioProgresiva = ({ onClose, onSave, proyectoId, progresivaData }) =
                                 <div className="estrato-slider">
                                     <div className="estrato-item" key={currentEstratoIndex}>
                                         <h5>Estrato {currentEstratoIndex + 1} / {estratosPerfil.length}</h5>
-                                        
+
                                         <label>Profundidad Inicial (m)</label>
                                         <input type="number" name="profundidad_inicial" value={estratosPerfil[currentEstratoIndex].profundidad_inicial} onChange={(e) => handleEstratoChange(currentEstratoIndex, e)} readOnly required />
                                         <label>Profundidad Final (m)</label>

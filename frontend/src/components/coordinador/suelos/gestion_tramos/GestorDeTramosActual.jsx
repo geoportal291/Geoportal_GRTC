@@ -277,7 +277,7 @@ export default function GestorDeTramosActual() {
         try {
             const headers = getAuthHeaders();
 
-            let url = `${API_URL}/progresivas/${tramoId}/children?page=${page}&limit=${itemsPerPage}`;
+            let url = `${API_URL}/api/progresivas/${tramoId}/children?page=${page}&limit=${itemsPerPage}`;
             if (search) {
                 url += `&search=${encodeURIComponent(search)}`;
             }
@@ -315,7 +315,7 @@ export default function GestorDeTramosActual() {
         setIsLoadingListado(true);
         try {
             const headers = getAuthHeaders();
-            const res = await axios.get(`${API_URL}/progresivas/${tramoId}/children/all`, { headers });
+            const res = await axios.get(`${API_URL}/api/progresivas/${tramoId}/children/all`, { headers });
 
             const processedData = res.data.filter(Boolean).map(subProg => ({
                 ...subProg,
@@ -360,8 +360,8 @@ export default function GestorDeTramosActual() {
         try {
             const headers = getAuthHeaders();
             const url = selectedProjectId
-                ? `${API_URL}/progresivas?selectedProjectId=${selectedProjectId}`
-                : `${API_URL}/progresivas`;
+                ? `${API_URL}/api/progresivas?selectedProjectId=${selectedProjectId}`
+                : `${API_URL}/api/progresivas`;
 
             const res = await axios.get(url, { headers });
             setTramos(res.data);
@@ -412,7 +412,7 @@ export default function GestorDeTramosActual() {
                     const fetchPageAndExpand = async () => {
                         try {
                             const headers = getAuthHeaders();
-                            const res = await axios.get(`${API_URL}/progresivas/${pId}/page`, { headers });
+                            const res = await axios.get(`${API_URL}/api/progresivas/${pId}/page`, { headers });
                             const { page } = res.data;
 
                             // Always fetch to ensure data is fresh and page is correct
@@ -442,7 +442,7 @@ export default function GestorDeTramosActual() {
                     try {
                         const headers = getAuthHeaders();
                         // Verify page just in case
-                        const res = await axios.get(`${API_URL}/progresivas/${pId}/page`, { headers });
+                        const res = await axios.get(`${API_URL}/api/progresivas/${pId}/page`, { headers });
                         const { page } = res.data;
                         console.log('>>> [GestorDeTramos] Page Check:', { apiPage: page, currentPage });
 
@@ -587,7 +587,7 @@ export default function GestorDeTramosActual() {
         try {
             const headers = getAuthHeaders();
             const payload = { ...progresivaFormData, estratos_perfil: undefined };
-            await axios.put(`${API_URL}/progresivas/child/${progresivaFormData.id}`, payload, { headers });
+            await axios.put(`${API_URL}/api/progresivas/child/${progresivaFormData.id}`, payload, { headers });
             alertify.success('Progresiva actualizada.');
             handleCloseEditProgresivaModal();
             fetchProgresivas(tramoSeleccionado.id, currentPage);
@@ -610,7 +610,7 @@ export default function GestorDeTramosActual() {
             payload.estratos_perfil.forEach((estrato, index) => {
                 console.log(`Estrato ${index}:`, estrato);
             });
-            await axios.put(`${API_URL}/progresivas/child/${progresivaParaGestionar.id}`, payload, { headers });
+            await axios.put(`${API_URL}/api/progresivas/child/${progresivaParaGestionar.id}`, payload, { headers });
             alertify.success('Estratos actualizados correctamente.');
             setShowGestionarEstratosModal(false);
             fetchProgresivas(tramoSeleccionado.id, currentPage);

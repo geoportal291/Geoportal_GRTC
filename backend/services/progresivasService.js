@@ -692,7 +692,7 @@ const updateProgresiva = async (id, progresivaData) => {
     const {
         nombre, descripcion, estado, coordenada_este, coordenada_norte, linea, longitud_total, tipo_via, intervalo_manual, proyecto_id,
         kml_trazado_id, // <-- AÑADIDO
-        generatedChildren
+        generatedChildren = []
     } = progresivaData;
 
     if (!nombre || !estado) {

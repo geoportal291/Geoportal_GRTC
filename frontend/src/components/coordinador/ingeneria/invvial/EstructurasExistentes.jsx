@@ -10,8 +10,9 @@ import { saveAs } from 'file-saver';
 import './vial.css';
 import ImagePreviewModal from './obras/ImagePreviewModal';
 import { CSSTransition } from 'react-transition-group';
+import ObservationsSidebar from './obras/ObservationsSidebar';
 
-const EstructurasExistentes = ({ projectId, isVisible, graphicsImages }) => {
+const EstructurasExistentes = ({ projectId, isVisible, graphicsImages, canComment }) => {
     const [estructurasData, setEstructurasData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isDataManagementModalOpen, setIsDataManagementModalOpen] = useState(false);
@@ -336,6 +337,17 @@ const EstructurasExistentes = ({ projectId, isVisible, graphicsImages }) => {
                                 )}
                             </div>
                         </CSSTransition>
+                    </div>
+
+                    <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginTop: '20px' }}>
+                        {selectedStructure && (
+                            <ObservationsSidebar
+                                projectId={projectId || selectedStructure.id_proyecto}
+                                elementId={selectedStructure.id_estructura || selectedStructure.id || selectedStructure.codigo}
+                                elementType="estructuras_existentes"
+                                canComment={canComment}
+                            />
+                        )}
                     </div>
                 </div>
             </div>

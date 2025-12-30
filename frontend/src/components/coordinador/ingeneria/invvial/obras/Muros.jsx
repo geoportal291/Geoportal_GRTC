@@ -7,7 +7,10 @@ import '../map/geoite.css';
 import ListaMurosModal from './ListaMurosModal';
 import ExportarMapaModal from './ExportarMapaModal';
 import axiosInstance from '../../../../../api/axios';
+
 import { saveAs } from 'file-saver';
+import { fromLatLon } from 'utm';
+import ObservationsSidebar from './ObservationsSidebar';
 
 // Estructura de datos de ejemplo
 const tramoData = {
@@ -25,7 +28,7 @@ const tramoData = {
     }
 };
 
-const Muros = ({ onEditElementSelect, murosData, graphicsImages, canUpload, showModal }) => {
+const Muros = ({ onEditElementSelect, murosData, graphicsImages, canUpload, showModal, canComment }) => {
 
     const [highlightedTramoId, setHighlightedTramoId] = useState('TRAMO 1');
     const [kmlRoute, setKmlRoute] = useState([]); // Estado para la ruta del KML
@@ -42,137 +45,86 @@ const Muros = ({ onEditElementSelect, murosData, graphicsImages, canUpload, show
     const infoRef = useRef(null);
     const generalInfoRef = useRef(null); // Nueva referencia para el panel de información general
 
-    useEffect(() => {
-        if (selectedMuro && selectedMuro.panel_fotografico_codigo && graphicsImages) {
-            const code = String(selectedMuro.panel_fotografico_codigo); // Ensure code is a string
-            const parts = code.split(' - ');
-            const rangePart = parts[0];
-            const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+    const getImagesForElement = useCallback((element, graphicsImages) => {
+        if (!element.panel_fotografico_codigo || !graphicsImages) {
+            return [];
+        }
+        const code = String(element.panel_fotografico_codigo).trim();
+        const entregable = element.entregable ? String(element.entregable).trim() : null;
 
-            let start, end;
+        // 1. Parse Ranges (e.g. "238-241" or "19")
+        const parts = code.split(' - ');
+        const rangePart = parts[0];
+        const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
-            if (rangePart.includes('-')) {
-                const [startStr, endStr] = rangePart.split('-');
-                start = parseInt(startStr, 10);
-                end = parseInt(endStr, 10);
-            } else {
-                start = parseInt(rangePart, 10);
-                end = start; // Treat single number as a range of one
-            }
+        let start, end;
+        if (rangePart.includes('-')) {
+            const [startStr, endStr] = rangePart.split('-');
+            start = parseInt(startStr, 10);
+            end = parseInt(endStr, 10);
+        } else {
+            start = parseInt(rangePart, 10);
+            end = start;
+        }
 
-            if (!isNaN(start) && !isNaN(end)) {
-                const expectedNames = [];
-                for (let i = start; i <= end; i++) {
-                    expectedNames.push(`${i}${suffix}`);
+        const expectedNames = [];
+        if (!isNaN(start) && !isNaN(end)) {
+            for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+        } else {
+            expectedNames.push(code);
+        }
+
+        // 2. Filter Images
+        return graphicsImages.filter(img => {
+            const imgNameWithoutExt = img.index ? img.index.split('.')[0] : '';
+            const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+
+            // A. Name Check (Always Required)
+            const nameMatches = expectedNames.includes(imgNameWithoutExt);
+            if (!nameMatches) return false;
+
+            // B. Entregable Logic (Hybrid Legacy/Strict)
+            const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+            if (entregable) {
+                const normElement = normalize(entregable);
+                const normImage = normalize(imgEntregable);
+
+                // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                if (normElement === 'E1') {
+                    return (!imgEntregable) || (normImage === 'E1');
                 }
 
-                const filtered = graphicsImages.filter(img => {
-                    const imgNameWithoutExt = img.index.split('.')[0];
-                    const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-                    const entregable = selectedMuro.entregable ? String(selectedMuro.entregable).trim() : null;
-
-                    // A. Name Check
-                    const nameMatches = expectedNames.includes(imgNameWithoutExt);
-                    if (!nameMatches) return false;
-
-                    // B. Entregable Logic (Hybrid Legacy/Strict)
-                    const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-                    if (entregable) {
-                        const normElement = normalize(entregable);
-                        const normImage = normalize(imgEntregable);
-
-                        // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
-                        if (normElement === 'E1') {
-                            return (!imgEntregable) || (normImage === 'E1');
-                        }
-
-                        // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
-                        return normImage === normElement;
-                    }
-
-                    // Scenario 3: No Entregable on Element. loose match.
-                    return true;
-                });
-                setMuroImages(filtered);
-            } else {
-                setMuroImages([]);
+                // Scenario 2: Element is "E2". STRICT match.
+                return normImage === normElement;
             }
+
+            // Scenario 3: No Entregable on element.
+            return true;
+        });
+    }, []);
+
+    useEffect(() => {
+        if (selectedMuro && graphicsImages) {
+            const filtered = getImagesForElement(selectedMuro, graphicsImages);
+            setMuroImages(filtered);
         } else {
             setMuroImages([]);
         }
-    }, [selectedMuro, graphicsImages]);
+    }, [selectedMuro, graphicsImages, getImagesForElement]);
 
     useEffect(() => {
         if (murosData.length > 0 && graphicsImages.length > 0) {
             const processedMuros = murosData.map(muro => {
-                const code = muro.panel_fotografico_codigo ? String(muro.panel_fotografico_codigo) : null;
-                let imageUrls = [];
-
-                if (code) {
-                    // 1. Parse Ranges
-                    const parts = code.split(' - ');
-                    const rangePart = parts[0];
-                    const suffix = parts.length > 1 ? `-${parts[1]}` : '';
-
-                    let start, end;
-                    if (rangePart.includes('-')) {
-                        const [startStr, endStr] = rangePart.split('-');
-                        start = parseInt(startStr, 10);
-                        end = parseInt(endStr, 10);
-                    } else {
-                        start = parseInt(rangePart, 10);
-                        end = start;
-                    }
-
-                    const expectedNames = [];
-                    if (!isNaN(start) && !isNaN(end)) {
-                        for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
-                    } else {
-                        expectedNames.push(code);
-                    }
-
-                    // 2. Filter Images
-                    const foundImages = graphicsImages.filter(img => {
-                        const imgNameWithoutExt = img.index.split('.')[0];
-                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-                        const entregable = muro.entregable ? String(muro.entregable).trim() : null;
-
-                        // A. Name Check
-                        const nameMatches = expectedNames.includes(imgNameWithoutExt);
-                        if (!nameMatches) return false;
-
-                        // B. Entregable Logic (Hybrid Legacy/Strict)
-                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-                        if (entregable) {
-                            const normElement = normalize(entregable);
-                            const normImage = normalize(imgEntregable);
-
-                            // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
-                            if (normElement === 'E1') {
-                                return (!imgEntregable) || (normImage === 'E1');
-                            }
-
-                            // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
-                            return normImage === normElement;
-                        }
-
-                        // Scenario 3: No Entregable on Element. loose match.
-                        return true;
-                    });
-
-                    if (foundImages.length > 0) {
-                        imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
-                    }
-                }
-                return { ...muro, imageUrls: imageUrls, type: 'muro' };
+                const foundImages = getImagesForElement(muro, graphicsImages);
+                const imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
+                return { ...muro, imageUrls: imageUrls, images: foundImages, type: 'muro' };
             });
             setMurosWithImages(processedMuros);
         } else {
             setMurosWithImages(murosData.map(muro => ({ ...muro, imageUrls: [], type: 'muro' })));
         }
-    }, [murosData, graphicsImages]);
+    }, [murosData, graphicsImages, getImagesForElement]);
 
     useEffect(() => {
         if (highlightedTramoId && tramoData[highlightedTramoId]) {
@@ -450,7 +402,18 @@ const Muros = ({ onEditElementSelect, murosData, graphicsImages, canUpload, show
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Longitud:</strong> {selectedMuro.longitud_muro || 'datos sin encontrar'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Alto:</strong> {selectedMuro.alto || 'datos sin encontrar'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Ancho:</strong> {selectedMuro.ancho || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Coordenadas:</strong> {selectedMuro.latitud.toFixed(6)}, {selectedMuro.longitud.toFixed(6)}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}>
+                                                        <strong>Coordenadas:</strong>{' '}
+                                                        {(() => {
+                                                            if (selectedMuro.latitud && selectedMuro.longitud) {
+                                                                try {
+                                                                    const { easting, northing, zoneNum, zoneLetter } = fromLatLon(selectedMuro.latitud, selectedMuro.longitud);
+                                                                    return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
+                                                                } catch (e) { return `${selectedMuro.latitud}, ${selectedMuro.longitud}`; }
+                                                            }
+                                                            return '---';
+                                                        })()}
+                                                    </p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Observaciones:</strong> {selectedMuro.observaciones || 'datos sin encontrar'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Código de Panel Fotográfico:</strong> {selectedMuro.panel_fotografico_codigo || 'datos sin encontrar'}</p>
                                                     <button
@@ -497,8 +460,16 @@ const Muros = ({ onEditElementSelect, murosData, graphicsImages, canUpload, show
                         </CSSTransition>
                     </div>
 
-
-
+                    <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginTop: '20px' }}>
+                        {selectedMuro && (
+                            <ObservationsSidebar
+                                projectId={selectedMuro.id_proyecto}
+                                elementId={selectedMuro.id_muro || selectedMuro.id || selectedMuro.clase}
+                                elementType="muros"
+                                canComment={canComment}
+                            />
+                        )}
+                    </div>
                 </div>
             </div>
             {isPreviewModalOpen && (

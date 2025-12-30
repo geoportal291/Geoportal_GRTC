@@ -222,6 +222,8 @@ const Progresivas = () => {
   const [formData, setFormData] = useState(initialFormData);
   const [kmlFileProgresiva, setKmlFileProgresiva] = useState(null);
   const [isUploadingKmlProgresiva, setIsUploadingKmlProgresiva] = useState(false);
+  const [kmlFilePuntos, setKmlFilePuntos] = useState(null); // NEW: State for Puntos KML
+  const [isUploadingKmlPuntos, setIsUploadingKmlPuntos] = useState(false); // NEW: State for Puntos KML upload status
   const { progresivas, loading, error, fetchProgresivas: fetchProgresivasFromHook } = useProgresivasData();
   const [proyectos, setProyectos] = useState([]); const [generatedSubProgresivas, setGeneratedSubProgresivas] = useState([]);
   const [progresivaDetails, setProgresivaDetails] = useState(null);
@@ -348,6 +350,33 @@ const Progresivas = () => {
     setKmlFileProgresiva(e.target.files[0]);
   };
 
+  const handleKmlFileChangePuntos = (e) => {
+    setKmlFilePuntos(e.target.files[0]);
+  };
+
+  const handleDeleteKmlPuntos = async () => {
+    if (!editingId) return;
+
+    alertify.confirm(
+      'Eliminar Puntos KML',
+      '¿Estás seguro de que quieres eliminar el KML de Puntos de Referencia?',
+      async () => {
+        try {
+          const headers = getAuthHeaders();
+          // Assuming new endpoint or param. If backend not ready, this will fail 404.
+          await axios.delete(`${API_URL}/api/progresivas/${editingId}/kml-puntos`, { headers });
+          setFormData(prev => ({ ...prev, kml_puntos_filename: null }));
+          alertify.success('KML de Puntos eliminado correctamente.');
+          fetchProgresivasFromHook();
+        } catch (err) {
+          console.error("Error deleting KML Puntos", err);
+          alertify.error('Error al eliminar KML de puntos.');
+        }
+      },
+      () => { }
+    );
+  };
+
 
   const handleNextStep = () => setStep(prev => Math.min(prev + 1, 3));
   const handlePrevStep = () => setStep(prev => Math.max(prev - 1, 1));
@@ -386,11 +415,12 @@ const Progresivas = () => {
         kml_trazado_id: progresiva.kml_trazado_id || null, // Add this line
         kml_filename: progresiva.kml_filename || null,
         kml_uploaded_at: progresiva.kml_uploaded_at || null,
+        kml_puntos_filename: progresiva.kml_puntos_filename || null, // NEW: Load Puntos KML filename
       });
 
       // Fetch generated sub-progresivas for editing
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/progresivas/${progresiva.id}/children/all`, { headers });
+      const res = await axios.get(`${API_URL}/api/progresivas/${progresiva.id}/children/all`, { headers });
 
       setGeneratedSubProgresivas(Array.isArray(res.data?.children) ? res.data.children : res.data || []);
       setShowForm(true);
@@ -624,7 +654,7 @@ const Progresivas = () => {
     setIsLoadingAction(true);
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/progresivas/${progresiva.id}/children/all`, { headers });
+      const res = await axios.get(`${API_URL}/api/progresivas/${progresiva.id}/children/all`, { headers });
 
       const subProgresivasData = Array.isArray(res.data) ? res.data : [];
       const processedSubProgresivas = subProgresivasData.map(subProg => ({
@@ -756,7 +786,7 @@ const Progresivas = () => {
         const progresiva = progresivas.find(p => p.id === id);
         if (!progresiva) continue;
 
-        const res = await axios.get(`${API_URL}/progresivas/${id}/children/all`, { headers });
+        const res = await axios.get(`${API_URL}/api/progresivas/${id}/children/all`, { headers });
         const children = Array.isArray(res.data) ? res.data : [];
         allChildrenData.push(...children); // Collect children for later
 
@@ -1733,6 +1763,32 @@ const Progresivas = () => {
                           </p>
                           <button type="button" className="delete-kml-btn" onClick={handleDeleteKml}>
                             <DeleteIcon /> Eliminar KML
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </fieldset>
+
+                  {/* NEW: KML Upload Section for Points (Puntos) */}
+                  <fieldset>
+                    <legend>Puntos Ref. KML (Opcional)</legend>
+                    <div className="form-group">
+                      <label htmlFor="kmlFilePuntos">Archivo KML/KMZ (Puntos)</label>
+                      <input
+                        type="file"
+                        id="kmlFilePuntos"
+                        name="kmlFilePuntos"
+                        accept=".kml,.kmz"
+                        onChange={handleKmlFileChangePuntos}
+                        disabled={isUploadingKmlProgresiva}
+                      />
+                      {formData?.kml_puntos_filename && (
+                        <div className="kml-info-display">
+                          <p className="file-info">
+                            Puntos KML actual: <strong>{formData.kml_puntos_filename}</strong>
+                          </p>
+                          <button type="button" className="delete-kml-btn" onClick={handleDeleteKmlPuntos}>
+                            <DeleteIcon /> Eliminar Puntos
                           </button>
                         </div>
                       )}

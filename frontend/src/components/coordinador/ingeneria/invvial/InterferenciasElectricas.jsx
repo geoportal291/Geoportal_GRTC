@@ -9,6 +9,8 @@ import ExportarMapaModal from './obras/ExportarMapaModal';
 import axiosInstance from '../../../../api/axios';
 import { saveAs } from 'file-saver';
 import ImagePreviewModal from './obras/ImagePreviewModal';
+import ObservationsSidebar from './obras/ObservationsSidebar';
+import { fromLatLon } from 'utm';
 
 const tramoData = {
     'TRAMO 1': { id: 'TRAMO 1', elements: [] },
@@ -16,7 +18,7 @@ const tramoData = {
     'TRAMO 3': { id: 'TRAMO 3', elements: [] }
 };
 
-const InterferenciasElectricas = ({ onEditElementSelect, interferenciasData, graphicsImages, canUpload, showModal }) => {
+const InterferenciasElectricas = ({ onEditElementSelect, interferenciasData, graphicsImages, canUpload, showModal, canComment, projectId }) => {
 
     const [highlightedTramoId, setHighlightedTramoId] = useState('TRAMO 1');
     const [kmlRoute, setKmlRoute] = useState([]);
@@ -296,7 +298,18 @@ const InterferenciasElectricas = ({ onEditElementSelect, interferenciasData, gra
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Material:</strong> {selectedInterferencia.material || 'N/A'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Tensión:</strong> {selectedInterferencia.tension || 'N/A'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Lado:</strong> {selectedInterferencia.lado || 'N/A'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Coordenadas:</strong> {selectedInterferencia.latitud ? selectedInterferencia.latitud.toFixed(6) : 'N/A'}, {selectedInterferencia.longitud ? selectedInterferencia.longitud.toFixed(6) : 'N/A'}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}>
+                                                        <strong>Coordenadas:</strong>{' '}
+                                                        {(() => {
+                                                            if (selectedInterferencia.latitud && selectedInterferencia.longitud) {
+                                                                try {
+                                                                    const { easting, northing, zoneNum, zoneLetter } = fromLatLon(selectedInterferencia.latitud, selectedInterferencia.longitud);
+                                                                    return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
+                                                                } catch (e) { return `${selectedInterferencia.latitud}, ${selectedInterferencia.longitud}`; }
+                                                            }
+                                                            return '---';
+                                                        })()}
+                                                    </p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Observaciones:</strong> {selectedInterferencia.observaciones || 'N/A'}</p>
                                                     <button
                                                         onClick={() => handleEditElement(selectedInterferencia)}
@@ -336,6 +349,17 @@ const InterferenciasElectricas = ({ onEditElementSelect, interferenciasData, gra
                                 )}
                             </div>
                         </CSSTransition>
+                    </div>
+
+                    <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginTop: '20px' }}>
+                        {selectedInterferencia && (
+                            <ObservationsSidebar
+                                projectId={projectId || selectedInterferencia.id_proyecto}
+                                elementId={selectedInterferencia.id_interferencia || selectedInterferencia.id || selectedInterferencia.codigo}
+                                elementType="interferencias"
+                                canComment={canComment}
+                            />
+                        )}
                     </div>
                 </div>
             </div>

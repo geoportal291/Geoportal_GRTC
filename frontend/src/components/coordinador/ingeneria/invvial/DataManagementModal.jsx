@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { toLatLon } from 'utm';
 import axiosInstance from '../../../../api/axios';
 import alertify from 'alertifyjs';
+import Swal from 'sweetalert2';
 
 // Import new sub-components
 import ListaElementosView from './AlcantarillaModalViews/ListaElementosView';
@@ -30,6 +31,7 @@ const DataManagementModal = ({
   type = 'alcantarillas', // Default type
   isNavbarExpanded,
   onDeleteElement, // New prop
+  canUpload, // Permission flag
 }) => {
   const initialFormData = {
     id_alcantarilla: '',
@@ -91,6 +93,7 @@ const DataManagementModal = ({
   const [entregableToUpload, setEntregableToUpload] = useState('');
 
   const [excelFileInfo, setExcelFileInfo] = useState(null);
+  const [isExplorerOpen, setIsExplorerOpen] = useState(false);
 
   const fetchExcelInfo = useCallback(async () => {
     if (!projectId) {
@@ -192,47 +195,105 @@ const DataManagementModal = ({
   }, [pollingJobId, processedFileName, fetchGraphicsImages]); // Added projectId to dependencies
 
   const handleDeleteGraphicImage = async (imageId) => {
-    alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar esta imagen de gráfico? Esta acción no se puede deshacer.',
-      async () => {
+    if (!canUpload) {
+      Swal.fire('Acceso Denegado', 'No tienes permiso para eliminar imágenes.', 'error');
+      return;
+    }
+    Swal.fire({
+      title: '¿Estás seguro?',
+      text: '¿Quieres eliminar esta imagen? Esta acción no se puede deshacer.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
         setUploadStatus({ message: 'Eliminando imagen...', type: 'info' });
         try {
           await axiosInstance.delete(`/api/alcantarillas/graphics/${imageId}?projectId=${projectId}`);
           setUploadStatus({ message: 'Imagen eliminada correctamente.', type: 'success' });
+          Swal.fire('Eliminado', 'La imagen ha sido eliminada.', 'success');
           fetchGraphicsImages();
         } catch (error) {
           if (error.response && error.response.status === 403) {
-            alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
+            Swal.fire('Error', 'Usted solo tiene acceso a lectura, no puede eliminar archivos', 'error');
           } else {
-            setUploadStatus({ message: 'Error al eliminar imagen de gráfico: ' + (error.response?.data?.message || error.message), type: 'error' });
+            setUploadStatus({ message: 'Error al eliminar imagen: ' + (error.response?.data?.message || error.message), type: 'error' });
+            Swal.fire('Error', 'No se pudo eliminar la imagen.', 'error');
           }
         }
-      },
-      () => {
-        setUploadStatus({ message: 'Eliminación cancelada.', type: 'info' });
       }
-    ).set('labels', { ok: 'Sí, eliminar', cancel: 'Cancelar' });
+    });
   };
 
   const handleDeleteAllGraphicImages = async () => {
-    alertify.confirm('Confirmar Eliminación', '¿Estás seguro de que quieres eliminar TODAS las imágenes de gráfico de este proyecto? Esta acción no se puede deshacer.',
-      async () => {
+    if (!canUpload) {
+      Swal.fire('Acceso Denegado', 'No tienes permiso para eliminar imágenes.', 'error');
+      return;
+    }
+    Swal.fire({
+      title: '¡CUIDADO!',
+      text: '¿Estás seguro de que quieres eliminar TODAS las imágenes de este proyecto? Esta acción es irreversible.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Sí, eliminar todo',
+      cancelButtonText: 'Cancelar'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
         try {
           setUploadStatus({ message: 'Eliminando todas las imágenes...', type: 'info' });
           await axiosInstance.delete(`/api/alcantarillas/graphics/all/${projectId}`);
           setUploadStatus({ message: 'Todas las imágenes eliminadas correctamente.', type: 'success' });
+          Swal.fire('Eliminado', 'Se han borrado todas las imágenes.', 'success');
           setGraphicsImages([]);
         } catch (error) {
           if (error.response && error.response.status === 403) {
-            alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
+            Swal.fire('Error', 'Usted solo tiene acceso a lectura, no puede eliminar archivos', 'error');
           } else {
-            setUploadStatus({ message: 'Error al eliminar todas las imágenes de gráfico: ' + (error.response?.data?.message || error.message), type: 'error' });
+            setUploadStatus({ message: 'Error al eliminar imágenes: ' + (error.response?.data?.message || error.message), type: 'error' });
+            Swal.fire('Error', 'No se pudieron eliminar las imágenes.', 'error');
           }
         }
-      },
-      () => {
-        setUploadStatus({ message: 'Eliminación cancelada.', type: 'info' });
       }
-    ).set('labels', { ok: 'Sí, eliminar', cancel: 'Cancelar' });
+    });
+  };
+
+  const handleDeleteFolderImages = async (entregable) => {
+    if (!canUpload) {
+      Swal.fire('Acceso Denegado', 'No tienes permiso para eliminar imágenes.', 'error');
+      return;
+    }
+    Swal.fire({
+      title: 'Confirmar Eliminación',
+      text: `¿Estás seguro de que quieres eliminar TODAS las imágenes de "${entregable}"? Esta acción no se puede deshacer.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Sí, eliminar todo',
+      cancelButtonText: 'Cancelar'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          setUploadStatus({ message: `Eliminando imágenes de ${entregable}...`, type: 'info' });
+          await axiosInstance.delete(`/api/alcantarillas/graphics/folder/${projectId}`, { data: { entregable } });
+          setUploadStatus({ message: `Imágenes de ${entregable} eliminadas correctamente.`, type: 'success' });
+          Swal.fire('Borrado', `Las imágenes de ${entregable} han sido eliminadas.`, 'success');
+          fetchGraphicsImages();
+        } catch (error) {
+          if (error.response && error.response.status === 403) {
+            Swal.fire('Error', 'Usted solo tiene acceso a lectura, no puede eliminar archivos', 'error');
+          } else {
+            setUploadStatus({ message: `Error al eliminar carpeta: ${error.response?.data?.message || error.message}`, type: 'error' });
+            Swal.fire('Error', 'No se pudieron eliminar las imágenes de la carpeta.', 'error');
+          }
+        }
+      }
+    });
   };
 
   useEffect(() => {
@@ -324,6 +385,10 @@ const DataManagementModal = ({
   };
 
   const handleProcessExcel = async () => {
+    if (!canUpload) {
+      alertify.error('Acceso Denegado: No tienes permiso para subir archivos.');
+      return;
+    }
     if (!filesToUpload) {
       alertify.warning('Por favor, selecciona un archivo Excel.');
       return;
@@ -395,6 +460,10 @@ const DataManagementModal = ({
   };
 
   const handleImageUploadProcess = async () => {
+    if (!canUpload) {
+      alertify.error('Acceso Denegado: No tienes permiso para subir imágenes.');
+      return;
+    }
     if (!filesToUpload || filesToUpload.length === 0) {
       alertify.error('Por favor, selecciona uno o más archivos.');
       return;
@@ -585,6 +654,10 @@ const DataManagementModal = ({
 
 
   const handleBulkOcr = async (fileInput) => {
+    if (!canUpload) {
+      alertify.error('Acceso Denegado: No tienes permiso para procesar OCR.');
+      return;
+    }
     if (!fileInput.files || fileInput.files.length === 0) {
       alertify.warning('Selecciona al menos una imagen o un archivo comprimido.');
       return;
@@ -659,6 +732,10 @@ const DataManagementModal = ({
   };
 
   const handleDeleteExcelData = async () => {
+    if (!canUpload) {
+      alertify.error('Acceso Denegado: No tienes permiso para eliminar datos.');
+      return;
+    }
     if (!projectId) {
       alertify.error('Error: No se ha proporcionado un ID de proyecto.');
       return;
@@ -828,8 +905,9 @@ const DataManagementModal = ({
         padding: '20px',
         borderRadius: '10px',
         boxShadow: '0 8px 25px rgba(0, 0, 0, 0.2)',
-        maxWidth: '900px',
+        maxWidth: isExplorerOpen && !isNavbarExpanded ? '98vw' : '900px',
         width: '95%',
+        transition: 'max-width 0.3s ease-in-out',
         zIndex: 100001,
         position: 'relative',
         maxHeight: '85vh',
@@ -939,34 +1017,42 @@ const DataManagementModal = ({
             />
           )}
 
-          <SubirImagenesAlcantarillasView
-            filesToUpload={filesToUpload}
-            isUploading={isUploading}
-            pollingJobId={pollingJobId}
-            handleFileChange={handleFileChange}
-            handleImageUploadProcess={handleImageUploadProcess}
-            handleDeleteAllGraphicImages={handleDeleteAllGraphicImages}
-            uploadStatus={uploadStatus}
-            uploadProgress={uploadProgress}
-            etr={etr}
-            formatEtr={formatEtr}
-            graphicsImages={graphicsImages}
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            handleDeleteGraphicImage={handleDeleteGraphicImage}
-            setPreviewImageUrl={setPreviewImageUrl}
-            setIsPreviewModalOpen={setIsPreviewModalOpen}
-            setModalViewMode={setModalViewMode}
-            setUploadStatus={setUploadStatus}
-            setGraphicsImages={setGraphicsImages}
+          {(modalViewMode === 'upload_images' || modalViewMode === 'upload_graphics_excel') && (
+            <SubirImagenesAlcantarillasView
+              filesToUpload={filesToUpload}
+              isUploading={isUploading}
+              pollingJobId={pollingJobId}
+              handleFileChange={handleFileChange}
+              handleImageUploadProcess={handleImageUploadProcess}
+              handleDeleteAllGraphicImages={handleDeleteAllGraphicImages}
+              uploadStatus={uploadStatus}
+              uploadProgress={uploadProgress}
+              etr={etr}
+              formatEtr={formatEtr}
+              graphicsImages={graphicsImages}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              handleDeleteGraphicImage={handleDeleteGraphicImage}
+              handleDeleteFolderImages={handleDeleteFolderImages} // New prop
+              setPreviewImageUrl={setPreviewImageUrl}
+              setIsPreviewModalOpen={setIsPreviewModalOpen}
+              setModalViewMode={setModalViewMode}
+              setUploadStatus={setUploadStatus}
+              setGraphicsImages={setGraphicsImages}
 
-            handleBulkOcr={handleBulkOcr}
-            bulkProgress={bulkProgress}
-            bulkEtr={bulkEtr}
+              handleBulkOcr={handleBulkOcr}
+              bulkProgress={bulkProgress}
+              bulkEtr={bulkEtr}
 
-            entregableToUpload={entregableToUpload}
-            setEntregableToUpload={setEntregableToUpload}
-          />
+              entregableToUpload={entregableToUpload}
+              setEntregableToUpload={setEntregableToUpload}
+
+              isExplorerOpen={isExplorerOpen}
+              setIsExplorerOpen={setIsExplorerOpen}
+            />
+          )}
+
+
 
 
 
@@ -977,26 +1063,40 @@ const DataManagementModal = ({
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              backgroundColor: 'rgba(0, 0, 0, 0.9)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              zIndex: 10002,
-            }}>
-              <img src={previewImageUrl} alt="Preview" style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
-              <button onClick={() => setIsPreviewModalOpen(false)} style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '40px',
-                height: '40px',
-                fontSize: '1.5rem',
-                cursor: 'pointer',
-                color: '#333',
-              }}>&times;</button>
+              zIndex: 100002, // Higher than main modal (100000)
+              padding: '20px'
+            }} onClick={() => setIsPreviewModalOpen(false)}>
+              <div style={{ position: 'relative', width: 'auto', maxHeight: '75vh', maxWidth: '75vw', display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                <img src={previewImageUrl} alt="Preview" style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', borderRadius: '4px', boxShadow: '0 0 25px rgba(0,0,0,0.7)' }} />
+                <button onClick={() => setIsPreviewModalOpen(false)} style={{
+                  position: 'absolute',
+                  top: '-25px', // More space above
+                  right: '-25px', // More space to the right
+                  background: '#dc3545', // Red background for visibility
+                  border: '2px solid white',
+                  borderRadius: '50%',
+                  width: '45px', // Larger touch target
+                  height: '45px',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+                  zIndex: 10,
+                  transition: 'transform 0.2s'
+                }}
+                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  &times;
+                </button>
+              </div>
             </div>
           )}
         </div>

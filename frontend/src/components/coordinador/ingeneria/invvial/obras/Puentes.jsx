@@ -7,7 +7,10 @@ import '../map/geoite.css';
 import ListaPuentesModal from './ListaPuentesModal';
 import ExportarMapaModal from './ExportarMapaModal';
 import axiosInstance from '../../../../../api/axios';
+
 import { saveAs } from 'file-saver';
+import { fromLatLon } from 'utm';
+import ObservationsSidebar from './ObservationsSidebar';
 
 // Estructura de datos de ejemplo
 const tramoData = {
@@ -25,7 +28,7 @@ const tramoData = {
     }
 };
 
-const Puentes = ({ onEditElementSelect, puentesData, graphicsImages, canUpload, showModal }) => {
+const Puentes = ({ onEditElementSelect, puentesData, graphicsImages, canUpload, showModal, canComment }) => {
 
     const [highlightedTramoId, setHighlightedTramoId] = useState('TRAMO 1');
     const [kmlRoute, setKmlRoute] = useState([]); // Estado para la ruta del KML
@@ -42,137 +45,86 @@ const Puentes = ({ onEditElementSelect, puentesData, graphicsImages, canUpload, 
     const infoRef = useRef(null);
     const generalInfoRef = useRef(null); // Nueva referencia para el panel de información general
 
-    useEffect(() => {
-        if (selectedPuente && selectedPuente.panel_fotografico_codigo && graphicsImages) {
-            const code = String(selectedPuente.panel_fotografico_codigo); // Ensure code is a string
-            const parts = code.split(' - ');
-            const rangePart = parts[0];
-            const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+    const getImagesForElement = useCallback((element, graphicsImages) => {
+        if (!element.panel_fotografico_codigo || !graphicsImages) {
+            return [];
+        }
+        const code = String(element.panel_fotografico_codigo).trim();
+        const entregable = element.entregable ? String(element.entregable).trim() : null;
 
-            let start, end;
+        // 1. Parse Ranges (e.g. "238-241" or "19")
+        const parts = code.split(' - ');
+        const rangePart = parts[0];
+        const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
-            if (rangePart.includes('-')) {
-                const [startStr, endStr] = rangePart.split('-');
-                start = parseInt(startStr, 10);
-                end = parseInt(endStr, 10);
-            } else {
-                start = parseInt(rangePart, 10);
-                end = start; // Treat single number as a range of one
-            }
+        let start, end;
+        if (rangePart.includes('-')) {
+            const [startStr, endStr] = rangePart.split('-');
+            start = parseInt(startStr, 10);
+            end = parseInt(endStr, 10);
+        } else {
+            start = parseInt(rangePart, 10);
+            end = start;
+        }
 
-            if (!isNaN(start) && !isNaN(end)) {
-                const expectedNames = [];
-                for (let i = start; i <= end; i++) {
-                    expectedNames.push(`${i}${suffix}`);
+        const expectedNames = [];
+        if (!isNaN(start) && !isNaN(end)) {
+            for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+        } else {
+            expectedNames.push(code);
+        }
+
+        // 2. Filter Images
+        return graphicsImages.filter(img => {
+            const imgNameWithoutExt = img.index ? img.index.split('.')[0] : '';
+            const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+
+            // A. Name Check (Always Required)
+            const nameMatches = expectedNames.includes(imgNameWithoutExt);
+            if (!nameMatches) return false;
+
+            // B. Entregable Logic (Hybrid Legacy/Strict)
+            const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+            if (entregable) {
+                const normElement = normalize(entregable);
+                const normImage = normalize(imgEntregable);
+
+                // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                if (normElement === 'E1') {
+                    return (!imgEntregable) || (normImage === 'E1');
                 }
 
-                const filtered = graphicsImages.filter(img => {
-                    const imgNameWithoutExt = img.index.split('.')[0];
-                    const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-                    const entregable = selectedPuente.entregable ? String(selectedPuente.entregable).trim() : null;
-
-                    // A. Name Check
-                    const nameMatches = expectedNames.includes(imgNameWithoutExt);
-                    if (!nameMatches) return false;
-
-                    // B. Entregable Logic (Hybrid Legacy/Strict)
-                    const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-                    if (entregable) {
-                        const normElement = normalize(entregable);
-                        const normImage = normalize(imgEntregable);
-
-                        // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
-                        if (normElement === 'E1') {
-                            return (!imgEntregable) || (normImage === 'E1');
-                        }
-
-                        // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
-                        return normImage === normElement;
-                    }
-
-                    // Scenario 3: No Entregable on Element. loose match.
-                    return true;
-                });
-                setPuenteImages(filtered);
-            } else {
-                setPuenteImages([]);
+                // Scenario 2: Element is "E2". STRICT match.
+                return normImage === normElement;
             }
+
+            // Scenario 3: No Entregable on element.
+            return true;
+        });
+    }, []);
+
+    useEffect(() => {
+        if (selectedPuente && graphicsImages) {
+            const filtered = getImagesForElement(selectedPuente, graphicsImages);
+            setPuenteImages(filtered);
         } else {
             setPuenteImages([]);
         }
-    }, [selectedPuente, graphicsImages]);
+    }, [selectedPuente, graphicsImages, getImagesForElement]);
 
     useEffect(() => {
         if (puentesData.length > 0 && graphicsImages.length > 0) {
             const processedPuentes = puentesData.map(puente => {
-                const code = puente.panel_fotografico_codigo ? String(puente.panel_fotografico_codigo) : null;
-                let imageUrls = [];
-
-                if (code) {
-                    // 1. Parse Ranges
-                    const parts = code.split(' - ');
-                    const rangePart = parts[0];
-                    const suffix = parts.length > 1 ? `-${parts[1]}` : '';
-
-                    let start, end;
-                    if (rangePart.includes('-')) {
-                        const [startStr, endStr] = rangePart.split('-');
-                        start = parseInt(startStr, 10);
-                        end = parseInt(endStr, 10);
-                    } else {
-                        start = parseInt(rangePart, 10);
-                        end = start;
-                    }
-
-                    const expectedNames = [];
-                    if (!isNaN(start) && !isNaN(end)) {
-                        for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
-                    } else {
-                        expectedNames.push(code);
-                    }
-
-                    // 2. Filter Images
-                    const foundImages = graphicsImages.filter(img => {
-                        const imgNameWithoutExt = img.index.split('.')[0];
-                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-                        const entregable = puente.entregable ? String(puente.entregable).trim() : null;
-
-                        // A. Name Check
-                        const nameMatches = expectedNames.includes(imgNameWithoutExt);
-                        if (!nameMatches) return false;
-
-                        // B. Entregable Logic (Hybrid Legacy/Strict)
-                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-                        if (entregable) {
-                            const normElement = normalize(entregable);
-                            const normImage = normalize(imgEntregable);
-
-                            // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
-                            if (normElement === 'E1') {
-                                return (!imgEntregable) || (normImage === 'E1');
-                            }
-
-                            // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
-                            return normImage === normElement;
-                        }
-
-                        // Scenario 3: No Entregable on Element. loose match.
-                        return true;
-                    });
-
-                    if (foundImages.length > 0) {
-                        imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
-                    }
-                }
-                return { ...puente, imageUrls: imageUrls, type: 'puente' };
+                const foundImages = getImagesForElement(puente, graphicsImages);
+                const imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
+                return { ...puente, imageUrls: imageUrls, images: foundImages, type: 'puente' };
             });
             setPuentesWithImages(processedPuentes);
         } else {
             setPuentesWithImages(puentesData.map(puente => ({ ...puente, imageUrls: [], type: 'puente' })));
         }
-    }, [puentesData, graphicsImages]);
+    }, [puentesData, graphicsImages, getImagesForElement]);
 
     useEffect(() => {
         if (highlightedTramoId && tramoData[highlightedTramoId]) {
@@ -448,7 +400,18 @@ const Puentes = ({ onEditElementSelect, puentesData, graphicsImages, canUpload, 
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Estado:</strong> {selectedPuente.estado || 'datos sin encontrar'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Longitud:</strong> {selectedPuente.longitud_puente || 'datos sin encontrar'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Ancho:</strong> {selectedPuente.ancho || 'datos sin encontrar'}</p>
-                                                    <p style={{ margin: '0 0 5px 0' }}><strong>Coordenadas:</strong> {selectedPuente.latitud.toFixed(6)}, {selectedPuente.longitud.toFixed(6)}</p>
+                                                    <p style={{ margin: '0 0 5px 0' }}>
+                                                        <strong>Coordenadas:</strong>{' '}
+                                                        {(() => {
+                                                            if (selectedPuente.latitud && selectedPuente.longitud) {
+                                                                try {
+                                                                    const { easting, northing, zoneNum, zoneLetter } = fromLatLon(selectedPuente.latitud, selectedPuente.longitud);
+                                                                    return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
+                                                                } catch (e) { return `${selectedPuente.latitud}, ${selectedPuente.longitud}`; }
+                                                            }
+                                                            return '---';
+                                                        })()}
+                                                    </p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Observaciones:</strong> {selectedPuente.observaciones || 'datos sin encontrar'}</p>
                                                     <p style={{ margin: '0 0 5px 0' }}><strong>Código de Panel Fotográfico:</strong> {selectedPuente.panel_fotografico_codigo || 'datos sin encontrar'}</p>
                                                     <button
@@ -495,8 +458,16 @@ const Puentes = ({ onEditElementSelect, puentesData, graphicsImages, canUpload, 
                         </CSSTransition>
                     </div>
 
-
-
+                    <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginTop: '20px' }}>
+                        {selectedPuente && (
+                            <ObservationsSidebar
+                                projectId={selectedPuente.id_proyecto}
+                                elementId={selectedPuente.id_puente || selectedPuente.id || selectedPuente.codigo}
+                                elementType="puentes"
+                                canComment={canComment}
+                            />
+                        )}
+                    </div>
                 </div>
             </div>
             {isPreviewModalOpen && (

@@ -9,6 +9,8 @@ import ExportarMapaModal from './ExportarMapaModal';
 import axiosInstance from '../../../../../api/axios';
 import { saveAs } from 'file-saver';
 import ImagePreviewModal from './ImagePreviewModal';
+import { fromLatLon } from 'utm';
+import ObservationsSidebar from './ObservationsSidebar';
 
 
 // Estructura de datos de ejemplo
@@ -29,7 +31,7 @@ const tramoData = {
   }
 };
 
-const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages, canUpload, showModal }) => {
+const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages, canUpload, showModal, canComment }) => {
 
   const [highlightedTramoId, setHighlightedTramoId] = useState('TRAMO 1');
   const [kmlRoute, setKmlRoute] = useState([]); // Estado para la ruta del KML
@@ -46,110 +48,86 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
   const infoRef = useRef(null);
   const generalInfoRef = useRef(null); // Nueva referencia para el panel de información general
 
+  const getImagesForElement = useCallback((element, graphicsImages) => {
+    if (!element.panel_fotografico_codigo || !graphicsImages) {
+      return [];
+    }
+    const code = String(element.panel_fotografico_codigo).trim();
+    const entregable = element.entregable ? String(element.entregable).trim() : null;
+
+    // 1. Parse Ranges (e.g. "238-241" or "19")
+    const parts = code.split(' - ');
+    const rangePart = parts[0];
+    const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+
+    let start, end;
+    if (rangePart.includes('-')) {
+      const [startStr, endStr] = rangePart.split('-');
+      start = parseInt(startStr, 10);
+      end = parseInt(endStr, 10);
+    } else {
+      start = parseInt(rangePart, 10);
+      end = start;
+    }
+
+    const expectedNames = [];
+    if (!isNaN(start) && !isNaN(end)) {
+      for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+    } else {
+      expectedNames.push(code);
+    }
+
+    // 2. Filter Images
+    return graphicsImages.filter(img => {
+      const imgNameWithoutExt = img.index ? img.index.split('.')[0] : '';
+      const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+
+      // A. Name Check (Always Required)
+      const nameMatches = expectedNames.includes(imgNameWithoutExt);
+      if (!nameMatches) return false;
+
+      // B. Entregable Logic (Hybrid Legacy/Strict)
+      const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+      if (entregable) {
+        const normElement = normalize(entregable);
+        const normImage = normalize(imgEntregable);
+
+        // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+        if (normElement === 'E1') {
+          return (!imgEntregable) || (normImage === 'E1');
+        }
+
+        // Scenario 2: Element is "E2". STRICT match.
+        return normImage === normElement;
+      }
+
+      // Scenario 3: No Entregable on element.
+      return true;
+    });
+  }, []);
+
   useEffect(() => {
-    if (selectedAlcantarilla && selectedAlcantarilla.panel_fotografico_codigo && graphicsImages) {
-      const code = String(selectedAlcantarilla.panel_fotografico_codigo).trim();
-      const entregable = selectedAlcantarilla.entregable ? String(selectedAlcantarilla.entregable).trim() : null;
-
-      const filtered = graphicsImages.filter(img => {
-        const imgCode = String(img.panel_fotografico_codigo || '').trim();
-        const imgIndex = img.index ? String(img.index).trim() : '';
-        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-
-        // Extract filename from URL
-        let urlFileName = '';
-        if (img.url) {
-          const parts = img.url.split('/');
-          const fileNameWithExt = parts[parts.length - 1];
-          urlFileName = fileNameWithExt.split('.')[0];
-        }
-
-        const codeMatches = imgCode === code || imgIndex === code || urlFileName === code;
-
-        // If both have entregable, they must match
-        if (entregable && imgEntregable) {
-          return codeMatches && (entregable === imgEntregable);
-        }
-
-        return codeMatches;
-      });
-
+    if (selectedAlcantarilla && graphicsImages) {
+      const filtered = getImagesForElement(selectedAlcantarilla, graphicsImages);
       setAlcantarillaImages(filtered);
     } else {
       setAlcantarillaImages([]);
     }
-  }, [selectedAlcantarilla, graphicsImages]);
+  }, [selectedAlcantarilla, graphicsImages, getImagesForElement]);
 
   useEffect(() => {
     if (alcantarillasData.length > 0 && graphicsImages.length > 0) {
       const processedAlcantarillas = alcantarillasData.map(alcantarilla => {
-        const code = String(alcantarilla.panel_fotografico_codigo || '').trim();
-        const entregable = alcantarilla.entregable ? String(alcantarilla.entregable).trim() : null;
-        let imageUrls = [];
-        let foundImages = [];
-
-        if (code) {
-          // 1. Parse Ranges (e.g. "3-6" or "19")
-          const parts = code.split(' - ');
-          const rangePart = parts[0];
-          const suffix = parts.length > 1 ? `-${parts[1]}` : '';
-
-          const [startStr, endStr] = rangePart.split('-');
-          const start = parseInt(startStr, 10);
-          const end = parseInt(endStr, 10);
-
-          const expectedNames = [];
-          if (!isNaN(start) && !isNaN(end)) {
-            for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
-          } else {
-            expectedNames.push(code);
-          }
-
-          // 2. Filter Images
-          foundImages = graphicsImages.filter(img => {
-            const imgNameWithoutExt = img.index.split('.')[0];
-            const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-
-            // A. Name Check (Always Required)
-            const nameMatches = expectedNames.includes(imgNameWithoutExt);
-            if (!nameMatches) return false;
-
-            // B. Entregable Logic
-            // Normalize: Remove non-alphanumeric, Uppercase. "E - 1" -> "E1"
-            const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-            if (entregable) {
-              const normElement = normalize(entregable);
-              const normImage = normalize(imgEntregable);
-
-              // Scenario 1: Element is "E1". 
-              // We allow matching "E1" images OR images with NO Entregable (Legacy/Null).
-              if (normElement === 'E1') {
-                return (!imgEntregable) || (normImage === 'E1');
-              }
-
-              // Scenario 2: Element is "E2" (or "E3", etc).
-              // We enforce STRICT matching. The image MUST be explicitly "E2".
-              // We REJECT nulls to prevent old E1 images from appearing here.
-              return normImage === normElement;
-            }
-
-            // Scenario 3: Element has NO Entregable.
-            // Just match by name.
-            return true;
-          });
-
-          if (foundImages.length > 0) {
-            imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
-          }
-        }
-        return { ...alcantarilla, imageUrls: imageUrls, images: foundImages, type: 'alcantarilla' }; // Also adding 'images' just in case
+        const foundImages = getImagesForElement(alcantarilla, graphicsImages);
+        const imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
+        return { ...alcantarilla, imageUrls: imageUrls, images: foundImages, type: 'alcantarilla' };
       });
       setAlcantarillasWithImages(processedAlcantarillas);
     } else {
       setAlcantarillasWithImages(alcantarillasData.map(alcantarilla => ({ ...alcantarilla, imageUrls: [], type: 'alcantarilla' })));
     }
-  }, [alcantarillasData, graphicsImages]);
+  }, [alcantarillasData, graphicsImages, getImagesForElement]);
 
   useEffect(() => {
     if (highlightedTramoId && tramoData[highlightedTramoId]) {
@@ -359,7 +337,18 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
                           <p style={{ margin: '0 0 5px 0' }}><strong>Estado:</strong> {selectedAlcantarilla.estado || 'datos sin encontrar'}</p>
                           <p style={{ margin: '0 0 5px 0' }}><strong>Longitud:</strong> {selectedAlcantarilla.longitud_alcantarilla || 'datos sin encontrar'}</p>
                           <p style={{ margin: '0 0 5px 0' }}><strong>Diámetro / Sección:</strong> {selectedAlcantarilla.diametro_lado || 'datos sin encontrar'}</p>
-                          <p style={{ margin: '0 0 5px 0' }}><strong>Coordenadas:</strong> {selectedAlcantarilla.latitud.toFixed(6)}, {selectedAlcantarilla.longitud.toFixed(6)}</p>
+                          <p style={{ margin: '0 0 5px 0' }}>
+                            <strong>Coordenadas:</strong>{' '}
+                            {(() => {
+                              if (selectedAlcantarilla.latitud && selectedAlcantarilla.longitud) {
+                                try {
+                                  const { easting, northing, zoneNum, zoneLetter } = fromLatLon(selectedAlcantarilla.latitud, selectedAlcantarilla.longitud);
+                                  return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
+                                } catch (e) { return `${selectedAlcantarilla.latitud}, ${selectedAlcantarilla.longitud}`; }
+                              }
+                              return '---';
+                            })()}
+                          </p>
                           <p style={{ margin: '0 0 5px 0' }}><strong>Observaciones:</strong> {selectedAlcantarilla.observaciones || 'datos sin encontrar'}</p>
                           <p style={{ margin: '0 0 5px 0' }}><strong>Código de Panel Fotográfico:</strong> {selectedAlcantarilla.panel_fotografico_codigo || 'datos sin encontrar'}</p>
                           <button
@@ -398,6 +387,14 @@ const Alcantarillas = ({ onEditElementSelect, alcantarillasData, graphicsImages,
                         </div>
                       </div>
                     )}
+
+                    {/* SECCIÓN DE OBSERVACIONES */}
+                    <ObservationsSidebar
+                      projectId={selectedAlcantarilla.id_proyecto}
+                      elementId={selectedAlcantarilla.id_alcantarilla || selectedAlcantarilla.id || selectedAlcantarilla.codigo} // Fallback to id or codigo if needed
+                      elementType="alcantarillas"
+                      canComment={canComment}
+                    />
                   </div>
                 ) : (
                   <p>Seleccione una alcantarilla en el mapa para ver sus detalles.</p>

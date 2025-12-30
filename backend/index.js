@@ -50,6 +50,9 @@ const estructurasExistentesService = require('./services/estructurasExistentesSe
 const senalesInformativasService = require('./services/senalesInformativasService');
 const hitosKilometricosService = require('./services/hitosKilometricosService');
 const senalesReguladorasService = require('./services/senalesReguladorasService');
+const observacionesService = require('./services/observacionesService'); // NEW
+const amigoSecretoService = require('./services/amigoSecretoService');
+const wishlistService = require('./services/wishlistService');
 
 
 console.log('DEBUG: Servidor backend iniciando...');
@@ -59,7 +62,8 @@ const whitelist = [
     'http://localhost:3000',
     'http://localhost:3001',
     'http://192.168.1.19:3000',
-    'https://geoportalbetav2.fly.dev'
+    'https://geoportalbetav2.fly.dev',
+    'https://backend-solitary-fire-911.fly.dev'
 ];
 
 const corsOptions = {
@@ -455,6 +459,26 @@ app.post('/api/senales-reguladoras', authenticateToken, senalesReguladorasServic
 app.put('/api/senales-reguladoras/:id', authenticateToken, senalesReguladorasService.updateSenal);
 
 app.delete('/api/senales-reguladoras/:id', authenticateToken, senalesReguladorasService.deleteSenal);
+
+// --------------------- OBSERVACIONES (EVALUADOR) ---------------------
+app.get('/api/observaciones/:projectId/:tipo/:elementoId', authenticateToken, async (req, res) => {
+    try {
+        const { projectId, tipo, elementoId } = req.params;
+        const result = await observacionesService.getObservaciones(projectId, tipo, elementoId);
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/observaciones', authenticateToken, async (req, res) => {
+    try {
+        const result = await observacionesService.createObservacion(req.body, req.user.id);
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // --------------------- AMIGO SECRETO ---------------------
 app.get('/api/amigo-secreto/participantes', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
@@ -1799,14 +1823,23 @@ app.post('/api/alcantarillas/complete-upload', authenticateToken, authorizePermi
 });
 
 // NEW ENDPOINT: For simple (non-chunked) file uploads
-app.post('/api/alcantarillas/upload-images', authenticateToken, authorizePermission('alcantarillas', 'edicion'), upload.single('files'), async (req, res) => {
+app.post('/api/alcantarillas/upload-images', authenticateToken, authorizePermission('alcantarillas', 'edicion'), uploadDisk.single('files'), async (req, res) => {
     const { projectId, entregable } = req.body;
     const userId = req.user.id;
 
     try {
         if (!req.file) {
+            console.log('DEBUG MANUAL UPLOAD: No file received in req.file');
             return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
         }
+
+        console.log('DEBUG MANUAL UPLOAD: req.file:', {
+            fieldname: req.file.fieldname,
+            originalname: req.file.originalname,
+            path: req.file.path,
+            size: req.file.size
+        });
+
         if (!projectId) {
             return res.status(400).json({ error: 'projectId es requerido.' });
         }
@@ -1890,6 +1923,32 @@ app.delete('/api/alcantarillas/graphics/all/:projectId', authenticateToken, asyn
     } catch (error) {
         console.error(`Error en la ruta DELETE /api/alcantarillas/graphics/all/${projectId}:`, error);
         res.status(500).json({ status: 'error', message: error.message || 'Error al eliminar todas las imágenes de gráfico.' });
+    }
+});
+
+// NEW: Endpoint to delete graphic images by folder (deliverable)
+app.delete('/api/alcantarillas/graphics/folder/:projectId', authenticateToken, async (req, res) => {
+    const { projectId } = req.params;
+    const { entregable } = req.body;
+    const userId = req.user.id;
+
+    if (!entregable) {
+        return res.status(400).json({ error: 'El entregable es requerido.' });
+    }
+
+    try {
+        const result = await alcantarillasGraphicsService.deleteGraphicImagesByFolder(projectId, entregable);
+
+        // --- Audit Log ---
+        await db.query(
+            'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
+            [userId, 'Eliminación selectiva de Gráficos', `Imágenes de entregable ${entregable} eliminadas para proyecto ${projectId}.`]
+        );
+
+        res.status(200).json({ status: 'ok', message: result.message });
+    } catch (error) {
+        console.error(`Error en DELETE /api/alcantarillas/graphics/folder/${projectId}:`, error);
+        res.status(500).json({ status: 'error', message: error.message || 'Error al eliminar imágenes por carpeta.' });
     }
 });
 
@@ -3092,7 +3151,7 @@ app.delete('/api/progresivas/:progresivaId/kml', authenticateToken, async (req, 
 });
 
 // Obtener progresivas principales
-app.get('/progresivas', authenticateToken, async (req, res) => {
+app.get('/api/progresivas', authenticateToken, async (req, res) => {
     try {
         const { selectedProjectId } = req.query; // Get selectedProjectId from query parameters
         const progresivas = await progresivasService.getProgresivas(req.user, selectedProjectId);
@@ -3105,7 +3164,7 @@ app.get('/progresivas', authenticateToken, async (req, res) => {
 
 // Eliminar progresivas en bulk (usando POST para mayor compatibilidad)
 // NEW: Create single progresiva (for KML import etc)
-app.post('/progresivas', authenticateToken, async (req, res) => {
+app.post('/api/progresivas', authenticateToken, async (req, res) => {
     try {
         const newProg = await progresivasService.createProgresiva(req.body);
         res.status(201).json(newProg);
@@ -3115,7 +3174,7 @@ app.post('/progresivas', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/progresivas/bulk-delete', authenticateToken, async (req, res) => {
+app.post('/api/progresivas/bulk-delete', authenticateToken, async (req, res) => {
     const { ids } = req.body; // Se espera un array de IDs
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ error: 'Se requiere un array de IDs.' });
@@ -3134,7 +3193,7 @@ app.post('/progresivas/bulk-delete', authenticateToken, async (req, res) => {
 });
 
 // Nueva ruta para importar progresivas con creación automática de ensayos
-app.post('/progresivas/importar-con-ensayos', authenticateToken, async (req, res) => {
+app.post('/api/progresivas/importar-con-ensayos', authenticateToken, async (req, res) => {
     try {
         const result = await progresivasService.importarConEnsayos(req.body);
         res.status(201).json(result);
@@ -3149,7 +3208,7 @@ app.post('/progresivas/importar-con-ensayos', authenticateToken, async (req, res
     }
 });
 
-app.put('/progresivas/importar-con-ensayos/:overwriteProgresivaId', authenticateToken, async (req, res) => {
+app.put('/api/progresivas/importar-con-ensayos/:overwriteProgresivaId', authenticateToken, async (req, res) => {
     const { overwriteProgresivaId } = req.params;
     try {
         // Mapeo del payload del frontend al esperado por el servicio
@@ -3228,7 +3287,7 @@ app.delete('/api/progresivas/:progresivaId/kml', authenticateToken, async (req, 
 });
 
 // Obtener progresivas principales
-app.get('/progresivas', authenticateToken, async (req, res) => {
+app.get('/api/progresivas', authenticateToken, async (req, res) => {
     try {
         const { selectedProjectId } = req.query; // Get selectedProjectId from query parameters
         const progresivas = await progresivasService.getProgresivas(req.user, selectedProjectId);
@@ -3239,12 +3298,12 @@ app.get('/progresivas', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/progresivas/:id/children', authenticateToken, progresivasService.getSubProgresivas);
+app.get('/api/progresivas/:id/children', authenticateToken, progresivasService.getSubProgresivas);
 
 // Nueva ruta para TODAS las sub-progresivas (para el Listado General)
-app.get('/progresivas/:id/children/all', authenticateToken, progresivasService.getAllSubProgresivas);
+app.get('/api/progresivas/:id/children/all', authenticateToken, progresivasService.getAllSubProgresivas);
 
-app.get('/progresivas/:id', authenticateToken, async (req, res) => {
+app.get('/api/progresivas/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const progresiva = await progresivasService.getProgresivaById(id);
@@ -3258,7 +3317,7 @@ app.get('/progresivas/:id', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/progresivas/:progresivaId/page', authenticateToken, async (req, res) => {
+app.get('/api/progresivas/:progresivaId/page', authenticateToken, async (req, res) => {
     const { progresivaId } = req.params;
     try {
         const result = await progresivasService.getProgresivaPage(progresivaId);
@@ -3295,7 +3354,7 @@ app.get('/api/user/tramos', authenticateToken, async (req, res) => {
     }
 });
 
-app.delete('/progresivas/:id', authenticateToken, async (req, res) => {
+app.delete('/api/progresivas/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const rowCount = await progresivasService.deleteProgresiva(id);
@@ -3329,7 +3388,7 @@ app.post('/progresivas/bulk-delete', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/progresivas/:id', authenticateToken, async (req, res) => {
+app.put('/api/progresivas/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const result = await progresivasService.updateProgresiva(id, req.body);
@@ -3340,7 +3399,7 @@ app.put('/progresivas/:id', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/progresivas/child/:id', authenticateToken, async (req, res) => {
+app.put('/api/progresivas/child/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const result = await progresivasService.updateChildProgresiva(id, req.body);

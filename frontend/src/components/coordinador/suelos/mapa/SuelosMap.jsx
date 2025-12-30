@@ -33,9 +33,26 @@ const isGeoJsonValid = (geojson) => {
   );
 };
 
+// --- Helper para normalizar metros/progresivas ---
+const parseToMeters = (val) => {
+  if (typeof val === 'number') return val;
+  if (!val) return null;
+  const s = String(val).trim().toUpperCase().replace(',', '.');
+  const kmMatch = s.match(/(\d+)\+(\d+(\.\d+)?)/);
+  if (kmMatch) {
+    return parseFloat(kmMatch[1]) * 1000 + parseFloat(kmMatch[2]);
+  }
+  const clean = s.replace(/[^0-9.]/g, '');
+  if (!clean) return null;
+  const num = parseFloat(clean);
+  return isNaN(num) ? null : num;
+};
+
 // --- Componente MapLogic (El "Corazón" de Geoite trasplantado) ---
 const MapLogic = ({
   kmlTrazadoIds,
+  trazadoIds = [], // NEW: List of strict IDs
+  puntosIds = [], // NEW: List of permissive IDs
   markerPosition, // Posición de un marcador único (ej. Cantera)
   cantera,        // Info adicional de la cantera para tooltip
   progresivasData, // DATA DE PROGRESIVAS (para colorear si tienen datos)
@@ -393,10 +410,14 @@ const MapLogic = ({
 
   }, [map, onMapReady]); // Fin Init Effect
 
+  // --- Prepare KML ID Sets ---
+  const effectiveKmlIds = useMemo(() => {
+    const legacy = Array.isArray(kmlTrazadoIds) ? kmlTrazadoIds : [];
+    // Filter null/undefined just in case
+    return [...new Set([...legacy, ...trazadoIds, ...puntosIds])].filter(Boolean);
+  }, [kmlTrazadoIds, trazadoIds, puntosIds]);
 
-
-
-
+  const trazadoSet = useMemo(() => new Set(trazadoIds), [trazadoIds]);
   // --- NUEVA LÓGICA: DIBUJAR CANTERAS (DASHBOARD) ---
   useEffect(() => {
     if (!map) return;
@@ -529,10 +550,10 @@ const MapLogic = ({
               const blueDotIcon = L.divIcon({
                 className: '',
                 html: `<div style="
-                        width: 12px; 
-                        height: 12px; 
-                        background-color: #3498db; 
-                        border: 2px solid white; 
+                        width: 12px;
+                        height: 12px;
+                        background-color: #3498db;
+                        border: 2px solid white;
                         border-radius: 50%;
                         box-shadow: 0 0 4px rgba(0,0,0,0.3);
                       "></div>`,
@@ -548,7 +569,7 @@ const MapLogic = ({
             }
 
             marker.bindPopup(`
-                <b>${p.nombre}</b><br/>
+                <b>${p.nombre || ''}</b><br/>
                 Prog: ${p.codigo}<br/>
                 Estado: ${hasData ? `<span style="color:green">Con Datos (${p.estratos_perfil.length} est.)</span>` : '<span style="color:orange">Pendiente</span>'}<br/>
                 Este: ${p.coordenada_este}<br/>
@@ -578,7 +599,7 @@ const MapLogic = ({
       }
     });
 
-    console.log(`[DEBUG SuelosMap] Total markers added: ${addedCount}`);
+    console.log(`[DEBUG SuelosMap] Total markers added: ${addedCount} `);
 
     // Auto-fit if we drew markers and user hasn't messed with map yet
     if (!userInteractedRef.current && addedCount > 0 && progLayer) {
@@ -591,7 +612,6 @@ const MapLogic = ({
         progLayer.clearLayers();
       }
     };
-
   }, [progresivasData, map, defaultZone, forceUpdate]);
 
   // --- 4. Carga reactiva de KMLs (Tramos) ---
@@ -603,7 +623,7 @@ const MapLogic = ({
   useEffect(() => {
     const loadTramos = async () => {
 
-      const currentIdsStr = JSON.stringify(kmlTrazadoIds);
+      const currentIdsStr = JSON.stringify(effectiveKmlIds);
       const currentProgresivasDataStr = JSON.stringify(progresivasData || []);
 
       const prevIdsStr = JSON.stringify(prevKmlIdsRef.current);
@@ -613,17 +633,12 @@ const MapLogic = ({
       const dataChanged = currentProgresivasDataStr !== prevDataStr;
 
       // SI NADA CAMBIÓ, SALIR INMEDIATAMENTE.
-      // Esto evita el parpadeo/redibujado si el componente padre se renderiza por otras razones.
       if (!idsChanged && !dataChanged) {
         return;
       }
 
-
-
       if (idsChanged) {
-
-        prevKmlIdsRef.current = kmlTrazadoIds;
-        // Si han cambiado los KMLs radicalmente (otro proyecto), permitimos recentrar
+        prevKmlIdsRef.current = effectiveKmlIds;
         userInteractedRef.current = false;
         fittedBoundsRef.current.clear();
       }
@@ -632,8 +647,7 @@ const MapLogic = ({
       prevProgresivasDataStrRef.current = currentProgresivasDataStr;
 
       displayLayersRef.current.clearLayers();
-      if (!kmlTrazadoIds || kmlTrazadoIds.length === 0) {
-        console.log('[SuelosMap] No KML IDs to load.');
+      if (!effectiveKmlIds || effectiveKmlIds.length === 0) {
         return;
       }
 
@@ -641,20 +655,33 @@ const MapLogic = ({
       const combinedBounds = L.latLngBounds();
 
       // Creamos una clave única para este conjunto de IDs para controlar el fitBounds
-      const boundsKey = kmlTrazadoIds.join(',');
+      const boundsKey = effectiveKmlIds.join(',');
 
-      for (const id of kmlTrazadoIds) {
+      // Prepare Progresivas Map
+      const completedMetersMap = new Map();
+      if (progresivasData) {
+        progresivasData.forEach(p => {
+          // Attempt to parse "nombre" (e.g. "0+100") or "codigo"
+          const meters = parseToMeters(p.nombre || p.codigo);
+          if (meters !== null && !isNaN(meters)) {
+            completedMetersMap.set(meters, p);
+          }
+        });
+      }
+
+      for (const id of effectiveKmlIds) {
         if (!id) continue;
 
         let kmlText = kmlContentCacheRef.current.get(id);
 
         if (!kmlText) {
-
           try {
-
+            // FIXED: Removed spaces in URL
             const response = await axiosInstance.get(`/api/kml-trazados/${id}/content`);
             const raw = response.data || {};
-            kmlText = raw.kmlContent ?? raw.content ?? raw.kml;
+            // Handle different possible response structures
+            kmlText = raw.kmlContent ?? raw.content ?? raw.kml ?? (typeof raw === 'string' ? raw : null);
+
             if (kmlText) {
               kmlContentCacheRef.current.set(id, kmlText);
             }
@@ -664,105 +691,48 @@ const MapLogic = ({
         }
 
         if (kmlText) {
-          try {
-            const hasPointTag = kmlText.includes('<Point');
-            const hasPlacemarkTag = kmlText.includes('<Placemark');
-            console.log(`[DEBUG SuelosMap] Analyzing Raw KML (ID ${id}): Length=${kmlText.length}. Has <Point>: ${hasPointTag}, Has <Placemark>: ${hasPlacemarkTag}`);
+          const geojson = safeParseKmlToGeoJson(kmlText);
 
-            const geojson = safeParseKmlToGeoJson(kmlText);
-            if (isGeoJsonValid(geojson)) {
+          if (isGeoJsonValid(geojson)) {
+            try {
+              // --- FILTERING LOGIC ---
+              const isTrazadoStrick = trazadoSet.has(id);
 
-              // Helper para parsear progresivas
-              const parseToMeters = (val) => {
-                if (typeof val === 'number') return val;
-                if (!val) return null;
-                const s = String(val).trim().toUpperCase().replace(',', '.');
-                const kmMatch = s.match(/(\d+)\+(\d+(\.\d+)?)/);
-                if (kmMatch) {
-                  return parseFloat(kmMatch[1]) * 1000 + parseFloat(kmMatch[2]);
-                }
-                const clean = s.replace(/[^0-9.]/g, '');
-                if (!clean) return null;
-                const num = parseFloat(clean);
-                return isNaN(num) ? null : num;
-              };
-
-              let featuresFound = 0;
-              let matchesFound = 0;
-              const completedMetersMap = new Map();
-
-              if (progresivasData && Array.isArray(progresivasData)) {
-                progresivasData.forEach(p => {
-                  // Removed check for estratos_perfil so we match ALL DB progressives
-                  let meters = p.progresiva_inicial !== undefined ? parseFloat(p.progresiva_inicial) : null;
-                  if (meters === null || isNaN(meters)) {
-                    meters = parseToMeters(p.nombre) || parseToMeters(p.codigo);
-                  }
-                  if (meters !== null && !isNaN(meters)) {
-                    completedMetersMap.set(meters, p);
-                  }
-                });
-              }
-
-              // DEBUG: Opcional, descomentar si se requiere depurar geometría de nuevo
-              const geomTypes = new Set(geojson.features.map(f => f.geometry.type));
-              const typesArray = Array.from(geomTypes);
-              console.log('[SuelosMap] Tipos de geometría encontrados en KML:', typesArray);
-              const pointsCount = geojson.features.filter(f => f.geometry.type === 'Point').length;
-              const multiPointsCount = geojson.features.filter(f => f.geometry.type === 'MultiPoint').length;
-              const lineStringsCount = geojson.features.filter(f => f.geometry.type === 'LineString').length;
-
-              console.log(`[SuelosMap] Estadísticas KML: Puntos=${pointsCount}, MultiPuntos=${multiPointsCount}, Lineas=${lineStringsCount}`);
+              // DEBUG: Check feature types
+              const types = geojson.features.map(f => f.geometry.type);
+              console.log(`[SuelosMap DEBUG] KML ID: ${id}, IsStrict: ${isTrazadoStrick}, FeatureTypes:`, types);
 
               const layer = L.geoJSON(geojson, {
                 style: (feature) => {
                   if (feature.geometry.type === 'Point') return {};
-                  return { color: '#ff1744', weight: 5, opacity: 0.9, interactive: false };
+                  // FORCE RED LINE VISIBILITY
+                  return { color: '#ff0000', weight: 8, opacity: 1.0, interactive: false };
                 },
                 pointToLayer: (feature, latlng) => {
-                  // FILTER: If hideKmlPoints is true, skip ALL points from KML
                   if (hideKmlPoints) return null;
-
                   if (feature.geometry.type !== 'Point') return null;
 
                   let matchedProgresiva = null;
                   let kmlMeters = null;
 
                   if (feature.properties && feature.properties.name) {
-                    featuresFound++;
                     kmlMeters = parseToMeters(feature.properties.name);
-
                     if (kmlMeters !== null) {
-                      // Debug simple matching
-                      // console.log(`[DEBUG Matching] Buscando: ${kmlMeters} en mapa de tamaño ${completedMetersMap.size}`);
                       if (completedMetersMap.has(kmlMeters)) {
                         matchedProgresiva = completedMetersMap.get(kmlMeters);
-                      } else {
-                        // Try loose match (tolerance 1-2 meters?)
-                        // For now exact match
                       }
                     }
-                  } else {
-                    featuresFound++;
                   }
 
-                  // FIX for Legend: Add points to progresivasLayerRef, NOT to this L.geoJSON layer
                   const addToProgresivasLayer = (markerInstance) => {
-                    // Usar siempre la referencia global más fresca si existe (conectada al UI), sino la local
                     const group = (useGlobalLayers && window.progresivasLayerGroupGlobal) ? window.progresivasLayerGroupGlobal : progresivasLayerRef.current;
-                    if (group) {
-                      markerInstance.addTo(group);
-                    } else {
-                      console.warn('[SuelosMap] No progresivas layer group found!');
-                    }
+                    if (group) markerInstance.addTo(group);
                   };
 
                   if (matchedProgresiva && matchedProgresiva.coordenada_este && matchedProgresiva.coordenada_norte) {
-                    matchesFound++;
-                    // DB Layer handles it (it has coords). Do NOT duplicate.
+                    // Match found AND DB has coords -> Let DB layer handle it.
                     return null;
                   } else {
-
                     let icon;
                     let zIndex = -500;
                     let popupHtml = `<b>${feature.properties?.name || 'Punto KML'}</b><br/>`;
@@ -770,60 +740,42 @@ const MapLogic = ({
                     let onClickHandler = null;
 
                     if (matchedProgresiva) {
+                      // Match found but NO DB coords -> Use KML coords
                       const hasData = matchedProgresiva.estratos_perfil && matchedProgresiva.estratos_perfil.length > 0;
                       zIndex = 800;
 
                       if (hasData) {
-                        // VERDE (Con Datos)
                         icon = L.divIcon({
                           className: 'verified-marker-icon',
-                          html: `<div class="verified-pin-body" style="animation: none;"><i class="fas fa-check"></i></div>`,
+                          html: `<div class="verified-pin-body"><i class="fas fa-check"></i></div>`,
                           iconSize: [30, 30],
                           iconAnchor: [15, 15]
                         });
-                        popupHtml += `Prog: ${matchedProgresiva.codigo}<br/>`;
-                        popupHtml += `<span style="color:green">Con Datos (Ubicación KML)</span>`;
+                        popupHtml += `Prog: ${matchedProgresiva.codigo}<br/><span style="color:green">Con Datos (Ubicación KML)</span>`;
                       } else {
-                        // AZUL (Pendiente)
                         icon = L.divIcon({
                           className: '',
-                          html: `<div style="
-                                    width: 12px; 
-                                    height: 12px; 
-                                    background-color: #3498db; 
-                                    border: 2px solid white; 
-                                    border-radius: 50%;
-                                    box-shadow: 0 0 4px rgba(0,0,0,0.3);
-                                "></div>`,
+                          html: `<div style="width:12px;height:12px;background-color:#3498db;border:2px solid white;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>`,
                           iconSize: [12, 12],
                           iconAnchor: [6, 6]
                         });
-                        popupHtml += `Prog: ${matchedProgresiva.codigo}<br/>`;
-                        popupHtml += `<span style="color:orange">Pendiente (Ubicación KML)</span>`;
+                        popupHtml += `Prog: ${matchedProgresiva.codigo}<br/><span style="color:orange">Pendiente (Ubicación KML)</span>`;
                       }
 
                       onClickHandler = () => {
-                        if (onMapClick) {
-                          onMapClick({
-                            type: 'progresiva',
-                            data: matchedProgresiva
-                          });
-                        }
+                        if (onMapClick) onMapClick({ type: 'progresiva', data: matchedProgresiva });
                       };
 
                     } else {
-                      // GRIS (Referencia Visual - Sin Match)
+                      // No Match in DB
+                      if (isTrazadoStrick) {
+                        return null; // Strict mode: Hide unmatched points
+                      }
+                      // Permissive mode: Grey point
                       zIndex = 0;
                       icon = L.divIcon({
                         className: 'kml-ref-point',
-                        html: `<div style="
-                                width: 10px; 
-                                height: 10px; 
-                                background-color: #6c757d; 
-                                border-radius: 50%;
-                                border: 1.5px solid white; 
-                                box-shadow: 0 0 3px rgba(0,0,0,0.5);
-                            "></div>`,
+                        html: `<div style="width:10px;height:10px;background-color:#6c757d;border-radius:50%;border:1.5px solid white;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
                         iconSize: [10, 10],
                         iconAnchor: [5, 5]
                       });
@@ -831,84 +783,54 @@ const MapLogic = ({
                     }
 
                     const marker = L.marker(latlng, {
-                      icon: icon,
-                      zIndexOffset: zIndex,
-                      interactive: interactive
+                      icon: icon, zIndexOffset: zIndex, interactive: interactive
                     }).bindPopup(popupHtml);
 
-                    if (onClickHandler) {
-                      marker.on('click', onClickHandler);
-                    }
+                    if (onClickHandler) marker.on('click', onClickHandler);
 
-                    // CRITICAL CHANGE: Add manualy to our controlled layer, return null so L.geoJSON doesn't own it
                     addToProgresivasLayer(marker);
-                    return null;
+                    return null; // Don't let L.geoJSON add it
                   }
                 },
                 onEachFeature: null
               });
 
               displayLayersRef.current.addLayer(layer);
+
               const b = layer.getBounds();
               if (b.isValid()) {
-                combinedBounds.extend(b);
-                hasBounds = true;
+                const center = b.getCenter();
+                // SANITY CHECK: Ignore bounds near 0,0 (Null Island)
+                if (Math.abs(center.lat) > 0.1 && Math.abs(center.lng) > 0.1) {
+                  combinedBounds.extend(b);
+                  hasBounds = true;
+                  console.log(`[SuelosMap DEBUG] Extended bounds with KML. New Center:`, combinedBounds.getCenter());
+                } else {
+                  console.warn(`[SuelosMap DEBUG] Ignored bounds near (0,0) for ID: ${id}`);
+                }
               }
-
-              if (matchesFound > 0 && idsChanged) {
-                // Notificar solo si idsChanged para no spamear
-                // alertify.success(`Identificadas ${matchesFound} progresivas con datos.`); 
-              }
+            } catch (e) {
+              console.error("[SuelosMap] Error processing KML geojson", id, e);
             }
-          } catch (e) {
-            console.error("[SuelosMap] Error processing KML content", id, e);
           }
         }
       }
 
-      // LOGICA BLINDADA V2: 
-      // Ignorar fitBounds si el usuario ya interactuó con el mapa
-      if (userInteractedRef.current) {
-
-        // Aun así marcamos como fitted para que el Set se mantenga consistente
-        fittedBoundsRef.current.add(boundsKey);
-        return;
-      }
-
-      // DEBUG: Log calculated bounds for analysis
-      console.log('[SuelosMap] Calculated Bounds:', {
-        isValid: combinedBounds.isValid(),
-        northEast: combinedBounds.getNorthEast(),
-        southWest: combinedBounds.getSouthWest()
-      });
-
-      // Si tenemos bounds válidos...
-      // Y el componente está montado...
-      // Y NO hemos enfocado este conjunto de IDs todavía...
-      if (hasBounds && isMounted.current && !fittedBoundsRef.current.has(boundsKey)) {
-        // console.log('[SuelosMap] Performing fitBounds (Async) for key:', boundsKey);
-
-        // FIX: Delay fitBounds slightly to allow map container to settle
-        setTimeout(() => {
-          if (isMounted.current && map) {
-            map.fitBounds(combinedBounds, { padding: [20, 20] });
-          }
-        }, 100);
-
-        fittedBoundsRef.current.add(boundsKey); // Marcamos como enfocado
-      } else {
-
+      if (hasBounds && !userInteractedRef.current && combinedBounds.isValid()) {
+        if (!fittedBoundsRef.current.has(boundsKey)) {
+          setTimeout(() => {
+            if (isMounted.current && map) {
+              console.log(`[SuelosMap DEBUG] Fitting bounds to:`, combinedBounds.toBBoxString());
+              map.fitBounds(combinedBounds, { padding: [50, 50], maxZoom: 16, animate: true });
+            }
+          }, 100);
+          fittedBoundsRef.current.add(boundsKey);
+        }
       }
     };
 
     loadTramos();
-
-    return () => {
-      if (displayLayersRef.current) {
-        displayLayersRef.current.clearLayers();
-      }
-    };
-  }, [kmlTrazadoIds, map, progresivasData]);
+  }, [effectiveKmlIds, progresivasData, map, hideKmlPoints, onMapClick, defaultZone, trazadoIds, puntosIds, useGlobalLayers]);
 
   // --- 5. Marcador Único (Canteras/Ensayos) ---
   useEffect(() => {
@@ -947,55 +869,52 @@ const MapLogic = ({
   }, [markerPosition, cantera, map]);
 
   return null;
-};
-
-// Define constant outside to maintain reference stability
-const DEFAULT_CENTER = [-9.19, -75.015];
+}; // End MapLogic
 
 // Helper component to capture ref and expose it globally for MapLogic to use
-// accepting a globalKey to distinguish between layers
 const FeatureGroupWithRef = ({ globalKey }) => {
+  const map = useMap(); // Helper needs map context if using standard addTo, but here using refs
+  // Actually FeatureGroup doesn't need map context if we just assign ref to window.
+  // But to be safe and standard:
   const groupRef = useRef(null);
+
   useEffect(() => {
-    if (groupRef.current && globalKey) {
+    if (groupRef.current) {
       window[globalKey] = groupRef.current;
-      // Signal update so consumers (MapLogic) can re-bind/draw if they need
+      // Auto add to map via parent LayersControl management usually
+      // But we dispatch event just in case logic needs it
       window.dispatchEvent(new CustomEvent('layerRefreshed', { detail: globalKey }));
     }
   }, [globalKey]);
+
   return <FeatureGroup ref={groupRef} />;
 };
 
-// --- Main Component ---
-const SuelosMap = React.memo(({
-  initialCoords,
-  initialZoom = 13,
-  kmlTrazadoIds,
-  markerPosition,
-  cantera,
-  progresivasData,
+// --- Componente Principal (Wrapper del Mapa) ---
+const SuelosMap = (props) => {
+  const [showLayersControl, setShowLayersControl] = useState(true);
 
-  canterasData, // Prop para canteras
-  onMapClick,
-  defaultZone, // NEW: Fallback zone (e.g., '18L') from parent
-  layerContext, // NEW: Context identifier to isolate maps (e.g., 'modal')
-  hideKmlPoints, // NEW: Optionally hide points
-  hideToolbar, // NEW: Hide tools
-  isSelecting // NEW: Visual feedback
-}) => {
-  // Use useMemo to ensure center prop stability 
-  const center = useMemo(() => initialCoords || DEFAULT_CENTER, [initialCoords]);
-
-  // Determine if we should show LayersControl (only in main dashboard usually)
-  const showLayersControl = !layerContext || layerContext === 'dashboard';
+  useEffect(() => {
+    // If explicitly 'modal' or 'modal-canteras', hide controls by default or specific rule
+    if (props.layerContext === 'modal-canteras' || props.layerContext === 'modal') {
+      setShowLayersControl(false);
+    } else {
+      setShowLayersControl(true);
+    }
+  }, [props.layerContext]);
 
   return (
-    <div className="suelos-map-container" style={{ height: '100%', width: '100%', position: 'relative' }}>
+    <div className={`map-container ${props.className || ''}`} style={props.style}>
       <MapContainer
-        center={center}
-        zoom={initialZoom}
+        center={[-12.930, -72.630]} // Centro aprox Quillabamba
+        zoom={13}
         style={{ height: '100%', width: '100%' }}
+        zoomControl={false} // Custom controls
       >
+        {!showLayersControl && (
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        )}
+
         {showLayersControl && (
           <LayersControl position="topright">
             <LayersControl.BaseLayer checked name="Estándar">
@@ -1014,29 +933,10 @@ const SuelosMap = React.memo(({
           </LayersControl>
         )}
 
-        {/* If NO LayersControl, we still need base tiles! */}
-        {!showLayersControl && (
-          <>
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          </>
-        )}
-
-        <MapLogic
-          kmlTrazadoIds={kmlTrazadoIds}
-          markerPosition={markerPosition}
-          cantera={cantera}
-          progresivasData={progresivasData} // Pass prop
-          canterasData={canterasData}
-          onMapClick={onMapClick}
-          defaultZone={defaultZone} // Pass to logic
-          layerContext={layerContext} // Pass context down
-          hideKmlPoints={hideKmlPoints}
-          hideToolbar={hideToolbar}
-          isSelecting={isSelecting}
-        />
+        <MapLogic {...props} />
       </MapContainer>
     </div>
   );
-});
+};
 
 export default SuelosMap;

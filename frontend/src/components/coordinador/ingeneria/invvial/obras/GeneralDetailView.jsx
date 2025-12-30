@@ -1,9 +1,12 @@
 import React, { useRef } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import ReactDOM from 'react-dom'; // Ensure ReactDOM is imported if not already, usually for Portal but here Component
 import Swal from 'sweetalert2';
 import ImageCarousel from './ImageCarousel';
 import MiniMap from './MiniMap';
+import axiosInstance from '../../../../../api/axios';
+import { useState, useEffect } from 'react';
 
 const ELEMENT_CONFIGS = {
     'alcantarillas': {
@@ -194,11 +197,58 @@ const formatValue = (key, value, data) => {
 };
 
 
-const GeneralDetailView = ({ data, elementType, images, route, onClose }) => {
+const GeneralDetailView = ({ data, elementType, images, route, onClose, projectId, canComment }) => {
     // console.log('GeneralDetailView Mounting with:', { elementType, dataId: data?.id || data?.codigo });
     const modalRef = useRef(null);
     const mapRef = useRef(null);
     const dataRef = useRef(null);
+    const [observaciones, setObservaciones] = useState([]);
+    const [newObservacion, setNewObservacion] = useState('');
+    const [isLoadingObservaciones, setIsLoadingObservaciones] = useState(false);
+
+    const getDbId = () => {
+        if (!data) return null;
+        return data.id || data.id_alcantarilla || data.id_baden || data.id_puente || data.id_muro || data.id_zona_critica || data.id_senal_informativa || data.id_senal_preventiva || data.id_senal_reguladora || data.id_hito_kilometrico || data.id_estructura;
+    };
+
+    const fetchObservaciones = async () => {
+        const dbId = getDbId();
+        if (!dbId || !projectId) return;
+        setIsLoadingObservaciones(true);
+        try {
+            const response = await axiosInstance.get(`/api/observaciones/${projectId}/${elementType}/${dbId}`);
+            setObservaciones(response.data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsLoadingObservaciones(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchObservaciones();
+    }, [data, projectId, elementType]);
+
+    const handleAddObservacion = async () => {
+        if (!newObservacion.trim()) return;
+        const dbId = getDbId();
+        if (!dbId) { Swal.fire('Error', 'No se encontró ID del elemento', 'error'); return; }
+
+        try {
+            await axiosInstance.post('/api/observaciones', {
+                proyecto_id: projectId,
+                elemento_id: dbId,
+                tipo_elemento: elementType,
+                observacion: newObservacion
+            });
+            setNewObservacion('');
+            fetchObservaciones();
+            Swal.fire({ icon: 'success', title: 'Observación agregada', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+        } catch (error) {
+            console.error('Error creating observacion:', error);
+            Swal.fire('Error', 'No se pudo guardar la observación', 'error');
+        }
+    };
 
     // Normalize elementType to match keys
     let configKey = elementType;
@@ -497,6 +547,47 @@ const GeneralDetailView = ({ data, elementType, images, route, onClose }) => {
                         </div>
                         <ImageCarousel images={images} />
                     </div>
+                </div>
+
+                {/* OBSERVACIONES SECTION */}
+                <div style={{ marginTop: '10px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                    <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#333' }}>Observaciones de Evaluación</h3>
+
+                    <div style={{ maxHeight: '150px', overflowY: 'auto', background: '#f9f9f9', padding: '10px', borderRadius: '5px', marginBottom: '10px' }}>
+                        {observaciones.length === 0 ? (
+                            <p style={{ color: '#777', fontStyle: 'italic', margin: 0 }}>No hay observaciones registradas.</p>
+                        ) : (
+                            observaciones.map((obs) => (
+                                <div key={obs.id} style={{ borderBottom: '1px solid #ddd', paddingBottom: '5px', marginBottom: '5px' }}>
+                                    <div style={{ fontSize: '0.8rem', color: '#555', display: 'flex', justifyContent: 'space-between' }}>
+                                        <strong>{obs.usuario_nombre || 'Usuario'}</strong>
+                                        <span>{new Date(obs.fecha_registro).toLocaleString()}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.9rem', color: '#333' }}>{obs.observacion}</div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {canComment && (
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <textarea
+                                value={newObservacion}
+                                onChange={(e) => setNewObservacion(e.target.value)}
+                                placeholder="Escribe una observación..."
+                                style={{ flex: 1, padding: '8px', borderRadius: '5px', border: '1px solid #ccc', resize: 'vertical', minHeight: '40px' }}
+                            />
+                            <button
+                                onClick={handleAddObservacion}
+                                style={{
+                                    backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px',
+                                    padding: '0 20px', cursor: 'pointer', fontWeight: 'bold'
+                                }}
+                            >
+                                Enviar
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}

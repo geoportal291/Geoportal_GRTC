@@ -9,8 +9,10 @@ import ExportarMapaModal from './obras/ExportarMapaModal';
 import ImagePreviewModal from './obras/ImagePreviewModal';
 import { saveAs } from 'file-saver';
 import axiosInstance from '../../../../api/axios';
+import ObservationsSidebar from './obras/ObservationsSidebar';
+import { fromLatLon } from 'utm';
 
-const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, onElementSelect }) => {
+const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, onElementSelect, canComment, projectId }) => {
     const [selectedHito, setSelectedHito] = useState(null);
     const [isInfoVisible, setIsInfoVisible] = useState(true);
     const [hitoImages, setHitoImages] = useState([]);
@@ -260,7 +262,18 @@ const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, on
                                                 <p style={{ margin: '0 0 5px 0' }}><strong>Clasificación:</strong> {selectedHito.clasificacion}</p>
                                                 <p style={{ margin: '0 0 5px 0' }}><strong>Lado:</strong> {selectedHito.lado}</p>
                                                 <p style={{ margin: '0 0 5px 0' }}><strong>Material:</strong> {selectedHito.material}</p>
-                                                <p style={{ margin: '0 0 5px 0' }}><strong>Coordenadas:</strong> {selectedHito.latitud?.toFixed(6) || '-'}, {selectedHito.longitud?.toFixed(6) || '-'}</p>
+                                                <p style={{ margin: '0 0 5px 0' }}>
+                                                    <strong>Coordenadas:</strong>{' '}
+                                                    {(() => {
+                                                        if (selectedHito.latitud && selectedHito.longitud) {
+                                                            try {
+                                                                const { easting, northing, zoneNum, zoneLetter } = fromLatLon(selectedHito.latitud, selectedHito.longitud);
+                                                                return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
+                                                            } catch (e) { return `${selectedHito.latitud}, ${selectedHito.longitud}`; }
+                                                        }
+                                                        return '---';
+                                                    })()}
+                                                </p>
                                                 <button
                                                     onClick={() => handleEditElement(selectedHito)}
                                                     style={{ marginTop: '10px', padding: '8px 12px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '0.9em' }}
@@ -293,6 +306,17 @@ const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, on
                                 )}
                             </div>
                         </CSSTransition>
+                    </div>
+
+                    <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginTop: '20px' }}>
+                        {selectedHito && (
+                            <ObservationsSidebar
+                                projectId={projectId || selectedHito.id_proyecto}
+                                elementId={selectedHito.id_hito || selectedHito.id || selectedHito.codigo}
+                                elementType="hitos_kilometricos"
+                                canComment={canComment}
+                            />
+                        )}
                     </div>
                 </div>
             </div>

@@ -9,8 +9,10 @@ import ExportarMapaModal from './obras/ExportarMapaModal';
 import ImagePreviewModal from './obras/ImagePreviewModal';
 import { saveAs } from 'file-saver';
 import axiosInstance from '../../../../api/axios';
+import ObservationsSidebar from './obras/ObservationsSidebar';
+import { fromLatLon } from 'utm';
 
-const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal, onElementSelect }) => {
+const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal, onElementSelect, canComment, projectId }) => {
     // State layout consistent with ZonasCriticas/Alcantarillas
     const [selectedSenal, setSelectedSenal] = useState(null);
     const [isInfoVisible, setIsInfoVisible] = useState(true);
@@ -271,7 +273,18 @@ const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal,
                                                 <p style={{ margin: '0 0 5px 0' }}><strong>Clasificación:</strong> {selectedSenal.clasificacion}</p>
                                                 <p style={{ margin: '0 0 5px 0' }}><strong>Lado:</strong> {selectedSenal.lado}</p>
                                                 <p style={{ margin: '0 0 5px 0' }}><strong>Material:</strong> {selectedSenal.material}</p>
-                                                <p style={{ margin: '0 0 5px 0' }}><strong>Coordenadas:</strong> {selectedSenal.latitud?.toFixed(6) || '-'}, {selectedSenal.longitud?.toFixed(6) || '-'}</p>
+                                                <p style={{ margin: '0 0 5px 0' }}>
+                                                    <strong>Coordenadas:</strong>{' '}
+                                                    {(() => {
+                                                        if (selectedSenal.latitud && selectedSenal.longitud) {
+                                                            try {
+                                                                const { easting, northing, zoneNum, zoneLetter } = fromLatLon(selectedSenal.latitud, selectedSenal.longitud);
+                                                                return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
+                                                            } catch (e) { return `${selectedSenal.latitud}, ${selectedSenal.longitud}`; }
+                                                        }
+                                                        return '---';
+                                                    })()}
+                                                </p>
                                                 <button
                                                     onClick={() => handleEditElement(selectedSenal)}
                                                     style={{ marginTop: '10px', padding: '8px 12px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '0.9em' }}
@@ -304,6 +317,17 @@ const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal,
                                 )}
                             </div>
                         </CSSTransition>
+                    </div>
+
+                    <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginTop: '20px' }}>
+                        {selectedSenal && (
+                            <ObservationsSidebar
+                                projectId={projectId || selectedSenal.id_proyecto}
+                                elementId={selectedSenal.id_senal_preventiva || selectedSenal.id || selectedSenal.codigo}
+                                elementType="senales_preventivas"
+                                canComment={canComment}
+                            />
+                        )}
                     </div>
                 </div>
             </div>

@@ -112,8 +112,8 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
                         intervalo_manual: projectData.intervalo_manual || '',
                         isIntervalManual: projectData.is_interval_manual || false,
                         // Update new fields
-                        codigo: projectData.codigo || '',
-                        nombre_proyecto: projectData.nombre_proyecto || '',
+                        codigo: projectData.codigo || `PROJ-${String(projectData.id).padStart(3, '0')}`,
+                        nombre_proyecto: projectData.nombre_proyecto || projectData.nombre_tramo || '',
                         descripcion_proyecto: projectData.descripcion_proyecto || '',
                         // Progresiva fields
                         nombre_progresiva: projectData.progresivas?.[0]?.nombre || '',

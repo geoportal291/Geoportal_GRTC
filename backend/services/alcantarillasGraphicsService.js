@@ -213,6 +213,48 @@ const deleteAllGraphicImages = async (projectId) => {
     }
 };
 
+const deleteGraphicImagesByFolder = async (projectId, entregable) => {
+    try {
+        let result;
+        if (entregable === 'Sin Asignar') {
+            result = await db.query(
+                'SELECT image_url FROM alcantarillas_graficos WHERE proyecto_id = $1 AND (entregable IS NULL OR entregable = \'\')',
+                [projectId]
+            );
+        } else {
+            result = await db.query(
+                'SELECT image_url FROM alcantarillas_graficos WHERE proyecto_id = $1 AND entregable = $2',
+                [projectId, entregable]
+            );
+        }
+
+        for (const row of result.rows) {
+            try {
+                await del(row.image_url, { token: process.env.BLOB_READ_WRITE_TOKEN });
+            } catch (delError) {
+                console.error(`No se pudo eliminar el blob ${row.image_url}. Continuando...`, delError);
+            }
+        }
+
+        if (entregable === 'Sin Asignar') {
+            await db.query(
+                'DELETE FROM alcantarillas_graficos WHERE proyecto_id = $1 AND (entregable IS NULL OR entregable = \'\')',
+                [projectId]
+            );
+        } else {
+            await db.query(
+                'DELETE FROM alcantarillas_graficos WHERE proyecto_id = $1 AND entregable = $2',
+                [projectId, entregable]
+            );
+        }
+
+        return { message: `Imágenes de la carpeta ${entregable} eliminadas correctamente.` };
+    } catch (error) {
+        console.error('Error en deleteGraphicImagesByFolder:', error);
+        throw new Error('Error al eliminar imágenes por carpeta: ' + error.message);
+    }
+};
+
 const getGraphicsImagesByProjectId = async (projectId) => {
     try {
         // Auto-migration check (Lazy)
@@ -391,24 +433,26 @@ const processRarExtractionJob = async (jobId) => {
                 const fileBuffer = await fsp.readFile(filePath);
 
                 // --- PROCESS WITH PYTHON OCR ---
-                const { buffer: processedBuffer, index: detectedIndex } = await processImageWithPython(fileBuffer, originalFileName);
+                // const { buffer: processedBuffer, index: detectedIndex } = await processImageWithPython(fileBuffer, originalFileName);
+                const processedBuffer = fileBuffer; // Skip OCR
+                const detectedIndex = null;
 
                 // Determine final filename
                 let finalIndex;
                 if (detectedIndex) {
                     finalIndex = detectedIndex;
                 } else {
-                    // Fallback to auto-increment if OCR failed or found no index
-                    // Check if original filename IS a number?
-                    const match = originalFileName.match(/^(\d+)\./);
-                    if (match) {
-                        finalIndex = match[1];
+                    // Use filename without extension if it contains numbers or hyphens (e.g., 1-1.jpg -> 1-1)
+                    const nameWithoutExt = path.parse(originalFileName).name;
+                    if (/^[\d-]+$/.test(nameWithoutExt)) {
+                        finalIndex = nameWithoutExt;
                     } else {
-                        // Fallback to original name (dangerous if duplicates?) 
-                        // or generate new index. Let's use original name as index if numeric structure not clear
-                        // But 'image_index' implies numeric. 
-                        // Let's use name.
-                        finalIndex = originalFileName;
+                        // If it's not a numeric/hyphenated structure, get the next one from DB
+                        const maxIndexResult = await db.query(
+                            "SELECT MAX(CASE WHEN image_index ~ '^[0-9]+$' THEN image_index::INT ELSE 0 END) as max_index FROM alcantarillas_graficos WHERE proyecto_id = $1",
+                            [projectId]
+                        );
+                        finalIndex = (maxIndexResult.rows[0].max_index || 0) + 1;
                     }
                 }
 
@@ -471,15 +515,26 @@ const processSimpleUploadJob = async (jobId) => {
         console.log(`Procesando imagen simple: ${originalName} [Entregable: ${entregable}]`);
 
         // --- PROCESS WITH PYTHON OCR ---
-        const { buffer: processedBuffer, index: detectedIndex } = await processImageWithPython(fileBuffer, originalName);
+        // const { buffer: processedBuffer, index: detectedIndex } = await processImageWithPython(fileBuffer, originalName);
+        const processedBuffer = fileBuffer; // Skip OCR for now
+        const detectedIndex = null;
 
         let nextIndex;
         if (detectedIndex) {
             nextIndex = detectedIndex;
         } else {
-            // Fallback to auto-increment behavior
-            const maxIndexResult = await db.query('SELECT MAX(image_index::INT) as max_index FROM alcantarillas_graficos WHERE proyecto_id = $1', [projectId]);
-            nextIndex = (maxIndexResult.rows[0].max_index || 0) + 1;
+            // Use filename without extension if it contains numbers or hyphens (e.g., 1-1.jpg -> 1-1)
+            const nameWithoutExt = path.parse(originalName).name;
+            if (/^[\d-]+$/.test(nameWithoutExt)) {
+                nextIndex = nameWithoutExt;
+            } else {
+                // Fallback to auto-increment behavior, safely ignoring non-numeric entries
+                const maxIndexResult = await db.query(
+                    "SELECT MAX(CASE WHEN image_index ~ '^[0-9]+$' THEN image_index::INT ELSE 0 END) as max_index FROM alcantarillas_graficos WHERE proyecto_id = $1",
+                    [projectId]
+                );
+                nextIndex = (maxIndexResult.rows[0].max_index || 0) + 1;
+            }
         }
 
         const filename = `tramoinv/uploaded/${projectId}/${nextIndex}.${extension}`;
@@ -697,6 +752,7 @@ module.exports = {
     processGraphicsJob,
     deleteGraphicImage,
     deleteAllGraphicImages,
+    deleteGraphicImagesByFolder,
     getGraphicsImagesByProjectId,
     reassembleAndProcessChunks,
     processRarExtractionJob,

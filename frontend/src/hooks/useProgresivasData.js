@@ -13,9 +13,9 @@ const useProgresivasData = () => {
   const getAuthHeaders = useCallback(() => {
     const token = user?.token;
     if (!token) {
-        // In a real app, you might want to redirect to login or handle this more gracefully
-        // For now, we'll just throw an error.
-        throw new Error('Token no proporcionado');
+      // In a real app, you might want to redirect to login or handle this more gracefully
+      // For now, we'll just throw an error.
+      throw new Error('Token no proporcionado');
     }
     return { Authorization: `Bearer ${token}` };
   }, [user]);
@@ -31,8 +31,8 @@ const useProgresivasData = () => {
     try {
       const headers = getAuthHeaders();
       const url = selectedProjectId
-        ? `${API_URL}/progresivas?selectedProjectId=${selectedProjectId}`
-        : `${API_URL}/progresivas`;
+        ? `${API_URL}/api/progresivas?selectedProjectId=${selectedProjectId}`
+        : `${API_URL}/api/progresivas`;
 
       const res = await axios.get(url, { headers });
       setProgresivas(Array.isArray(res.data) ? res.data : []);

@@ -68,13 +68,17 @@ import ProjectSelectionModal from './components/ProjectSelectionModal'; // NEW: 
 
 import { AuthProvider } from './data/contexts/AuthContext';
 
+import { HelmetProvider } from 'react-helmet-async';
+
 function App() {
     return (
-        <PageTitleProvider>
-            <AuthProvider>
-                <AppContent />
-            </AuthProvider>
-        </PageTitleProvider>
+        <HelmetProvider>
+            <PageTitleProvider>
+                <AuthProvider>
+                    <AppContent />
+                </AuthProvider>
+            </PageTitleProvider>
+        </HelmetProvider>
     );
 }
 
