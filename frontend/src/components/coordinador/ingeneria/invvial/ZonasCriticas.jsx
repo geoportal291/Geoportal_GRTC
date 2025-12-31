@@ -42,121 +42,86 @@ const ZonasCriticas = ({ onEditElementSelect, zonasCriticasData, graphicsImages,
     const [showListModal, setShowListModal] = useState(false);
     const infoRef = useRef(null);
 
-    useEffect(() => {
-        if (selectedZona && selectedZona.panel_fotografico_codigo && graphicsImages) {
-            const code = String(selectedZona.panel_fotografico_codigo);
-            const parts = code.split(' - ');
-            const rangePart = parts[0];
-            const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+    const getImagesForElement = useCallback((element, graphicsImages) => {
+        if (!element.panel_fotografico_codigo || !graphicsImages) {
+            return [];
+        }
+        const code = String(element.panel_fotografico_codigo).trim();
+        const entregable = element.entregable ? String(element.entregable).trim() : null;
 
-            let start, end;
-            if (rangePart.includes('-')) {
-                const [startStr, endStr] = rangePart.split('-');
-                start = parseInt(startStr, 10);
-                end = parseInt(endStr, 10);
-            } else {
-                start = parseInt(rangePart, 10);
-                end = start;
-            }
+        // 1. Parse Ranges (e.g. "238-241" or "19")
+        const parts = code.split(' - ');
+        const rangePart = parts[0];
+        const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
-            const expectedNames = [];
-            if (!isNaN(start) && !isNaN(end)) {
-                for (let i = start; i <= end; i++) {
-                    expectedNames.push(`${i}${suffix}`);
+        let start, end;
+        if (rangePart.includes('-')) {
+            const [startStr, endStr] = rangePart.split('-');
+            start = parseInt(startStr, 10);
+            end = parseInt(endStr, 10);
+        } else {
+            start = parseInt(rangePart, 10);
+            end = start;
+        }
+
+        const expectedNames = [];
+        if (!isNaN(start) && !isNaN(end)) {
+            for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+        } else {
+            expectedNames.push(code);
+        }
+
+        // 2. Filter Images
+        return graphicsImages.filter(img => {
+            const imgNameWithoutExt = img.index ? img.index.split('.')[0] : '';
+            const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+
+            // A. Name Check (Always Required)
+            const nameMatches = expectedNames.includes(imgNameWithoutExt);
+            if (!nameMatches) return false;
+
+            // B. Entregable Logic (Hybrid Legacy/Strict)
+            const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+            if (entregable) {
+                const normElement = normalize(entregable);
+                const normImage = normalize(imgEntregable);
+
+                // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                if (normElement === 'E1') {
+                    return (!imgEntregable) || (normImage === 'E1');
                 }
 
-                const filtered = graphicsImages.filter(img => {
-                    const imgNameWithoutExt = img.index.split('.')[0];
-                    const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-                    const entregable = selectedZona.entregable ? String(selectedZona.entregable).trim() : null;
-
-                    // A. Name Check
-                    const nameMatches = expectedNames.includes(imgNameWithoutExt);
-                    if (!nameMatches) return false;
-
-                    // B. Entregable Logic
-                    const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-                    if (entregable) {
-                        const normElement = normalize(entregable);
-                        const normImage = normalize(imgEntregable);
-                        if (normElement === 'E1') {
-                            return (!imgEntregable) || (normImage === 'E1');
-                        }
-                        return normImage === normElement;
-                    }
-                    return true;
-                });
-                setZonaImages(filtered);
-            } else {
-                setZonaImages([]);
+                // Scenario 2: Element is "E2". STRICT match.
+                return normImage === normElement;
             }
+
+            // Scenario 3: No Entregable on element.
+            return true;
+        });
+    }, []);
+
+    useEffect(() => {
+        if (selectedZona && graphicsImages) {
+            const filtered = getImagesForElement(selectedZona, graphicsImages);
+            setZonaImages(filtered);
         } else {
             setZonaImages([]);
         }
-    }, [selectedZona, graphicsImages]);
+    }, [selectedZona, graphicsImages, getImagesForElement]);
 
     useEffect(() => {
         if (zonasCriticasData.length > 0 && graphicsImages.length > 0) {
             const processedZonas = zonasCriticasData.map(zona => {
-                const code = zona.panel_fotografico_codigo ? String(zona.panel_fotografico_codigo) : null;
-                let imageUrls = [];
-
-                if (code) {
-                    const parts = code.split(' - ');
-                    const rangePart = parts[0];
-                    const suffix = parts.length > 1 ? `-${parts[1]}` : '';
-
-                    let start, end;
-                    if (rangePart.includes('-')) {
-                        const [startStr, endStr] = rangePart.split('-');
-                        start = parseInt(startStr, 10);
-                        end = parseInt(endStr, 10);
-                    } else {
-                        start = parseInt(rangePart, 10);
-                        end = start;
-                    }
-
-                    const expectedNames = [];
-                    if (!isNaN(start) && !isNaN(end)) {
-                        for (let i = start; i <= end; i++) {
-                            expectedNames.push(`${i}${suffix}`);
-                        }
-
-                        const foundImages = graphicsImages.filter(img => {
-                            const imgNameWithoutExt = img.index.split('.')[0];
-                            const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-                            const entregable = zona.entregable ? String(zona.entregable).trim() : null;
-
-                            const nameMatches = expectedNames.includes(imgNameWithoutExt);
-                            if (!nameMatches) return false;
-
-                            const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-                            if (entregable) {
-                                const normElement = normalize(entregable);
-                                const normImage = normalize(imgEntregable);
-                                if (normElement === 'E1') {
-                                    return (!imgEntregable) || (normImage === 'E1');
-                                }
-                                return normImage === normElement;
-                            }
-                            return true;
-                        });
-
-                        if (foundImages.length > 0) {
-                            imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
-                        }
-                    }
-                }
-                return { ...zona, imageUrls: imageUrls, type: 'zona_critica' };
+                const foundImages = getImagesForElement(zona, graphicsImages);
+                const imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
+                return { ...zona, imageUrls: imageUrls, images: foundImages, type: 'zona_critica' };
             });
             setZonasWithImages(processedZonas);
         } else {
-            // If no images or no data, just map type and empty images
             setZonasWithImages(zonasCriticasData.map(zona => ({ ...zona, imageUrls: [], type: 'zona_critica' })));
         }
-    }, [zonasCriticasData, graphicsImages]);
+    }, [zonasCriticasData, graphicsImages, getImagesForElement]);
 
     useEffect(() => {
         if (highlightedTramoId && tramoData[highlightedTramoId]) {

@@ -803,3 +803,22 @@ CREATE TABLE IF NOT EXISTS senales_reguladoras (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Fix para endpoint POST /anuncios - Eliminación de campo duracion_horas
+INSERT INTO anuncios (titulo, contenido, fecha_inicio, fecha_fin, usuario_id, creador_id, archivo_url)
+VALUES (, , , , , , )
+RETURNING *;
+
+-- Query para obtener solo anuncios activos (dentro del rango de fechas)
+SELECT a.id, a.titulo, a.contenido,
+    a.fecha_inicio,
+    a.fecha_fin,
+    COALESCE(creador.nombre, '') || ' ' || COALESCE(creador.ap_paterno, '') || ' ' || COALESCE(creador.ap_materno, '') as autor,
+    COALESCE(asignado.nombre, '') || ' ' || COALESCE(asignado.ap_paterno, '') || ' ' || COALESCE(asignado.ap_materno, '') as asignado_a,
+    a.archivo_url,
+    a.usuario_id
+FROM anuncios a
+LEFT JOIN usuariost creador ON a.creador_id = creador.id
+LEFT JOIN usuariost asignado ON a.usuario_id = asignado.id
+WHERE CURRENT_DATE BETWEEN a.fecha_inicio::date AND a.fecha_fin::date
+ORDER BY a.fecha_inicio DESC;

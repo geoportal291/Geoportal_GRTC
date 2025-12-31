@@ -526,27 +526,70 @@ const MapLogic = ({
               return;
             }
 
-            // Determine styles based on data presence
+            // Determine styles based on state
+            const estado = (p.estado || 'pendiente').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const hasData = p.estratos_perfil && p.estratos_perfil.length > 0;
-            const isGreen = hasData; // You can add p.estado === 'completado' check if needed
+            const isApproved = estado.includes('aprobado') || estado.includes('completado');
+            const isReview = estado.includes('revision');
+            const isInactive = estado.includes('inactivo');
 
             let marker;
+            let statusIconHtml = '';
+            let statusClass = 'status-pending';
+            let statusLabel = 'Pendiente';
 
-            if (isGreen) {
-              // CHECK VERDE para progresivas con datos
+            // VISUAL STYLING LOGIC
+            if (isApproved) {
+              // APROBADO: VERDE (Check)
               const icon = L.divIcon({
                 className: 'verified-marker-icon',
                 html: `<div class="verified-pin-body" style="animation: none;"><i class="fas fa-check"></i></div>`,
-                iconSize: [30, 30], // Slightly larger
+                iconSize: [30, 30],
                 iconAnchor: [15, 15]
               });
               marker = L.marker([latLon.latitude, latLon.longitude], {
                 icon: icon,
-                title: `${p.nombre || p.codigo} (Con Datos)`
+                title: `${p.nombre || p.codigo} (Aprobado)`
               });
+              statusIconHtml = `<i class="fas fa-check-circle"></i>`;
+              statusClass = 'status-ok';
+              statusLabel = 'Aprobado';
+
+            } else if (isReview) {
+              // EN REVISION: AMARILLO (Reloj/Ojo)
+              const icon = L.divIcon({
+                className: 'verified-marker-icon',
+                html: `<div class="verified-pin-body" style="background-color: #f1c40f; border-color: #fff; animation: none;"><i class="fas fa-clock" style="color: white;"></i></div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+              });
+              marker = L.marker([latLon.latitude, latLon.longitude], {
+                icon: icon,
+                title: `${p.nombre || p.codigo} (En Revisión)`
+              });
+              statusIconHtml = `<i class="fas fa-clock"></i>`;
+              statusClass = 'status-warning'; // Need to define or use inline style
+              statusLabel = 'En Revisión';
+
+            } else if (isInactive) {
+              // INACTIVO: GRIS (Punto pequeño)
+              const icon = L.divIcon({
+                className: 'kml-ref-point',
+                html: `<div style="width:10px;height:10px;background-color:#95a5a6;border-radius:50%;border:1.5px solid white;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
+                iconSize: [10, 10],
+                iconAnchor: [5, 5]
+              });
+              marker = L.marker([latLon.latitude, latLon.longitude], {
+                icon: icon,
+                zIndexOffset: 0,
+                title: `${p.nombre || p.codigo} (Inactivo)`
+              });
+              statusIconHtml = `<i class="fas fa-ban"></i>`;
+              statusClass = 'status-inactive';
+              statusLabel = 'Inactivo';
+
             } else {
-              // PUNTO AZUL SIMPLE para progresivas sin datos (pendientes)
-              // Usamos L.marker + DivIcon para asegurar que quede ENCIMA de la línea del KML (Z-Index)
+              // PENDIENTE: AZUL (Punto medio)
               const blueDotIcon = L.divIcon({
                 className: '',
                 html: `<div style="
@@ -563,19 +606,48 @@ const MapLogic = ({
 
               marker = L.marker([latLon.latitude, latLon.longitude], {
                 icon: blueDotIcon,
-                zIndexOffset: 800, // Priority over route lines
+                zIndexOffset: 800,
                 title: `${p.nombre || p.codigo} (Pendiente)`
               });
+              statusIconHtml = hasData ? `<i class="fas fa-file-alt"></i>` : `<i class="fas fa-hourglass-start"></i>`;
+              statusClass = 'status-pending';
+              statusLabel = hasData ? 'Pendiente (Con Datos)' : 'Pendiente';
             }
 
-            marker.bindPopup(`
-                <b>${p.nombre || ''}</b><br/>
-                Prog: ${p.codigo}<br/>
-                Estado: ${hasData ? `<span style="color:green">Con Datos (${p.estratos_perfil.length} est.)</span>` : '<span style="color:orange">Pendiente</span>'}<br/>
-                Este: ${p.coordenada_este}<br/>
-                Norte: ${p.coordenada_norte}<br/>
-                Zona: ${zoneToUse}
-             `);
+            const popupHtml = `
+              <div class="popup-premium-container">
+                <div class="popup-header">
+                  <i class="fas fa-map-marker-alt"></i>
+                  <span>${p.nombre || 'Progresiva Sin Nombre'}</span>
+                </div>
+                <div class="popup-body">
+                  <div class="popup-row">
+                    <span class="popup-label">Progresiva:</span>
+                    <span class="popup-value">${p.nombre}</span>
+                  </div>
+                  <div class="popup-row">
+                    <span class="popup-label">Estado:</span>
+                    <span class="popup-value ${statusClass}" style="${statusClass === 'status-warning' ? 'color: #f39c12;' : ''} ${statusClass === 'status-inactive' ? 'color: #7f8c8d;' : ''}">
+                      ${statusIconHtml} ${statusLabel}
+                    </span>
+                  </div>
+                  <div class="popup-divider"></div>
+                  <div class="popup-row compact">
+                    <span class="popup-label">Este:</span>
+                    <span class="popup-mono">${p.coordenada_este}</span>
+                  </div>
+                  <div class="popup-row compact">
+                    <span class="popup-label">Norte:</span>
+                    <span class="popup-mono">${p.coordenada_norte}</span>
+                  </div>
+                  <div class="popup-row compact">
+                    <span class="popup-label">Zona:</span>
+                    <span class="popup-mono">${zoneToUse}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+            marker.bindPopup(popupHtml);
 
             marker.on('click', () => {
               if (onMapClick) {

@@ -13,8 +13,8 @@ const CoordinatorProjectsView = ({ simulatedProject }) => { // Accept prop
     const token = user?.token;
 
     const [projects, setProjects] = useState([]);
-    const [selectedProject, setSelectedProject] = useState(null);
-    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [detailProject, setDetailProject] = useState(null);
+    const hasNavigatedBack = React.useRef(false); // Ref to track if user explicitly went back
 
     // If simulating, we directly show the detail view for that project
     const isSimulationMode = !!simulatedProject;
@@ -23,38 +23,68 @@ const CoordinatorProjectsView = ({ simulatedProject }) => { // Accept prop
         // If simulating, use that project only
         if (simulatedProject) {
             setProjects([simulatedProject]);
+            setDetailProject(simulatedProject);
             return;
         }
 
         try {
             const headers = { Authorization: `Bearer ${token}` };
-            // Fetch projects assigned to the logged-in user
             const res = await axios.get(`${API_URL}/api/proyectos/assigned-detailed`, { headers });
             setProjects(res.data);
+
+            // Auto-navigate if only one project and user hasn't gone back
+            if (res.data.length === 1 && !hasNavigatedBack.current) {
+                setDetailProject(res.data[0]);
+            }
+
         } catch (error) {
             console.error("Error fetching projects", error);
             alertify.error("Error al cargar mis proyectos.");
         }
-    }, [API_URL, token, simulatedProject]); // Add dependency
+    }, [API_URL, token, simulatedProject]);
 
     useEffect(() => {
         fetchProjects();
     }, [fetchProjects]);
 
-    const handleOpenForm = (project) => {
-        setSelectedProject(project);
-        setIsFormOpen(true);
+    // Update detailProject when simulatedProject changes
+    useEffect(() => {
+        if (simulatedProject) {
+            setDetailProject(simulatedProject);
+        } else {
+            // Only force reset if we are NOT in auto-nav mode or manual nav
+            // Actually, if simulatedProject becomes null, we might want to clear detailProject 
+            // BUT we don't want to interfere with normal navigation.
+            // Since simulatedProject is prop-driven from parent, let's respect it if it becomes null.
+            if (isSimulationMode) {
+                setDetailProject(null);
+            }
+        }
+    }, [simulatedProject, isSimulationMode]);
+
+    const handleViewProject = (project) => {
+        setDetailProject(project);
     };
 
-    const handleFormSave = () => {
-        fetchProjects(); // Refresh list to show updated status
+    const handleBackToList = () => {
+        hasNavigatedBack.current = true; // Mark as manually navigated back
+        setDetailProject(null);
+        fetchProjects();
     };
 
-    if (isSimulationMode) {
+    if (detailProject) {
         return (
             <div className="p-6 bg-white rounded-lg shadow mt-8">
+                {!isSimulationMode && (
+                    <button
+                        onClick={handleBackToList}
+                        className="mb-4 text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1 transition-colors"
+                    >
+                        <i className="fa-solid fa-arrow-left"></i> Volver a Mis Proyectos
+                    </button>
+                )}
                 <ProjectDetailView
-                    project={simulatedProject}
+                    project={detailProject}
                     onRefresh={fetchProjects}
                 />
             </div>
@@ -70,17 +100,10 @@ const CoordinatorProjectsView = ({ simulatedProject }) => { // Accept prop
 
             <ProjectTable
                 projects={projects}
-                onEdit={handleOpenForm} // "Edit" becomes "Completar"
-                onDelete={() => { }} // Delete disabled/hidden for Coordinator usually
-                onAssign={() => { }} // Assign disabled for Coordinator
+                onEdit={handleViewProject} // Action "Completar" now opens the Detail View
+                onDelete={() => { }}
+                onAssign={() => { }}
                 showAssignAction={false}
-            />
-
-            <FullProjectForm
-                isOpen={isFormOpen}
-                onClose={() => setIsFormOpen(false)}
-                onSave={handleFormSave}
-                projectData={selectedProject}
             />
         </div>
     );

@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import '../ProyectosV2.css';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './SharedComponents';
+
 import { useAuth } from '../../../../../data/contexts/AuthContext';
-import { kml } from '@tmcw/togeojson';
 import { DOMParser } from 'xmldom';
+import * as toGeoJSON from '@tmcw/togeojson';
+import shp from 'shpjs';
+import { Button, Input, Select, Label, Textarea, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Card, CardHeader, CardTitle, CardContent } from './SharedComponents';
 
 // Import Ubigeo JSONs (Fixing the path relative to component location)
 // Component is in frontend/src/components/coordinador/suelos/proyectosv2/components
@@ -73,8 +75,196 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
     // Calibration States
     const [identifiedTramos, setIdentifiedTramos] = useState([]);
     const [calibrationData, setCalibrationData] = useState({});
+    const [manualTramoCount, setManualTramoCount] = useState(0); // For manual override
 
-    // Initial Load & Catalog Fetching (Entities only via API)
+    // -------------------------------------------------------------------------
+    // KML / SHAPEFILE Handling
+    // -------------------------------------------------------------------------
+
+    // Helper: Process features generic (KML or Shapefile)
+    const processGeoJSONFeatures = (features, existingData = null) => {
+        const tramos = [];
+        features.forEach(f => {
+            // Check meaningful properties for name
+            const name = f.properties?.name || f.properties?.Name || f.properties?.NAME || f.properties?.tramo || f.properties?.TRAMO;
+            if (name) {
+                tramos.push(name);
+            }
+        });
+
+        // Sort tramos logically (Tramo 1, Tramo 2, etc.)
+        tramos.sort((a, b) => {
+            const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
+            const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
+            return numA - numB;
+        });
+
+        // Always update identified tramos
+        setIdentifiedTramos(tramos);
+
+        // Smart merge with existing calibration
+        const baseCalibration = existingData || calibrationData;
+
+        // Normalize base for case-insensitive check
+        const normalizedBase = {};
+        if (baseCalibration) {
+            Object.keys(baseCalibration).forEach(k => {
+                normalizedBase[k.toUpperCase()] = baseCalibration[k];
+            });
+        }
+
+        const newCalib = { ...baseCalibration };
+
+        // 1. Add detected tramos
+        tramos.forEach(t => {
+            const upperT = t.toUpperCase();
+            if (normalizedBase[upperT]) {
+                newCalib[t] = normalizedBase[upperT];
+            } else if (!newCalib[t]) {
+                newCalib[t] = { start: '', end: '' };
+            }
+        });
+
+        setCalibrationData(newCalib);
+    };
+
+    const handleKmlUpload = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        console.log("File selected:", file.name);
+
+        setIsUploadingKml(true);
+        try {
+            // Upload to Blob (remote storage) - Note: backend token needed? Assuming existing logic worked or we use a public token here?
+            // The previous code had a 'put' call but I don't see the import. 
+            // WAIT - The previous code used a backend endpoint for uploading KML in handleSubmit, but here we seem to be wanting to preview it.
+            // The snippet I replaced had `handleKmlFileChange`.
+            // Let's stick to the previous pattern: 
+            // 1. Set file to state (for submit later).
+            // 2. Parse LOCALLY for preview.
+
+            setKmlFile(file);
+            setIdentifiedTramos([]);
+            setCalibrationData({});
+
+            // Parse content locally
+            const reader = new FileReader();
+
+            if (file.name.toLowerCase().endsWith('.zip')) {
+                // Handle Shapefile (ZIP)
+                reader.onload = async (e) => {
+                    try {
+                        const arrayBuffer = e.target.result;
+                        const geojson = await shp(arrayBuffer);
+                        // shpjs might return a FeatureCollection or an array of them if zip has multiple shps
+                        let features = [];
+                        if (Array.isArray(geojson)) {
+                            geojson.forEach(g => features = features.concat(g.features));
+                        } else {
+                            features = geojson.features;
+                        }
+                        processGeoJSONFeatures(features);
+                        alertify.success(`Archivo ZIP analizado: ${features.length} elementos.`);
+                    } catch (err) {
+                        console.error("Error parsing Shapefile", err);
+                        alertify.error("Error leyendo el archivo Shapefile (ZIP).");
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+
+            } else {
+                // Handle KML/KMZ (Text)
+                reader.onload = (e) => {
+                    const text = e.target.result;
+                    parseKmlText(text);
+                };
+                reader.readAsText(file);
+            }
+
+
+        } catch (error) {
+            console.error("Error processing file", error);
+            alertify.error("Error al procesar el archivo.");
+        } finally {
+            setIsUploadingKml(false);
+        }
+    };
+
+    const parseKmlText = (kmlText, existingData = null) => {
+        try {
+            const parser = new DOMParser();
+            const kmlDom = parser.parseFromString(kmlText, 'text/xml');
+            // use generic toGeoJSON.kml
+            const geojson = toGeoJSON.kml(kmlDom);
+
+            // Reuse generic processor
+            processGeoJSONFeatures(geojson.features, existingData);
+
+        } catch (error) {
+            console.error("Error parsing KML", error);
+        }
+    };
+
+    // Keep this for fetching remote existing ones
+    const fetchAndParseRemoteKml = async (url, existingData = null) => {
+        try {
+            const proxyUrl = `${API_URL}/api/proxy?url=${encodeURIComponent(url)}`;
+
+            // Simple check extension from URL
+            if (url.toLowerCase().endsWith('.zip')) {
+                const response = await axios.get(proxyUrl, { responseType: 'arraybuffer' });
+                const geojson = await shp(response.data);
+                let features = [];
+                if (Array.isArray(geojson)) {
+                    geojson.forEach(g => features = features.concat(g.features));
+                } else {
+                    features = geojson.features;
+                }
+                processGeoJSONFeatures(features, existingData);
+            } else {
+                const response = await axios.get(proxyUrl, { responseType: 'text' });
+                parseKmlText(response.data, existingData);
+            }
+        } catch (error) {
+            console.error("Error remote file via proxy", error);
+            // Fallback direct?
+            try {
+                if (url.toLowerCase().endsWith('.zip')) {
+                    // Direct fetch might fail CORS if generic.
+                } else {
+                    const response = await axios.get(url);
+                    parseKmlText(response.data, existingData);
+                }
+            } catch (directError) {
+                console.error("Direct download also failed", directError);
+            }
+        }
+    };
+
+    // Manual Tramo Handler
+    const handleManualTramoCountChange = (e) => {
+        const count = parseInt(e.target.value) || 0;
+        setManualTramoCount(count);
+
+        // Generate generic tramos if count > 0
+        if (count > 0) {
+            const newTramos = [];
+            for (let i = 1; i <= count; i++) {
+                newTramos.push(`TRAMO ${i}`);
+            }
+            setIdentifiedTramos(newTramos);
+
+            // Sync calibration keys
+            const newCalib = { ...calibrationData };
+            newTramos.forEach(t => {
+                if (!newCalib[t]) {
+                    newCalib[t] = { start: '', end: '' };
+                }
+            });
+            setCalibrationData(newCalib);
+        }
+    };
     useEffect(() => {
         if (!isOpen) return;
 
@@ -93,58 +283,71 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
                 if (results[1].status === 'fulfilled') setOtrasEntidades(results[1].value.data);
 
                 // Initial Cascading Logic using JSONs
-                if (projectData) {
+
+                // Fetch full project data to ensure calibration and KML URL are present
+                let fullProject = projectData;
+                if (projectData && projectData.id) {
+                    try {
+                        const projRes = await axios.get(`${API_URL}/proyectos/${projectData.id}`, { headers });
+                        fullProject = projRes.data;
+                    } catch (e) {
+                        console.error("Could not fetch full project details, using fallback", e);
+                    }
+                }
+
+                if (fullProject) {
                     // Populate Form
-                    setOriginalProject(projectData);
+                    setOriginalProject(fullProject);
                     setFormData({
-                        id: projectData.id,
-                        nombre_tramo: projectData.nombre_tramo || '',
-                        proyecto_nom: projectData.proyecto_nom || '',
-                        solicitante: projectData.solicitante || '',
-                        departamento: projectData.departamento || '',
-                        provincia: projectData.provincia || '',
-                        distrito: projectData.distrito || '',
-                        localidad: projectData.localidad || '',
-                        descripcion_larga: projectData.descripcion_larga || '',
-                        estado: projectData.estado || 'Activo',
-                        longitud_total: projectData.longitud_total || '',
-                        tipo_via: projectData.tipo_via || '500',
-                        intervalo_manual: projectData.intervalo_manual || '',
-                        isIntervalManual: projectData.is_interval_manual || false,
+                        id: fullProject.id,
+                        nombre_tramo: fullProject.nombre_tramo || '',
+                        proyecto_nom: fullProject.proyecto_nom || '',
+                        solicitante: fullProject.solicitante || '',
+                        departamento: fullProject.departamento || '',
+                        provincia: fullProject.provincia || '',
+                        distrito: fullProject.distrito || '',
+                        localidad: fullProject.localidad || '',
+                        descripcion_larga: fullProject.descripcion_larga || '',
+                        estado: fullProject.estado || 'Activo',
+                        longitud_total: fullProject.longitud_total || '',
+                        tipo_via: fullProject.tipo_via || '500',
+                        intervalo_manual: fullProject.intervalo_manual || '',
+                        isIntervalManual: fullProject.is_interval_manual || false,
                         // Update new fields
-                        codigo: projectData.codigo || `PROJ-${String(projectData.id).padStart(3, '0')}`,
-                        nombre_proyecto: projectData.nombre_proyecto || projectData.nombre_tramo || '',
-                        descripcion_proyecto: projectData.descripcion_proyecto || '',
+                        codigo: fullProject.codigo || `PROJ-${String(fullProject.id).padStart(3, '0')}`,
+                        nombre_proyecto: fullProject.nombre_proyecto || fullProject.nombre_tramo || '',
+                        descripcion_proyecto: fullProject.descripcion_proyecto || '',
                         // Progresiva fields
-                        nombre_progresiva: projectData.progresivas?.[0]?.nombre || '',
-                        codigo_progresiva: projectData.progresivas?.[0]?.codigo || '',
-                        linea_progresiva: projectData.progresivas?.[0]?.linea || '18L',
-                        coordenada_este_progresiva: projectData.progresivas?.[0]?.coordenada_este || '',
-                        coordenada_norte_progresiva: projectData.progresivas?.[0]?.coordenada_norte || '',
-                        descripcion_progresiva: projectData.progresivas?.[0]?.descripcion || '',
-                        estado_progresiva: projectData.progresivas?.[0]?.estado || 'activo',
+                        nombre_progresiva: fullProject.progresivas?.[0]?.nombre || '',
+                        codigo_progresiva: fullProject.progresivas?.[0]?.codigo || '',
+                        linea_progresiva: fullProject.progresivas?.[0]?.linea || '18L',
+                        coordenada_este_progresiva: fullProject.progresivas?.[0]?.coordenada_este || '',
+                        coordenada_norte_progresiva: fullProject.progresivas?.[0]?.coordenada_norte || '',
+                        descripcion_progresiva: fullProject.progresivas?.[0]?.descripcion || '',
+                        estado_progresiva: fullProject.progresivas?.[0]?.estado || 'activo',
                     });
 
                     // Pre-fill Sub-catalogs based on Project Data
-                    if (projectData.departamento) {
-                        const filteredProvs = provinciasData.filter(p => p.department_id === projectData.departamento);
+                    if (fullProject.departamento) {
+                        const filteredProvs = provinciasData.filter(p => p.department_id === fullProject.departamento);
                         setProvincias(filteredProvs);
                     }
-                    if (projectData.provincia) {
-                        const filteredDists = distritosData.filter(d => d.province_id === projectData.provincia);
+                    if (fullProject.provincia) {
+                        const filteredDists = distritosData.filter(d => d.province_id === fullProject.provincia);
                         setDistritos(filteredDists);
                     }
 
-                    if (projectData.calibracion) {
-                        setCalibrationData(projectData.calibracion);
-                        // setIdentifiedTramos(Object.keys(projectData.calibracion)); // Don't rely solely on saved keys, fetch KML to be sure
+                    if (fullProject.calibracion) {
+                        setCalibrationData(fullProject.calibracion);
                     }
 
-                    if (projectData.url_kml) {
-                        fetchAndParseRemoteKml(projectData.url_kml);
-                    } else if (projectData.calibracion) {
+                    const kmlUrlToUse = fullProject.url_kml || fullProject.kml_url; // Handle potential varied naming
+
+                    if (kmlUrlToUse) {
+                        fetchAndParseRemoteKml(kmlUrlToUse, fullProject.calibracion);
+                    } else if (fullProject.calibracion) {
                         // Fallback if no URL but data exists (unlikely given flow, but safe)
-                        setIdentifiedTramos(Object.keys(projectData.calibracion));
+                        setIdentifiedTramos(Object.keys(fullProject.calibracion));
                     }
                 }
             } catch (err) {
@@ -190,83 +393,7 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
         });
     };
 
-    // KML Analysis Logic
-    const handleKmlFileChange = (e) => {
-        const file = e.target.files[0];
-        setKmlFile(file);
-        setIdentifiedTramos([]); // Reset tramos
-        setCalibrationData({}); // Reset calibration
-
-        if (file) {
-            analyzeKml(file);
-        }
-    };
-
-    const analyzeKml = (file) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const kmlText = e.target.result;
-            parseKmlText(kmlText);
-        };
-        reader.readAsText(file);
-    };
-
-    const parseKmlText = (kmlText) => {
-        try {
-            const parser = new DOMParser();
-            const kmlDoc = parser.parseFromString(kmlText, 'text/xml');
-            const convertedGeoJson = kml(kmlDoc);
-
-            const tramos = [];
-            convertedGeoJson.features.forEach(feature => {
-                if (feature.properties && feature.properties.name) {
-                    tramos.push(feature.properties.name);
-                }
-            });
-
-            // Sort tramos logically (Tramo 1, Tramo 2, etc.)
-            tramos.sort((a, b) => {
-                const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
-                const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
-                return numA - numB;
-            });
-
-            if (tramos.length > 0) {
-                setIdentifiedTramos(tramos);
-
-                // If we have SAVED calibration data, merge it. 
-                // Otherwise initialize empty.
-                const newCalib = { ...calibrationData };
-
-                tramos.forEach(t => {
-                    if (!newCalib[t]) {
-                        newCalib[t] = { start: '', end: '' };
-                    }
-                });
-
-                setCalibrationData(newCalib);
-                // Only alert success if it's a manual upload actions, otherwise concise
-                if (kmlFile) alertify.success(`Se identificaron ${tramos.length} tramos.`);
-            } else {
-                if (kmlFile) alertify.warning('No se encontraron tramos nombrados en el KML.');
-            }
-
-        } catch (error) {
-            console.error("Error parsing KML", error);
-            if (kmlFile) alertify.error('Error al analizar el archivo KML.');
-        }
-    };
-
-    const fetchAndParseRemoteKml = async (url) => {
-        try {
-            const response = await axios.get(url);
-            parseKmlText(response.data);
-        } catch (error) {
-            console.error("Error downloading remote KML", error);
-            // Silent fail or toast? Maybe minimal warning
-            // alertify.error('No se pudo cargar el KML del proyecto para calibración.');
-        }
-    };
+    // (Merged above)
 
     const handleCalibrationChange = (tramo, field, value) => {
         setCalibrationData(prev => ({
@@ -485,25 +612,94 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
                     <fieldset>
                         <legend>Trazado KML y Calibración</legend>
                         <div className="form-group">
-                            <label>Archivo KML/KMZ</label>
-                            <input type="file" accept=".kml,.kmz" onChange={handleKmlFileChange} disabled={isUploadingKml} />
-                            {originalProject?.kml_filename && !kmlFile && (
-                                <p className="file-info text-xs text-blue-600 mt-1">Actual: {originalProject.kml_filename}</p>
+                            <label>Archivo KML/KMZ o Shapefile (.zip)</label>
+
+                            {!kmlFile && (formData.url_kml || originalProject?.kml_filename) ? (
+                                <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-blue-100 rounded text-blue-600">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-blue-900">Archivo Actual Cargado</p>
+                                            <a
+                                                href={formData.url_kml || '#'}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-xs text-blue-700 truncate max-w-[200px] hover:underline block"
+                                                title={originalProject?.kml_filename || formData.url_kml}
+                                            >
+                                                {originalProject?.kml_filename || (formData.url_kml ? formData.url_kml.split('/').pop() : 'Archivo KML/ZIP')}
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setOriginalProject(prev => ({ ...prev, kml_filename: null }));
+                                            setFormData(prev => ({ ...prev, url_kml: null }));
+                                            setIdentifiedTramos([]);
+                                            setCalibrationData({});
+                                            setManualTramoCount(0);
+                                        }}
+                                        className="text-xs text-red-500 hover:text-red-700 font-medium underline px-2"
+                                    >
+                                        Cambiar Archivo
+                                    </button>
+                                </div>
+                            ) : (
+                                <input
+                                    type="file"
+                                    accept=".kml,.kmz,.zip"
+                                    onChange={handleKmlUpload}
+                                    disabled={isUploadingKml}
+                                    className="border p-2 rounded w-full"
+                                />
                             )}
+
+                            {kmlFile && (
+                                <p className="text-xs text-green-600 mt-1 font-medium flex items-center gap-1">
+                                    <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+                                    Nuevo archivo seleccionado: {kmlFile.name}
+                                </p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">Soporta: .kml, .kmz, .zip (Shapefile con .shp/.dbf)</p>
                         </div>
 
-                        {/* Calibration Form */}
+                        {/* Manual Override Control - Only show if no tramos detected yet */}
+                        {identifiedTramos.length === 0 && (
+                            <div className="mt-4 mb-4 bg-gray-50 p-3 rounded-md border border-gray-200">
+                                <div className="flex items-center gap-2">
+                                    <Label className="text-sm">¿Definir tramos manualmente?</Label>
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        max="50"
+                                        className="w-24"
+                                        value={manualTramoCount}
+                                        onChange={handleManualTramoCountChange}
+                                        placeholder="# Tramos"
+                                    />
+                                    <span className="text-xs text-gray-400">(Ingresa cantidad e.g. 3)</span>
+                                </div>
+                            </div>
+                        )}
+
+
+
                         {identifiedTramos.length > 0 && (
                             <div className="mt-4 p-4 border border-blue-200 rounded bg-blue-50">
                                 <h4 className="text-sm font-bold text-blue-800 mb-2">Calibración de Tramos Identificados</h4>
                                 <div className="text-xs text-gray-600 mb-3">
-                                    Ingrese la progresiva oficial de inicio y fin para cada tramo encontrado en el KML (ej: 0+000).
+                                    Ingrese la progresiva oficial de inicio y fin para cada tramo (ej: 0+000).
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full bg-white text-sm border-collapse">
                                         <thead>
                                             <tr>
-                                                <th className="border px-2 py-1 bg-gray-100">Tramo (KML)</th>
+                                                <th className="border px-2 py-1 bg-gray-100">Tramo</th>
                                                 <th className="border px-2 py-1 bg-gray-100">Prog. Inicio</th>
                                                 <th className="border px-2 py-1 bg-gray-100">Prog. Fin</th>
                                             </tr>
@@ -607,10 +803,29 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
                         </div>
                     </fieldset>
 
-                    <DialogFooter className="mt-6">
-                        <button type="button" className="btn btn-outline mr-2" onClick={onClose} disabled={isUploadingKml}>Cancelar</button>
-                        <button type="submit" className="btn btn-primary bg-blue-600 text-white" disabled={isUploadingKml}>
-                            {isUploadingKml ? 'Guardando...' : 'Guardar y Finalizar'}
+                    <DialogFooter className="mt-6 flex flex-row justify-end gap-3 sm:gap-3">
+                        <button
+                            type="button"
+                            className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                            onClick={onClose}
+                            disabled={isUploadingKml}
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow-sm transition-colors flex items-center"
+                            disabled={isUploadingKml}
+                        >
+                            {isUploadingKml ? (
+                                <>
+                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Guardando...
+                                </>
+                            ) : 'Guardar y Finalizar'}
                         </button>
                     </DialogFooter>
                 </form>

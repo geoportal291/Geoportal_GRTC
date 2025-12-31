@@ -460,10 +460,24 @@ const deleteSenal = async (req, res) => {
 
 const updateSenal = async (req, res) => {
     const { id } = req.params;
+    const {
+        codigo, progresiva, lado, tipo, clasificacion, material,
+        latitud, longitud, altitud, observaciones, panel_fotografico_codigo, entregable
+    } = req.body;
+
     try {
-        // Placeholder update logic
-        res.json({ message: 'Señal actualizada (placeholder)' });
+        const result = await pool.query(
+            `UPDATE senales_informativas
+             SET codigo = $1, progresiva = $2, lado = $3, tipo = $4, clasificacion = $5, 
+                 material = $6, latitud = $7, longitud = $8, altitud = $9, observaciones = $10, 
+                 panel_fotografico_codigo = $11, entregable = $12
+             WHERE id_senal_informativa = $13 RETURNING *`,
+            [codigo, progresiva, lado, tipo, clasificacion, material,
+                latitud, longitud, altitud, observaciones, panel_fotografico_codigo, entregable, id]
+        );
+        res.json(result.rows[0]);
     } catch (e) {
+        console.error('Error updating informativa:', e);
         res.status(500).json({ message: 'Error update' });
     }
 };

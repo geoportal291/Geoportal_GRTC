@@ -15,7 +15,12 @@ import FormularioZonaCriticaView from './AlcantarillaModalViews/FormularioZonaCr
 import FormularioInterferenciaView from './AlcantarillaModalViews/FormularioInterferenciaView'; // Import Interferencias Form
 import FormularioSenalInformativaView from './AlcantarillaModalViews/FormularioSenalInformativaView';
 import FormularioSenalReguladoraView from './AlcantarillaModalViews/FormularioSenalReguladoraView';
+import FormularioSenalPreventivaView from './AlcantarillaModalViews/FormularioSenalPreventivaView';
 import FormularioHitoKilometricoView from './AlcantarillaModalViews/FormularioHitoKilometricoView';
+import FormularioPuenteView from './AlcantarillaModalViews/FormularioPuenteView';
+import FormularioMuroView from './AlcantarillaModalViews/FormularioMuroView';
+import FormularioCanteraView from './AlcantarillaModalViews/FormularioCanteraView';
+import FormularioEstructuraExistenteView from './AlcantarillaModalViews/FormularioEstructuraExistenteView';
 
 
 const DataManagementModal = ({
@@ -41,19 +46,29 @@ const DataManagementModal = ({
     material: '',
     diametro_lado: '',
     longitud_alcantarilla: '',
-    longitud_baden: '', // Add longitud_baden
+    longitud_baden: '',
+    longitud_puente: '',
+    longitud_muro: '',
     estado: '',
     observaciones: '',
     progresiva: '',
+    progresiva_inicio: '',
+    progresiva_final: '',
     latitud: '',
     longitud: '',
+    latitud_inicio: '',
+    longitud_inicio: '',
+    latitud_final: '',
+    longitud_final: '',
     luz: '',
     alto: '',
     ancho: '',
+    ancho_calzada: '',
     altitud: '',
     caracteristicas: '',
     clase: '',
     panel_fotografico_codigo: '',
+    panel_fotografico: '',
     // Zonas Criticas
     id_zona_critica: '',
     lado: '',
@@ -64,7 +79,19 @@ const DataManagementModal = ({
     // Interferencias
     tipo_interferencia: '',
     tension: '',
-    // Common properties that might duplicate but harmless
+    // Puentes
+    nombre: '',
+    numero_vias: '',
+    tablero: '',
+    // Señales
+    clasificacion: '',
+    soporte: '',
+    // Canteras
+    accesibilidad: '',
+    coordenada_este: '',
+    coordenada_norte: '',
+    id_progresiva_referencia: '',
+    desplazamiento_km: '',
   };
 
   const modalRef = useRef();
@@ -210,17 +237,22 @@ const DataManagementModal = ({
       cancelButtonText: 'Cancelar'
     }).then(async (result) => {
       if (result.isConfirmed) {
-        setUploadStatus({ message: 'Eliminando imagen...', type: 'info' });
+        Swal.fire({
+          title: 'Eliminando...',
+          text: 'Por favor espera un momento.',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
         try {
           await axiosInstance.delete(`/api/alcantarillas/graphics/${imageId}?projectId=${projectId}`);
-          setUploadStatus({ message: 'Imagen eliminada correctamente.', type: 'success' });
           Swal.fire('Eliminado', 'La imagen ha sido eliminada.', 'success');
           fetchGraphicsImages();
         } catch (error) {
           if (error.response && error.response.status === 403) {
             Swal.fire('Error', 'Usted solo tiene acceso a lectura, no puede eliminar archivos', 'error');
           } else {
-            setUploadStatus({ message: 'Error al eliminar imagen: ' + (error.response?.data?.message || error.message), type: 'error' });
             Swal.fire('Error', 'No se pudo eliminar la imagen.', 'error');
           }
         }
@@ -244,17 +276,22 @@ const DataManagementModal = ({
       cancelButtonText: 'Cancelar'
     }).then(async (result) => {
       if (result.isConfirmed) {
+        Swal.fire({
+          title: 'Eliminando todo...',
+          text: 'Estamos borrando todas las imágenes del proyecto. Esto puede tardar.',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
         try {
-          setUploadStatus({ message: 'Eliminando todas las imágenes...', type: 'info' });
           await axiosInstance.delete(`/api/alcantarillas/graphics/all/${projectId}`);
-          setUploadStatus({ message: 'Todas las imágenes eliminadas correctamente.', type: 'success' });
           Swal.fire('Eliminado', 'Se han borrado todas las imágenes.', 'success');
           setGraphicsImages([]);
         } catch (error) {
           if (error.response && error.response.status === 403) {
             Swal.fire('Error', 'Usted solo tiene acceso a lectura, no puede eliminar archivos', 'error');
           } else {
-            setUploadStatus({ message: 'Error al eliminar imágenes: ' + (error.response?.data?.message || error.message), type: 'error' });
             Swal.fire('Error', 'No se pudieron eliminar las imágenes.', 'error');
           }
         }
@@ -278,17 +315,22 @@ const DataManagementModal = ({
       cancelButtonText: 'Cancelar'
     }).then(async (result) => {
       if (result.isConfirmed) {
+        Swal.fire({
+          title: 'Borrando Carpeta...',
+          text: `Eliminando imágenes de ${entregable}.`,
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
         try {
-          setUploadStatus({ message: `Eliminando imágenes de ${entregable}...`, type: 'info' });
           await axiosInstance.delete(`/api/alcantarillas/graphics/folder/${projectId}`, { data: { entregable } });
-          setUploadStatus({ message: `Imágenes de ${entregable} eliminadas correctamente.`, type: 'success' });
           Swal.fire('Borrado', `Las imágenes de ${entregable} han sido eliminadas.`, 'success');
           fetchGraphicsImages();
         } catch (error) {
           if (error.response && error.response.status === 403) {
             Swal.fire('Error', 'Usted solo tiene acceso a lectura, no puede eliminar archivos', 'error');
           } else {
-            setUploadStatus({ message: `Error al eliminar carpeta: ${error.response?.data?.message || error.message}`, type: 'error' });
             Swal.fire('Error', 'No se pudieron eliminar las imágenes de la carpeta.', 'error');
           }
         }
@@ -300,8 +342,10 @@ const DataManagementModal = ({
     if (show) {
       setModalViewMode(initialMode);
       if (initialMode === 'edit' && editData) {
+        // Combine initialFormData with editData to ensure all fields are populated
         const normalizedData = {
-          ...editData,
+          ...initialFormData, // Start with all possible fields
+          ...editData,        // Override with actual data from the element
           estado: editData.estado ? editData.estado.trim() : ''
         };
         setFormData(normalizedData);
@@ -770,15 +814,37 @@ const DataManagementModal = ({
         </div>
     `;
 
-    alertify.confirm('Confirmar Eliminación', confirmContent,
-      async () => {
-        const deleteAlcantarillas = document.getElementById('delete-alcantarillas').checked;
-        const deleteBadenes = document.getElementById('delete-badenes').checked;
-        const deletePuentes = document.getElementById('delete-puentes').checked;
-        const deleteMuros = document.getElementById('delete-muros').checked;
-        const deleteCanterasFuentes = document.getElementById('delete-canterasfuentes').checked;
-        const deleteZonasCriticas = document.getElementById('delete-zonascriticas')?.checked;
-        const deleteEstructuras = document.getElementById('delete-estructuras')?.checked;
+    Swal.fire({
+      title: 'Confirmar Eliminación',
+      html: confirmContent,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Sí, eliminar seleccionado',
+      cancelButtonText: 'Cancelar',
+      preConfirm: () => {
+        return {
+          deleteAlcantarillas: document.getElementById('delete-alcantarillas').checked,
+          deleteBadenes: document.getElementById('delete-badenes').checked,
+          deletePuentes: document.getElementById('delete-puentes').checked,
+          deleteMuros: document.getElementById('delete-muros').checked,
+          deleteCanterasFuentes: document.getElementById('delete-canterasfuentes').checked,
+          deleteZonasCriticas: document.getElementById('delete-zonascriticas').checked,
+          deleteEstructuras: document.getElementById('delete-estructuras').checked
+        }
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const {
+          deleteAlcantarillas,
+          deleteBadenes,
+          deletePuentes,
+          deleteMuros,
+          deleteCanterasFuentes,
+          deleteZonasCriticas,
+          deleteEstructuras
+        } = result.value;
 
         const typesToDelete = [];
         if (deleteAlcantarillas) typesToDelete.push('alcantarillas');
@@ -787,31 +853,35 @@ const DataManagementModal = ({
         if (deleteMuros) typesToDelete.push('muros');
         if (deleteCanterasFuentes) typesToDelete.push('canterasfuentes');
         if (deleteZonasCriticas) typesToDelete.push('zonascriticas');
-        // Do NOT push 'estructuras' to typesToDelete if we handle it separately, OR ensure backend ignores it?
-        // Better to handle separately below.
 
         if (typesToDelete.length === 0 && !deleteEstructuras) {
-          setUploadStatus({ message: 'No se seleccionó ningún tipo de dato para eliminar. Operación cancelada.', type: 'info' });
+          Swal.fire('Información', 'No se seleccionó ningún tipo de dato para eliminar.', 'info');
           return;
         }
 
-        setUploadStatus({ message: 'Eliminando archivo Excel y datos seleccionados...', type: 'info' });
+        Swal.fire({
+          title: 'Eliminando datos...',
+          text: 'Estamos procesando tu solicitud, por favor espera.',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
         try {
           const entregableMatch = vialHeaderOption.match(/(\d+)/);
           const entregableNum = entregableMatch ? entregableMatch[1] : '';
 
-          // Handle Estructuras delete separately
           if (deleteEstructuras) {
             await axiosInstance.delete(`/api/estructuras-existentes/project/${projectId}`);
           }
 
           if (typesToDelete.length > 0) {
             const response = await axiosInstance.delete(`/api/alcantarillas/delete-excel/${projectId}?entregableNum=${entregableNum}&tipos=${typesToDelete.join(',')}`);
-            setUploadStatus({ message: response.data.message || 'Datos eliminados.', type: 'success' });
+            Swal.fire('Eliminado', response.data.message || 'Datos seleccionados eliminados correctamente.', 'success');
           } else {
-            setUploadStatus({ message: 'Datos de estructuras eliminados.', type: 'success' });
+            Swal.fire('Eliminado', 'Datos de estructuras eliminados correctamente.', 'success');
           }
-
 
           fetchExcelInfo();
           if (onUploadExcelData) {
@@ -820,16 +890,15 @@ const DataManagementModal = ({
           setFilesToUpload(null);
         } catch (error) {
           if (error.response && error.response.status === 403) {
-            alertify.error('Usted solo tiene acceso a lectura, no puede eliminar archivos');
+            Swal.fire('Error', 'Usted solo tiene acceso a lectura, no puede eliminar archivos', 'error');
           } else {
-            setUploadStatus({ message: 'Error al eliminar el archivo Excel y los datos: ' + (error.response?.data?.message || error.message), type: 'error' });
+            Swal.fire('Error', 'Error al eliminar el archivo Excel y los datos: ' + (error.response?.data?.message || error.message), 'error');
           }
         }
-      },
-      () => {
-        setUploadStatus({ message: 'Eliminación cancelada.', type: 'info' });
+      } else {
+        Swal.fire('Información', 'Eliminación cancelada.', 'info');
       }
-    ).set('labels', { ok: 'Sí, eliminar', cancel: 'Cancelar' });
+    });
   };
 
   const submitButtonText = modalViewMode === 'edit' ? 'Actualizar Alcantarilla' : 'Guardar Alcantarilla';
@@ -988,6 +1057,47 @@ const DataManagementModal = ({
                 handleInputChange={handleChange}
                 onSubmit={handleSubmit}
                 onCancel={() => setModalViewMode('list')}
+              />
+            ) : type === 'puentes' ? (
+              <FormularioPuenteView
+                formData={formData}
+                handleChange={handleChange}
+                handleSubmit={handleSubmit}
+                modalViewMode={modalViewMode}
+                setModalViewMode={setModalViewMode}
+                submitButtonText={submitButtonText}
+              />
+            ) : type === 'muros' ? (
+              <FormularioMuroView
+                formData={formData}
+                handleChange={handleChange}
+                handleSubmit={handleSubmit}
+                modalViewMode={modalViewMode}
+                setModalViewMode={setModalViewMode}
+                submitButtonText={submitButtonText}
+              />
+            ) : type === 'senales_preventivas' ? (
+              <FormularioSenalPreventivaView
+                formData={formData}
+                handleInputChange={handleChange}
+              />
+            ) : type === 'canteras' ? (
+              <FormularioCanteraView
+                formData={formData}
+                handleChange={handleChange}
+                handleSubmit={handleSubmit}
+                modalViewMode={modalViewMode}
+                setModalViewMode={setModalViewMode}
+                submitButtonText={submitButtonText}
+              />
+            ) : type === 'est_existentes' ? (
+              <FormularioEstructuraExistenteView
+                formData={formData}
+                handleChange={handleChange}
+                handleSubmit={handleSubmit}
+                modalViewMode={modalViewMode}
+                setModalViewMode={setModalViewMode}
+                submitButtonText={submitButtonText}
               />
             ) : (
               <FormularioAlcantarillaView

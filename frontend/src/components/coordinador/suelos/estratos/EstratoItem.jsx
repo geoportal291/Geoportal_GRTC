@@ -174,13 +174,7 @@ const EstratoItem = React.memo(React.forwardRef(({
                         >
                             <i className="fas fa-plus" /> Añadir Ensayo
                         </button>
-                        <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => onClasificar(estrato)}
-                        >
-                            <i className="fas fa-certificate" /> Clasificar Suelo
-                        </button>
+                        {/* Botón Clasificar Suelo Eliminado */}
                         {selectedEnsayo && (
                             <div className="selected-ensayo-actions">
                                 <button
@@ -249,7 +243,7 @@ const EstratoItem = React.memo(React.forwardRef(({
                                         </div>
                                         <div className="detail-item">
                                             <span className="detail-label">Estado:</span>
-                                            <span className={`detail-value status-badge status-${(ensayo?.estado || 'sin-estado').toString().toLowerCase()}`}>
+                                            <span className={`detail-value status-badge status-${(ensayo?.estado || 'sin-estado').toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}`}>
                                                 {ensayo?.estado ?? 'Sin estado'}
                                             </span>
                                         </div>

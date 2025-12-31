@@ -11,7 +11,7 @@
     --estrato-gray-color: #607d8b;
     --estrato-light-gray-color: #e0e0e0;
     --estrato-radius: 8px;
-    --estrato-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    --estrato-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 /* Contenedor principal de un Estrato
@@ -61,7 +61,7 @@
     width: 24px;
     height: 24px;
     border-radius: 4px;
-    border: 2px solid rgba(0,0,0,0.1);
+    border: 2px solid rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
 }
 
@@ -102,7 +102,7 @@
     font-weight: 500;
     font-size: 0.9rem;
     transition: all 0.25s ease;
-    background-color: rgba(0,0,0,0.05);
+    background-color: rgba(0, 0, 0, 0.05);
     color: #555;
 }
 
@@ -115,6 +115,7 @@
     background-color: rgba(76, 175, 80, 0.15);
     color: #2e7d32;
 }
+
 .estrato-action-btn.add:hover {
     background-color: rgba(76, 175, 80, 0.3);
 }
@@ -138,17 +139,24 @@
 
 /* Cuando está abierto */
 .estrato-item.open .estrato-body {
-    max-height: 1000px; /* suficiente para mostrar el contenido */
+    max-height: 1000px;
+    /* suficiente para mostrar el contenido */
     opacity: 1;
     visibility: visible;
-    padding: 12px 20px; /* agrega espacio interno al mostrarse */
+    padding: 12px 20px;
+    /* agrega espacio interno al mostrarse */
 }
 
 
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .ensayos-header {
@@ -171,7 +179,8 @@
     overflow-x: auto;
     gap: 15px;
     padding: 10px 5px;
-    margin: 0 -5px; /* Compensate padding for scrollbar */
+    margin: 0 -5px;
+    /* Compensate padding for scrollbar */
 }
 
 .no-ensayos {
@@ -185,115 +194,164 @@
    ========================================================================== */
 .ensayo-card {
     background-color: #ffffff;
-    border-radius: 10px; /* Ligeramente más redondeado */
+    border-radius: 10px;
+    /* Ligeramente más redondeado */
     border: 1px solid #e0e0e0;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Sombra más pronunciada */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    /* Sombra más pronunciada */
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
-    width: 260px; /* Ligeramente más estrecho */
+    width: 260px;
+    /* Ligeramente más estrecho */
     flex-shrink: 0;
-    overflow: hidden; /* Asegura que el border-radius se aplique a los hijos */
+    overflow: hidden;
+    /* Asegura que el border-radius se aplique a los hijos */
 }
 
 .ensayo-card.selectable {
     cursor: pointer;
-    border-left: none; /* Se quita el borde izquierdo para un look más limpio */
+    border-left: none;
+    /* Se quita el borde izquierdo para un look más limpio */
 }
 
 .ensayo-card.selectable:hover {
-    transform: translateY(-5px); /* Elevación más notoria */
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); /* Sombra más fuerte */
-    border-color: var(--estrato-accent-color); /* Resaltado de borde */
+    transform: translateY(-5px);
+    /* Elevación más notoria */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    /* Sombra más fuerte */
+    border-color: var(--estrato-accent-color);
+    /* Resaltado de borde */
 }
 
 .ensayo-card.selectable.selected {
     background-color: var(--estrato-light-color);
-    border: 1px solid var(--estrato-primary-color); /* Borde sólido para selección */
-    box-shadow: 0 0 0 2px var(--estrato-primary-color); /* Efecto de brillo azul */
-    transform: translateY(-2px); /* Ligera elevación */
+    border: 1px solid var(--estrato-primary-color);
+    /* Borde sólido para selección */
+    box-shadow: 0 0 0 2px var(--estrato-primary-color);
+    /* Efecto de brillo azul */
+    transform: translateY(-2px);
+    /* Ligera elevación */
 }
 
 .ensayo-card .ensayo-header {
-    background-color: var(--estrato-primary-color); /* Encabezado azul sólido */
+    background-color: var(--estrato-primary-color);
+    /* Encabezado azul sólido */
     color: white;
     padding: 10px 15px;
     display: flex;
-    flex-direction: column; /* Apila título y fecha */
+    flex-direction: column;
+    /* Apila título y fecha */
     align-items: flex-start;
-    border-bottom: none; /* Sin borde, el fondo sólido es suficiente */
+    border-bottom: none;
+    /* Sin borde, el fondo sólido es suficiente */
     border-top-left-radius: 9px;
     border-top-right-radius: 9px;
 }
 
 .ensayo-card .ensayo-title {
-    font-weight: 700; /* Título más grueso */
+    font-weight: 700;
+    /* Título más grueso */
     font-size: 1.1rem;
     margin-bottom: 4px;
-    color: white; /* Texto blanco */
+    color: white;
+    /* Texto blanco */
 }
 
 .ensayo-card .ensayo-date {
     font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.8); /* Texto de fecha más claro */
-    margin-left: 0; /* Alineado con el título */
+    color: rgba(255, 255, 255, 0.8);
+    /* Texto de fecha más claro */
+    margin-left: 0;
+    /* Alineado con el título */
 }
 
 .ensayo-card .ensayo-details {
     padding: 15px;
-    display: grid; /* Grid para mejor alineación */
-    grid-template-columns: 1fr 1fr; /* Dos columnas */
-    gap: 12px 15px; /* Espaciado de fila y columna */
-    font-size: 0.85rem; /* Fuente de detalles más pequeña */
+    display: grid;
+    /* Grid para mejor alineación */
+    grid-template-columns: 1fr 1fr;
+    /* Dos columnas */
+    gap: 12px 15px;
+    /* Espaciado de fila y columna */
+    font-size: 0.85rem;
+    /* Fuente de detalles más pequeña */
     color: #444;
 }
 
 .ensayo-card .detail-item {
     display: flex;
-    flex-direction: column; /* Apila etiqueta y valor */
+    flex-direction: column;
+    /* Apila etiqueta y valor */
     align-items: flex-start;
     gap: 2px;
 }
 
 .ensayo-card .detail-label {
-    color: #888; /* Color de etiqueta más claro */
-    font-weight: 400; /* Peso normal */
-    text-transform: uppercase; /* Mayúsculas */
-    font-size: 0.75rem; /* Fuente de etiqueta más pequeña */
+    color: #888;
+    /* Color de etiqueta más claro */
+    font-weight: 400;
+    /* Peso normal */
+    text-transform: uppercase;
+    /* Mayúsculas */
+    font-size: 0.75rem;
+    /* Fuente de etiqueta más pequeña */
 }
 
 .ensayo-card .detail-value {
     color: #222;
-    font-weight: 600; /* Valor más grueso */
-    text-align: left; /* Alineado a la izquierda */
+    font-weight: 600;
+    /* Valor más grueso */
+    text-align: left;
+    /* Alineado a la izquierda */
     width: 100%;
 }
 
 /* Estilo específico para el badge de estado dentro de la tarjeta */
 .ensayo-card .detail-value.status-badge {
     padding: 3px 8px;
-    border-radius: 12px; /* Forma de píldora */
+    border-radius: 12px;
+    /* Forma de píldora */
     font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
     display: inline-block;
-    width: auto; /* Ancho automático para el badge */
+    width: auto;
+    /* Ancho automático para el badge */
     text-align: center;
 }
 
-/* Colores de estado (se pueden añadir más) */
+/* Colores de estado actualizados */
 .ensayo-card .detail-value.status-completado {
-    background-color: #e8f5e9; /* Verde claro */
-    color: #2e7d32; /* Verde oscuro */
+    background-color: #bbdefb;
+    /* Azul */
+    color: #1976d2;
 }
+
 .ensayo-card .detail-value.status-pendiente {
-    background-color: #fff3e0; /* Naranja claro */
-    color: #ef6c00; /* Naranja oscuro */
+    background-color: #f0f0f0;
+    /* Gris */
+    color: #616161;
 }
-.ensayo-card .detail-value.status-en-proceso {
-    background-color: #e3f2fd; /* Azul claro */
-    color: #1565c0; /* Azul oscuro */
+
+.ensayo-card .detail-value.status-en-revision {
+    background-color: #fff9c4;
+    /* Amarillo */
+    color: #fbc02d;
 }
+
+.ensayo-card .detail-value.status-rechazado {
+    background-color: #ffcdd2;
+    /* Rojo */
+    color: #d32f2f;
+}
+
+.ensayo-card .detail-value.status-aprobado {
+    background-color: #c8e6c9;
+    /* Verde */
+    color: #388e3c;
+}
+
 .ensayo-card .detail-value.status-sin-estado {
     background-color: #f5f5f5;
     color: #616161;
@@ -305,7 +363,7 @@
     display: flex;
     gap: 8px;
     padding: 8px;
-    background-color: rgba(0,0,0,0.03);
+    background-color: rgba(0, 0, 0, 0.03);
     border-radius: var(--estrato-radius);
 }
 
@@ -319,25 +377,37 @@
     background-color: rgba(156, 39, 176, 0.1);
     color: #8e24aa;
 }
-.action-btn.view:hover { background-color: rgba(156, 39, 176, 0.2); }
+
+.action-btn.view:hover {
+    background-color: rgba(156, 39, 176, 0.2);
+}
 
 .action-btn.edit {
     background-color: rgba(33, 150, 243, 0.1);
     color: #1976d2;
 }
-.action-btn.edit:hover { background-color: rgba(33, 150, 243, 0.2); }
+
+.action-btn.edit:hover {
+    background-color: rgba(33, 150, 243, 0.2);
+}
 
 .action-btn.delete {
     background-color: rgba(244, 67, 54, 0.1);
     color: #c62828;
 }
-.action-btn.delete:hover { background-color: rgba(244, 67, 54, 0.2); }
+
+.action-btn.delete:hover {
+    background-color: rgba(244, 67, 54, 0.2);
+}
 
 .action-btn.go {
     background-color: rgba(0, 150, 136, 0.1);
     color: #00796b;
 }
-.action-btn.go:hover { background-color: rgba(0, 150, 136, 0.2); }
+
+.action-btn.go:hover {
+    background-color: rgba(0, 150, 136, 0.2);
+}
 
 /* ==========================================================================
    Estilos para el Modal de Detalles de Ensayo (Alertify)
@@ -350,7 +420,8 @@
 
 /* Contenedor principal del modal personalizado */
 .ensayo-details-modal-container {
-    overflow: hidden; /* Asegura que el border-radius de los hijos funcione */
+    overflow: hidden;
+    /* Asegura que el border-radius de los hijos funcione */
 }
 
 /* Encabezado del Modal */
@@ -376,53 +447,53 @@
 
 /* Contenido del Modal */
 .ensayo-details-modal-content {
-  padding: 25px;
-  background-color: #f7f9fc;
+    padding: 25px;
+    background-color: #f7f9fc;
 }
 
 /* Cada item de detalle (ej. Nombre, Tipo, Fecha) */
 .modal-detail-item {
-  background-color: #ffffff;
-  padding: 15px;
-  margin-bottom: 12px;
-  border-radius: 6px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  display: flex;
-  align-items: center;
-  transition: box-shadow 0.3s ease;
+    background-color: #ffffff;
+    padding: 15px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    transition: box-shadow 0.3s ease;
 }
 
 .modal-detail-item:last-child {
-  margin-bottom: 0;
+    margin-bottom: 0;
 }
 
 .modal-detail-item:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* Icono dentro de cada item */
 .modal-detail-item i {
-  font-size: 1.4em;
-  margin-right: 15px;
-  color: #555;
-  width: 24px;
-  text-align: center;
+    font-size: 1.4em;
+    margin-right: 15px;
+    color: #555;
+    width: 24px;
+    text-align: center;
 }
 
 /* Etiqueta del detalle (ej. "Nombre:") */
 .modal-detail-label {
-  text-transform: uppercase;
-  font-size: 0.85em;
-  font-weight: 600;
-  color: #666;
-  flex-shrink: 0;
-  margin-right: 10px;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #666;
+    flex-shrink: 0;
+    margin-right: 10px;
 }
 
 /* Valor del detalle */
 .modal-detail-value {
-  font-size: 1.1em;
-  font-weight: 500;
-  color: #222;
-  word-break: break-word;
+    font-size: 1.1em;
+    font-weight: 500;
+    color: #222;
+    word-break: break-word;
 }

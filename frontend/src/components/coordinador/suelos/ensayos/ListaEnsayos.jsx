@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import '../../proyectos/GestorProyectos.css';
+import '../estratos/EstratoItem.css';
 import FormularioEnsayo from './FormularioEnsayo'; // Importar el formulario de ensayo
 
 const ListaEnsayos = ({ estrato, estratoRealId }) => {
@@ -49,7 +50,7 @@ const ListaEnsayos = ({ estrato, estratoRealId }) => {
     };
 
     const handleDeleteEnsayo = async (ensayoId) => {
-        alertify.confirm('Eliminar Ensayo', '¿Está seguro que desea eliminar este ensayo?', 
+        alertify.confirm('Eliminar Ensayo', '¿Está seguro que desea eliminar este ensayo?',
             async () => {
                 try {
                     await axios.delete(`${API_URL}/ensayos/${ensayoId}`, {
@@ -117,7 +118,9 @@ const ListaEnsayos = ({ estrato, estratoRealId }) => {
                                 </div>
                                 <div className="detail-item">
                                     <span className="detail-label">Estado</span>
-                                    <span className="detail-value">{ensayo.estado}</span>
+                                    <span className={`detail-value status-badge status-${(ensayo.estado || 'sin-estado').toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}`}>
+                                        {ensayo.estado}
+                                    </span>
                                 </div>
                             </div>
                             <div className="ensayo-actions">
@@ -137,10 +140,10 @@ const ListaEnsayos = ({ estrato, estratoRealId }) => {
             )}
 
             {showEnsayoForm && (
-                <FormularioEnsayo 
-                    onClose={handleCloseEnsayoForm} 
-                    onSave={handleSaveEnsayo} 
-                    estratoId={estratoRealId} 
+                <FormularioEnsayo
+                    onClose={handleCloseEnsayoForm}
+                    onSave={handleSaveEnsayo}
+                    estratoId={estratoRealId}
                     ensayoData={ensayoToEdit} // Pasar datos si es edición
                 />
             )}

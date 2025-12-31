@@ -284,6 +284,26 @@ const ZonesCriticasService = {
         }
     },
 
+    createZonaCritica: async (data) => {
+        const {
+            id_proyecto, codigo, progresiva, latitud, longitud, altitud,
+            lado, longitud_zona, observaciones, tipo, clase_dano, condicion,
+            panel_fotografico_codigo, entregable, numero_seguimiento
+        } = data;
+
+        const result = await db.query(
+            `INSERT INTO zonas_criticas (
+                id_proyecto, codigo, progresiva, latitud, longitud, altitud,
+                lado, longitud_zona, observaciones, tipo, clase_dano, condicion,
+                panel_fotografico_codigo, entregable, numero_seguimiento
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+            [id_proyecto, codigo, progresiva, latitud, longitud, altitud,
+                lado, longitud_zona, observaciones, tipo, clase_dano, condicion,
+                panel_fotografico_codigo, entregable, numero_seguimiento]
+        );
+        return result.rows[0];
+    },
+
     getAllZonasCriticas: async (projectId) => {
         const result = await db.query('SELECT * FROM zonas_criticas WHERE id_proyecto = $1 ORDER BY id_zona_critica ASC', [projectId]);
         return result.rows;

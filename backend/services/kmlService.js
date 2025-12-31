@@ -45,19 +45,25 @@ const createKmlTrazado = async (file, userId) => {
             }
         } else if (originalFilename.toLowerCase().endsWith('.kml')) {
             kmlText = fileBuffer.toString('utf8');
+        } else if (originalFilename.toLowerCase().endsWith('.zip')) {
+            // Shapefile or other ZIP content. We don't extract KML text from generic ZIPs.
+            // We store a placeholder as the actual file is in Vercel Blob.
+            kmlText = "CONTENIDO_BINARIO_ZIP_SHAPEFILE";
         } else {
-            throw new KmlServiceError('Formato de archivo no soportado. Solo se permiten KML y KMZ.', 400);
+            throw new KmlServiceError('Formato de archivo no soportado. Solo se permiten KML, KMZ y ZIP (Shapefile).', 400);
         }
 
-        // 2. Seguridad: Validación y sanitización básica del XML
-        const parser = new XMLParser({
-            ignoreAttributes: false,
-            allowBooleanAttributes: true,
-        });
-        try {
-            parser.parse(kmlText);
-        } catch (xmlError) {
-            throw new KmlServiceError('El contenido del archivo KML no es un XML válido.', 400);
+        // 2. Seguridad: Validación y sanitización básica del XML (Solo para KML/KMZ real)
+        if (!originalFilename.toLowerCase().endsWith('.zip') || originalFilename.toLowerCase().endsWith('.kmz')) {
+            const parser = new XMLParser({
+                ignoreAttributes: false,
+                allowBooleanAttributes: true,
+            });
+            try {
+                parser.parse(kmlText);
+            } catch (xmlError) {
+                throw new KmlServiceError('El contenido del archivo KML no es un XML válido.', 400);
+            }
         }
 
         // 3. Persistencia en kml_trazados

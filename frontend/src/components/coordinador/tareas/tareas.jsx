@@ -12,7 +12,7 @@ const ArchivoAdjunto = ({ url }) => {
 
   const extension = url.split('.').pop().toLowerCase();
 
-  
+
 
   const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'].includes(extension);
   const isPdf = extension === 'pdf';
@@ -21,7 +21,7 @@ const ArchivoAdjunto = ({ url }) => {
   // Función para obtener una URL para el visor de documentos
   const getViewerUrl = (fileUrl, fileExtension) => {
     if (!fileUrl) return ''; // Retorna cadena vacía si no hay URL
-    
+
     if (['xls', 'xlsx'].includes(fileExtension)) {
       return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
     } else {
@@ -60,7 +60,7 @@ const ArchivoAdjunto = ({ url }) => {
       </>
     );
   } else if (isExcel) {
-    
+
     return (
       <>
         <div className="archivo-adjunto excel-viewer-container" style={{ marginTop: '1rem', width: '100%', height: '800px' }}>
@@ -216,8 +216,7 @@ export default function Tareas() {
     formData.append('fecha_inicio', anuncio.fecha_inicio);
     formData.append('fecha_fin', anuncio.fecha_fin);
     formData.append('usuario_id', anuncio.usuario_id);
-    formData.append('creador_id', user.id);
-    
+
     if (anuncio.archivo) {
       formData.append('file', anuncio.archivo);
     }
@@ -384,8 +383,8 @@ export default function Tareas() {
             {enviando
               ? 'Guardando...'
               : editando
-              ? 'Actualizar Anuncio'
-              : 'Publicar Anuncio'}
+                ? 'Actualizar Anuncio'
+                : 'Publicar Anuncio'}
           </button>
           <button type="button" onClick={limpiarFormulario} disabled={enviando}>
             Limpiar
@@ -413,7 +412,7 @@ export default function Tareas() {
               <span className="anuncio-asignado">Asignado a: {a.asignado_a}</span>
             </div>
             <p className="anuncio-contenido">{a.contenido}</p>
-            
+
             {/* --- Integración del componente de archivo adjunto --- */}
             <ArchivoAdjunto url={a.archivo_url} />
 

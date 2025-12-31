@@ -1,24 +1,30 @@
 .map-wrapper {
-  position: relative;
-  height: 280px; /* Altura inicial */
-  min-height: 200px; /* Altura mínima */
-  max-height: 85vh; /* Altura máxima (85% de la pantalla) */
-  width: 100%;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  
-  /* Activar redimensionado nativo del navegador */
-  overflow: auto; 
-  resize: vertical;
+    position: relative;
+    height: 280px;
+    /* Altura inicial */
+    min-height: 200px;
+    /* Altura mínima */
+    max-height: 85vh;
+    /* Altura máxima (85% de la pantalla) */
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+
+    /* Activar redimensionado nativo del navegador */
+    overflow: auto;
+    resize: vertical;
 }
 
 /* Opcional: Ocultar la barra de scroll que a veces aparece */
 .map-wrapper::-webkit-scrollbar {
-  display: none;
+    display: none;
 }
+
 .map-wrapper {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
 }
 
 /* ==========================================================================
@@ -27,16 +33,21 @@
 
 .cantera-form-modal-container {
     background: #fff;
-    padding: 0; /* Remove padding from container, add to body */
+    padding: 0;
+    /* Remove padding from container, add to body */
     border-radius: var(--radius);
     width: 90%;
-    max-width: 900px; /* Increased max-width for more content */
+    max-width: 900px;
+    /* Increased max-width for more content */
     box-shadow: var(--shadow);
     display: flex;
     flex-direction: column;
-    max-height: 90vh; /* Limit height for scrollability */
-    overflow: hidden; /* Hide overflow from body */
-    animation: fadeInScale 0.3s ease-out forwards; /* Modal entry animation */
+    max-height: 90vh;
+    /* Limit height for scrollability */
+    overflow: hidden;
+    /* Hide overflow from body */
+    animation: fadeInScale 0.3s ease-out forwards;
+    /* Modal entry animation */
 }
 
 .cantera-form {
@@ -77,7 +88,8 @@
 
 .modal-body {
     padding: 25px;
-    overflow-y: auto; /* Make body scrollable */
+    overflow-y: auto;
+    /* Make body scrollable */
     flex-grow: 1;
 }
 
@@ -135,7 +147,8 @@
 .form-group select:focus,
 .form-group textarea:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2); /* Custom shadow for focus */
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
+    /* Custom shadow for focus */
 }
 
 .form-group textarea {
@@ -154,7 +167,8 @@
 
 .select-with-loader select {
     flex-grow: 1;
-    padding-right: 35px; /* Make space for loader */
+    padding-right: 35px;
+    /* Make space for loader */
 }
 
 .select-with-loader .loader-icon {
@@ -209,6 +223,7 @@
         opacity: 0;
         transform: scale(0.9);
     }
+
     to {
         opacity: 1;
         transform: scale(1);
@@ -225,6 +240,7 @@
         opacity: 1;
         transform: scale(1);
     }
+
     to {
         opacity: 0;
         transform: scale(0.9);
@@ -241,7 +257,8 @@
 }
 
 .detalle-grupo h3 {
-    font-size: 1rem; /* Adjusted from 16px */
+    font-size: 1rem;
+    /* Adjusted from 16px */
     font-weight: 600;
     border-bottom: 1px solid var(--light-gray, #e5e7eb);
     padding-bottom: 8px;
@@ -251,11 +268,14 @@
 
 .detalle-campo {
     display: grid;
-    grid-template-columns: 200px 1fr; /* Increased label width slightly */
+    grid-template-columns: 200px 1fr;
+    /* Increased label width slightly */
     gap: 16px;
     margin-bottom: 12px;
-    font-size: 0.9rem; /* Adjusted from 14px */
-    align-items: start; /* Align items to the top */
+    font-size: 0.9rem;
+    /* Adjusted from 14px */
+    align-items: start;
+    /* Align items to the top */
 }
 
 .detalle-campo label {
@@ -268,7 +288,8 @@
 .detalle-campo span {
     font-weight: 500;
     color: var(--dark, #0d47a1);
-    white-space: pre-wrap; /* Allow wrapping for long descriptions */
+    white-space: pre-wrap;
+    /* Allow wrapping for long descriptions */
 }
 
 .mini-map-container {
@@ -292,83 +313,95 @@
    ========================================================================== */
 
 .map-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000; /* Ensure it's above other content */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    /* Ensure it's above other content */
 }
 
 .map-modal-content {
-  background-color: #fff; /* Usar un color de fondo explícito */
-  border-radius: 8px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  width: 100vw; /* Ocupa todo el ancho del viewport */
-  height: 100vh; /* Ocupa todo el alto del viewport */
-  display: flex;
-  flex-direction: column;
-  overflow: hidden; /* Oculta el overflow del mapa */
-  padding: 0; /* Eliminar padding para que el mapa ocupe todo */
+    background-color: #fff;
+    /* Usar un color de fondo explícito */
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    width: 100vw;
+    /* Ocupa todo el ancho del viewport */
+    height: 100vh;
+    /* Ocupa todo el alto del viewport */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* Oculta el overflow del mapa */
+    padding: 0;
+    /* Eliminar padding para que el mapa ocupe todo */
 }
 
 .map-expand-button {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  z-index: 1001; /* High z-index to be on top of map controls */
-  background-color: rgba(255, 255, 255, 0.8);
-  color: #333;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  width: 30px;
-  height: 30px;
-  font-size: 1.2rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 1001;
+    /* High z-index to be on top of map controls */
+    background-color: rgba(255, 255, 255, 0.8);
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 30px;
+    height: 30px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
 }
 
 .map-expand-button:hover {
-  background-color: #fff;
-  color: #000;
+    background-color: #fff;
+    color: #000;
 }
 
 .map-modal-close-button {
-  position: absolute;
-  top: 10px; /* Ajustar posición */
-  right: 10px; /* Ajustar posición */
-  z-index: 2010; /* Debe estar por encima del contenido del modal */
-  background-color: #e74c3c; /* Color de cierre */
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  font-size: 1.5rem;
-  font-weight: bold;
-  line-height: 32px;
-  text-align: center;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-  transition: all 0.2s;
+    position: absolute;
+    top: 10px;
+    /* Ajustar posición */
+    right: 10px;
+    /* Ajustar posición */
+    z-index: 2010;
+    /* Debe estar por encima del contenido del modal */
+    background-color: #e74c3c;
+    /* Color de cierre */
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    line-height: 32px;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s;
 }
 
 .map-modal-close-button:hover {
-  background-color: #c0392b;
-  transform: scale(1.1);
+    background-color: #c0392b;
+    transform: scale(1.1);
 }
 
 .info-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px 20px; /* 8px de gap vertical, 20px horizontal */
+    gap: 8px 20px;
+    /* 8px de gap vertical, 20px horizontal */
     margin-bottom: 16px;
 }
 
@@ -410,17 +443,20 @@
 }
 
 .map-container {
-    height: 300px;
+    /* height: 300px;  <-- REMOVED: Conflict with SuelosMap 100% height */
     border-radius: 8px;
     margin-top: 10px;
     border: 1px solid #e0e0e0;
-    resize: vertical;
-    overflow: auto;
+    resize: none;
+    /* <-- CHANGED: Disable manual resize */
+    overflow: hidden;
+    /* <-- CHANGED: Hide scrollbars */
     min-height: 200px;
 }
 
 .map-section {
-    height: 400px; /* Altura por defecto para el mapa */
+    height: 400px;
+    /* Altura por defecto para el mapa */
     border-radius: 8px;
     overflow: hidden;
     margin-bottom: 20px;
@@ -456,7 +492,8 @@
 }
 
 .cantera-imagen-container {
-    grid-column: 1 / -1; /* Ocupa todo el ancho */
+    grid-column: 1 / -1;
+    /* Ocupa todo el ancho */
     margin: 10px 0;
 }
 
@@ -464,38 +501,46 @@
     max-width: 100%;
     height: auto;
     border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* Fix for react-slick carousel inside flex container */
 .detalle-content .carousel-section-container {
     width: 100%;
-    min-width: 0; /* Crucial for flex items containing carousels */
+    min-width: 0;
+    /* Crucial for flex items containing carousels */
 }
 
 /* Status Badges */
 .status-badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.85em;
-  font-weight: bold;
-  color: #fff; /* Default white text, will be overridden for specific statuses */
-  text-transform: capitalize;
-  white-space: nowrap;
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: #fff;
+    /* Default white text, will be overridden for specific statuses */
+    text-transform: capitalize;
+    white-space: nowrap;
 }
 
 .status-Activa {
-  background-color: #4CAF50; /* Green */
-  color: #fff; /* White text for contrast */
+    background-color: #4CAF50;
+    /* Green */
+    color: #fff;
+    /* White text for contrast */
 }
 
 .status-Potencial {
-  background-color: #FFC107; /* Amber/Yellow */
-  color: #333; /* Dark text for contrast */
+    background-color: #FFC107;
+    /* Amber/Yellow */
+    color: #333;
+    /* Dark text for contrast */
 }
 
 .status-Inactiva {
-  background-color: #F44336; /* Red */
-  color: #fff; /* White text for contrast */
+    background-color: #F44336;
+    /* Red */
+    color: #fff;
+    /* White text for contrast */
 }

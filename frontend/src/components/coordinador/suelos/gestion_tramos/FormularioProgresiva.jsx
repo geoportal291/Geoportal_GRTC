@@ -29,7 +29,8 @@ const FormularioProgresiva = ({ onClose, onSave, proyectoId, progresivaData }) =
         coordenada_este: '',
         coordenada_norte: '',
         descripcion: '',
-        estado: 'activo',
+        fecha_ejecucion: '',
+        estado: 'pendiente',
         longitud_total: '',
         tipo_via: '500',
         intervalo_manual: '',
@@ -172,6 +173,7 @@ const FormularioProgresiva = ({ onClose, onSave, proyectoId, progresivaData }) =
             coordenada_este: formData.coordenada_este,
             coordenada_norte: formData.coordenada_norte,
             descripcion: formData.descripcion,
+            fecha_ejecucion: formData.fecha_ejecucion,
             estado: formData.estado,
             estratos_perfil: estratosPerfil.map(ep => ({
                 estrato_id: (ep.estrato_id !== null && ep.estrato_id !== '') ? Number(ep.estrato_id) : null,
@@ -298,10 +300,15 @@ const FormularioProgresiva = ({ onClose, onSave, proyectoId, progresivaData }) =
                         <div className="form-group">
                             <label>Estado</label>
                             <select name="estado" value={formData.estado} onChange={handleInputChange} required>
-                                <option value="activo">Activo</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="en revision">En Revisión</option>
+                                <option value="aprobado">Aprobado</option>
                                 <option value="inactivo">Inactivo</option>
-                                <option value="completado">Completado</option>
                             </select>
+                        </div>
+                        <div className="form-group">
+                            <label>Fecha Ejecución</label>
+                            <input type="date" name="fecha_ejecucion" value={formData.fecha_ejecucion} onChange={handleInputChange} />
                         </div>
                         <div className="form-group full-width">
                             <label>Descripción</label>

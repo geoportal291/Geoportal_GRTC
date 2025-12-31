@@ -91,7 +91,7 @@ const EstructurasExistentesService = {
             // 1. Delete old data
             await client.query('DELETE FROM estructuras_existentes WHERE id_proyecto = $1', [projectId]);
 
-            // 2. Load KML & Calibration (Same logic as Zonas Criticas)
+            // 2. Load KML & Calibration
             const kmlUrlRes = await client.query('SELECT kml_url FROM invvial WHERE id_proyecto = $1', [projectId]);
             const kmlUrl = kmlUrlRes.rows.length > 0 ? kmlUrlRes.rows[0].kml_url : null;
 
@@ -128,7 +128,6 @@ const EstructurasExistentesService = {
 
             // 3. Parse Excel
             const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-            // Look for sheet with 'ESTRUCTURA'
             const sheetName = workbook.SheetNames.find(n => n.toUpperCase().includes('ESTRUCTURA'));
             if (!sheetName) throw new Error('No se encontró la hoja "ESTRUCTURA" (o similar).');
 
@@ -137,14 +136,9 @@ const EstructurasExistentesService = {
 
             const extractedData = [];
 
-            // Scan rows
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
-                // Columns: A=Entregable(0), B=PF(1), C=Inicio(2), D=Final(3), E=Ancho(4), F=Obs(5)
-                // Need to find where data starts. Progresiva usually looks like '0+000'
-                const progInicio = row[2]; // Col C
-
-                // Allow number or string format matching regex
+                const progInicio = row[2];
                 const isProg = (val) => {
                     if (typeof val === 'number') return true;
                     if (typeof val === 'string' && (val.match(/^\d+\+\d+$/) || val.match(/^\d+$/))) return true;
@@ -163,68 +157,56 @@ const EstructurasExistentesService = {
                 }
             }
 
-            // 4. Calculate Coordinates (Start & End) & Insert
-            for (const item of extractedData) {
-                const startM = progresivaToMeters(item.progresiva_inicio);
-                const endM = progresivaToMeters(item.progresiva_final);
+            const getCoords = (meters) => {
+                if (isNaN(meters) || Object.keys(routesMap).length === 0) return null;
+                let tramoName = null;
+                let calibration = null;
 
-                let coordsStart = null;
-                let coordsEnd = null;
-
-                // Function to get coords for a specific meter value
-                const getCoords = (meters) => {
-                    if (isNaN(meters) || Object.keys(routesMap).length === 0) return null;
-
-                    let tramoName = null;
-                    let calibration = null;
-
-                    for (const calibKey in calibrations) {
-                        const cal = calibrations[calibKey];
-                        const calInicioM = progresivaToMeters(cal.progresiva_inicio);
-                        const calFinM = progresivaToMeters(cal.progresiva_fin);
-                        if (!isNaN(calInicioM) && !isNaN(calFinM) && meters >= calInicioM && meters <= calFinM) {
-                            tramoName = cal.nombre_tramo.toUpperCase().trim();
-                            calibration = cal;
-                            break;
-                        }
+                for (const calibKey in calibrations) {
+                    const cal = calibrations[calibKey];
+                    const calInicioM = progresivaToMeters(cal.progresiva_inicio);
+                    const calFinM = progresivaToMeters(cal.progresiva_fin);
+                    if (!isNaN(calInicioM) && !isNaN(calFinM) && meters >= calInicioM && meters <= calFinM) {
+                        tramoName = cal.nombre_tramo.toUpperCase().trim();
+                        calibration = cal;
+                        break;
                     }
+                }
 
-                    if (tramoName && calibration) {
-                        const tramoNumberMatch = tramoName.match(/\d+/);
-                        const tramoIdKey = tramoNumberMatch ? tramoNumberMatch[0] : null;
-                        let routePositions = routesMap[tramoIdKey] || routesMap[tramoName];
-                        if (routePositions) {
-                            const calInicioM = progresivaToMeters(calibration.progresiva_inicio);
-                            const calFinM = progresivaToMeters(calibration.progresiva_fin);
-                            const kmlRouteLength = calculateRouteLength(routePositions);
-                            const calLengthM = calFinM - calInicioM;
-                            // Avoid division by zero
-                            if (calLengthM > 0) {
-                                const distOnKml = ((meters - calInicioM) / calLengthM) * kmlRouteLength;
-                                if (distOnKml >= 0) {
-                                    return calculateCoordinates(distOnKml, routePositions);
-                                }
+                if (tramoName && calibration) {
+                    const tramoNumberMatch = tramoName.match(/\d+/);
+                    const tramoIdKey = tramoNumberMatch ? tramoNumberMatch[0] : null;
+                    let routePositions = routesMap[tramoIdKey] || routesMap[tramoName];
+                    if (routePositions) {
+                        const calInicioM = progresivaToMeters(calibration.progresiva_inicio);
+                        const calFinM = progresivaToMeters(calibration.progresiva_fin);
+                        const kmlRouteLength = calculateRouteLength(routePositions);
+                        const calLengthM = calFinM - calInicioM;
+                        if (calLengthM > 0) {
+                            const distOnKml = ((meters - calInicioM) / calLengthM) * kmlRouteLength;
+                            if (distOnKml >= 0) {
+                                return calculateCoordinates(distOnKml, routePositions);
                             }
                         }
                     }
-                    return null;
-                };
+                }
+                return null;
+            };
 
-                coordsStart = getCoords(startM);
-                coordsEnd = getCoords(endM);
+            for (const item of extractedData) {
+                const startM = progresivaToMeters(item.progresiva_inicio);
+                const endM = progresivaToMeters(item.progresiva_final);
+                const coordsStart = getCoords(startM);
+                const coordsEnd = getCoords(endM);
 
                 await client.query(
                     `INSERT INTO estructuras_existentes (
-                        id_proyecto, codigo, 
-                        progresiva_inicio, progresiva_final,
-                        latitud_inicio, longitud_inicio,
-                        latitud_final, longitud_final,
-                        ancho_calzada, observaciones,
-                        panel_fotografico, entregable
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                        id_proyecto, progresiva_inicio, progresiva_final,
+                        latitud_inicio, longitud_inicio, latitud_final, longitud_final,
+                        ancho_calzada, observaciones, panel_fotografico, entregable
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
                     [
                         projectId,
-                        'EE', // Generic code prefix
                         item.progresiva_inicio,
                         item.progresiva_final,
                         coordsStart ? coordsStart.latitude : null,
@@ -244,11 +226,50 @@ const EstructurasExistentesService = {
 
         } catch (e) {
             await client.query('ROLLBACK');
-            console.error('[EstructurasExistentes] Error:', e);
             throw e;
         } finally {
             client.release();
         }
+    },
+
+    create: async (data) => {
+        const {
+            id_proyecto, progresiva_inicio, progresiva_final,
+            latitud_inicio, longitud_inicio, latitud_final, longitud_final,
+            ancho_calzada, observaciones, panel_fotografico, entregable
+        } = data;
+
+        const result = await db.query(
+            `INSERT INTO estructuras_existentes (
+                id_proyecto, progresiva_inicio, progresiva_final,
+                latitud_inicio, longitud_inicio, latitud_final, longitud_final,
+                ancho_calzada, observaciones, panel_fotografico, entregable
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+            [id_proyecto, progresiva_inicio, progresiva_final,
+                latitud_inicio, longitud_inicio, latitud_final, longitud_final,
+                ancho_calzada, observaciones, panel_fotografico, entregable]
+        );
+        return result.rows[0];
+    },
+
+    update: async (id, data) => {
+        const {
+            progresiva_inicio, progresiva_final,
+            latitud_inicio, longitud_inicio, latitud_final, longitud_final,
+            ancho_calzada, observaciones, panel_fotografico, entregable
+        } = data;
+
+        const result = await db.query(
+            `UPDATE estructuras_existentes SET
+                progresiva_inicio = $1, progresiva_final = $2,
+                latitud_inicio = $3, longitud_inicio = $4, latitud_final = $5, longitud_final = $6,
+                ancho_calzada = $7, observaciones = $8, panel_fotografico = $9, entregable = $10
+            WHERE id_estructura = $11 RETURNING *`,
+            [progresiva_inicio, progresiva_final,
+                latitud_inicio, longitud_inicio, latitud_final, longitud_final,
+                ancho_calzada, observaciones, panel_fotografico, entregable, id]
+        );
+        return result.rows[0];
     },
 
     getAll: async (projectId) => {

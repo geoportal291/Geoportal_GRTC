@@ -979,10 +979,15 @@ export default function GestorDeTramosActual() {
                                 <div className="form-group">
                                     <label>Estado</label>
                                     <select name="estado" value={progresivaFormData.estado} onChange={handleProgresivaFormChange} required>
-                                        <option value="activo">Activo</option>
+                                        <option value="pendiente">Pendiente</option>
+                                        <option value="en revision">En Revisión</option>
+                                        <option value="aprobado">Aprobado</option>
                                         <option value="inactivo">Inactivo</option>
-                                        <option value="completado">Completado</option>
                                     </select>
+                                </div>
+                                <div className="form-group">
+                                    <label>Fecha Ejecución</label>
+                                    <input type="date" name="fecha_ejecucion" value={progresivaFormData.fecha_ejecucion ? progresivaFormData.fecha_ejecucion.split('T')[0] : ''} onChange={handleProgresivaFormChange} />
                                 </div>
                                 <div className="form-group full-width">
                                     <label>Descripción</label>
@@ -1079,7 +1084,7 @@ export default function GestorDeTramosActual() {
                                                                                             </div>
                                                                                             <div className="detail-item">
                                                                                                 <span className="detail-label">Estado</span>
-                                                                                                <span className={`detail-value status-badge status-${ensayo.estado?.toLowerCase()}`}>{ensayo.estado}</span>
+                                                                                                <span className={`detail-value status-badge status-${(ensayo.estado || 'sin-estado').toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}`}>{ensayo.estado}</span>
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>
@@ -1124,7 +1129,7 @@ export default function GestorDeTramosActual() {
                             progresiva={currentProgresivaForAssay}
                             estrato={currentEstratoForAssay}
                             onAssayCreated={handleAssayCreated}
-                            ensayoToEdit={ensayoToEdit} // Pass ensayoToEdit
+                            ensayoData={ensayoToEdit} // Pass ensayoToEdit as ensayoData
                             token={user?.token}
                         />
                     </div>

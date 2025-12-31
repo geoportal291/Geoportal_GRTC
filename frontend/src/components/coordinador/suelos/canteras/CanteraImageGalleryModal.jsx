@@ -1,21 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
+import { useAuth } from '../../../../data/contexts/AuthContext';
 import './CanteraImageGalleryModal.css';
 
-const API_URL = process.env.REACT_APP_API_BASE || '';
-
 const CanteraImageGalleryModal = ({ isOpen, onClose, cantera, onDataChange }) => {
+    const { user } = useAuth();
     const [imagenes, setImagenes] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [selectedImage, setSelectedImage] = useState(null); // Nuevo estado para la imagen ampliada
 
+    // API URL definition consistent with other components
+    const API_BASE = process.env.REACT_APP_API_BASE || process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    const API_URL = `${API_BASE}/api`;
+
     const fetchImagenes = useCallback(async () => {
         if (!cantera?.id) return;
         setLoading(true);
         try {
+            // Optional: You might want to fetch fresh images from valid endpoint if needed
+            // But currently it relies on 'cantera.imagenes' passed as prop, which is updated by parent
             setImagenes(cantera.imagenes || []);
+
+            // If we wanted to fetch fresh status:
+            // const response = await axios.get(`${API_URL}/canteras/${cantera.id}/imagenes`, { headers: { Authorization: `Bearer ${user?.token}` } });
+            // setImagenes(response.data);
+
         } catch (error) {
             alertify.error('Error al cargar las imágenes.');
         } finally {
@@ -41,11 +52,13 @@ const CanteraImageGalleryModal = ({ isOpen, onClose, cantera, onDataChange }) =>
 
         setIsUploading(true);
         try {
-            const userToken = JSON.parse(localStorage.getItem('user'))?.token;
-            const response = await axios.post(`${API_URL}/api/canteras/upload-image`, formData, {
+            const token = user?.token;
+            if (!token) throw new Error('No estás autenticado');
+
+            const response = await axios.post(`${API_URL}/canteras/upload-image`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
-                    Authorization: `Bearer ${userToken}`,
+                    Authorization: `Bearer ${token}`,
                 },
             });
             setImagenes(prev => [...prev, response.data]);
@@ -53,7 +66,8 @@ const CanteraImageGalleryModal = ({ isOpen, onClose, cantera, onDataChange }) =>
             if (onDataChange) onDataChange();
         } catch (error) {
             console.error('Error al subir imagen:', error);
-            alertify.error(error.response?.data?.error || 'Error al subir la imagen.');
+            const errorMsg = error.response?.data?.details || error.response?.data?.error || 'Error al subir la imagen.';
+            alertify.error(errorMsg);
         } finally {
             setIsUploading(false);
             event.target.value = null; // Resetear el input para permitir subir la misma imagen de nuevo
@@ -63,17 +77,20 @@ const CanteraImageGalleryModal = ({ isOpen, onClose, cantera, onDataChange }) =>
     const handleDeleteImage = async (imagenId) => {
         alertify.confirm('Confirmar Eliminación', '¿Está seguro de que desea eliminar esta imagen?', async () => {
             try {
-                const userToken = JSON.parse(localStorage.getItem('user'))?.token;
-                await axios.delete(`${API_URL}/api/canteras/imagenes/${imagenId}`, {
-                    headers: { Authorization: `Bearer ${userToken}` },
+                const token = user?.token;
+                if (!token) throw new Error('No estás autenticado');
+
+                await axios.delete(`${API_URL}/canteras/imagenes/${imagenId}`, {
+                    headers: { Authorization: `Bearer ${token}` },
                 });
                 setImagenes(prev => prev.filter(img => img.id !== imagenId));
                 alertify.success('Imagen eliminada.');
                 if (onDataChange) onDataChange();
             } catch (error) {
+                console.error('Error al eliminar imagen:', error);
                 alertify.error('Error al eliminar la imagen.');
             }
-        }, () => {});
+        }, () => { });
     };
 
     const handleImageClick = (imageUrl) => {
@@ -101,9 +118,9 @@ const CanteraImageGalleryModal = ({ isOpen, onClose, cantera, onDataChange }) =>
                             {imagenes.map(img => (
                                 <div key={img.id} className="image-card">
                                     <div className="image-container">
-                                        <img 
-                                            src={img.imagen_url} 
-                                            alt={img.descripcion || 'Imagen de cantera'} 
+                                        <img
+                                            src={img.imagen_url}
+                                            alt={img.descripcion || 'Imagen de cantera'}
                                             onClick={() => handleImageClick(img.imagen_url)} // Manejador de clic
                                         />
                                         <button className="delete-image-btn" onClick={() => handleDeleteImage(img.id)}>&times;</button>
@@ -125,12 +142,12 @@ const CanteraImageGalleryModal = ({ isOpen, onClose, cantera, onDataChange }) =>
                     <label htmlFor="add-image-input" className={`btn-add-image ${isUploading ? 'disabled' : ''}`}>
                         {isUploading ? 'Subiendo...' : 'Añadir Imagen'}
                     </label>
-                    <input 
-                        id="add-image-input" 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleFileChange} 
-                        style={{ display: 'none' }} 
+                    <input
+                        id="add-image-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        style={{ display: 'none' }}
                         disabled={isUploading}
                     />
                 </div>

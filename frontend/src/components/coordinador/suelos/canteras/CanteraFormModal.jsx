@@ -5,6 +5,7 @@ import SuelosMap from '../mapa/SuelosMap'; // Mapa de suelos
 import proj4 from 'proj4'; // Para conversión de coordenadas
 import { kml } from '@tmcw/togeojson'; // Conversión KML a GeoJSON
 import JSZip from 'jszip';
+import { useAuth } from '../../../../data/contexts/AuthContext'; // Import useAuth
 
 // Definiciones de proyecciones para proj4
 const wgs84 = 'EPSG:4326';
@@ -29,6 +30,7 @@ const initialFormData = {
 export default function CanteraFormModal({
   showModal, onClose, onSave, onSaveComplete, projectId, isSubmitting, selectedTramoId, selectedTramoName, canteraToEdit
 }) {
+  const { user } = useAuth(); // Use useAuth hook
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState(canteraToEdit ? {
     nombre: canteraToEdit.nombre || '',
@@ -95,7 +97,7 @@ export default function CanteraFormModal({
   const [mapCenter, setMapCenter] = useState(null);
   const [uploadedKmlGeoJson, setUploadedKmlGeoJson] = useState(null); // Estado para el GeoJSON del KML subido
 
-  const API_URL = process.env.REACT_APP_API_BASE || '';
+  const API_URL = process.env.REACT_APP_API_BASE || process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
   // ✅ Formatear código de progresiva tipo 001-02-0005000 -> 0+500
   const formatProgresivaCodigo = (rawCodigo) => {
@@ -119,8 +121,7 @@ export default function CanteraFormModal({
       }
       setLoadingProgresivas(true);
       try {
-        const userData = JSON.parse(localStorage.getItem('user'));
-        const token = userData?.token;
+        const token = user?.token;
         if (!token) {
           alertify.error('Sesión expirada. Por favor, inicia sesión de nuevo.');
           return;
@@ -136,7 +137,7 @@ export default function CanteraFormModal({
       }
     };
     fetchProgresivas();
-  }, [selectedTramoId, API_URL]);
+  }, [selectedTramoId, API_URL, user]);
 
   // ✅ Obtener el KML trazado del tramo seleccionado
   useEffect(() => {
@@ -146,8 +147,7 @@ export default function CanteraFormModal({
         return;
       }
       try {
-        const userData = JSON.parse(localStorage.getItem('user'));
-        const token = userData?.token;
+        const token = user?.token;
         if (!token) {
           alertify.error('Sesión expirada. Por favor, inicia sesión de nuevo.');
           return;
@@ -162,7 +162,7 @@ export default function CanteraFormModal({
       }
     };
     fetchTramoKml();
-  }, [selectedTramoId, API_URL]);
+  }, [selectedTramoId, API_URL, user]);
 
   // ✅ Manejo de cambios de formulario
   const handleChange = (e) => {
@@ -311,35 +311,11 @@ export default function CanteraFormModal({
       return;
     }
 
-    let finalImagenUrl = canteraToEdit?.imagen_url || null;
-
-    if (imagenFile) {
-      try {
-        const userToken = JSON.parse(localStorage.getItem('user'))?.token;
-        const formData = new FormData();
-        formData.append('imagen_cantera', imagenFile);
-
-        const response = await axios.post(`${API_URL}/api/canteras/upload-image`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${userToken}`,
-          },
-        });
-
-        finalImagenUrl = response.data.url;
-
-      } catch (uploadError) {
-        console.error('Error al subir la imagen:', uploadError);
-        alertify.error('Error al subir la imagen. Por favor, intente de nuevo.');
-        return; // Stop submission if image upload fails
-      }
-    }
-
+    // 1. Prepare base data for Cantera (without image logic yet)
     const dataToSave = {
       ...formData,
       id_proyecto: projectId,
       tramo_id: selectedTramoId, // <-- FIX: Include the tramo_id
-      imagen_url: finalImagenUrl, // Add the new image URL
       coordenada_este: formData.coordenada_este ? parseFloat(formData.coordenada_este) : null,
       coordenada_norte: formData.coordenada_norte ? parseFloat(formData.coordenada_norte) : null,
       id_progresiva_referencia: formData.id_progresiva_referencia
@@ -348,11 +324,42 @@ export default function CanteraFormModal({
       desplazamiento_km: formData.desplazamiento_km ? parseFloat(formData.desplazamiento_km) : null,
     };
 
-    const savedCantera = await onSave(dataToSave);
+    try {
+      // 2. Save Cantera (Create or Update) first to ensure we have an ID
+      const savedCantera = await onSave(dataToSave);
 
-    // ... (resto de la lógica de KML)
-    if (savedCantera) {
-      onSaveComplete();
+      if (savedCantera && savedCantera.id && imagenFile) {
+        // 3. If there is an image, upload it associated with the cantera ID
+        try {
+          const token = user?.token;
+          if (!token) throw new Error('No estás autenticado');
+
+          const formDataImg = new FormData();
+          formDataImg.append('imagen_cantera', imagenFile);
+          formDataImg.append('canteraId', savedCantera.id);
+          formDataImg.append('descripcion', 'Imagen principal (Formulario)');
+
+          await axios.post(`${API_URL}/api/canteras/upload-image`, formDataImg, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          alertify.success('Imagen asociada correctamente.');
+        } catch (uploadError) {
+          console.error('Error al subir la imagen:', uploadError);
+          const detailMsg = uploadError.response?.data?.details || uploadError.response?.data?.error || 'Error desconocido';
+          alertify.warning(`La cantera se guardó, pero falló la imagen: ${detailMsg}`);
+        }
+      }
+
+      if (savedCantera) {
+        onSaveComplete();
+      }
+
+    } catch (error) {
+      console.error("Error saving cantera:", error);
+      // Alertify error should be handled by onSave in parent, but good to ensure
     }
   };
 
@@ -442,9 +449,10 @@ export default function CanteraFormModal({
                 </div>
 
                 {/* Mapa */}
-                <div className="form-group full-width" style={{ height: '400px', marginBottom: '20px' }}>
+                <div className="form-group full-width" style={{ marginBottom: '20px' }}>
                   <SuelosMap // Renderizar mapa
                     displayMode="form"
+                    style={{ height: '400px', width: '100%' }}
                     kmlTrazadoIds={kmlIdsMemo}
                     markerPosition={canteraMarkerPosition}
                     onMapClick={handleMapClick}

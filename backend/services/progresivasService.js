@@ -54,12 +54,12 @@ const importarConEnsayos = async ({ parentProgresiva, generatedChildren, estrato
             const uniqueSubProgresivaCodigo = `${parentId}-${prog.codigo}`;
             const childResult = await client.query(`
                 INSERT INTO progresivas
-                (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, lado)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, lado, fecha_ejecucion)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING id
             `, [
                 proyecto_id, parentId, uniqueSubProgresivaCodigo, prog.nombre, prog.descripcion, Number(prog.codigo), Number(prog.codigo),
-                prog.estado || 'pendiente', prog.coordenada_este, prog.coordenada_norte, prog.linea, prog.lado
+                prog.estado || 'pendiente', prog.coordenada_este, prog.coordenada_norte, prog.linea, prog.lado, prog.fecha_ejecucion || null
             ]);
             const childId = childResult.rows[0].id;
 
@@ -211,8 +211,8 @@ const createBulkProgresivas = async (parentProgresiva, generatedChildren) => {
             const uniqueSubProgresivaCodigo = `${parentId}-${prog.codigo}`;
             await client.query(`
                 INSERT INTO progresivas
-                (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, fecha_ejecucion)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             `, [
                 proyecto_id,
                 parentId,
@@ -224,7 +224,8 @@ const createBulkProgresivas = async (parentProgresiva, generatedChildren) => {
                 prog.estado || 'pendiente',
                 prog.coordenada_este,
                 prog.coordenada_norte,
-                prog.linea
+                prog.linea,
+                prog.fecha_ejecucion || null
             ]);
         }
 
@@ -870,7 +871,6 @@ const updateProgresiva = async (id, progresivaData) => {
 
             } else {
                 await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1', [currentChildDbId]);
-                await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1', [currentChildDbId]);
             }
         } // 🔹 Cierre del for (generatedChildren)
 
@@ -899,7 +899,7 @@ const updateProgresiva = async (id, progresivaData) => {
 
 const updateChildProgresiva = async (id, progresivaData) => {
     const {
-        nombre, descripcion, estado, coordenada_este, coordenada_norte, estratos_perfil, linea, lado
+        nombre, descripcion, estado, coordenada_este, coordenada_norte, estratos_perfil, linea, lado, fecha_ejecucion
     } = progresivaData;
 
     if (!nombre || !estado) {
@@ -919,9 +919,20 @@ const updateChildProgresiva = async (id, progresivaData) => {
                 coordenada_norte = $5,
                 linea = $6,
                 lado = $7,
+                fecha_ejecucion = $8,
                 actualizado_en = NOW()
-            WHERE id = $8
-        `, [nombre, descripcion, estado, coordenada_este, coordenada_norte, linea, lado, id]);
+            WHERE id = $9
+        `, [
+            nombre,
+            descripcion,
+            estado,
+            coordenada_este === '' ? null : coordenada_este,
+            coordenada_norte === '' ? null : coordenada_norte,
+            linea,
+            lado,
+            fecha_ejecucion || null,
+            id
+        ]);
 
         await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1', [id]);
 
@@ -1255,12 +1266,12 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
 
             const childResult = await client.query(`
                 INSERT INTO progresivas
-                (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, lado)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, lado, fecha_ejecucion)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING id
             `, [
                 parentProgresiva.proyecto_id, progresivaId, uniqueSubProgresivaCodigo, prog.nombre, prog.descripcion, parseInt(prog.codigo, 10), parseInt(prog.codigo, 10),
-                prog.estado || 'pendiente', prog.coordenada_este, prog.coordenada_norte, lineaIntChild, prog.lado
+                prog.estado || 'pendiente', prog.coordenada_este, prog.coordenada_norte, lineaIntChild, prog.lado, prog.fecha_ejecucion || null
             ]);
             const childId = childResult.rows[0].id;
 
@@ -1408,7 +1419,7 @@ const createProgresiva = async (data) => {
         descripcion || '',
         p_val, // progresiva_inicial
         progresiva_final !== undefined ? progresiva_final : p_val, // progresiva_final (default to same as initial for points)
-        estado || 'activo',
+        estado || 'pendiente', // Default to 'pendiente' as per new requirement
         coordenada_este || null,
         coordenada_norte || null,
         linea || null,

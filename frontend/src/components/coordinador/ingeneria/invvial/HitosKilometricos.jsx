@@ -27,125 +27,86 @@ const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, on
     const infoRef = useRef(null);
 
     // Filter images effect (Side Panel)
-    useEffect(() => {
-        if (selectedHito && selectedHito.panel_fotografico_codigo && graphicsImages) {
-            const code = String(selectedHito.panel_fotografico_codigo).trim();
+    const getImagesForElement = useCallback((element, graphicsImages) => {
+        if (!element.panel_fotografico_codigo || !graphicsImages) {
+            return [];
+        }
+        const code = String(element.panel_fotografico_codigo).trim();
+        const entregable = element.entregable ? String(element.entregable).trim() : null;
 
-            // 1. Parse Ranges
-            const parts = code.split(' - ');
-            const rangePart = parts[0];
-            const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+        // 1. Parse Ranges (e.g. "238-241" or "19")
+        const parts = code.split(' - ');
+        const rangePart = parts[0];
+        const suffix = parts.length > 1 ? `-${parts[1]}` : '';
 
-            let start, end;
-            if (rangePart.includes('-')) {
-                const [startStr, endStr] = rangePart.split('-');
-                start = parseInt(startStr, 10);
-                end = parseInt(endStr, 10);
-            } else {
-                start = parseInt(rangePart, 10);
-                end = start;
-            }
+        let start, end;
+        if (rangePart.includes('-')) {
+            const [startStr, endStr] = rangePart.split('-');
+            start = parseInt(startStr, 10);
+            end = parseInt(endStr, 10);
+        } else {
+            start = parseInt(rangePart, 10);
+            end = start;
+        }
 
-            const expectedNames = [];
-            if (!isNaN(start) && !isNaN(end)) {
-                for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
-            } else {
-                expectedNames.push(code);
-            }
+        const expectedNames = [];
+        if (!isNaN(start) && !isNaN(end)) {
+            for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+        } else {
+            expectedNames.push(code);
+        }
 
-            // 2. Filter Images
-            const filtered = graphicsImages.filter(img => {
-                const imgNameWithoutExt = img.index.split('.')[0];
-                const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-                const entregable = selectedHito.entregable ? String(selectedHito.entregable).trim() : null;
+        // 2. Filter Images
+        return graphicsImages.filter(img => {
+            const imgNameWithoutExt = img.index ? img.index.split('.')[0] : '';
+            const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
 
-                // A. Name Check
-                const nameMatches = expectedNames.includes(imgNameWithoutExt);
-                if (!nameMatches) return false;
+            // A. Name Check (Always Required)
+            const nameMatches = expectedNames.includes(imgNameWithoutExt);
+            if (!nameMatches) return false;
 
-                // B. Entregable Logic
-                const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+            // B. Entregable Logic (Hybrid Legacy/Strict)
+            const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
-                if (entregable) {
-                    const normElement = normalize(entregable);
-                    const normImage = normalize(imgEntregable);
+            if (entregable) {
+                const normElement = normalize(entregable);
+                const normImage = normalize(imgEntregable);
 
-                    if (normElement === 'E1') {
-                        return (!imgEntregable) || (normImage === 'E1');
-                    }
-                    return normImage === normElement;
+                // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                if (normElement === 'E1') {
+                    return (!imgEntregable) || (normImage === 'E1');
                 }
-                return true;
-            });
+
+                // Scenario 2: Element is "E2". STRICT match.
+                return normImage === normElement;
+            }
+
+            // Scenario 3: No Entregable on element.
+            return true;
+        });
+    }, []);
+
+    useEffect(() => {
+        if (selectedHito && graphicsImages) {
+            const filtered = getImagesForElement(selectedHito, graphicsImages);
             setHitoImages(filtered);
         } else {
             setHitoImages([]);
         }
-    }, [selectedHito, graphicsImages]);
+    }, [selectedHito, graphicsImages, getImagesForElement]);
 
-    // Bulk Image Processing for Map
     useEffect(() => {
         if (hitosData.length > 0 && graphicsImages.length > 0) {
             const processed = hitosData.map(hito => {
-                const code = hito.panel_fotografico_codigo ? String(hito.panel_fotografico_codigo) : null;
-                let imageUrls = [];
-
-                if (code) {
-                    // 1. Parse Ranges
-                    const parts = code.split(' - ');
-                    const rangePart = parts[0];
-                    const suffix = parts.length > 1 ? `-${parts[1]}` : '';
-
-                    let start, end;
-                    if (rangePart.includes('-')) {
-                        const [startStr, endStr] = rangePart.split('-');
-                        start = parseInt(startStr, 10);
-                        end = parseInt(endStr, 10);
-                    } else {
-                        start = parseInt(rangePart, 10);
-                        end = start;
-                    }
-
-                    const expectedNames = [];
-                    if (!isNaN(start) && !isNaN(end)) {
-                        for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
-                    } else {
-                        expectedNames.push(code);
-                    }
-
-                    // 2. Filter Images
-                    const foundImages = graphicsImages.filter(img => {
-                        const imgNameWithoutExt = img.index.split('.')[0];
-                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-                        const entregable = hito.entregable ? String(hito.entregable).trim() : null;
-
-                        const nameMatches = expectedNames.includes(imgNameWithoutExt);
-                        if (!nameMatches) return false;
-
-                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-                        if (entregable) {
-                            const normElement = normalize(entregable);
-                            const normImage = normalize(imgEntregable);
-                            if (normElement === 'E1') {
-                                return (!imgEntregable) || (normImage === 'E1');
-                            }
-                            return normImage === normElement;
-                        }
-                        return true;
-                    });
-
-                    if (foundImages.length > 0) {
-                        imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
-                    }
-                }
-                return { ...hito, imageUrls, type: 'hitos_kilometricos' };
+                const foundImages = getImagesForElement(hito, graphicsImages);
+                const imageUrls = foundImages.map(img => `${img.url}?v=${img.id}`);
+                return { ...hito, imageUrls, images: foundImages, type: 'hitos_kilometricos' };
             });
             setHitosWithImages(processed);
         } else {
             setHitosWithImages(hitosData.map(s => ({ ...s, imageUrls: [], type: 'hitos_kilometricos' })));
         }
-    }, [hitosData, graphicsImages]);
+    }, [hitosData, graphicsImages, getImagesForElement]);
 
     const handleHitoClick = useCallback((hito) => {
         setSelectedHito(hito);

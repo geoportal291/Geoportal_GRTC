@@ -63,8 +63,8 @@ body {
 }
 
 
-/* --- 2. TARJETAS FLOTANTES (CORREGIDO) --- */
-.invvial-flyout-card {
+/* --- 2. TARJETAS FLOTANTES (CORREGIDO VERSION 2) --- */
+.invvial-flyout-card-v2 {
     /* IMPORTANTE: Fixed para que ignore cualquier contenedor padre y use coordenadas de pantalla */
     position: fixed;
     width: 280px;
@@ -86,7 +86,7 @@ body {
 }
 
 /* La flechita que apunta hacia la izquierda al botón - POSICIÓN DINÁMICA */
-.invvial-flyout-card::before {
+.invvial-flyout-card-v2::before {
     content: "";
     position: absolute;
     top: var(--arrow-top);
@@ -98,12 +98,11 @@ body {
     background: inherit;
     /* Hereda el color del header o body */
     transform: rotate(45deg);
-    border-left: 1px solid rgba(0, 0, 0, 0.1);
-    /* Sombra sutil borde */
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    border-left: 1px solid #e0e0e0;
+    border-bottom: 1px solid #e0e0e0;
     z-index: -1;
-    /* Detrás del contenido */
 }
+
 
 @keyframes invvial-fadeInRight {
     from {
@@ -597,28 +596,84 @@ body {
 }
 
 /* --- ESTILOS DE POPUP TIPO TARJETA --- */
+/* --- ESTILOS DE POPUP TIPO TARJETA (NAMESPACEADO) --- */
+.geoite-internal-map-container {
+    --header-bg-geoite: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    --close-btn-color-geoite: #ffffff;
+}
+
+/* Reset Leaflet default wrapper to avoid double-box effect */
+.geoite-internal-map-container .leaflet-popup-content-wrapper {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    border: none !important;
+}
+
+.geoite-internal-map-container .leaflet-popup-content {
+    margin: 0 !important;
+    width: 280px !important;
+    line-height: inherit !important;
+}
+
+.geoite-internal-map-container .leaflet-popup-tip-container {
+    display: none !important;
+}
+
 .invvial-map-popup-card {
-    width: 260px;
-    /* Reduced from 300px */
+    width: 280px;
     font-family: 'Arial', sans-serif;
     background: #fff;
     border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .invvial-map-popup-card .popup-header {
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #e9ecef;
-    padding: 8px;
-    /* Reduced padding */
+    background: var(--header-bg-geoite);
+    border-bottom: none;
+    padding: 12px;
     text-align: center;
-    font-weight: bold;
+    font-weight: 700;
     font-size: 13px;
-    /* Slightly smaller */
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #333;
+    color: white;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+/* Custom styling for Leaflet Close Button */
+.geoite-internal-map-container .leaflet-popup-close-button {
+    color: var(--close-btn-color-geoite) !important;
+    font-size: 24px !important;
+    font-weight: 300 !important;
+    top: 9px !important;
+    right: 18px !important;
+    /* Moved significantly left as requested */
+    text-shadow: none !important;
+    opacity: 0.9 !important;
+    z-index: 100 !important;
+    width: 24px !important;
+    height: 24px !important;
+    line-height: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+}
+
+.geoite-internal-map-container .leaflet-popup-close-button:hover {
+    color: #fff !important;
+    opacity: 1 !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 50%;
 }
 
 .invvial-map-popup-card .popup-content {
@@ -628,7 +683,6 @@ body {
 .invvial-map-popup-card .popup-image-container {
     width: 100%;
     height: 140px;
-    /* Reduced from 180px */
     overflow: hidden;
     background: #eee;
     position: relative;
@@ -642,16 +696,13 @@ body {
 
 .invvial-map-popup-card .popup-details-grid {
     padding: 8px 12px;
-    /* Reduced padding */
     font-size: 11px;
-    /* Smaller font */
 }
 
 .invvial-map-popup-card .detail-row {
     display: flex;
     justify-content: space-between;
     margin-bottom: 5px;
-    /* Tighter spacing */
     border-bottom: 1px solid #f0f0f0;
     padding-bottom: 3px;
 }
@@ -679,7 +730,6 @@ body {
     color: white;
     border: none;
     padding: 8px;
-    /* Reduced padding */
     font-weight: bold;
     text-transform: uppercase;
     cursor: pointer;

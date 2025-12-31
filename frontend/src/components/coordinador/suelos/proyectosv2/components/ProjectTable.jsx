@@ -30,7 +30,11 @@ const ProjectTable = ({ projects, onEdit, onDelete, onAssign, showAssignAction =
                         </TableRow>
                     ) : (
                         projects.map((p) => (
-                            <TableRow key={p.id} className="cursor-pointer hover:bg-gray-50">
+                            <TableRow
+                                key={p.id}
+                                className="cursor-pointer hover:bg-gray-50 transition-colors"
+                                onClick={() => onEdit(p)}
+                            >
                                 <TableCell className="font-medium text-center">{p.id}</TableCell>
                                 <TableCell className="text-left">{p.nombre_tramo}</TableCell>
                                 <TableCell className="text-center" style={{ width: '100px', whiteSpace: 'normal' }}>

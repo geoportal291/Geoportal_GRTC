@@ -11,15 +11,24 @@ const FormularioEnsayo = ({ showModal, onClose, estrato, ensayoData, token, cant
     };
 
     // Soluciona el warning de "controlled input" proveyendo siempre valores definidos.
-    const [formData, setFormData] = useState(ensayoData ? {
-        tipo_ensayo_id: ensayoData.tipo_ensayo_id || '',
-        nombre_ensayo: ensayoData.nombre_ensayo || '',
-        estado: ensayoData.estado || 'Pendiente',
-    } : initialFormData);
+    const [formData, setFormData] = useState(initialFormData);
     const [tiposEnsayo, setTiposEnsayo] = useState([]);
 
     const API_URL = process.env.REACT_APP_API_BASE || '';
-    
+
+    // Initial load and updates when ensayoData changes
+    useEffect(() => {
+        if (ensayoData) {
+            setFormData({
+                tipo_ensayo_id: ensayoData.tipo_ensayo_id || ensayoData.tipo_ensayo || '',
+                nombre_ensayo: ensayoData.nombre_ensayo || '',
+                estado: ensayoData.estado || 'Pendiente',
+            });
+        } else {
+            setFormData(initialFormData);
+        }
+    }, [ensayoData]);
+
     useEffect(() => {
         if (showModal) {
             const fetchTiposEnsayo = async () => {
@@ -73,8 +82,8 @@ const FormularioEnsayo = ({ showModal, onClose, estrato, ensayoData, token, cant
                 });
                 alertify.success("Ensayo creado correctamente.");
             }
-            
-            if(onAssayCreated) onAssayCreated();
+
+            if (onAssayCreated) onAssayCreated();
             onClose(); // Cerrar el modal
         } catch (error) {
             console.error("Error al guardar ensayo:", error);
@@ -107,10 +116,27 @@ const FormularioEnsayo = ({ showModal, onClose, estrato, ensayoData, token, cant
                     {ensayoData && ( // Solo mostrar estado en modo edición
                         <div className="form-group">
                             <label>Estado</label>
-                            <select name="estado" value={formData.estado} onChange={handleInputChange} required>
-                                <option value="Pendiente">Pendiente</option>
-                                <option value="Aprobado">Aprobado</option>
-                                <option value="Rechazado">Rechazado</option>
+                            <select
+                                name="estado"
+                                value={formData.estado}
+                                onChange={handleInputChange}
+                                required
+                                style={{
+                                    backgroundColor:
+                                        formData.estado === 'Pendiente' ? '#f0f0f0' :
+                                            formData.estado === 'En revisión' ? '#fff9c4' :
+                                                formData.estado === 'Rechazado' ? '#ffcdd2' :
+                                                    formData.estado === 'Aprobado' ? '#c8e6c9' :
+                                                        formData.estado === 'Completado' ? '#bbdefb' : 'white',
+                                    color: '#333',
+                                    fontWeight: '500'
+                                }}
+                            >
+                                <option value="Pendiente" style={{ backgroundColor: '#f0f0f0', color: '#616161' }}>⬤ Pendiente</option>
+                                <option value="En revisión" style={{ backgroundColor: '#fff9c4', color: '#fbc02d' }}>⬤ En revisión</option>
+                                <option value="Rechazado" style={{ backgroundColor: '#ffcdd2', color: '#d32f2f' }}>⬤ Rechazado</option>
+                                <option value="Aprobado" style={{ backgroundColor: '#c8e6c9', color: '#388e3c' }}>⬤ Aprobado</option>
+                                <option value="Completado" style={{ backgroundColor: '#bbdefb', color: '#1976d2' }}>⬤ Completado</option>
                             </select>
                         </div>
                     )}

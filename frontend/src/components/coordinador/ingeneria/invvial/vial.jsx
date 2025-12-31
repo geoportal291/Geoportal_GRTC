@@ -684,6 +684,15 @@ const Vialds = ({ isNavbarExpanded }) => {
     } else if (activeSeñalizacionSubTab === 'HITOS KILOMETRICOS') {
       endpoint = '/api/hitos-kilometricos';
       idField = 'id_hito_kilometrico';
+    } else if (activeTab === 'CANTERAS Y FUENTES DE AGUA') {
+      endpoint = '/api/canteras';
+      idField = 'id';
+    } else if (activeTab === 'ZONAS CRITICAS') {
+      endpoint = '/api/zonas-criticas';
+      idField = 'id_zona_critica';
+    } else if (activeTab === 'ESTRUCTURA EXISTENTE') {
+      endpoint = '/api/estructuras-existentes';
+      idField = 'id_estructura';
     }
 
     try {
@@ -1250,6 +1259,8 @@ const Vialds = ({ isNavbarExpanded }) => {
             if (activeObrasSubTab === 'MUROS DE CONTENCION') return 'muros';
             return 'alcantarillas';
           }
+
+          if (activeTab === 'ESTRUCTURA EXISTENTE') return 'estructuras-existentes';
 
           return 'alcantarillas';
         })()} // Pass type

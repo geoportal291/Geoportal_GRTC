@@ -33,45 +33,45 @@ import ErrorBoundary from '../../../ErrorBoundary';
 const analizarDatosHorarios = (datos, etiquetas) => {
   if (!datos || datos.length < 24) return null;
 
-  
+
   const getStdDev = (arr) => {
-      const n = arr.length;
-      if (n === 0) return 0;
-      const mean = arr.reduce((a, b) => a + b) / n;
-      if (mean === 0) return 0;
-      const variance = arr.reduce((a, b) => a + (b - mean) ** 2, 0) / n;
-      return Math.sqrt(variance);
+    const n = arr.length;
+    if (n === 0) return 0;
+    const mean = arr.reduce((a, b) => a + b) / n;
+    if (mean === 0) return 0;
+    const variance = arr.reduce((a, b) => a + (b - mean) ** 2, 0) / n;
+    return Math.sqrt(variance);
   };
 
- 
+
   const periodosInfo = [];
   const periodos = {
-      Madrugada: { inicio: 0, fin: 5, icono: 'fas fa-moon' },
-      Mañana:   { inicio: 6, fin: 11, icono: 'fas fa-sun' },
-      Tarde:    { inicio: 12, fin: 18, icono: 'fas fa-cloud-sun' },
-      Noche:    { inicio: 19, fin: 23, icono: 'fas fa-star' }
+    Madrugada: { inicio: 0, fin: 5, icono: 'fas fa-moon' },
+    Mañana: { inicio: 6, fin: 11, icono: 'fas fa-sun' },
+    Tarde: { inicio: 12, fin: 18, icono: 'fas fa-cloud-sun' },
+    Noche: { inicio: 19, fin: 23, icono: 'fas fa-star' }
   };
 
-  for (const [nombre, {inicio, fin, icono}] of Object.entries(periodos)) {
-      const datosPeriodo = datos.slice(inicio, fin + 1);
-      if(datosPeriodo.length === 0 || datosPeriodo.every(d => d === 0)) continue;
+  for (const [nombre, { inicio, fin, icono }] of Object.entries(periodos)) {
+    const datosPeriodo = datos.slice(inicio, fin + 1);
+    if (datosPeriodo.length === 0 || datosPeriodo.every(d => d === 0)) continue;
 
-      const totalPeriodo = datosPeriodo.reduce((a, b) => a + b, 0);
-      const promedioPeriodo = totalPeriodo / datosPeriodo.length;
-      const maxPeriodo = Math.max(...datosPeriodo);
-      const horaPicoPeriodo = etiquetas[datos.indexOf(maxPeriodo)];
-      
-      periodosInfo.push({
-          nombre,
-          icono,
-          promedio: promedioPeriodo.toFixed(1),
-          pico: maxPeriodo,
-          horaPico: horaPicoPeriodo,
-          total: totalPeriodo
-      });
+    const totalPeriodo = datosPeriodo.reduce((a, b) => a + b, 0);
+    const promedioPeriodo = totalPeriodo / datosPeriodo.length;
+    const maxPeriodo = Math.max(...datosPeriodo);
+    const horaPicoPeriodo = etiquetas[datos.indexOf(maxPeriodo)];
+
+    periodosInfo.push({
+      nombre,
+      icono,
+      promedio: promedioPeriodo.toFixed(1),
+      pico: maxPeriodo,
+      horaPico: horaPicoPeriodo,
+      total: totalPeriodo
+    });
   }
 
-  
+
   const puntosClave = [];
   const maxVehiculos = Math.max(...datos);
   const minVehiculos = Math.min(...datos);
@@ -82,37 +82,37 @@ const analizarDatosHorarios = (datos, etiquetas) => {
   puntosClave.push(`El momento de menor tráfico fue a las ${horaValle} con ${minVehiculos} vehículos.`);
 
   if (periodosInfo.length > 0) {
-      const busiestPeriod = periodosInfo.reduce((prev, current) => (prev.total > current.total) ? prev : current);
-      puntosClave.push(`El periodo de mayor actividad fue la ${busiestPeriod.nombre}.`);
+    const busiestPeriod = periodosInfo.reduce((prev, current) => (prev.total > current.total) ? prev : current);
+    puntosClave.push(`El periodo de mayor actividad fue la ${busiestPeriod.nombre}.`);
   }
 
- 
+
   const morningPeak = periodosInfo.find(p => p.nombre === 'Mañana')?.pico || 0;
   const afternoonPeak = periodosInfo.find(p => p.nombre === 'Tarde')?.pico || 0;
   if (morningPeak > 0 && afternoonPeak > 0) {
-      if (morningPeak > afternoonPeak) {
-          puntosClave.push(`El pico de la mañana (${morningPeak} veh.) fue más intenso que el de la tarde (${afternoonPeak} veh.).`);
-      } else if (afternoonPeak > morningPeak) {
-          puntosClave.push(`El pico de la tarde (${afternoonPeak} veh.) fue más intenso que el de la mañana (${morningPeak} veh.).`);
-      } else {
-          puntosClave.push(`Los picos de la mañana y la tarde tuvieron una intensidad similar (${morningPeak} veh.).`);
-      }
+    if (morningPeak > afternoonPeak) {
+      puntosClave.push(`El pico de la mañana (${morningPeak} veh.) fue más intenso que el de la tarde (${afternoonPeak} veh.).`);
+    } else if (afternoonPeak > morningPeak) {
+      puntosClave.push(`El pico de la tarde (${afternoonPeak} veh.) fue más intenso que el de la mañana (${morningPeak} veh.).`);
+    } else {
+      puntosClave.push(`Los picos de la mañana y la tarde tuvieron una intensidad similar (${morningPeak} veh.).`);
+    }
   }
 
-  
+
   const mean = datos.reduce((a, b) => a + b) / datos.length;
   const stdDev = getStdDev(datos);
   const coefficientOfVariation = mean > 0 ? stdDev / mean : 0;
-  if (coefficientOfVariation > 0.6) { 
-      puntosClave.push(`El flujo de tráfico fue muy variable a lo largo del día.`);
+  if (coefficientOfVariation > 0.6) {
+    puntosClave.push(`El flujo de tráfico fue muy variable a lo largo del día.`);
   } else {
-      puntosClave.push(`El flujo de tráfico fue relativamente estable a lo largo del día.`);
+    puntosClave.push(`El flujo de tráfico fue relativamente estable a lo largo del día.`);
   }
 
   const avgMadrugada = datos.slice(0, 6).reduce((a, b) => a + b, 0) / 6;
   const avgTotal = datos.reduce((a, b) => a + b, 0) / 24;
-  if (avgMadrugada < avgTotal * 0.5) { 
-      puntosClave.push(`El volumen de tráfico es consistentemente bajo durante la madrugada.`);
+  if (avgMadrugada < avgTotal * 0.5) {
+    puntosClave.push(`El volumen de tráfico es consistentemente bajo durante la madrugada.`);
   }
 
   return { periodosInfo, puntosClave };
@@ -132,7 +132,7 @@ const analizarDatosPorcentaje = (data, labels) => {
     if (lowerLabel.includes('micro')) return 1.8;
     if (lowerLabel.includes('rural') || lowerLabel.includes('combi')) return 1.5;
     if (lowerLabel.includes('pick up') || lowerLabel.includes('panel')) return 1.2;
-    return 1.0; 
+    return 1.0;
   };
 
   const vehicleData = labels.map((label, index) => ({
@@ -245,7 +245,7 @@ const analizarDatosClasificacion = (data, labels) => {
     icon: "fas fa-car"
   });
 
-  
+
   const heavyLabels = ['Camión', 'Semi trayler', 'Trayler', 'Omnibus', 'Bus', 'Micro']; // Re-using from percentage analysis
   const lightVehicles = vehicleClassification.filter(v => !heavyLabels.some(hl => v.type.toLowerCase().includes(hl.toLowerCase())));
   const heavyVehicles = vehicleClassification.filter(v => heavyLabels.some(hl => v.type.toLowerCase().includes(hl.toLowerCase())));
@@ -268,7 +268,7 @@ const analizarDatosClasificacion = (data, labels) => {
     icon: "fas fa-balance-scale"
   });
 
-  
+
   let implicationText = "";
   if (parseFloat(percentHeavy) > 25) {
     implicationText = `El alto porcentaje de vehículos pesados (${percentHeavy}%) sugiere una necesidad de monitoreo constante del estado del pavimento y una planificación de mantenimiento más frecuente debido al mayor desgaste.`;
@@ -307,13 +307,13 @@ const analizarDatosDiarios = (data, labels) => {
     });
     return { puntosClave };
   }
- 
+
 
   const sortedByCount = [...dailyTraffic].sort((a, b) => a.count - b.count);
   const minTrafficDay = sortedByCount[0];
   const maxTrafficDay = sortedByCount[sortedByCount.length - 1];
 
-  
+
   let summaryText = `El tráfico semanal total fue de **${totalTrafficWeek}** vehículos, con un promedio diario de **${averageDailyTraffic.toFixed(0)}** vehículos. `;
   summaryText += `El día de mayor tráfico fue el **${maxTrafficDay.day}** con **${maxTrafficDay.count}** vehículos, y el de menor tráfico fue el **${minTrafficDay.day}** con **${minTrafficDay.count}** vehículos.`;
   puntosClave.push({
@@ -322,7 +322,7 @@ const analizarDatosDiarios = (data, labels) => {
     icon: "fas fa-calendar-week"
   });
 
-  
+
   const weekdays = dailyTraffic.filter(d => ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'].includes(d.day));
   const weekends = dailyTraffic.filter(d => ['Sábado', 'Domingo'].includes(d.day));
 
@@ -330,9 +330,9 @@ const analizarDatosDiarios = (data, labels) => {
   const avgWeekendTraffic = weekends.length > 0 ? weekends.reduce((sum, d) => sum + d.count, 0) / weekends.length : 0;
 
   let patternText = "";
-  if (avgWeekdayTraffic > avgWeekendTraffic * 1.2) { 
+  if (avgWeekdayTraffic > avgWeekendTraffic * 1.2) {
     patternText = `Se observa un patrón claro de mayor tráfico durante los días de semana (promedio: **${avgWeekdayTraffic.toFixed(0)}** veh.) en comparación con el fin de semana (promedio: **${avgWeekendTraffic.toFixed(0)}** veh.), lo cual es típico para vías con uso laboral/comercial.`;
-  } else if (avgWeekendTraffic > avgWeekdayTraffic * 1.2) { 
+  } else if (avgWeekendTraffic > avgWeekdayTraffic * 1.2) {
     patternText = `El tráfico es notablemente más alto durante el fin de semana (promedio: **${avgWeekendTraffic.toFixed(0)}** veh.) que en días de semana (promedio: **${avgWeekdayTraffic.toFixed(0)}** veh.), sugiriendo un uso recreacional o turístico de la vía.`;
   } else {
     patternText = `El flujo de tráfico se mantiene relativamente constante a lo largo de la semana, sin grandes variaciones entre días laborales y fines de semana.`;
@@ -343,7 +343,7 @@ const analizarDatosDiarios = (data, labels) => {
     icon: "fas fa-chart-line"
   });
 
-  
+
   let operationalImplicationText = "";
   if (maxTrafficDay.count > averageDailyTraffic * 1.5) { // Significant peak day
     operationalImplicationText = `El pico de tráfico en **${maxTrafficDay.day}** (${maxTrafficDay.count} veh.) podría requerir una gestión de tráfico específica o recursos adicionales en ese día.`;
@@ -407,7 +407,7 @@ ChartJS.register(
   percentageTextPlugin
 );
 
- 
+
 const MapViewController = ({ cu104Route, setView, view }) => {
   const map = useMap();
   const isInitialFitDone = useRef(false);
@@ -435,7 +435,7 @@ const MapViewController = ({ cu104Route, setView, view }) => {
 
   return null;
 };
-const ConteoVehicularTab = ({ 
+const ConteoVehicularTab = ({
   cu104Route,
   stationData,
   selectedStation,
@@ -455,20 +455,20 @@ const ConteoVehicularTab = ({
   const [stationIdToUpload, setStationIdToUpload] = useState(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [imageToDisplay, setImageToDisplay] = useState(null);
-  
+
   const [isStationDataVisible, setIsStationDataVisible] = useState(true);
   const [uploadedExcelUrl, setUploadedExcelUrl] = useState(null);
   const [excelTableData, setExcelTableData] = useState(null);
   const [isLoadingCharts, setIsLoadingCharts] = useState(false);
 
 
-  const [modalAnalysisData, setModalAnalysisData] = useState(null); 
-  const [hourlyAnalysis, setHourlyAnalysis] = useState(null); 
-  const [percentageAnalysis, setPercentageAnalysis] = useState(null); 
-  const [classificationAnalysis, setClassificationAnalysis] = useState(null); 
-  const [dailyAnalysis, setDailyAnalysis] = useState(null); 
+  const [modalAnalysisData, setModalAnalysisData] = useState(null);
+  const [hourlyAnalysis, setHourlyAnalysis] = useState(null);
+  const [percentageAnalysis, setPercentageAnalysis] = useState(null);
+  const [classificationAnalysis, setClassificationAnalysis] = useState(null);
+  const [dailyAnalysis, setDailyAnalysis] = useState(null);
 
- 
+
 
   const [chartData, setChartData] = useState({ hourly: { labels: [], datasets: [{ data: [] }] }, percentage: { labels: [], datasets: [{ data: [] }] }, classification: { labels: [], datasets: [{ data: [] }] }, daily: { labels: [], datasets: [{ data: [] }] } });
   const stationDataRef = useRef(null);
@@ -525,7 +525,7 @@ const ConteoVehicularTab = ({
     return isNaN(date.getTime()) ? 'Fecha inválida' : date.toLocaleDateString();
   };
 
-  
+
 
   const openImageModal = (imageUrl) => {
     setImageToDisplay(imageUrl);
@@ -537,7 +537,7 @@ const ConteoVehicularTab = ({
     setImageToDisplay(null);
   };
 
-  
+
 
   const handleUploadSuccess = (stationId, newImageData) => {
     refreshStationData();
@@ -576,7 +576,7 @@ const ConteoVehicularTab = ({
 
     const formData = new FormData();
     formData.append('excelFile', file);
-    formData.append('stationId', selectedStation); 
+    formData.append('stationId', selectedStation);
 
     try {
       const response = await axiosInstance.post('/api/trafico/conteovehicular/upload-excel', formData, {
@@ -604,13 +604,22 @@ const ConteoVehicularTab = ({
             alertify.error(`La hoja "${targetSheetName}" no se encontró en el archivo Excel.`);
             setExcelTableData(null);
           }
-          
-          const stationNumber = parseInt(selectedStation.split('-')[1], 10).toString(); // Extracts '1' from 'E-1' or '01'
-          const sheetName = `FW_E${stationNumber}`;
+
+
+
+          const stationNumber = parseInt(selectedStation.split('-')[1], 10);
+          // Helper to find sheet with loose matching (e.g. FW_E2, FW_E02, fw_e2)
+          const findStationSheet = (wb, num) => {
+            const regex = new RegExp(`^FW_E0?${num}$`, 'i');
+            return wb.SheetNames.find(n => regex.test(n.trim()));
+          };
+
+          const sheetName = findStationSheet(workbook, stationNumber) || `FW_E${stationNumber}`;
           const worksheet = workbook.Sheets[sheetName];
 
           if (!worksheet) {
-            alertify.error(`La hoja "${sheetName}" no se encontró en el archivo Excel.`);
+            console.warn(`Sheet not found. Searched for FW_E${stationNumber} variants. Available:`, workbook.SheetNames);
+            alertify.error(`La hoja para la Estación ${stationNumber} (ej. "FW_E${stationNumber}") no se encontró.`);
             setChartData({
               hourly: { labels: [], datasets: [{ data: [] }] },
               percentage: { labels: [], datasets: [{ data: [] }] },
@@ -620,30 +629,86 @@ const ConteoVehicularTab = ({
             return;
           }
 
-        
-          const rawHourlyLabels = XLSX.utils.sheet_to_json(worksheet, { range: 'A3:A26', header: 1 });
-          const hourlyLabels = rawHourlyLabels.map(row => row[0]);
-          const rawHourlyData = XLSX.utils.sheet_to_json(worksheet, { range: 'U3:U26', header: 1 });
-          const hourlyData = rawHourlyData.map(row => Number(row[0])); // Explicitly convert to Number
 
-        
-          const rawPercentageLabels = XLSX.utils.sheet_to_json(worksheet, { range: 'T32:T43', header: 1 });
-          const percentageLabels = rawPercentageLabels.map(row => row[0]);
-          const rawPercentageData = XLSX.utils.sheet_to_json(worksheet, { range: 'W32:W43', header: 1 });
-          const percentageData = rawPercentageData.map(row => {
-            const originalValue = Number(row[0]) * 100;
-            return { originalValue, renderValue: originalValue };
-          }).filter(item => !isNaN(item.originalValue) && item.originalValue > 0);
-          const classificationSheet = [];
-          const rawClassificationLabels = XLSX.utils.sheet_to_json(worksheet, { range: 'B32:B43', header: 1 });
+          // Dynamic Row Detection Helper
+          const findRowIndex = (colIndex, searchText, startRow = 0, maxRow = 100) => {
+            for (let r = startRow; r < maxRow; r++) {
+              const cellAddress = XLSX.utils.encode_cell({ r, c: colIndex });
+              const cell = worksheet[cellAddress];
+              if (cell && cell.v && cell.v.toString().trim().toUpperCase() === searchText) {
+                return r;
+              }
+            }
+            return -1;
+          };
+
+          // 1. Hourly Data: Find first hour label (00-01 or 01-02) and TOTAL
+          let hourlyStartRow = -1;
+          for (let r = 2; r <= 5; r++) {
+            const cellAddress = XLSX.utils.encode_cell({ r, c: 0 });
+            const cell = worksheet[cellAddress];
+            if (cell && cell.v && /^\d{2}-\d{2}$/.test(cell.v.toString().trim())) {
+              hourlyStartRow = r;
+              break;
+            }
+          }
+          const hourlyStartRow1Based = hourlyStartRow !== -1 ? hourlyStartRow + 1 : 4;
+
+          const totalRowIndex = findRowIndex(0, 'TOTAL', 20, 35);
+          const hourlyEndRow1Based = totalRowIndex !== -1 ? totalRowIndex : 27;
+
+          // Variación Horaria
+          const rawHourlyLabels = XLSX.utils.sheet_to_json(worksheet, { range: `A${hourlyStartRow1Based}:A${hourlyEndRow1Based}`, header: 1 });
+          const hourlyLabels = rawHourlyLabels.map(row => row[0]);
+          const rawHourlyData = XLSX.utils.sheet_to_json(worksheet, { range: `U${hourlyStartRow1Based}:U${hourlyEndRow1Based}`, header: 1 });
+          const hourlyData = rawHourlyData.map(row => Number(row[0]));
+
+          // Classification (Use Col B Types and Col M IMDa)
+          // 2. Classification Start: Find 'Autos' in Column B (Index 1)
+          let autosRowIndex = findRowIndex(1, 'AUTOS', 25, 45);
+          if (autosRowIndex === -1) autosRowIndex = findRowIndex(1, 'Autos', 25, 45);
+
+          const classStartRow = autosRowIndex !== -1 ? autosRowIndex : 32;
+          const classEndRow = classStartRow + 12;
+
+          const classStart1Based = classStartRow + 1;
+          const classEnd1Based = classEndRow;
+
+          // Classification (Use Col B Types and Col M IMDa)
+          const rawClassificationLabels = XLSX.utils.sheet_to_json(worksheet, { range: `B${classStart1Based}:B${classEnd1Based}`, header: 1 });
           const classificationLabels = rawClassificationLabels.map(row => row[0]);
-          const rawClassificationData = XLSX.utils.sheet_to_json(worksheet, { range: 'M32:M43', header: 1 });
-          const classificationData = rawClassificationData.map(row => Number(row[0]));
-          
-          const rawDailyLabels = XLSX.utils.sheet_to_json(worksheet, { range: 'C31:I31', header: 1 });
-          const dailyLabels = rawDailyLabels.length > 0 ? rawDailyLabels[0] : [];
-          const rawDailyData = XLSX.utils.sheet_to_json(worksheet, { range: 'C44:I44', header: 1 });
-          const dailyData = rawDailyData.length > 0 ? rawDailyData[0].map(Number) : [];
+          const rawClassificationData = XLSX.utils.sheet_to_json(worksheet, { range: `M${classStart1Based}:M${classEnd1Based}`, header: 1 });
+          const classificationData = rawClassificationData.map(row => {
+            const val = Number(row[0]);
+            return isNaN(val) ? 0 : Number(val.toFixed(2));
+          });
+
+          // Percentage (Computed from Classification Data)
+          const totalIMD = classificationData.reduce((a, b) => a + b, 0);
+          const percentageLabels = classificationLabels;
+          const percentageData = classificationData.map(val => {
+            const pct = totalIMD > 0 ? (val / totalIMD) * 100 : 0;
+            return { originalValue: pct, renderValue: Number(pct.toFixed(2)) };
+          }).filter(item => item.originalValue > 0);
+
+          // Daily (Computed Sums of C33:C44 through I33:I44)
+          const rawDailyHeaders = XLSX.utils.sheet_to_json(worksheet, { range: 'C32:I32', header: 1 });
+          const dailyLabels = rawDailyHeaders.length > 0 ? rawDailyHeaders[0] : ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+          const rawDailyBlock = XLSX.utils.sheet_to_json(worksheet, { range: 'C33:I44', header: 1 });
+          // Transpose and Sum
+          const dailyData = [];
+          if (rawDailyBlock.length > 0) {
+            const numDays = 7; // Sunday to Saturday
+            for (let i = 0; i < numDays; i++) {
+              let daySum = 0;
+              rawDailyBlock.forEach(row => {
+                const val = Number(row[i]);
+                if (!isNaN(val)) daySum += val;
+              });
+              dailyData.push(daySum);
+            }
+          }
 
           setChartData({
             hourly: {
@@ -674,7 +739,7 @@ const ConteoVehicularTab = ({
             daily: {
               labels: dailyLabels,
               datasets: [{
-                label: 'Vehículos/Día',
+                label: 'Vehículos/Día (Semana Representativa)',
                 data: dailyData,
                 backgroundColor: [
                   'rgba(255, 99, 132, 0.6)',
@@ -704,10 +769,10 @@ const ConteoVehicularTab = ({
     alertify.confirm(
       'Eliminar Grupo de Imágenes',
       '¿Estás seguro de que quieres eliminar este grupo de imágenes?\nEsta acción eliminará todas las imágenes con la descripción "' + description + '" y fecha "' + formatDate(uploadDate) + '" para esta estación.',
-      async function() {
+      async function () {
         try {
           await axiosInstance.delete(`/api/trafico/delete-image-group`,
-           { data: { stationId, description, uploadDate } });
+            { data: { stationId, description, uploadDate } });
           refreshStationData();
           alertify.success('Grupo de imágenes eliminado con éxito.');
         } catch (error) {
@@ -715,7 +780,7 @@ const ConteoVehicularTab = ({
           alertify.error('Error al eliminar el grupo de imágenes.');
         }
       },
-      function() {
+      function () {
         alertify.error('Eliminación cancelada.');
       }
     );
@@ -725,10 +790,10 @@ const ConteoVehicularTab = ({
     alertify.confirm(
       'Eliminar Archivo',
       `¿Estás seguro de que quieres eliminar el archivo "${description || imageUrl.split('/').pop()}" subido el ${formatDate(uploadDate)}?`,
-      async function() {
+      async function () {
         try {
           await axiosInstance.delete(`/api/trafico/delete-image`,
-           { data: { stationId, imageUrl } });
+            { data: { stationId, imageUrl } });
           refreshStationData();
           alertify.success('Archivo eliminado con éxito.');
         } catch (error) {
@@ -736,13 +801,13 @@ const ConteoVehicularTab = ({
           alertify.error('Error al eliminar el archivo.');
         }
       },
-      function() {
+      function () {
         alertify.error('Eliminación cancelada.');
       }
     );
   };
 
-useEffect(() => {
+  useEffect(() => {
     const fetchLatestExcel = async () => {
       setIsLoadingCharts(true); // Set loading to true at the start of data fetching
 
@@ -758,52 +823,107 @@ useEffect(() => {
             const data = new Uint8Array(excelFileResponse.data);
             const workbook = XLSX.read(data, { type: 'array' });
 
-            const stationNumber = parseInt(selectedStation.split('-')[1], 10).toString();
-            const sheetName = `FW_E${stationNumber}`;
+            const stationNumber = parseInt(selectedStation.split('-')[1], 10);
+            const findStationSheet = (wb, num) => {
+              const regex = new RegExp(`^FW_E0?${num}$`, 'i');
+              return wb.SheetNames.find(n => regex.test(n.trim()));
+            };
+            const sheetName = findStationSheet(workbook, stationNumber) || `FW_E${stationNumber}`;
             const worksheet = workbook.Sheets[sheetName];
 
             if (!worksheet) {
               console.error(`La hoja "${sheetName}" no se encontró en el archivo Excel al cargar el último.`);
               setChartData({
-              hourly: { labels: [], datasets: [{ data: [] }] },
-              percentage: { labels: [], datasets: [{ data: [] }] },
-              classification: { labels: [], datasets: [{ data: [] }] },
-              daily: { labels: [], datasets: [{ data: [] }] }
-            });
+                hourly: { labels: [], datasets: [{ data: [] }] },
+                percentage: { labels: [], datasets: [{ data: [] }] },
+                classification: { labels: [], datasets: [{ data: [] }] },
+                daily: { labels: [], datasets: [{ data: [] }] }
+              });
               setIsLoadingCharts(false); // Set loading to false if sheet not found
               return;
             }
 
             // Variación Horaria
-            const rawHourlyLabels = XLSX.utils.sheet_to_json(worksheet, { range: 'A3:A26', header: 1 });
+            // Dynamic Layout Detection
+            const findRowIndex = (colIndex, searchText, startRow = 0, maxRow = 100) => {
+              for (let r = startRow; r < maxRow; r++) {
+                const cellAddress = XLSX.utils.encode_cell({ r, c: colIndex });
+                const cell = workbook.Sheets[sheetName][cellAddress];
+                if (cell && cell.v && cell.v.toString().trim().toUpperCase() === searchText) {
+                  return r;
+                }
+              }
+              return -1;
+            };
+
+            // 1. Hourly Data: Find first hour label (00-01 or 01-02) and TOTAL
+            let hourlyStartRow = -1;
+            for (let r = 2; r <= 5; r++) {
+              const cellAddress = XLSX.utils.encode_cell({ r, c: 0 });
+              const cell = workbook.Sheets[sheetName][cellAddress];
+              if (cell && cell.v && /^\d{2}-\d{2}$/.test(cell.v.toString().trim())) {
+                hourlyStartRow = r;
+                break;
+              }
+            }
+            const hourlyStartRow1Based = hourlyStartRow !== -1 ? hourlyStartRow + 1 : 4;
+
+            const totalRowIndex = findRowIndex(0, 'TOTAL', 20, 35);
+            const hourlyEndRow1Based = totalRowIndex !== -1 ? totalRowIndex : 27;
+
+            const rawHourlyLabels = XLSX.utils.sheet_to_json(worksheet, { range: `A${hourlyStartRow1Based}:A${hourlyEndRow1Based}`, header: 1 });
             const hourlyLabels = rawHourlyLabels.map(row => row[0]);
-            const rawHourlyData = XLSX.utils.sheet_to_json(worksheet, { range: 'U3:U26', header: 1 });
+            const rawHourlyData = XLSX.utils.sheet_to_json(worksheet, { range: `U${hourlyStartRow1Based}:U${hourlyEndRow1Based}`, header: 1 });
             const hourlyData = rawHourlyData.map(row => Number(row[0]));
 
-            // Porcentaje Vehicular
-            const rawPercentageLabels = XLSX.utils.sheet_to_json(worksheet, { range: 'T32:T43', header: 1 });
-            const percentageLabels = rawPercentageLabels.map(row => row[0]);
-            const rawPercentageData = XLSX.utils.sheet_to_json(worksheet, { range: 'W32:W43', header: 1 });
-            const percentageData = rawPercentageData.map(row => {
-              const originalValue = Number(row[0]) * 100;
-              return { originalValue, renderValue: originalValue };
-            }).filter(item => !isNaN(item.originalValue) && item.originalValue > 0);
+            // Classification (Use Col B Types and Col M IMDa)
+            let autosRowIndex = findRowIndex(1, 'AUTOS', 25, 45);
+            if (autosRowIndex === -1) autosRowIndex = findRowIndex(1, 'Autos', 25, 45);
+            const classStartRow = autosRowIndex !== -1 ? autosRowIndex : 32;
+            const classEndRow = classStartRow + 12;
+            const classStart1Based = classStartRow + 1;
+            const classEnd1Based = classEndRow;
 
-            const rawClassificationLabels = XLSX.utils.sheet_to_json(worksheet, { range: 'B32:B43', header: 1 });
+            const rawClassificationLabels = XLSX.utils.sheet_to_json(worksheet, { range: `B${classStart1Based}:B${classEnd1Based}`, header: 1 });
             const classificationLabels = rawClassificationLabels.map(row => row[0]);
-            const rawClassificationData = XLSX.utils.sheet_to_json(worksheet, { range: 'M32:M43', header: 1 });
-            const classificationData = rawClassificationData.map(row => Number(row[0]));
+            const rawClassificationData = XLSX.utils.sheet_to_json(worksheet, { range: `M${classStart1Based}:M${classEnd1Based}`, header: 1 });
+            const classificationData = rawClassificationData.map(row => {
+              const val = Number(row[0]);
+              return isNaN(val) ? 0 : Number(val.toFixed(2));
+            });
 
-            const rawDailyLabels = XLSX.utils.sheet_to_json(worksheet, { range: 'C31:I31', header: 1 });
-            const dailyLabels = rawDailyLabels.length > 0 ? rawDailyLabels[0] : [];
-            const rawDailyData = XLSX.utils.sheet_to_json(worksheet, { range: 'C44:I44', header: 1 });
-            const dailyData = rawDailyData.length > 0 ? rawDailyData[0].map(Number) : [];
+            // Percentage (Computed)
+            const totalIMD = classificationData.reduce((a, b) => a + b, 0);
+            const percentageLabels = classificationLabels;
+            const percentageData = classificationData.map(val => {
+              const pct = totalIMD > 0 ? (val / totalIMD) * 100 : 0;
+              return { originalValue: pct, renderValue: Number(pct.toFixed(2)) };
+            }).filter(item => item.originalValue > 0);
+
+            // Daily (Computed Sums)
+            const dailyHeaderRow1Based = classStartRow;
+            const rawDailyHeaders = XLSX.utils.sheet_to_json(worksheet, { range: `C${dailyHeaderRow1Based}:I${dailyHeaderRow1Based}`, header: 1 });
+            const dailyLabels = rawDailyHeaders.length > 0 ? rawDailyHeaders[0] : ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+            const rawDailyBlock = XLSX.utils.sheet_to_json(worksheet, { range: `C${classStart1Based}:I${classEnd1Based}`, header: 1 });
+            const dailyData = [];
+            if (rawDailyBlock.length > 0) {
+              const numDays = 7;
+              for (let i = 0; i < numDays; i++) {
+                let daySum = 0;
+                rawDailyBlock.forEach(row => {
+                  const val = Number(row[i]);
+                  if (!isNaN(val)) daySum += val;
+                });
+                dailyData.push(daySum);
+              }
+            }
 
             setChartData({
               hourly: {
                 labels: hourlyLabels,
                 datasets: [{
-                  label: 'IMD',
+                  label: 'Variación Horaria (Promedio Semanal)',
                   data: hourlyData,
                   borderColor: 'rgb(75, 192, 192)',
                   tension: 0.1
@@ -820,7 +940,7 @@ useEffect(() => {
               classification: {
                 labels: classificationLabels,
                 datasets: [{
-                  label: 'Nº de Vehículos',
+                  label: 'Clasificación Vehicular (IMDa)',
                   data: classificationData,
                   backgroundColor: 'rgba(255, 99, 132, 0.5)'
                 }]
@@ -828,7 +948,7 @@ useEffect(() => {
               daily: {
                 labels: dailyLabels,
                 datasets: [{
-                  label: 'Vehículos/Día',
+                  label: 'Vehículos/Día (Semana Representativa)',
                   data: dailyData,
                   backgroundColor: [
                     'rgba(255, 99, 132, 0.6)',
@@ -858,23 +978,23 @@ useEffect(() => {
           setUploadedExcelUrl(null);
           console.log('URL de Excel establecida a null (error de carga).');
           setChartData({
-              hourly: { labels: [], datasets: [{ data: [] }] },
-              percentage: { labels: [], datasets: [{ data: [] }] },
-              classification: { labels: [], datasets: [{ data: [] }] },
-              daily: { labels: [], datasets: [{ data: [] }] }
-            });
+            hourly: { labels: [], datasets: [{ data: [] }] },
+            percentage: { labels: [], datasets: [{ data: [] }] },
+            classification: { labels: [], datasets: [{ data: [] }] },
+            daily: { labels: [], datasets: [{ data: [] }] }
+          });
         } finally {
-            setIsLoadingCharts(false); // Ensure loading is set to false in all cases
+          setIsLoadingCharts(false); // Ensure loading is set to false in all cases
         }
       } else {
         setUploadedExcelUrl(null);
         console.log('URL de Excel establecida a null (sin estación seleccionada).');
         setChartData({
-              hourly: { labels: [], datasets: [{ data: [] }] },
-              percentage: { labels: [], datasets: [{ data: [] }] },
-              classification: { labels: [], datasets: [{ data: [] }] },
-              daily: { labels: [], datasets: [{ data: [] }] }
-            });
+          hourly: { labels: [], datasets: [{ data: [] }] },
+          percentage: { labels: [], datasets: [{ data: [] }] },
+          classification: { labels: [], datasets: [{ data: [] }] },
+          daily: { labels: [], datasets: [{ data: [] }] }
+        });
         setIsLoadingCharts(false); // Set loading to false if no station is selected
       }
     };
@@ -884,57 +1004,57 @@ useEffect(() => {
 
   return (
     <div className="estacion-control-tab-wrapper">
-      <div style={{display: 'flex', minHeight: '600px', padding: '20px', gap: '20px', alignItems: 'stretch'}}>
+      <div style={{ display: 'flex', minHeight: '600px', padding: '20px', gap: '20px', alignItems: 'stretch' }}>
         {/* MAPA principal - a la izquierda */}
-        <div style={{flex: '3', display: 'flex', flexDirection: 'column'}}>
-          <div style={{height: '500px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden'}}>
+        <div style={{ flex: '3', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ height: '500px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
             <ErrorBoundary>
-              <MapContainer center={view.center} zoom={view.zoom} zoomControl={false} className="map-container-custom-controls" style={{height: '100%', width: '100%'}}>
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="&copy; OpenStreetMap contributors"
-              />
-              <MapViewController setView={setView} cu104Route={cu104Route} />
-              {showRoute && cu104Route && cu104Route.length > 0 && (
-                <Polyline
-                  positions={cu104Route.map(point => [point.lat, point.lng]).filter(p => p[0] !== undefined && p[1] !== undefined)}
-                  color="#e74c3c"
-                  weight={4}
-                  opacity={0.8}
+              <MapContainer center={view.center} zoom={view.zoom} zoomControl={false} className="map-container-custom-controls" style={{ height: '100%', width: '100%' }}>
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution="&copy; OpenStreetMap contributors"
                 />
-              )}
-              {showTraffic && Object.values(stationData).map((station) => {
-                // Add defensive check for station.info and its properties
-                if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined) {
-                  console.warn("Skipping marker for station due to missing lat/lng:", station);
-                  return null; // Don't render marker if lat or lng is missing
-                }
+                <MapViewController setView={setView} cu104Route={cu104Route} />
+                {showRoute && cu104Route && cu104Route.length > 0 && (
+                  <Polyline
+                    positions={cu104Route.map(point => [point.lat, point.lng]).filter(p => p[0] !== undefined && p[1] !== undefined)}
+                    color="#e74c3c"
+                    weight={4}
+                    opacity={0.8}
+                  />
+                )}
+                {showTraffic && Object.values(stationData).map((station) => {
+                  // Add defensive check for station.info and its properties
+                  if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined) {
+                    console.warn("Skipping marker for station due to missing lat/lng:", station);
+                    return null; // Don't render marker if lat or lng is missing
+                  }
 
-                const images = station.info.imagenes.filter(img => img.source_type === 'conteo_vehicular_image');
-                let randomImageUrl = null;
-                if (images && images.length > 0) {
-                  const randomIndex = Math.floor(Math.random() * images.length);
-                  randomImageUrl = images[randomIndex].image_url;
-                }
+                  const images = station.info.imagenes.filter(img => img.source_type === 'conteo_vehicular_image');
+                  let randomImageUrl = null;
+                  if (images && images.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * images.length);
+                    randomImageUrl = images[randomIndex].image_url;
+                  }
 
-                return (
-                  <Marker
-                    key={station.info.id}
-                    position={[station.info.lat, station.info.lng]}
-                    eventHandlers={{
-                      click: () => {
-                        handleStationSelect(station.info.id);
-                      },
-                      mouseover: (event) => {
-                        event.target.openPopup();
-                      },
-                      mouseout: (event) => {
-                        event.target.closePopup();
-                      },
-                    }}
-                    icon={divIcon({
-                      className: 'custom-station-icon',
-                      html: `<div style="
+                  return (
+                    <Marker
+                      key={station.info.id}
+                      position={[station.info.lat, station.info.lng]}
+                      eventHandlers={{
+                        click: () => {
+                          handleStationSelect(station.info.id);
+                        },
+                        mouseover: (event) => {
+                          event.target.openPopup();
+                        },
+                        mouseout: (event) => {
+                          event.target.closePopup();
+                        },
+                      }}
+                      icon={divIcon({
+                        className: 'custom-station-icon',
+                        html: `<div style="
                       background-color: ${selectedStation === station.info.id ? '#1abc9c' : '#2ecc71'};
                         border: ${selectedStation === station.info.id ? '4px solid #3498db' : '2px solid #27ae60'};
                         border-radius: 50%;
@@ -948,46 +1068,46 @@ useEffect(() => {
                         font-size: ${selectedStation === station.info.id ? '14px' : '12px'};
                         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                       ">${station.info.id}</div>`,
-                      iconSize: selectedStation === station.info.id ? [50, 50] : [40, 40],
-                      iconAnchor: selectedStation === station.info.id ? [25, 25] : [20, 20],
-                      popupAnchor: selectedStation === station.info.id ? [0, -25] : [0, -20],
-                    })}
-                  >
-                                        <Popup>
-                      <div style={{ maxWidth: '250px', fontFamily: 'Arial, sans-serif' }}>
-                        <strong style={{ fontSize: '14px', color: '#333' }}>{station.info.nombre}</strong>
-                        {randomImageUrl && (
-                          <img 
-                            src={randomImageUrl} 
-                            alt={`Foto de ${station.info.nombre}`}
-                            style={{ 
-                              width: '100%', 
-                              height: '150px',
-                              objectFit: 'cover',
-                              marginTop: '8px', 
-                              borderRadius: '4px' 
-                            }} 
-                          />
-                        )}
-                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#555' }}>
-                          <strong>Ubicación:</strong> {station.info.ubicacion}
+                        iconSize: selectedStation === station.info.id ? [50, 50] : [40, 40],
+                        iconAnchor: selectedStation === station.info.id ? [25, 25] : [20, 20],
+                        popupAnchor: selectedStation === station.info.id ? [0, -25] : [0, -20],
+                      })}
+                    >
+                      <Popup>
+                        <div style={{ maxWidth: '250px', fontFamily: 'Arial, sans-serif' }}>
+                          <strong style={{ fontSize: '14px', color: '#333' }}>{station.info.nombre}</strong>
+                          {randomImageUrl && (
+                            <img
+                              src={randomImageUrl}
+                              alt={`Foto de ${station.info.nombre}`}
+                              style={{
+                                width: '100%',
+                                height: '150px',
+                                objectFit: 'cover',
+                                marginTop: '8px',
+                                borderRadius: '4px'
+                              }}
+                            />
+                          )}
+                          <div style={{ marginTop: '8px', fontSize: '12px', color: '#555' }}>
+                            <strong>Ubicación:</strong> {station.info.ubicacion}
+                          </div>
                         </div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
-            </MapContainer>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+              </MapContainer>
             </ErrorBoundary>
           </div>
-          <div style={{display: 'grid', gap: '20px', marginTop: '12px'}}>
+          <div style={{ display: 'grid', gap: '20px', marginTop: '12px' }}>
             <div className="stations-container-box" style={{ width: '100%', position: 'relative', paddingBottom: '50px' }}>
               <div className="stations-header">
                 <h3 className="stations-title">
                   <i className="fas fa-map-marker-alt"></i>
                   Estaciones
                 </h3>
-                
+
               </div>
               <div className="stations-content">
                 <div className="stations-grid" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-start', overflowX: 'auto', paddingBottom: '10px', width: '100%', gap: '10px' }}>
@@ -1013,8 +1133,8 @@ useEffect(() => {
                       </div>
 
                       {/* Nuevo botón para visualizar Excel */}
-                      
-                      
+
+
                       {stationData[stationId].info && stationData[stationId].info.imagenes && stationData[stationId].info.imagenes.filter(item => item.source_type === 'conteo_vehicular_file').length > 0 && (() => {
                         const sortedItems = [...stationData[stationId].info.imagenes.filter(item => item.source_type === 'conteo_vehicular_file')].sort((a, b) => {
                           return new Date(b.upload_date) - new Date(a.upload_date);
@@ -1049,7 +1169,7 @@ useEffect(() => {
                           </div>
                         );
                       })()}
-                      
+
                     </div>
                   ))}
                 </div>
@@ -1077,7 +1197,7 @@ useEffect(() => {
                 </button>
               )}
             </div>
-            
+
           </div>
           {selectedStation && (
             <div style={{
@@ -1095,7 +1215,7 @@ useEffect(() => {
                 id="excelUpload"
                 accept=".xlsx, .xls"
                 style={{ display: 'none' }}
-                onChange={handleExcelUpload} 
+                onChange={handleExcelUpload}
               />
               <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
                 <button
@@ -1142,10 +1262,10 @@ useEffect(() => {
               <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px' }}>
                 Gráficos e Información de Estación
               </h3>
-              
+
               <div style={{ border: '1px solid #eee', padding: '15px', borderRadius: '5px', minHeight: '100px', overflowX: 'auto' }}>
-                {}
-                
+                { }
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', marginTop: '20px' }}>
                   {excelTableData && excelTableData.length > 0 && (
                     <div style={{ marginTop: '20px', overflowX: 'auto', border: '1px solid #ccc', padding: '10px', borderRadius: '5px' }}>
@@ -1219,16 +1339,16 @@ useEffect(() => {
                   </div>
                   <div style={{ position: 'relative', border: '1px solid #ccc', padding: '10px', borderRadius: '5px' }}>
                     <h4>Porcentaje Vehicular</h4>
-                    
+
                     {chartData && chartData.percentage && chartData.percentage.datasets && chartData.percentage.datasets[0] && chartData.percentage.datasets[0].data.length > 0 ? (
-                                            <Pie key={selectedStation} data={chartData.percentage} plugins={[ChartDataLabels]} options={{
+                      <Pie key={selectedStation} data={chartData.percentage} plugins={[ChartDataLabels]} options={{
                         parsing: {
                           key: 'renderValue'
                         },
                         plugins: {
                           tooltip: {
                             callbacks: {
-                              label: function(context) {
+                              label: function (context) {
                                 let label = context.label || '';
                                 if (label) {
                                   label += ': ';
@@ -1249,7 +1369,7 @@ useEffect(() => {
                               size: 12
                             },
                             formatter: (value, context) => {
-                                return value.renderValue.toFixed(1) + '%';
+                              return value.renderValue.toFixed(1) + '%';
                             }
                           }
                         }
@@ -1325,7 +1445,7 @@ useEffect(() => {
                           beginAtZero: true
                         }
                       }
-                    }} />} 
+                    }} />}
                     {classificationAnalysis && (
                       <button
                         onClick={() => setModalAnalysisData({ ...classificationAnalysis, title: 'Análisis de Clasificación Vehicular' })}
@@ -1367,7 +1487,7 @@ useEffect(() => {
                           beginAtZero: true
                         }
                       }
-                    }} />} 
+                    }} />}
                     {dailyAnalysis && (
                       <button
                         onClick={() => setModalAnalysisData({ ...dailyAnalysis, title: 'Análisis de Variación Diaria' })}
@@ -1396,9 +1516,9 @@ useEffect(() => {
             </div>
           )}
         </div>
-        <div style={{flex: '0.8', display: 'flex', flexDirection: 'column', gap: '20px'}}>
-          <div style={{background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px'}}>
-            <h3 onClick={() => setIsStationDataVisible(!isStationDataVisible)} style={{margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '20px' }}>
+            <h3 onClick={() => setIsStationDataVisible(!isStationDataVisible)} style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Estación Datos</span>
               <i className={`fas fa-chevron-down accordion-icon ${isStationDataVisible ? '' : 'collapsed'}`}></i>
             </h3>
@@ -1409,9 +1529,9 @@ useEffect(() => {
               classNames="accordion-content"
               unmountOnExit
             >
-              <div ref={stationDataRef}> 
+              <div ref={stationDataRef}>
                 {currentStationData && (
-                  <div style={{display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px'}}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px' }}>
                     <div>
                       <strong>Nombre:</strong> {currentStationData.info.nombre}
                     </div>
@@ -1432,32 +1552,32 @@ useEffect(() => {
               </div>
             </CSSTransition>
           </div>
-                   {currentStationData && (
+          {currentStationData && (
             <button
               onClick={() => alert('Descargar Reporte Clicked!')} // Placeholder for future functionality
               style={{
-                  backgroundColor: '#28a745',
-                  color: 'white',
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  width: '100%',
-                  marginTop: '20px',
-                  boxSizing: 'border-box', // Ensure padding and border are included in the width
-                  margin: '0 auto' // Center horizontally
+                backgroundColor: '#28a745',
+                color: 'white',
+                padding: '10px 20px',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                width: '100%',
+                marginTop: '20px',
+                boxSizing: 'border-box', // Ensure padding and border are included in the width
+                margin: '0 auto' // Center horizontally
               }}
             >
-                Descargar Reporte
+              Descargar Reporte
             </button>
           )}
 
-          
+
         </div>
-        
+
       </div>
-      <UploadTrafficDataModal 
+      <UploadTrafficDataModal
         isOpen={isModalOpen}
         onClose={closeUploadModal}
         entityId={stationIdToUpload}
@@ -1467,7 +1587,7 @@ useEffect(() => {
         sourceTypeImage="conteo_vehicular_image"
         sourceTypeFile="conteo_vehicular_file"
       />
-     
+
       <ImageDisplayModal
         isOpen={isImageModalOpen}
         onClose={closeImageModal}
@@ -1482,25 +1602,25 @@ useEffect(() => {
       />
 
       {isLoadingCharts && (
-          <div style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              backgroundColor: 'rgba(255, 255, 255, 0.8)',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 1000,
-              fontSize: '24px',
-              fontWeight: 'bold',
-              color: '#333',
-              flexDirection: 'column'
-          }}>
-              <i className="fas fa-spinner fa-spin" style={{ fontSize: '48px', marginBottom: '20px', color: '#ADD8E6' }}></i>
-              Cargando datos de estación {selectedStation ? selectedStation.replace('E-', '') : ''}...
-          </div>
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          fontSize: '24px',
+          fontWeight: 'bold',
+          color: '#333',
+          flexDirection: 'column'
+        }}>
+          <i className="fas fa-spinner fa-spin" style={{ fontSize: '48px', marginBottom: '20px', color: '#ADD8E6' }}></i>
+          Cargando datos de estación {selectedStation ? selectedStation.replace('E-', '') : ''}...
+        </div>
       )}
 
     </div>

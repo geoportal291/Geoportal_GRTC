@@ -10,7 +10,14 @@ const { exec } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const FormData = require('form-data'); // Import FormData
 
+// --- HELPER TO NORMALIZE ENTREGABLE FOR URLS ---
+const normalizeEntregable = (str) => {
+    if (!str) return 'SE'; // Sin Entregable
+    return String(str).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+};
+
 // --- HELPER TO CALL PYTHON WORKER ---
+
 const processImageWithPython = async (fileBuffer, originalName) => {
     try {
         const formData = new FormData();
@@ -118,16 +125,17 @@ const processGraphicsJob = async (jobId) => {
             // But if user wants OCR everywhere, we could add it here too.
             // For now, leaving Excel logic as is (it relies on cell position).
 
-            const filename = `tramoinv/excelft/${projectId}/${currentImageIndex}.${extension}`;
+            const entregableCell = worksheet.getRow(imgData.range.tl.row + 1).getCell(13); // Column M is 13th
+            const entregableVal = entregableCell ? (entregableCell.value ? String(entregableCell.value).trim() : null) : null;
+            const entregableNorm = normalizeEntregable(entregableVal);
+
+            const filename = `tramoinv/excelft/${projectId}/${entregableNorm}/${currentImageIndex}.${extension}`;
 
             const blob = await put(filename, buffer, {
                 access: 'public',
                 allowOverwrite: true,
                 token: process.env.BLOB_READ_WRITE_TOKEN
             });
-
-            const entregableCell = worksheet.getRow(imgData.range.tl.row + 1).getCell(13); // Column M is 13th
-            const entregableVal = entregableCell ? (entregableCell.value ? String(entregableCell.value).trim() : null) : null;
 
             await db.query(
                 'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url, entregable) VALUES ($1, $2, $3, $4)',
@@ -456,9 +464,10 @@ const processRarExtractionJob = async (jobId) => {
                     }
                 }
 
-                // Construct filename with the FINAL INDEX
+                // Construct filename with the FINAL INDEX and ENTREGABLE to avoid collisions
                 const ext = path.extname(originalFileName);
-                const filename = `tramoinv/uploaded/${projectId}/${finalIndex}${ext}`;
+                const entregableNorm = normalizeEntregable(entregable);
+                const filename = `tramoinv/uploaded/${projectId}/${entregableNorm}/${finalIndex}${ext}`;
 
                 const blob = await put(filename, processedBuffer, {
                     access: 'public',
@@ -537,7 +546,8 @@ const processSimpleUploadJob = async (jobId) => {
             }
         }
 
-        const filename = `tramoinv/uploaded/${projectId}/${nextIndex}.${extension}`;
+        const entregableNorm = normalizeEntregable(entregable);
+        const filename = `tramoinv/uploaded/${projectId}/${entregableNorm}/${nextIndex}.${extension}`;
 
         const blob = await put(filename, processedBuffer, {
             access: 'public',

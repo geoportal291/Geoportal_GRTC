@@ -180,8 +180,11 @@
         /* Grid flexible: Izquierda fijo/minimo, Derecha expande */
         grid-template-columns: minmax(300px, 350px) 1fr;
         gap: 1.5rem;
-        align-items: start;
+        align-items: stretch;
+        /* FIX: Equal height for both panels */
         width: 100%;
+        height: 560px;
+        /* FIX: Fixed height to enable scrolling in list */
     }
 
     /* Panel Izquierdo */
@@ -190,15 +193,17 @@
         border-radius: var(--dashboard-radius);
         padding: 1.5rem;
         box-shadow: var(--dashboard-shadow-sm);
-        border: 2px solid #56585b !important;
+        border: 2px solid #000000 !important;
         /* Nuevo borde para consistencia */
         display: flex;
         flex-direction: column;
         align-items: center;
         cursor: pointer;
         height: 100%;
-        min-height: 400px;
+        /* min-height removed as parent has fixed height */
         box-sizing: border-box;
+        overflow: hidden;
+        /* Ensure content stays inside */
     }
 
     .chart-wrapper-premium {
@@ -207,6 +212,7 @@
         /* Reducir ligeramente para pantallas pequeñas */
         height: 200px;
         margin-top: 1rem;
+        flex-shrink: 0;
     }
 
     .chart-center-text {
@@ -235,6 +241,8 @@
     .chart-legend-premium {
         margin-top: 2rem;
         width: 100%;
+        overflow-y: auto;
+        /* Scroll if legend is too long */
     }
 
     .legend-item {
@@ -261,17 +269,15 @@
         border-radius: var(--dashboard-radius);
         padding: 1.5rem;
         box-shadow: var(--dashboard-shadow-sm);
-        border: 2px solid #b6b6b6 !important;
+        border: 2px solid #000000 !important;
         /* Nuevo borde */
         display: flex;
         flex-direction: column;
         height: 100%;
-        /* Match height */
-        min-height: 400px;
-        max-height: 500px;
         box-sizing: border-box;
         min-width: 0;
-        /* Grid overflow fix */
+        overflow: hidden;
+        /* Crucial for internal scroll */
     }
 
     .panel-header-premium {
@@ -279,6 +285,8 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 1.5rem;
+        flex-shrink: 0;
+        /* Keep header visible */
     }
 
     .panel-header-premium h2 {
@@ -294,7 +302,10 @@
     .cards-list-premium {
         flex: 1;
         overflow-y: auto;
+        /* ENABLE SCROLL */
         padding-right: 0.5rem;
+        min-height: 0;
+        /* Flexbox scroll fix */
     }
 
     .cards-list-premium::-webkit-scrollbar {

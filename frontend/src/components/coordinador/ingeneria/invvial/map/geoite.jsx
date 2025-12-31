@@ -256,7 +256,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         Object.assign(coordContainer.style, { backgroundColor: 'rgba(0, 0, 0, 0.7)', color: 'white', padding: '5px 10px', borderRadius: '5px', fontSize: '12px', fontFamily: 'monospace', display: 'none' });
 
         // --- Lógica del Modal de Mediciones ---
-        const measureModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-blue', map.getContainer());
+        const measureModal = L.DomUtil.create('div', 'invvial-flyout-card-v2 invvial-card-blue', map.getContainer());
         measureModal.id = "invvial-menu-medir";
         L.DomEvent.disableClickPropagation(measureModal);
 
@@ -450,7 +450,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
 
         // --- Lógica del Modal de Dibujo ---
-        const drawModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-orange', map.getContainer());
+        const drawModal = L.DomUtil.create('div', 'invvial-flyout-card-v2 invvial-card-orange', map.getContainer());
         drawModal.id = "invvial-menu-dibujo";
         drawModal.style.width = '340px'; // Reducido para que no se salga del mapa
         L.DomEvent.disableClickPropagation(drawModal);
@@ -526,7 +526,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         `;
 
         // --- Lógica del Modal de Descarga ---
-        const downloadModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-purple', map.getContainer());
+        const downloadModal = L.DomUtil.create('div', 'invvial-flyout-card-v2 invvial-card-purple', map.getContainer());
         downloadModal.id = 'invvial-menu-kml-descarga';
         L.DomEvent.disableClickPropagation(downloadModal);
 
@@ -602,7 +602,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
 
         // --- Lógica del Modal de Subida ---
-        const uploadModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-purple', map.getContainer());
+        const uploadModal = L.DomUtil.create('div', 'invvial-flyout-card-v2 invvial-card-purple', map.getContainer());
         uploadModal.id = 'invvial-menu-kml-carga';
         L.DomEvent.disableClickPropagation(uploadModal);
 
@@ -1139,7 +1139,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         L.DomEvent.disableClickPropagation(toolbarContainer);
 
         const closeAll = () => {
-            document.querySelectorAll('.invvial-flyout-card').forEach(m => m.style.display = 'none');
+            document.querySelectorAll('.invvial-flyout-card-v2').forEach(m => m.style.display = 'none');
             document.querySelectorAll('.invvial-tool-btn').forEach(b => b.classList.remove('active'));
         };
 
@@ -1151,20 +1151,51 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
             closeAll();
 
             if (!isVisible) {
-                const rect = btnElement.getBoundingClientRect();
-                // Posicionar a la derecha del botón
-                menu.style.left = (rect.right + 15) + 'px';
-                // Posicionar desde arriba (180px desde el top)
-                menu.style.top = '180px';
-                menu.style.bottom = 'auto'; // Resetear bottom
+                // Usamos requestAnimationFrame para asegurar que el navegador tenga tiempo de renderizar
+                // el contenido insertado dinámicamente antes de medir.
+                requestAnimationFrame(() => {
+                    // 1. Mostrar (invisible) para poder medir dimensiones
+                    menu.style.visibility = 'hidden';
+                    menu.style.display = 'block';
 
-                // Calcular la posición de la flecha para que apunte al botón
-                const modalTop = 180; // Debe coincidir con menu.style.top
-                const arrowTop = rect.top - modalTop + (rect.height / 2) - 7; // Centrar en el botón
-                menu.style.setProperty('--arrow-top', `${arrowTop}px`);
+                    const rect = btnElement.getBoundingClientRect();
+                    const menuHeight = menu.offsetHeight;
+                    const windowHeight = window.innerHeight;
 
-                menu.style.display = 'block';
-                btnElement.classList.add('active');
+                    // 2. Calcular Top Inicial (Alineado Top-Top por defecto)
+                    // El usuario prefiere que empiece alineado al botón, no centrado.
+                    let top = rect.top;
+
+                    // 3. Verificar desbordamiento inferior
+                    // Si (Top + AlturaMenu) > AlturaVentana, lo subimos lo justo para que quepa
+                    const margin = 20; // Margen de seguridad
+                    if (top + menuHeight > windowHeight - margin) {
+                        top = windowHeight - menuHeight - margin;
+                    }
+
+                    // 4. Verificar desbordamiento superior (por seguridad)
+                    if (top < margin) {
+                        top = margin;
+                    }
+
+                    menu.style.left = (rect.right + 15) + 'px';
+                    menu.style.top = top + 'px';
+                    menu.style.bottom = 'auto';
+
+                    // 5. Ajustar flecha para que siempre apunte al CENTRO del botón
+                    // ArrowTop relative to Modal = (Button Center Y) - (Modal Top Y)
+                    const buttonCenterY = rect.top + (rect.height / 2);
+                    let arrowTop = buttonCenterY - top - 7; // -7 para centrar la flecha de 14px
+
+                    // Clampear la flecha para que no se salga del modal si el desfazase es mucho (bordes redondeados)
+                    arrowTop = Math.max(8, Math.min(arrowTop, menuHeight - 22));
+
+                    menu.style.setProperty('--arrow-top', `${arrowTop}px`);
+
+                    // 6. Hacer visible
+                    menu.style.visibility = 'visible';
+                    btnElement.classList.add('active');
+                });
             }
         };
 
@@ -1180,7 +1211,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
 
         // --- NEW: Calibration Modal ---
-        const calibrationModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-blue', map.getContainer());
+        const calibrationModal = L.DomUtil.create('div', 'invvial-flyout-card-v2 invvial-card-blue', map.getContainer());
         calibrationModal.id = "invvial-menu-calibrar";
         L.DomEvent.disableClickPropagation(calibrationModal);
 
@@ -1227,7 +1258,6 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         loadInitialCalibrationData();
 
         calibrateButton.onclick = () => {
-            toggleMenu('invvial-menu-calibrar', calibrateButton);
             const routeLayer = geoJsonLayerRef.current;
             if (!routeLayer) {
                 alertify.error('Primero debe cargar un archivo KML.');
@@ -1315,6 +1345,9 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     function () { alertify.message('Eliminación cancelada.'); }
                 );
             };
+
+            // Now call toggleMenu AFTER content is populated so height is correct
+            toggleMenu('invvial-menu-calibrar', calibrateButton);
         };
 
         const handleDeleteKml = async () => {
@@ -2007,82 +2040,104 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                             } else if (alcantarilla.type === 'interferencia_electrica') {
                                 typeLabel = 'Interferencia Eléctrica';
                                 idValue = alcantarilla.tipo_interferencia || alcantarilla.id;
-                            } else if (alcantarilla.type === 'senales_informativas' || alcantarilla.type === 'senales_preventivas' || alcantarilla.type === 'hitos_kilometricos') {
-                                if (alcantarilla.type === 'hitos_kilometricos') {
-                                    typeLabel = 'Hito Kilométrico';
-                                    idValue = `${alcantarilla.codigo} (Prog: ${alcantarilla.progresiva || 'S/D'})`;
+                            } else if (alcantarilla.type === 'senales_informativas' || alcantarilla.type === 'senales_preventivas' || alcantarilla.type === 'senales_reguladoras') {
+                                typeLabel = alcantarilla.type === 'senales_preventivas' ? 'Señal Preventiva' : (alcantarilla.type === 'senales_reguladoras' ? 'Señal Reguladora' : 'Señal Informativa');
+                                idValue = alcantarilla.codigo;
+                            } else if (alcantarilla.type === 'hitos_kilometricos') {
+                                typeLabel = 'Hito Kilométrico';
+                                idValue = `${alcantarilla.codigo} (Prog: ${alcantarilla.progresiva || 'S/D'})`;
+                            } else if (alcantarilla.type === 'estructura_existente') {
+                                typeLabel = 'Estructura Existente';
+                                idValue = alcantarilla.id_estructura || alcantarilla.id;
+                            }
+
+                            // --- IMPROVED IMAGE LOOKUP LOGIC ---
+                            // This logic now applies to more element types and includes robust range parsing and entregable normalization.
+                            const shouldLookupImages = ['alcantarilla', 'baden', 'puente', 'muro', 'senales_informativas', 'senales_preventivas', 'senales_reguladoras', 'hitos_kilometricos', 'zona_critica'].includes(alcantarilla.type);
+
+                            if (shouldLookupImages && graphicsImages && alcantarilla.panel_fotografico_codigo) {
+                                const code = String(alcantarilla.panel_fotografico_codigo).trim();
+                                const entregable = alcantarilla.entregable ? String(alcantarilla.entregable).trim() : null;
+
+                                // 1. Parse Ranges (e.g. "238-241" or "19")
+                                const parts = code.split(' - ');
+                                const rangePart = parts[0];
+                                const suffix = parts.length > 1 ? `-${parts[1]}` : '';
+
+                                let start, end;
+                                if (rangePart.includes('-')) {
+                                    const [startStr, endStr] = rangePart.split('-');
+                                    start = parseInt(startStr, 10);
+                                    end = parseInt(endStr, 10);
                                 } else {
-                                    typeLabel = alcantarilla.type === 'senales_preventivas' ? 'Señal Preventiva' : 'Señal Informativa';
-                                    idValue = alcantarilla.codigo;
+                                    start = parseInt(rangePart, 10);
+                                    end = start;
                                 }
 
-                                // Lookup images for signals and hitos
-                                if (graphicsImages && alcantarilla.panel_fotografico_codigo && elementImages.length === 0) {
-                                    const code = String(alcantarilla.panel_fotografico_codigo).trim();
-                                    const entregable = alcantarilla.entregable ? String(alcantarilla.entregable).trim() : null;
+                                const expectedNames = [];
+                                if (!isNaN(start) && !isNaN(end)) {
+                                    for (let i = start; i <= end; i++) expectedNames.push(`${i}${suffix}`);
+                                } else {
+                                    expectedNames.push(code);
+                                }
 
-                                    console.log('DEBUG FILTER:', {
-                                        elId: alcantarilla.id,
-                                        elCode: code,
-                                        elEntregable: entregable
-                                    });
+                                console.log('DEBUG FILTER (GEOITE):', {
+                                    elId: alcantarilla.id,
+                                    elCode: code,
+                                    elEntregable: entregable,
+                                    expectedNames
+                                });
 
-                                    elementImages = graphicsImages.filter(img => {
-                                        const imgCode = String(img.panel_fotografico_codigo || '').trim();
-                                        const imgIndex = img.index ? String(img.index).trim() : '';
+                                elementImages = graphicsImages.filter(img => {
+                                    const imgCode = String(img.panel_fotografico_codigo || '').trim();
+                                    const imgIndex = img.index ? String(img.index).trim() : '';
+                                    const imgIndexNoExt = imgIndex.split('.')[0];
 
-                                        // Extract filename from URL
-                                        let urlFileName = '';
-                                        if (img.url) {
-                                            const parts = img.url.split('/');
-                                            const fileNameWithExt = parts[parts.length - 1];
-                                            urlFileName = fileNameWithExt.split('.')[0];
-                                        }
-
-                                        // 1. Name Match
-                                        const nameMatches = (imgCode === code || imgIndex === code || urlFileName === code);
-                                        if (!nameMatches) return false;
-
-                                        // 2. Entregable Logic (Strict/Hybrid)
-                                        const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
-
-                                        const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-
-                                        if (entregable) {
-                                            const normElement = normalize(entregable);
-                                            const normImage = normalize(imgEntregable);
-
-                                            // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
-                                            if (normElement === 'E1') {
-                                                return (!imgEntregable) || (normImage === 'E1');
-                                            }
-
-                                            // Scenario 2: Element is "E2" (etc). STRICT match. Reject nulls.
-                                            return normImage === normElement;
-                                        }
-
-                                        // Scenario 3: No Entregable on Element. loose match.
-                                        return true;
-                                    });
-
-                                    console.log('--- FILTER SUMMARY ---');
-                                    console.log(`Element Entregable: ${entregable}`);
-                                    if (elementImages.length > 0) {
-                                        elementImages.forEach(img => {
-                                            console.log(`Image Found: ${img.url} | Index: ${img.index} | Entregable: ${img.entregable}`);
-                                        });
-                                    } else {
-                                        console.log('No matched images found.');
+                                    // Extract filename from URL
+                                    let urlFileName = '';
+                                    if (img.url) {
+                                        const urlParts = img.url.split('/');
+                                        const fileNameWithExt = urlParts[urlParts.length - 1];
+                                        urlFileName = fileNameWithExt.split('.')[0];
                                     }
-                                    console.log('----------------------');
-                                }
+
+                                    // A. Name Match (Check against all expected names from range)
+                                    const nameMatches = expectedNames.includes(imgCode) ||
+                                        expectedNames.includes(imgIndex) ||
+                                        expectedNames.includes(imgIndexNoExt) ||
+                                        expectedNames.includes(urlFileName);
+
+                                    if (!nameMatches) return false;
+
+                                    // B. Entregable Logic (Hybrid Legacy/Strict)
+                                    const imgEntregable = img.entregable ? String(img.entregable).trim() : null;
+                                    const normalize = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+                                    if (entregable) {
+                                        const normElement = normalize(entregable);
+                                        const normImage = normalize(imgEntregable);
+
+                                        // Scenario 1: Element is "E1". Allow matching "E1" OR null (legacy).
+                                        if (normElement === 'E1') {
+                                            return (!imgEntregable) || (normImage === 'E1');
+                                        }
+
+                                        // Scenario 2: Element is "E2", "E3", etc. STRICT match.
+                                        return normImage === normElement;
+                                    }
+
+                                    // Scenario 3: No Entregable on Element.
+                                    return true;
+                                });
+
+                                console.log(`FILTER SUMMARY (GEOITE): Found ${elementImages.length} images for delivered ${entregable}`);
                             }
 
                             // --- LOGIC FOR CARD TITLE ---
                             let cardTitle = 'ELEMENTO';
                             if (['alcantarilla', 'baden', 'puente', 'muro'].includes(alcantarilla.type)) {
                                 cardTitle = 'OBRAS DE ARTE';
-                            } else if (['senales_preventivas', 'senales_informativas'].includes(alcantarilla.type)) {
+                            } else if (['senales_preventivas', 'senales_informativas', 'senales_reguladoras'].includes(alcantarilla.type)) {
                                 cardTitle = 'SEÑALIZACIÓN';
                             } else if (alcantarilla.type === 'hitos_kilometricos') {
                                 cardTitle = 'HITO KILOMÉTRICO';
@@ -2409,7 +2464,7 @@ const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantaril
     const center = [-12, -75];
 
     return (
-        <div style={{ height: '700px', width: '100%', minHeight: 0 }}>
+        <div className="geoite-internal-map-container" style={{ height: '700px', width: '100%', minHeight: 0 }}>
             <MapContainer center={center} zoom={6} style={{ height: '100%', width: '100%' }}>
                 <LayersControl position="topright" key="layers-v2">
                     <LayersControl.BaseLayer name="Estándar">

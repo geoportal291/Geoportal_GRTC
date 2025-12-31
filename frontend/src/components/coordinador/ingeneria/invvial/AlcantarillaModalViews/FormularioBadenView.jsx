@@ -25,6 +25,10 @@ const FormularioBadenView = ({
                     <label htmlFor="tipo" style={{ marginBottom: '5px', fontWeight: 'bold', fontSize: '0.9em', color: '#333' }}>Tipo:</label>
                     <input type="text" id="tipo" name="tipo" value={formData.tipo ?? ''} onChange={handleChange} style={{ padding: '10px', border: '1px solid #ccc', borderRadius: '5px' }} required />
                 </div>
+                <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 calc(50% - 7.5px)' }}>
+                    <label htmlFor="material" style={{ marginBottom: '5px', fontWeight: 'bold', fontSize: '0.9em', color: '#333' }}>Material:</label>
+                    <input type="text" id="material" name="material" value={formData.material ?? ''} onChange={handleChange} style={{ padding: '10px', border: '1px solid #ccc', borderRadius: '5px' }} />
+                </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 calc(50% - 7.5px)' }}>
                     <label htmlFor="diametro_lado" style={{ marginBottom: '5px', fontWeight: 'bold', fontSize: '0.9em', color: '#333' }}>Diámetro/Lado:</label>

@@ -394,6 +394,36 @@ app.get('/api/url-preview', async (req, res) => {
     }
 });
 
+// --------------------- GENERIC PROXY ---------------------
+app.get('/api/proxy', async (req, res) => {
+    const { url } = req.query;
+
+    if (!url) {
+        return res.status(400).json({ error: 'URL no proporcionada.' });
+    }
+
+    try {
+        const response = await axios.get(url, {
+            responseType: 'arraybuffer', // Handle binary files correctly if needed, or text
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Geoportal Proxy)'
+            }
+        });
+
+        // Forward content type
+        const contentType = response.headers['content-type'];
+        if (contentType) {
+            res.setHeader('Content-Type', contentType);
+        }
+
+        res.send(response.data);
+
+    } catch (error) {
+        console.error(`Error en proxy para ${url}:`, error.message);
+        res.status(500).json({ error: 'Error al obtener el recurso remoto.' });
+    }
+});
+
 
 // --------------------- LOGIN ---------------------
 app.post('/login', async (req, res) => {
@@ -1305,7 +1335,7 @@ async function uploadFileToVercelBlob(file) {
 
 // Crear un nuevo anuncio con archivo y subirlo
 app.post('/anuncios', authenticateToken, upload.single('file'), async (req, res) => {
-    const { titulo, contenido, fecha_inicio, fecha_fin, usuario_id, duracion_horas } = req.body;
+    const { titulo, contenido, fecha_inicio, fecha_fin, usuario_id } = req.body;
     const creador_id = req.user.id;
     const archivo = req.file;
     try {
@@ -1314,10 +1344,10 @@ app.post('/anuncios', authenticateToken, upload.single('file'), async (req, res)
             archivoUrl = await uploadFileToVercelBlob(archivo);
         }
         const result = await db.query(`
-            INSERT INTO anuncios (titulo, contenido, fecha_inicio, fecha_fin, usuario_id, creador_id, archivo_url, duracion_horas)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO anuncios (titulo, contenido, fecha_inicio, fecha_fin, usuario_id, creador_id, archivo_url)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *
-        `, [titulo, contenido, fecha_inicio, fecha_fin, usuario_id, creador_id, archivoUrl, duracion_horas]);
+        `, [titulo, contenido, fecha_inicio, fecha_fin, usuario_id, creador_id, archivoUrl]);
         res.status(201).json({ status: 'ok', mensaje: 'Anuncio creado correctamente', anuncio: result.rows[0] });
     } catch (err) {
         console.error('Error al crear anuncio:', err);
@@ -2178,8 +2208,8 @@ app.get('/api/trafico/conteovehicular/latest-excel/:stationId', async (req, res)
     const { stationId } = req.params;
     try {
         const result = await db.query(
-            'SELECT image_url FROM trafico_imagenes WHERE station_id = $1 AND source_type = $2 ORDER BY upload_date DESC, id DESC LIMIT 1',
-            [stationId, 'conteo_vehicular_excel']
+            'SELECT image_url FROM trafico_imagenes WHERE source_type = $1 ORDER BY upload_date DESC, id DESC LIMIT 1',
+            ['conteo_vehicular_excel']
         );
         if (result.rows.length > 0) {
             res.json({ status: 'ok', excelUrl: result.rows[0].image_url });
@@ -2329,14 +2359,16 @@ app.get('/anuncios/activos', async (req, res) => {
     try {
         const result = await db.query(`
             SELECT a.id, a.titulo, a.contenido,
-                to_char(a.fecha_inicio, 'DD/MM/YYYY') as fecha_inicio,
-                to_char(a.fecha_fin, 'DD/MM/YYYY') as fecha_fin,
+                a.fecha_inicio,
+                a.fecha_fin,
                 COALESCE(creador.nombre, '') || ' ' || COALESCE(creador.ap_paterno, '') || ' ' || COALESCE(creador.ap_materno, '') as autor,
                 COALESCE(asignado.nombre, '') || ' ' || COALESCE(asignado.ap_paterno, '') || ' ' || COALESCE(asignado.ap_materno, '') as asignado_a,
-                a.archivo_url
+                a.archivo_url,
+                a.usuario_id
             FROM anuncios a
             LEFT JOIN usuariost creador ON a.creador_id = creador.id
             LEFT JOIN usuariost asignado ON a.usuario_id = asignado.id
+            WHERE CURRENT_DATE BETWEEN a.fecha_inicio::date AND a.fecha_fin::date
             ORDER BY a.fecha_inicio DESC
         `);
         res.json(result.rows);
@@ -2935,7 +2967,7 @@ app.post('/api/canteras/upload-image', authenticateToken, upload.single('imagen_
         res.status(201).json(nuevaImagen);
     } catch (error) {
         console.error('Error al subir y asociar la imagen de la cantera:', error);
-        res.status(500).json({ error: 'Error al procesar la subida de la imagen.' });
+        res.status(500).json({ error: 'Error al procesar la subida de la imagen.', details: error.message });
     }
 });
 
@@ -2966,6 +2998,17 @@ app.post('/api/canteras', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error('Error al crear cantera en index.js:', err.stack); // Loguear el stack completo
         res.status(500).json({ error: 'Error al crear la cantera', details: err.message });
+    }
+});
+
+// NEW: CREATE Cantera
+app.post('/api/canteras', authenticateToken, async (req, res) => {
+    try {
+        const newCantera = await canterasService.createCantera(req.body);
+        res.status(201).json(newCantera);
+    } catch (error) {
+        console.error('Error al crear cantera:', error);
+        res.status(500).json({ error: 'Error al crear la cantera.', details: error.message });
     }
 });
 
@@ -4873,6 +4916,27 @@ app.post('/api/zonas-criticas/upload-excel', authenticateToken, upload.single('e
     }
 });
 
+app.post('/api/zonas-criticas', authenticateToken, async (req, res) => {
+    try {
+        const newZona = await zonasCriticasService.createZonaCritica(req.body);
+        res.status(201).json(newZona);
+    } catch (err) {
+        console.error('Error creating zona critica:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/zonas-criticas/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const updatedZona = await zonasCriticasService.updateZonaCritica(id, req.body);
+        res.json(updatedZona);
+    } catch (err) {
+        console.error('Error updating zona critica:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.delete('/api/zonas-criticas/project/:projectId', authenticateToken, async (req, res) => {
     const { projectId } = req.params;
     try {
@@ -4906,6 +4970,27 @@ app.post('/api/estructuras-existentes/upload-excel', authenticateToken, upload.s
         res.json(result);
     } catch (err) {
         console.error('Error uploading estructuras existentes excel:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/estructuras-existentes', authenticateToken, async (req, res) => {
+    try {
+        const result = await estructurasExistentesService.create(req.body);
+        res.status(201).json(result);
+    } catch (err) {
+        console.error('Error creating estructura existente:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/estructuras-existentes/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await estructurasExistentesService.update(id, req.body);
+        res.json(result);
+    } catch (err) {
+        console.error('Error updating estructura existente:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -5052,9 +5137,13 @@ app.delete('/api/estructuras-existentes/:id', authenticateToken, async (req, res
 });
 
 // HITOS KILOMETRICOS
+app.post('/api/hitos-kilometricos', authenticateToken, hitosKilometricosService.createHito);
+app.put('/api/hitos-kilometricos/:id', authenticateToken, hitosKilometricosService.updateHito);
 app.delete('/api/hitos-kilometricos/:id', authenticateToken, hitosKilometricosService.deleteHito);
 
 // SENALES INFORMATIVAS
+app.post('/api/senales-informativas', authenticateToken, senalesInformativasService.createSenal);
+app.put('/api/senales-informativas/:id', authenticateToken, senalesInformativasService.updateSenal);
 app.delete('/api/senales-informativas/:id', authenticateToken, senalesInformativasService.deleteSenal);
 
 // --------------------------------------------------------------------------------

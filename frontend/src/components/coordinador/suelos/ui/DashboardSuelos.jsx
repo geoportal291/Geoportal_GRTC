@@ -51,23 +51,40 @@ export default function DashboardSuelos() {
   const [progresivas, setProgresivas] = useState([]);
   const [kmlTrazadoIdsStricto, setKmlTrazadoIdsStricto] = useState([]); // NEW STATE
   const [kmlPuntosIdsPermisivo, setKmlPuntosIdsPermisivo] = useState([]); // NEW STATE
+  const [recentAssays, setRecentAssays] = useState([]);
+  const [avgCanteraDistance, setAvgCanteraDistance] = useState('0.0');
   const navigate = useNavigate();
 
 
   // Estados KPIs (Mock)
-  const [avanceStats, setAvanceStats] = useState({ val: 76, total: 100 });
+  const [avanceStats, setAvanceStats] = useState({ val: 0, total: 100 });
   const [canterasMapData, setCanterasMapData] = useState([]); // NUEVO: Estado para canteras
 
+  // Stats helpers
+  const getTotalAssays = () => {
+    return ensayosStatusData.datasets[0].data.reduce((a, b) => a + b, 0);
+  }
+
+  const getStatusCount = (index) => {
+    return ensayosStatusData.datasets[0].data[index] || 0;
+  }
+
+  const getStatusPercent = (index) => {
+    const total = getTotalAssays();
+    return total > 0 ? Math.round((getStatusCount(index) / total) * 100) : 0;
+  }
+
   const [ensayosStatusData, setEnsayosStatusData] = useState({
-    labels: ['Aprobados', 'Pendientes', 'Rechazados'],
+    labels: ['Pendiente', 'En revisión', 'Rechazado', 'Aprobado', 'Completado'],
     datasets: [{
-      data: [28, 12, 5],
-      backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+      data: [0, 0, 0, 0, 0],
+      backgroundColor: ['#9ca3af', '#f59e0b', '#ef4444', '#10b981', '#3b82f6'],
       borderWidth: 0,
       hoverOffset: 4
     }]
   });
 
+  // --- 1. Sincronizar datos del Hook con el Dashboard ---
   // --- 1. Sincronizar datos del Hook con el Dashboard ---
   useEffect(() => {
     if (!hookLoading) {
@@ -75,6 +92,7 @@ export default function DashboardSuelos() {
 
       const syncData = async () => {
         let allData = [...hookProgresivas];
+        let allCanteras = [];
 
         // WORKAROUND: Si el backend no devuelve los hijos (por problema de proyecto_id null o filtros),
         // los buscamos manualmente para cada tramo padre encontrado.
@@ -122,7 +140,7 @@ export default function DashboardSuelos() {
             );
 
             const canterasArrays = await Promise.all(canterasPromises);
-            const allCanteras = canterasArrays.flat();
+            allCanteras = canterasArrays.flat();
             console.log(`[Dashboard] Total canteras cargadas: ${allCanteras.length}`, allCanteras);
             setCanterasMapData(allCanteras);
 
@@ -131,107 +149,159 @@ export default function DashboardSuelos() {
           }
         }
 
+        // --- AGREGACIÓN DE ENSAYOS & CÁLCULOS DE ESTADÍSTICAS ---
+        const allEnsayos = [];
+
+        // 1. Ensayos de Progresivas
+        allData.forEach(prog => {
+          if (prog.estratos_perfil && Array.isArray(prog.estratos_perfil)) {
+            prog.estratos_perfil.forEach(estrato => {
+              if (estrato.ensayos && Array.isArray(estrato.ensayos)) {
+                estrato.ensayos.forEach(ensayo => {
+                  allEnsayos.push({
+                    ...ensayo,
+                    sourceType: 'Tramo',
+                    sourceName: prog.nombre, // 0+000
+                    distance: null // Tramos don't usually have a 'source' distance field in this context
+                  });
+                });
+              }
+            });
+          }
+        });
+
+        // 2. Ensayos de Canteras
+        allCanteras.forEach(cantera => {
+          // Check if cantera has estratos/ensayos attached. 
+          // canterasService.getCanterasByTramoId attaches them!
+          if (cantera.estratos && Array.isArray(cantera.estratos)) {
+            cantera.estratos.forEach(estrato => {
+              if (estrato.ensayos && Array.isArray(estrato.ensayos)) {
+                estrato.ensayos.forEach(ensayo => {
+                  allEnsayos.push({
+                    ...ensayo,
+                    sourceType: 'Cantera',
+                    sourceName: cantera.nombre,
+                    distance: cantera.desplazamiento_km
+                  });
+                });
+              }
+            });
+          }
+        });
+
+        // 3. Calcular Stats de Estado
+        const statusCounts = {
+          pendiente: 0,
+          en_revision: 0,
+          rechazado: 0,
+          aprobado: 0,
+          completado: 0,
+          total: 0
+        };
+
+        allEnsayos.forEach(ensayo => {
+          statusCounts.total++;
+          const status = (ensayo.estado || 'pendiente').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+
+          if (status.includes('aprobado')) statusCounts.aprobado++;
+          else if (status.includes('pendiente')) statusCounts.pendiente++;
+          else if (status.includes('rechazado')) statusCounts.rechazado++;
+          else if (status.includes('revision')) statusCounts.en_revision++;
+          else if (status.includes('completado')) statusCounts.completado++;
+          else statusCounts.pendiente++; // Default fallback
+        });
+
+        // Actualizar datos del gráfico de Estado
+        setEnsayosStatusData({
+          labels: ['Pendiente', 'En revisión', 'Rechazado', 'Aprobado', 'Completado'],
+          datasets: [{
+            data: [
+              statusCounts.pendiente,
+              statusCounts.en_revision,
+              statusCounts.rechazado,
+              statusCounts.aprobado,
+              statusCounts.completado
+            ],
+            backgroundColor: ['#9ca3af', '#f59e0b', '#ef4444', '#10b981', '#3b82f6'],
+            borderWidth: 0,
+            hoverOffset: 4
+          }]
+        });
+
+        // 4. Calcular KPIs
+        // A) Avance del Tramo (Progresivas Terminadas VS Total Activas)
+        // Filtrar solo las sub-progresivas (hijas) que son los puntos reales de avance
+        const subProgresivas = allData.filter(p => p.parent_id);
+
+        let aprobadasCount = 0;
+        let totalActiveCount = 0;
+
+        subProgresivas.forEach(p => {
+          const estado = (p.estado || 'pendiente').toLowerCase();
+          // Considerar solo las que NO están inactivas (plomas)
+          if (estado !== 'inactivo') {
+            totalActiveCount++;
+            if (estado === 'aprobado' || estado === 'completado') {
+              aprobadasCount++;
+            }
+          }
+        });
+
+        const avancePorcentaje = totalActiveCount > 0 ? Math.round((aprobadasCount / totalActiveCount) * 100) : 0;
+
+        // B) Distancia Promedio (Canteras)
+        let totalDist = 0;
+        let countDist = 0;
+        allCanteras.forEach(c => {
+          const d = parseFloat(c.desplazamiento_km);
+          if (!isNaN(d)) {
+            totalDist += d;
+            countDist++;
+          }
+        });
+        const avgDistance = countDist > 0 ? (totalDist / countDist).toFixed(1) : '0.0';
+
+        // Update KPI States
+        setAvanceStats({
+          val: avancePorcentaje,
+          total: 100,
+          lastProg: `${aprobadasCount}/${totalActiveCount} Progresivas`
+        });
+
+        // Save computed data for other components
+        // (We can assume canterasMapData is already set above)
+        // Store recent assays for Notifications Panel
+        const sortedEnsayos = [...allEnsayos].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 10);
+        // We'll use a hack to store this in a state derived from this effect if needed, 
+        // but for now let's just use a ref or simplified state if we want to render the list.
+        // Actually, let's add a state for notifications!
+        setRecentAssays(sortedEnsayos); // Need to define this state!
+
+        // UPDATE PROGRESIVAS MAP DATA
         // Procesamos KMLs de los padres (tramos)
-        // Procesamos KMLs de los padres (tramos) - SEPARACION ESTRICTA
         const trazadoIdsSet = new Set();
         const puntosIdsSet = new Set();
 
         if (Array.isArray(allData)) {
           allData.forEach(p => {
-            // 1. Trazados de Línea (Solo línea roja, sin puntos grises)
-            if (p.kml_trazado_id) trazadoIdsSet.add(p.kml_trazado_id);
-            if (p.trazado_kml_id) trazadoIdsSet.add(p.trazado_kml_id); // Legacy field name check
-
-            // 2. Puntos de Referencia (Permite puntos grises)
+            if (p.kml_trazado_id) puntosIdsSet.add(p.kml_trazado_id);
+            if (p.trazado_kml_id) puntosIdsSet.add(p.trazado_kml_id);
             if (p.kml_puntos_id) puntosIdsSet.add(p.kml_puntos_id);
           });
         }
+        trazadoIdsSet.clear();
 
-        // --- PATCH TEMPORAL DEPURACION (Mantenido por seguridad) ---
-        // Si estamos en Quellouno y se cargó puntos, asegurar trazado
         if (puntosIdsSet.has(27) && !trazadoIdsSet.has(25)) {
-          console.log('[DEBUG PATCH] Detectado KMZ Puntos (27). Forzando inclusion de Trazado (25).');
           trazadoIdsSet.add(25);
         }
-        // ---------------------------------
 
-        if (allData.length > 0) {
-          console.log('[DEBUG Frontend Dashboard] KMLs Clasificados:', {
-            trazados: Array.from(trazadoIdsSet),
-            puntos: Array.from(puntosIdsSet)
-          });
-        }
-
-        // ... (resto cálculo avance) ...
-
-        // ... (código existente omitido) ...
-
-        // CALCULO DE AVANCE (reemplazando bloque omitido)
-        let maxProg = 0;
-        let totalLen = 0;
-
-        // Sumar longitud total de los tramos padres
-        if (parents && parents.length > 0) {
-          totalLen = parents.reduce((sum, t) => sum + (parseFloat(t.longitud_total) || 0), 0);
-        }
-
-        // Calcular maxProg basado en progresivas completadas
-        if (allData && allData.length > 0) {
-          // Filtramos solo las que tienen datos (estratos_perfil > 0)
-          const completadas = allData.filter(p => p.estratos_perfil && p.estratos_perfil.length > 0);
-          // Esto es una estimación simple: cono de avance count / total estimated stops? 
-          // O mejor: usar la lógica de longitud cubierta.
-          // Por simplicidad para el dashboard, usaremos la longitud del tramo proporcional
-          // Si tenemos 100 progresivas y 50 hechas, 50%?
-          // El código original usaba maxProg como metros cubiertos?
-          // Vamos a asumir que maxProg es el numero de progresivas completadas * 50m (si fuera estandar) 
-          // O simplemente usar el conteo.
-
-          // REIMPLEMENTACIÓN SEGURA:
-          // Usaremos el porcentaje de progresivas completadas vs total planificadas si es posible.
-          // O si totalLen es metros, necesitamos metros completados.
-
-          // Asumiremos que cada progresiva completada aporta "algo" a maxProg.
-          // Pero para evitar errores y complejidad, si totalLen es km, esto es dificil.
-
-          // FALLBACK SIMPLE para que no crashee:
-          // Si totalLen no está definido, lo definimos como 1 para evitar division por cero.
-
-          // Recuperamos la lógica original si es posible, o una aproximación.
-          // Si maxProg era la "distancia máxima alcanzada con datos", busquemos la progresiva más alta con datos.
-
-          if (completadas.length > 0) {
-            // Buscar la progresiva con mayor valor numérico que tenga datos
-            // Parseamos nombres
-            // Buscar la progresiva con mayor valor numérico que tenga datos
-            // Parseamos nombres
-            maxProg = completadas.reduce((max, p) => {
-              const val = parseToMeters(p.nombre || p.codigo);
-              // console.log(`[DEBUG Calc] P: ${p.nombre}, Val: ${val}, MaxCurrent: ${max}`);
-              return (val !== null && val > max) ? val : max;
-            }, 0);
-          }
-        }
-
-        // Definición de seguridad por si la lógica compleja falla o falta
-        if (typeof maxProg === 'undefined') maxProg = 0;
-        if (typeof totalLen === 'undefined' || totalLen === 0) totalLen = 10000; // Default 10km to avoid NaN if missing
-
-        const porcentaje = totalLen > 0 ? Math.min(Math.round((maxProg / totalLen) * 100), 100) : 0;
-
-        console.log('[DEBUG Dashboard Stats] MaxProg:', maxProg, 'TotalLen:', totalLen, 'Pct:', porcentaje);
-
-        // ACTUALIZAR ESTADOS CON LISTAS SEPARADAS
         setKmlTrazadoIdsStricto(Array.from(trazadoIdsSet));
         setKmlPuntosIdsPermisivo(Array.from(puntosIdsSet));
         setProgresivas(allData);
         setLoading(false);
+        setAvgCanteraDistance(avgDistance); // Need state
 
-        setAvanceStats({
-          val: porcentaje,
-          total: 100,
-          lastProg: formatMeters(maxProg) // Nuevo campo para mostrar
-        });
       };
 
       syncData();
@@ -305,7 +375,7 @@ export default function DashboardSuelos() {
           <i className="fas fa-globe-americas text-primary"></i>
           Mapa General del Proyecto
         </div>
-        <section className="map-section-premium" style={{ display: 'flex', overflow: 'hidden', height: '600px', position: 'relative' }}> {/* Flex Container */}
+        <section className="map-section-premium" style={{ display: 'flex', overflow: 'visible', height: '600px', position: 'relative', paddingRight: '15px' }}> {/* Flex Container with padding to prevent clipping */}
 
           {/* MAPA (Flex Item 1) */}
           <div style={{ flex: 1, position: 'relative', height: '100%', minWidth: 0 }}>
@@ -334,22 +404,24 @@ export default function DashboardSuelos() {
             style={{
               width: selectedMapItem ? '400px' : '0px',
               marginLeft: selectedMapItem ? '20px' : '0px', // Separación del mapa
+              // marginRight prop removed as parent padding handles it consistently
               borderRadius: '1rem', // Bordes redondeados
               position: 'relative',
               height: '100%',
               top: 0,
               backgroundColor: '#ffffff',
-              border: '2px solid #00409fff',
-              transition: 'width 0.3s ease-in-out, margin-left 0.3s ease-in-out', // Animar margen también
+              border: '2px solid #000000', // Black Border requested by user
+              transition: 'width 0.3s ease-in-out, margin-left 0.3s ease-in-out',
               overflow: 'hidden',
               flexShrink: 0,
               boxShadow: '-4px 0 6px -1px rgba(0, 0, 0, 0.05)',
-              zIndex: 1000
+              zIndex: 1000,
+              boxSizing: 'border-box'
             }}
           >
             {/* Contenido protegido por width > 0 visualmente, pero react renderiza si selectedMapItem existe */}
             {selectedMapItem && selectedMapItem.data && (
-              <div style={{ width: '400px', height: '100%', padding: '1.5rem', overflowY: 'auto', boxSizing: 'border-box' }}>
+              <div style={{ width: '100%', height: '100%', padding: '1.5rem', overflowY: 'auto', boxSizing: 'border-box' }}>
                 <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
                   <h3 style={{ margin: 0, color: '#1e293b', fontSize: '1.25rem' }}>{selectedMapItem.data.nombre || selectedMapItem.kmlData?.name || 'Progresiva'}</h3>
                   <button onClick={() => setSelectedMapItem(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.2rem' }}>
@@ -466,9 +538,9 @@ export default function DashboardSuelos() {
         {/* KPI 2: Canteras */}
         < div className="kpi-card-premium orange" >
           <div className="kpi-info">
-            <h3>Volumen Canteras</h3>
-            <p className="value">120K m³</p>
-            <p className="sub-text">Capacidad disponible</p>
+            <h3>Canteras Identificadas</h3>
+            <p className="value">{canterasMapData.length}</p>
+            <p className="sub-text">Total registradas</p>
           </div>
           <div className="kpi-viz">
             <i className="fas fa-cubes kpi-icon canteras"></i>
@@ -479,8 +551,8 @@ export default function DashboardSuelos() {
         < div className="kpi-card-premium blue" >
           <div className="kpi-info">
             <h3>Agua - Abastecimiento</h3>
-            <p className="value">85%</p>
-            <p className="sub-text">Demanda satisfecha</p>
+            <p className="value">--</p>
+            <p className="sub-text">Datos no disponibles</p>
           </div>
           <div className="kpi-viz">
             <i className="fas fa-tint kpi-icon agua"></i>
@@ -491,7 +563,7 @@ export default function DashboardSuelos() {
         < div className="kpi-card-premium indigo" >
           <div className="kpi-info">
             <h3>Distancia Promedio</h3>
-            <p className="value">25 km</p>
+            <p className="value">{avgCanteraDistance} km</p>
             <p className="sub-text">Cantera a Frente</p>
           </div>
           <div className="kpi-viz">
@@ -516,35 +588,43 @@ export default function DashboardSuelos() {
           <div className="chart-wrapper-premium">
             <Doughnut data={ensayosStatusData} options={mainChartOptions} />
             <div className="chart-center-text">
-              <div className="total-num">45</div>
+              <div className="total-num">{getTotalAssays()}</div>
               <div className="total-label">Ensayos</div>
             </div>
           </div>
 
           <div className="chart-legend-premium">
             <div className="legend-item">
-              <span><span className="legend-color" style={{ background: '#10b981' }}></span>Aprobados</span>
-              <strong>28 (62%)</strong>
+              <span><span className="legend-color" style={{ background: '#9ca3af' }}></span>Pendiente</span>
+              <strong>{getStatusCount(0)} ({getStatusPercent(0)}%)</strong>
             </div>
             <div className="legend-item">
-              <span><span className="legend-color" style={{ background: '#f59e0b' }}></span>Pendientes</span>
-              <strong>12 (27%)</strong>
+              <span><span className="legend-color" style={{ background: '#f59e0b' }}></span>En revisión</span>
+              <strong>{getStatusCount(1)} ({getStatusPercent(1)}%)</strong>
             </div>
             <div className="legend-item">
-              <span><span className="legend-color" style={{ background: '#ef4444' }}></span>Rechazados</span>
-              <strong>5 (11%)</strong>
+              <span><span className="legend-color" style={{ background: '#ef4444' }}></span>Rechazado</span>
+              <strong>{getStatusCount(2)} ({getStatusPercent(2)}%)</strong>
+            </div>
+            <div className="legend-item">
+              <span><span className="legend-color" style={{ background: '#10b981' }}></span>Aprobado</span>
+              <strong>{getStatusCount(3)} ({getStatusPercent(3)}%)</strong>
+            </div>
+            <div className="legend-item">
+              <span><span className="legend-color" style={{ background: '#3b82f6' }}></span>Completado</span>
+              <strong>{getStatusCount(4)} ({getStatusPercent(4)}%)</strong>
             </div>
           </div>
         </aside >
 
-        {/* PANEL DERECHO: LISTA DE CRONOLOGÍA (Static for now, visually updated) */}
+        {/* PANEL DERECHO: LISTA DE CRONOLOGÍA (Dynamic) */}
         < main className="list-panel-premium" >
           <div className="panel-header-premium">
             <h2>
               <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>
                 <i className="fas fa-clipboard-check"></i>
               </span>
-              Notificaciones
+              Notificaciones Recientes
             </h2>
             <button
               onClick={() => handleGoToEnsayosGeneral()}
@@ -555,64 +635,36 @@ export default function DashboardSuelos() {
           </div>
 
           <div className="cards-list-premium">
-            {/* Item 1 */}
-            <div className="resource-card-premium">
-              <div className="resource-icon-box">
-                <i className="fas fa-mountain"></i>
+            {recentAssays.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>
+                No hay ensayos recientes registrados.
               </div>
-              <div className="resource-info">
-                <span className="resource-name">Cantera "El Peñón" - Muestra M-201</span>
-                <div className="resource-meta">
-                  <span><i className="fas fa-layer-group me-1"></i> Grava-Arena (GW)</span>
-                  <span className="distance-tag"><i className="fas fa-road me-1"></i> 15.2 km</span>
-                </div>
-              </div>
-              <span className="badge-premium approved">Aprobado</span>
-            </div>
+            ) : (
+              recentAssays.map((ensayo, idx) => {
+                const statusClass = (ensayo.estado || 'pendiente').toLowerCase().includes('aprobado') ? 'approved' :
+                  (ensayo.estado || 'pendiente').toLowerCase().includes('rechazado') ? 'rejected' : 'pending';
+                const fechaStr = new Date(ensayo.fecha).toLocaleDateString();
 
-            {/* Item 2 */}
-            <div className="resource-card-premium">
-              <div className="resource-icon-box" style={{ background: '#ecfdf5', color: '#059669' }}>
-                <i className="fas fa-water"></i>
-              </div>
-              <div className="resource-info">
-                <span className="resource-name">Fuente "Río Seco" - Análisis Químico</span>
-                <div className="resource-meta">
-                  <span><i className="fas fa-heartbeat me-1"></i> PH: 7.5</span>
-                  <span className="distance-tag"><i className="fas fa-road me-1"></i> 8.1 km</span>
-                </div>
-              </div>
-              <span className="badge-premium pending">Pendiente Lab</span>
-            </div>
-
-            {/* Item 3 */}
-            <div className="resource-card-premium">
-              <div className="resource-icon-box" style={{ background: '#fff1f2', color: '#be123c' }}>
-                <i className="fas fa-mountain"></i>
-              </div>
-              <div className="resource-info">
-                <span className="resource-name">Cantera "Loma Sur" - Muestra M-204</span>
-                <div className="resource-meta">
-                  <span><i className="fas fa-layer-group me-1"></i> Arcilla (CL)</span>
-                  <span className="distance-tag"><i className="fas fa-road me-1"></i> 32.7 km</span>
-                </div>
-              </div>
-              <span className="badge-premium rejected">Rechazado</span>
-            </div>
-
-            {/* Item 4 */}
-            <div className="resource-card-premium">
-              <div className="resource-icon-box">
-                <i className="fas fa-vial"></i>
-              </div>
-              <div className="resource-info">
-                <span className="resource-name">Ensayo de Compactación - Km 12+500</span>
-                <div className="resource-meta">
-                  <span>Proctor Modificado</span>
-                </div>
-              </div>
-              <span className="badge-premium approved">Aprobado</span>
-            </div>
+                return (
+                  <div className="resource-card-premium" key={idx}>
+                    <div className="resource-icon-box" style={{
+                      background: statusClass === 'approved' ? '#ecfdf5' : statusClass === 'rejected' ? '#fff1f2' : '#fef3c7',
+                      color: statusClass === 'approved' ? '#059669' : statusClass === 'rejected' ? '#be123c' : '#d97706'
+                    }}>
+                      <i className="fas fa-vial"></i>
+                    </div>
+                    <div className="resource-info">
+                      <span className="resource-name">{ensayo.nombre_ensayo}</span>
+                      <div className="resource-meta">
+                        <span><i className="fas fa-map-marker-alt me-1"></i> {ensayo.sourceType}: {ensayo.sourceName}</span>
+                        <span className="distance-tag"><i className="far fa-calendar-alt me-1"></i> {fechaStr}</span>
+                      </div>
+                    </div>
+                    <span className={`badge-premium ${statusClass}`}>{ensayo.estado || 'Pendiente'}</span>
+                  </div>
+                );
+              })
+            )}
 
           </div>
         </main >
