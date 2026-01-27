@@ -563,7 +563,8 @@
 }
 
 .invvial-map-popup-card .popup-header {
-    background: var(--primary-gradient);
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%) !important;
+    /* Explicitly set to fix potential variable issue */
     border-bottom: none;
     padding: 12px;
     text-align: center;
@@ -768,4 +769,119 @@
     font-size: 13px;
     padding: 0;
     margin-left: 5px;
+}
+
+/* --- DASHBOARD POPUP STYLES (Scoped for DashboardMap) --- */
+.dashboard-map-container .leaflet-popup-content-wrapper {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    border: none !important;
+}
+
+.dashboard-map-container .leaflet-popup-content {
+    margin: 0 !important;
+    width: 280px !important;
+    line-height: inherit !important;
+}
+
+.dashboard-map-container .leaflet-popup-tip-container {
+    display: none !important;
+}
+
+.invvial-map-popup-card-dash {
+    width: 280px;
+    font-family: 'Arial', sans-serif;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.invvial-map-popup-card-dash .popup-header-dash {
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    /* Blue Gradient manual */
+    border-bottom: none;
+    padding: 12px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: white;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.dashboard-map-container .leaflet-popup-close-button {
+    color: white !important;
+    font-size: 24px !important;
+    font-weight: 300 !important;
+    top: 9px !important;
+    right: 18px !important;
+    text-shadow: none !important;
+    opacity: 0.9 !important;
+    z-index: 100 !important;
+    width: 24px !important;
+    height: 24px !important;
+    line-height: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+}
+
+.dashboard-map-container .leaflet-popup-close-button:hover {
+    color: #fff !important;
+    opacity: 1 !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 50%;
+}
+
+.invvial-map-popup-card-dash .popup-content-dash {
+    padding: 0;
+}
+
+.invvial-map-popup-card-dash .popup-image-container-dash {
+    width: 100%;
+    height: 160px;
+    background: #eee;
+    position: relative;
+    overflow: hidden;
+}
+
+.invvial-map-popup-card-dash .popup-details-grid-dash {
+    padding: 12px;
+    font-size: 12px;
+}
+
+.invvial-map-popup-card-dash .detail-row-dash {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 4px;
+}
+
+.invvial-map-popup-card-dash .detail-row-dash:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.invvial-map-popup-card-dash .label-dash {
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+}
+
+.invvial-map-popup-card-dash .value-dash {
+    text-align: right;
+    color: #1e293b;
+    font-weight: 500;
 }

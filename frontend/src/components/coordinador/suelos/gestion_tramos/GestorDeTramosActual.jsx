@@ -8,6 +8,7 @@ import FormularioEnsayo from '../ensayos/FormularioEnsayo';
 import EstratoItem from '../estratos/EstratoItem'; // Import the new EstratoItem component
 import PerfilEstratigraficoModal from '../estratos/PerfilEstratigraficoModal'; // Import the new PerfilEstratigraficoModal component
 import VisorGraficosProgresivaModal from '../estratos/VisorGraficosProgresivaModal'; // NEW: Import VisorGraficosProgresivaModal
+import ProgresivaImageGalleryModal from './ProgresivaImageGalleryModal'; // Importar Modal de Galería
 
 // --- Pagination Component ---
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
@@ -91,7 +92,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 
 
 // Memoized ProgressivaItem Component
-const ForwardedProgressivaItem = React.forwardRef(({ progresiva, expandedProgresivas, toggleProgresiva, expandedEstratos, toggleEstrato, handleGestionarEstratos, formatCodigoForDisplay, handleEditProgresiva, handleOpenEnsayoModal, handleDeleteEnsayo, handleEditEnsayo, handleViewEnsayo, handleViewGraficos }, ref) => { // MODIFIED: handleViewPerfil -> handleViewGraficos
+const ForwardedProgressivaItem = React.forwardRef(({ progresiva, expandedProgresivas, toggleProgresiva, expandedEstratos, toggleEstrato, handleGestionarEstratos, formatCodigoForDisplay, handleEditProgresiva, handleOpenEnsayoModal, handleDeleteEnsayo, handleEditEnsayo, handleViewEnsayo, handleViewGraficos, handleViewGallery }, ref) => { // MODIFIED: handleViewGallery added
     return (
         <div ref={ref} key={progresiva.id} className={`progresiva-item ${expandedProgresivas[progresiva.id] ? 'progresiva-expanded' : ''}`}>
 
@@ -157,6 +158,9 @@ const ForwardedProgressivaItem = React.forwardRef(({ progresiva, expandedProgres
                         <button type="button" onClick={(e) => { e.stopPropagation(); handleViewGraficos(progresiva); }} className="btn btn-outline"> {/* MODIFIED */}
                             <i className="fas fa-chart-bar"></i> Ver Gráficos
                         </button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); handleViewGallery(progresiva); }} className="btn btn-outline" style={{ marginLeft: '5px' }}>
+                            <i className="fas fa-images"></i> Ver Galería
+                        </button>
                         <button type="button" onClick={() => handleGestionarEstratos(progresiva)} className="btn btn-outline">
                             <i className="fas fa-plus"></i> Añadir Estrato
                         </button>
@@ -189,7 +193,7 @@ const ProgressivaItem = React.memo(ForwardedProgressivaItem);
 export default function GestorDeTramosActual() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { selectedProjectId, user } = useAuth();
+    const { selectedProjectId, user, selectedProjectName, selectProject } = useAuth();
     const [tramos, setTramos] = useState([]);
     const [tramoSeleccionado, setTramoSeleccionado] = useState(null);
     const [subProgresivas, setSubProgresivas] = useState([]);
@@ -197,6 +201,22 @@ export default function GestorDeTramosActual() {
     const [loadingProgresivas, setLoadingProgresivas] = useState(false);
     const [, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('progresivas');
+
+    // --- AUTO-SWITCH PROJECT LOGIC (Deep Linking) ---
+    useEffect(() => {
+        if (location.state?.selectedProjectId && selectProject) {
+            const targetId = String(location.state.selectedProjectId);
+            const currentId = selectedProjectId ? String(selectedProjectId) : null;
+
+            if (targetId !== currentId) {
+                console.log('[GestorDeTramos] Switching Project Context to:', targetId);
+                selectProject(
+                    location.state.selectedProjectId,
+                    location.state.selectedProjectName || 'Auto-Selected Project'
+                );
+            }
+        }
+    }, [location.state, selectedProjectId, selectProject]);
 
     // --- Pagination State ---
     const [currentPage, setCurrentPage] = useState(1);
@@ -239,6 +259,7 @@ export default function GestorDeTramosActual() {
 
     // NEW: State for graphics modal
     const [viewingGraficosFor, setViewingGraficosFor] = useState(null);
+    const [viewingGalleryFor, setViewingGalleryFor] = useState(null); // Nuevo estado para la galería
 
     const toggleEnsayos = (estratoId) => {
         setExpandedEnsayos(prev => ({ ...prev, [estratoId]: !prev[estratoId] }));
@@ -394,17 +415,22 @@ export default function GestorDeTramosActual() {
         const progresivaId = state.activeProgresivaId || state.progresivaId || state.openProgresivaId;
         const estratoId = state.estratoId;
 
-        console.log('>>> [GestorDeTramos] Deep Link Analysis:', { tramoId, progresivaId, estratoId });
-
         // Ensure strictly integer comparison if IDs are numbers
         const pId = progresivaId ? Number(progresivaId) : null;
         const tId = tramoId ? Number(tramoId) : null;
 
-        if (tId && tramos.length > 0) {
-            const tramoToSelect = tramos.find(t => t.id === tId);
+        if (tId) {
+            console.log('[DEBUG DeepLink] Intentando seleccionar tramo ID:', tId);
+            console.log('[DEBUG DeepLink] Tramos disponibles:', tramos.map(t => ({ id: t.id, nombre: t.nombre })));
+
+            // Usar comparación laxa (==) para soportar IDs numéricos y string
+            const tramoToSelect = tramos.find(t => t.id == tId);
+
+            console.log('[DEBUG DeepLink] Resultado búsqueda:', tramoToSelect);
 
             // Case 1: Switching Tramos or No Tramo Selected
-            if (tramoToSelect && (!tramoSeleccionado || tramoSeleccionado.id !== tId)) {
+            if (tramoToSelect && (!tramoSeleccionado || tramoSeleccionado.id != tId)) {
+                console.log('[DEBUG DeepLink] Ejecutando setTramoSeleccionado (Cambio de tramo)...');
                 setTramoSeleccionado(tramoToSelect);
                 setActiveTab('progresivas');
 
@@ -438,20 +464,15 @@ export default function GestorDeTramosActual() {
             // Case 2: Tramo Already Selected - Just Need to Expand/Scroll
             else if (tramoSeleccionado && tramoSeleccionado.id === tId && pId) {
                 const handleExistingTramoDeepLink = async () => {
-                    console.log('>>> [GestorDeTramos] Case 2: Handling Valid Deep Link for pId:', pId);
                     try {
                         const headers = getAuthHeaders();
                         // Verify page just in case
                         const res = await axios.get(`${API_URL}/api/progresivas/${pId}/page`, { headers });
                         const { page } = res.data;
-                        console.log('>>> [GestorDeTramos] Page Check:', { apiPage: page, currentPage });
 
                         // Force fetch if page is different OR to ensure children are loaded
                         if (page !== currentPage) {
-                            console.log('>>> [GestorDeTramos] Pages mismatch, fetching page:', page);
                             await fetchProgresivas(tramoSeleccionado.id, page);
-                        } else {
-                            console.log('>>> [GestorDeTramos] Page matches, proceeding to expand.');
                         }
 
                         // Force expansion logic even if already expanded (to trigger scroll effects if needed)
@@ -462,15 +483,12 @@ export default function GestorDeTramosActual() {
                         // Trigger Scroll
                         setTimeout(() => {
                             const el = progresivaRefs.current[pId];
-                            console.log('>>> [GestorDeTramos] Attempting Scroll. Ref found?', !!el);
 
                             if (el) {
                                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 // Add a temporary highlight class if desired
                                 el.classList.add('highlight-pulse');
                                 setTimeout(() => el.classList.remove('highlight-pulse'), 2000);
-                            } else {
-                                console.warn('>>> [GestorDeTramos] SCROLL FAILED: Ref not found for pId', pId);
                             }
                         }, 800); // Increased delay slightly to be safe
 
@@ -677,6 +695,10 @@ export default function GestorDeTramosActual() {
     const handleViewGraficos = (progresiva) => {
         setViewingGraficosFor(progresiva);
     };
+
+    const handleViewGallery = (progresiva) => {
+        setViewingGalleryFor(progresiva);
+    };
     // ***************************************************
 
 
@@ -791,6 +813,18 @@ export default function GestorDeTramosActual() {
                 />
             )}
 
+            {viewingGalleryFor && (
+                <ProgresivaImageGalleryModal
+                    isOpen={!!viewingGalleryFor}
+                    onClose={() => setViewingGalleryFor(null)}
+                    progresiva={viewingGalleryFor}
+                    onDataChange={() => {
+                        // Opcional: Recargar progresivas si se necesita actualizar contadores de fotos
+                        if (tramoSeleccionado) fetchProgresivas(tramoSeleccionado.id, currentPage);
+                    }}
+                />
+            )}
+
             {(loadingProgresivas || submitting || isLoadingListado) && (
                 <div className="loading-overlay">
                     <div className="loading-spinner"></div>
@@ -867,6 +901,7 @@ export default function GestorDeTramosActual() {
                                                 handleEditEnsayo={handleEditEnsayo}
                                                 handleViewEnsayo={handleViewEnsayo}
                                                 handleViewGraficos={handleViewGraficos}
+                                                handleViewGallery={handleViewGallery}
                                                 selectedProgresivaId={selectedProgresivaId}
                                                 ref={el => progresivaRefs.current[progresiva.id] = el}
                                             />

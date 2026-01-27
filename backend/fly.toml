@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for backend-solitary-fire-911 on 2025-12-24T10:04:20-05:00
+# fly.toml app configuration file generated for backendgeoportal on 2026-01-21T10:43:25-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'backend-solitary-fire-911'
+app = 'backendgeoportal'
 primary_region = 'gru'
 
 [build]
@@ -18,6 +18,7 @@ primary_region = 'gru'
   processes = ['app']
 
 [[vm]]
-  memory = '16gb' 
+  memory = '16gb'
   cpu_kind = 'performance'
-  cpus = 8  
+  cpus = 8
+  memory_mb = 16384

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom'; // Import ReactDOM for portals
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
@@ -48,6 +49,7 @@ import GeoTestPage from './components/coordinador/ingeneria/trafico/GeoTestPage.
 import TestMapWithRoute from './components/coordinador/testmapa'; // <-- Importar componente de mapa de prueba
 import Geoite from './components/coordinador/pruebas/geoite'; // <-- Importar componente de mapa de prueba
 import Vialds from './components/coordinador/ingeneria/invvial/vial.jsx'; // <-- NUEVO: Importar Vialds
+import Geologia from './components/coordinador/ingeneria/geologia/Geologia.jsx'; // <-- NUEVO: Importar Geologia
 
 // Ensayos
 import Ensayos from './ensayos/layout.jsx';
@@ -90,13 +92,13 @@ function AppContent() {
 
     const [isInitialViz, setIsInitialViz] = useState(false);
 
-    useEffect(() => {
-        // Se cambió 'showAmigoSecretoViz' a 'showNewYearViz'
-        if (sessionStorage.getItem('showNewYearViz') === 'true' && location.pathname !== '/') {
-            setIsInitialViz(true);
-            sessionStorage.removeItem('showNewYearViz');
-        }
-    }, [location.pathname]);
+    // useEffect(() => {
+    //     // Se cambió 'showAmigoSecretoViz' a 'showNewYearViz'
+    //     if (sessionStorage.getItem('showNewYearViz') === 'true' && location.pathname !== '/') {
+    //         setIsInitialViz(true);
+    //         sessionStorage.removeItem('showNewYearViz');
+    //     }
+    // }, [location.pathname]);
 
     useEffect(() => {
         const interceptor = axios.interceptors.response.use(
@@ -146,10 +148,6 @@ function AppContent() {
 
     return (
         <div className="principal">
-            {isInitialViz && ReactDOM.createPortal(
-                <NewYearCountdown onClose={handleCloseInitialViz} />,
-                document.getElementById('overlay-root')
-            )}
             <Routes>
                 {/* Login */}
                 <Route path="/" element={<Login />} />
@@ -200,6 +198,9 @@ function AppContent() {
                 {/* NUEVO: Ruta para Inventario Vial */}
                 <Route path="/ingenieria/inventario-vial" element={<RutaPrivada><Layout><Vialds /></Layout></RutaPrivada>} />
 
+                {/* NUEVO: Ruta para Geología */}
+                <Route path="/ingenieria/geologia" element={<RutaPrivada><Layout><Geologia /></Layout></RutaPrivada>} />
+
                 {/* Ruta de prueba para el mapa */}
                 <Route path="/test-map" element={<RutaPrivada><Layout><TestMapWithRoute /></Layout></RutaPrivada>} />
 
@@ -216,9 +217,9 @@ function AppContent() {
                 {/* Página No Encontrada */}
                 <Route path="*" element={<NotFound />} />
             </Routes>
-            <div className="app-version">
+            {/* <div className="app-version">
                 Versión: 0.1.0-alpha.3
-            </div>
+            </div> */}
             {showProjectSelectionModal && <ProjectSelectionModal />}
         </div>
     );

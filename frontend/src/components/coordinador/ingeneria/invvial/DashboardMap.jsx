@@ -7,6 +7,7 @@ import { DOMParser } from 'xmldom';
 import L from 'leaflet';
 import axios from 'axios';
 import * as turf from '@turf/turf'; // Import Turf
+import './ExternalView.css'; // Import shared styles for popups
 
 // --- Helper for Validating Coordinates ---
 const isValidCoordinate = (lat, lng) => {
@@ -209,10 +210,16 @@ const DashboardMap = ({ projectId, kmlUrl, mapData, filters, calibrations }) => 
 
     // --- Calculate Coords from Progressive using Calibration ---
     const calculateCoords = (progresiva) => {
-        if (!progresiva || !kmlRoutes || kmlRoutes.length === 0) return null;
+        if (!progresiva || !kmlRoutes || kmlRoutes.length === 0) {
+            console.log("calculateCoords abort: missing prog or routes", { progresiva, routesLen: kmlRoutes?.length });
+            return null;
+        }
 
         const targetMeters = progressiveToMeters(progresiva);
-        if (isNaN(targetMeters)) return null;
+        if (isNaN(targetMeters)) {
+            console.log("calculateCoords abort: invalid targetMeters", targetMeters);
+            return null;
+        }
 
         let selectedRoute = null;
         let startMeters = 0;
@@ -281,7 +288,7 @@ const DashboardMap = ({ projectId, kmlUrl, mapData, filters, calibrations }) => 
 
 
     return (
-        <div style={{ height: '100%', width: '100%', borderRadius: '8px', overflow: 'hidden', position: 'relative' }}>
+        <div style={{ height: '100%', width: '100%', borderRadius: '8px', overflow: 'hidden', position: 'relative' }} className="dashboard-map-container">
             <MapContainer
                 center={[-13.5, -71.9]}
                 zoom={10}
@@ -296,8 +303,8 @@ const DashboardMap = ({ projectId, kmlUrl, mapData, filters, calibrations }) => 
                 {/* KML Routes */}
                 {/* KML Layer via GeoJSON Component */}
                 {kmlGeoJson && (
-                    <GeoJSON 
-                        key={kmlUrl} 
+                    <GeoJSON
+                        key={kmlUrl}
                         data={kmlGeoJson}
                         style={(feature) => {
                             return {
@@ -307,9 +314,9 @@ const DashboardMap = ({ projectId, kmlUrl, mapData, filters, calibrations }) => 
                             };
                         }}
                         onEachFeature={(feature, layer) => {
-                             if (feature.properties && feature.properties.name) {
+                            if (feature.properties && feature.properties.name) {
                                 layer.bindTooltip(feature.properties.name, { sticky: true });
-                             }
+                            }
                         }}
                     />
                 )}
@@ -317,6 +324,7 @@ const DashboardMap = ({ projectId, kmlUrl, mapData, filters, calibrations }) => 
                 {/* Inventory Points */}
                 {mapData && filters && Object.keys(mapData).map(key => {
                     if (!filters[key] || !Array.isArray(mapData[key])) return null;
+                    console.log(`Processing key: ${key}, count: ${mapData[key].length}`); // DEBUG
 
                     return mapData[key].map(point => {
                         if (!point) return null;
@@ -339,13 +347,55 @@ const DashboardMap = ({ projectId, kmlUrl, mapData, filters, calibrations }) => 
                                 key={key + "-" + point.id}
                                 position={position}
                                 icon={getIcon(key)}
+                                eventHandlers={{
+                                    click: (e) => {
+                                        const map = e.target._map;
+                                        map.flyTo(e.latlng, 15, { duration: 1.5 });
+                                    }
+                                }}
                             >
-                                <Popup>
-                                    <div style={{ fontSize: '12px', textAlign: 'center' }}>
-                                        <strong>{key.toUpperCase().replace('_', ' ')}</strong><br />
-                                        Código: {point.codigo || 'S/C'}<br />
-                                        {point.subType && <div>Tipo: {point.subType}</div>}<br />
-                                        {point.progresiva && <div>Prog: {point.progresiva}</div>}
+                                <Popup className="invvial-popup-override">
+                                    <div className="invvial-map-popup-card">
+                                        <div className="popup-header">
+                                            {key === 'alcantarillas' ? 'OBRAS DE ARTE' :
+                                                key === 'badenes' ? 'OBRAS DE ARTE' :
+                                                    key === 'puentes' ? 'OBRAS DE ARTE' :
+                                                        key === 'muros' ? 'OBRAS DE ARTE' :
+                                                            key.toUpperCase().replace('_', ' ')}
+                                        </div>
+                                        <div className="popup-content">
+                                            {/* Image Placeholder or Actual Image if available in data */}
+                                            {point.imageUrls && point.imageUrls.length > 0 && (
+                                                <div className="popup-image-container">
+                                                    <img
+                                                        src={typeof point.imageUrls[0] === 'string' ? point.imageUrls[0] : point.imageUrls[0].url}
+                                                        alt="Preview"
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            <div className="popup-details-grid">
+                                                <div className="detail-row">
+                                                    <span className="label">CÓDIGO:</span>
+                                                    <span className="value">{point.codigo || 'S/C'}</span>
+                                                </div>
+                                                {point.subType && (
+                                                    <div className="detail-row">
+                                                        <span className="label">TIPO:</span>
+                                                        <span className="value">{point.subType}</span>
+                                                    </div>
+                                                )}
+                                                <div className="detail-row">
+                                                    <span className="label">UBICACIÓN:</span>
+                                                    <span className="value">{point.progresiva || '---'}</span>
+                                                </div>
+                                                <div className="detail-row">
+                                                    <span className="label">COORDENADA:</span>
+                                                    <span className="value">{point.lat.toFixed(6)}, {point.lng.toFixed(6)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </Popup>
                             </Marker>

@@ -4,6 +4,10 @@ const { v4: uuidv4 } = require('uuid');
 const ensayosService = require('./ensayosService'); // Importar ensayosService
 const fsp = require('fs').promises;
 const kmlService = require('./kmlService'); // NEW: Import kmlService
+const { put, del } = require('@vercel/blob');
+const AdmZip = require('adm-zip');
+const { DOMParser } = require('xmldom');
+const path = require('path');
 
 const importarConEnsayos = async ({ parentProgresiva, generatedChildren, estratosSeleccionados }) => {
     if (!parentProgresiva || !generatedChildren || generatedChildren.length === 0) {
@@ -342,7 +346,7 @@ const getSubProgresivas = async (req, res) => {
 
         const baseQuery = `
             SELECT
-                p.id, p.codigo, COALESCE(p.nombre, '') AS nombre, p.descripcion,
+                p.id, p.parent_id, p.proyecto_id, p.codigo, COALESCE(p.nombre, '') AS nombre, p.descripcion,
                 p.progresiva_inicial, p.progresiva_final,
                 p.estado, p.creado_en, p.actualizado_en,
                 p.coordenada_este, p.coordenada_norte,
@@ -453,7 +457,7 @@ const getAllSubProgresivas = async (req, res) => {
 
         const progresivasResult = await db.query(`
             SELECT
-                p.id, p.codigo, COALESCE(p.nombre, '') AS nombre, p.descripcion,
+                p.id, p.parent_id, p.proyecto_id, p.codigo, COALESCE(p.nombre, '') AS nombre, p.descripcion,
                 p.progresiva_inicial, p.progresiva_final,
                 p.estado, p.creado_en, p.actualizado_en,
                 p.coordenada_este, p.coordenada_norte,
@@ -1372,6 +1376,184 @@ const deleteKmlFromProgresiva = async (progresivaId) => {
 };
 
 
+// --- MANEJO DE IMAGENES Y DOCX ---
+
+const uploadImage = async (file, userId) => {
+    // Check ENV
+    if (!process.env.BLOB_READ_WRITE_TOKEN_SUELOS && !process.env.BLOB_READ_WRITE_TOKEN) {
+        throw new Error("Falta configurar BLOB_READ_WRITE_TOKEN_SUELOS en variables de entorno.");
+    }
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS || process.env.BLOB_READ_WRITE_TOKEN;
+
+    const { url } = await put(`progresivas/${userId}/${file.originalname}`, file.buffer, {
+        access: 'public',
+        token: blobToken
+    });
+    return url;
+};
+
+const addImagenToProgresiva = async (progresivaId, imagenUrl, descripcion, nombreArchivo) => {
+    const query = `
+        INSERT INTO progresiva_imagenes (progresiva_id, imagen_url, descripcion, nombre_archivo)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+    `;
+    const res = await db.query(query, [progresivaId, imagenUrl, descripcion, nombreArchivo]);
+    return res.rows[0];
+};
+
+const getImagenesByProgresivaId = async (progresivaId) => {
+    const query = `SELECT * FROM progresiva_imagenes WHERE progresiva_id = $1 ORDER BY created_at DESC`;
+    const res = await db.query(query, [progresivaId]);
+    return res.rows;
+};
+
+const deleteImagenProgresiva = async (imagenId) => {
+    // Primero obtener URL para borrar del blob
+    const imgQuery = 'SELECT imagen_url FROM progresiva_imagenes WHERE id = $1';
+    const imgRes = await db.query(imgQuery, [imagenId]);
+
+    if (imgRes.rows.length === 0) throw new Error('Imagen no encontrada');
+    const { imagen_url } = imgRes.rows[0];
+
+    // Borrar de Vercel Blob (si es posible, requiere token)
+    try {
+        const blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS || process.env.BLOB_READ_WRITE_TOKEN;
+        if (blobToken) await del(imagen_url, { token: blobToken });
+    } catch (e) {
+        console.warn("No se pudo borrar del blob, posiblemente ya borrado o sin permisos:", e.message);
+    }
+
+    // Borrar de DB
+    await db.query('DELETE FROM progresiva_imagenes WHERE id = $1', [imagenId]);
+    return { status: 'ok', id: imagenId };
+};
+
+const processDocxUpload = async (docFile, tramoId, userId) => {
+    // 1. Unzip
+    const zip = new AdmZip(docFile.buffer);
+
+    // 2. Parse rels to map rId -> filename
+    const relsEntry = zip.getEntry('word/_rels/document.xml.rels');
+    if (!relsEntry) throw new Error('No se encontró document.xml.rels en el DOCX');
+
+    const relsXml = relsEntry.getData().toString('utf8');
+    const relsDoc = new DOMParser().parseFromString(relsXml, 'text/xml');
+    const relationships = relsDoc.getElementsByTagName('Relationship');
+
+    const imageMap = {}; // rId -> target (media/image1.jpeg)
+    for (let i = 0; i < relationships.length; i++) {
+        const rel = relationships[i];
+        const type = rel.getAttribute('Type');
+        if (type && type.includes('relationships/image')) {
+            const id = rel.getAttribute('Id');
+            const target = rel.getAttribute('Target');
+            imageMap[id] = target;
+        }
+    }
+
+    // 3. Parse document.xml by PARAGRAPHS to fix fragmentation
+    const docEntry = zip.getEntry('word/document.xml');
+    if (!docEntry) throw new Error('Documento XML principal no encontrado');
+    const docXml = docEntry.getData().toString('utf8');
+    const doc = new DOMParser().parseFromString(docXml, 'text/xml');
+
+    // Helper to extract clean text from a node
+    const getTextFromNode = (node) => {
+        let text = '';
+        const textNodes = node.getElementsByTagName('w:t');
+        for (let i = 0; i < textNodes.length; i++) {
+            text += textNodes[i].textContent;
+        }
+        return text;
+    };
+
+    // Helper to find images in a node
+    const getImagesFromNode = (node) => {
+        const images = [];
+        const blips = node.getElementsByTagName('a:blip');
+        for (let i = 0; i < blips.length; i++) {
+            const embedId = blips[i].getAttribute('r:embed');
+            if (embedId) images.push(embedId);
+        }
+        return images;
+    };
+
+    // New Strategy: Process all PARAGRAPHS (w:p) sequentially.
+    const paragraphs = doc.getElementsByTagName('w:p');
+    const sequence = [];
+
+    for (let i = 0; i < paragraphs.length; i++) {
+        const p = paragraphs[i];
+        const text = getTextFromNode(p);
+        const images = getImagesFromNode(p);
+
+        if (text.trim() || images.length > 0) {
+            sequence.push({ text: text.trim(), images });
+        }
+    }
+
+    let bufferImages = [];
+    let processedCount = 0;
+
+    const childrenRes = await db.query('SELECT id, codigo, progresiva_inicial FROM progresivas WHERE parent_id = $1', [tramoId]);
+    const children = childrenRes.rows;
+
+    const normalizeProg = (txt) => {
+        const m = txt.match(/(\d+)\s*\+\s*(\d+)/);
+        if (m) return (parseInt(m[1]) * 1000 + parseInt(m[2]));
+        return null;
+    };
+
+    // 4. Process the sequence
+    for (const item of sequence) {
+        // First, add any images found in this paragraph to the buffer
+        if (item.images.length > 0) {
+            bufferImages.push(...item.images);
+        }
+
+        // Then, check if this paragraph contains a matching progresiva text
+        if (item.text) {
+            const pVal = normalizeProg(item.text);
+            if (pVal !== null) {
+                const match = children.find(c => Math.abs(c.progresiva_inicial - pVal) < 1);
+
+                if (match) {
+                    if (bufferImages.length > 0) {
+                        for (const rId of bufferImages) {
+                            const imgPath = imageMap[rId];
+                            if (imgPath) {
+                                const zipPath = 'word/' + imgPath;
+                                const imgEntry = zip.getEntry(zipPath);
+                                if (imgEntry) {
+                                    const imgBuffer = imgEntry.getData();
+                                    const fileObj = {
+                                        buffer: imgBuffer,
+                                        originalname: `import_${match.codigo}_${path.basename(imgPath)}`
+                                    };
+
+                                    try {
+                                        const url = await uploadImage(fileObj, userId);
+                                        await addImagenToProgresiva(match.id, url, item.text, fileObj.originalname);
+                                        processedCount++;
+                                    } catch (e) {
+                                        console.error("Failed to upload image from docx", e);
+                                    }
+                                }
+                            }
+                        }
+                        bufferImages = [];
+                    }
+                }
+            }
+        }
+    }
+
+    return { processed: processedCount };
+};
+
+// ------------------------------
+
 const createProgresiva = async (data) => {
     const {
         proyecto_id, parent_id, codigo, nombre, descripcion,
@@ -1467,4 +1649,9 @@ module.exports = {
 
     deleteKmlFromProgresiva, // NEW: Export the delete function
 
+    uploadImage,
+    addImagenToProgresiva,
+    getImagenesByProgresivaId,
+    deleteImagenProgresiva,
+    processDocxUpload,
 };

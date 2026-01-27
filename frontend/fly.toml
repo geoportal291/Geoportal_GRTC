@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for geoportalbetav2 on 2025-12-24T09:04:29-05:00
+# fly.toml app configuration file generated for geoportalbetav3 on 2026-01-21T10:19:10-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'geoportalbetav2'
+app = 'geoportalbetav3'
 primary_region = 'gru'
 
 [build]
@@ -13,11 +13,12 @@ primary_region = 'gru'
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
   processes = ['app']
 
 [[vm]]
-  memory = '32gb'
-  cpu_kind = 'performance'
-  cpus = 16
-  memory_mb = 32768
+  memory = '4gb'
+  cpu_kind = "shared"
+  cpus = 2
+  memory_mb = 4096
+

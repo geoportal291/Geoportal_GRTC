@@ -20,6 +20,7 @@ const PermisosManagement = () => {
     const [generalAccessType, setGeneralAccessType] = useState('none'); // 'none', 'read', 'read_edit'
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [global2FA, setGlobal2FA] = useState(true); // Nuevo estado para 2FA global
 
     const getAuthHeaders = useCallback(() => {
         if (!user || !user.token) return {};
@@ -37,15 +38,21 @@ const PermisosManagement = () => {
             return;
         }
         try {
-            const [rolesRes, usersRes, permsRes] = await Promise.all([
+            const [rolesRes, usersRes, permsRes, settingsRes] = await Promise.all([
                 axios.get(`${API_BASE_URL}/roles`, getAuthHeaders()),
                 axios.get(`${API_BASE_URL}/api/users/simple`, getAuthHeaders()),
-                axios.get(`${API_BASE_URL}/api/permissions/all`, getAuthHeaders())
+                axios.get(`${API_BASE_URL}/api/permissions/all`, getAuthHeaders()),
+                axios.get(`${API_BASE_URL}/api/settings/global`, getAuthHeaders())
             ]);
 
             setRoles(rolesRes.data);
             setUsers(usersRes.data);
             setPermissions(permsRes.data);
+
+            if (settingsRes.data && settingsRes.data.require_2fa_global !== undefined) {
+                setGlobal2FA(settingsRes.data.require_2fa_global === 'true');
+            }
+
             setLoading(false);
         } catch (err) {
             console.error('Error al cargar datos iniciales:', err);
@@ -168,16 +175,55 @@ const PermisosManagement = () => {
         }
     };
 
+    const handleToggleGlobal2FA = async () => {
+        const newValue = !global2FA;
+        /* Optimistic update */
+        setGlobal2FA(newValue);
+
+        try {
+            await axios.post(`${API_BASE_URL}/api/settings/global`, {
+                key: 'require_2fa_global',
+                value: newValue ? 'true' : 'false'
+            }, getAuthHeaders());
+            alertify.success(`2FA ${newValue ? 'activado' : 'desactivado'} globalmente.`);
+        } catch (err) {
+            console.error('Error al actualizar configuración:', err);
+            setGlobal2FA(!newValue); // Revert on error
+            alertify.error('Error al actualizar la configuración.');
+        }
+    };
+
     return (
         <div className="permisos-container">
             <header className="permisos-header">
                 <h1><FaUserShield /> Gestión de Permisos</h1>
             </header>
 
+            {/* Configuración Global 2FA */}
+            <div style={{ backgroundColor: '#2d3748', padding: '15px', borderRadius: '8px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <FaKey color="#ecc94b" size={20} />
+                    <div>
+                        <h3 style={{ margin: 0, color: 'white' }}>Autenticación de Dos Factores (2FA)</h3>
+                        <p style={{ margin: 0, color: '#a0aec0', fontSize: '14px' }}>
+                            {global2FA ? 'Activado para todos los usuarios' : 'Desactivado (Login directo)'}
+                        </p>
+                    </div>
+                </div>
+                <label className="switch">
+                    <input
+                        type="checkbox"
+                        checked={global2FA}
+                        onChange={handleToggleGlobal2FA}
+                    />
+                    <span className="slider round"></span>
+                </label>
+            </div>
+
             <div className="permisos-selector">
                 <div className="selector-group">
                     <label htmlFor="select-role">Seleccionar Rol:</label>
-                    <select 
+                    <select
                         id="select-role"
                         value={selectedRole}
                         onChange={(e) => { setSelectedRole(e.target.value); setSelectedUser(''); }}
@@ -205,7 +251,7 @@ const PermisosManagement = () => {
                 </div>
                 <div className="selector-group">
                     <label htmlFor="select-user">Seleccionar Usuario:</label>
-                    <select 
+                    <select
                         id="select-user"
                         value={selectedUser}
                         onChange={(e) => { setSelectedUser(e.target.value); setSelectedRole(''); }}

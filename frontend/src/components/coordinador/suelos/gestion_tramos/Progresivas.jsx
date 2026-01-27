@@ -8,14 +8,32 @@ import 'alertifyjs/build/css/alertify.min.css';
 import 'alertifyjs/build/css/themes/default.min.css';
 import SeleccionarEstratosModal from '../estratos/SeleccionarEstratosModal';
 import KmlMapModal from '../mapa/KmlMapModal';
-import * as XLSX from 'xlsx';
+import ProgresivaImageGalleryModal from './ProgresivaImageGalleryModal';
 import { kml } from '@tmcw/togeojson';
 import { DOMParser } from 'xmldom';
 import { fromLatLon } from 'utm';
 import JSZip from 'jszip';
+import * as XLSX from 'xlsx';
 
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import useProgresivasData from '../../../../hooks/useProgresivasData';
+
+const CameraIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+    <circle cx="12" cy="13" r="4"></circle>
+  </svg>
+);
+
+const WordIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-file-text">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+    <polyline points="14 2 14 8 20 8"></polyline>
+    <line x1="16" y1="13" x2="8" y2="13"></line>
+    <line x1="16" y1="17" x2="8" y2="17"></line>
+    <polyline points="10 9 9 9 8 9"></polyline>
+  </svg>
+);
 
 const formatNumber = (num) => {
   if (typeof num === 'number') {
@@ -202,8 +220,22 @@ const getLadoInitial = (ladoDisplayName) => {
 const Progresivas = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, selectedProjectId, selectedProjectName } = useAuth();
+  const { user, selectedProjectId, selectedProjectName, selectProject } = useAuth();
   const isAdmin = user?.rol_nombre === 'ADMIN';
+
+  // --- 0. AUTO-SWITCH PROJECT LOGIC (Deep Linking) ---
+  useEffect(() => {
+    if (location.state?.selectedProjectId && selectProject) {
+      const targetId = String(location.state.selectedProjectId);
+      const currentId = selectedProjectId ? String(selectedProjectId) : null;
+
+      if (targetId !== currentId) {
+        console.log('[DEBUG Progresivas] Switching Project Context to:', targetId);
+        selectProject(location.state.selectedProjectId, location.state.selectedProjectName || 'Auto-Selected Project');
+      }
+    }
+  }, [location.state, selectedProjectId, selectProject]);
+
   const initialFormData = {
     codigo: '',
     nombre: '',
@@ -256,6 +288,7 @@ const Progresivas = () => {
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
+  const [canterasData, setCanterasData] = useState([]); // NEW: State for map popup canteras
 
 
   const handleViewKmlMap = async (progresiva) => { // NEW: Handler for KML map button
@@ -267,6 +300,19 @@ const Progresivas = () => {
       const res = await axios.get(`${API_URL}/api/progresivas/${progresiva.id}/children/all`, { headers });
       const subProgs = Array.isArray(res.data) ? res.data : [];
       setSubProgresivas(subProgs);
+
+      // NEW: Fetch Canteras for this tramo to show on map
+      try {
+        // Intentar ruta con /api/tramos (estándar) o /tramos (si fuera legacy)
+        // Usaremos /api/tramos/${id}/canteras asumiendo consistencia
+        const resCanteras = await axios.get(`${API_URL}/api/tramos/${progresiva.id}/canteras`, { headers });
+        setCanterasData(resCanteras.data || []);
+      } catch (canteraErr) {
+        console.warn("Could not fetch canteras for map fallback:", canteraErr);
+        // Si falla con 404, podría intentar sin /api/ pero por ahora dejamos []
+        setCanterasData([]);
+      }
+
     } catch (err) {
       console.error("Error fetching sub-progresivas for map", err);
       setSubProgresivas([]);
@@ -275,6 +321,54 @@ const Progresivas = () => {
     setShowMapModal(true);
   };
 
+  // --- Gallery & DOCX Upload Logic ---
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [galleryProgresiva, setGalleryProgresiva] = useState(null);
+  const [isUploadingDocx, setIsUploadingDocx] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const handleOpenGallery = (prog) => {
+    setGalleryProgresiva(prog);
+    setShowGalleryModal(true);
+  };
+
+  const handleDocxUpload = async (event, tramoId) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validación básica de extensión
+    if (!file.name.match(/\.(docx|doc)$/i)) {
+      alertify.error('Por favor sube un archivo Word (.docx)');
+      return;
+    }
+
+    setIsUploadingDocx(true);
+    setUploadProgress(0);
+    const formData = new FormData();
+    formData.append('docxFile', file);
+
+    try {
+      const headers = getAuthHeaders();
+      const res = await axios.post(`${API_URL}/api/tramos/${tramoId}/upload-docx-photos`, formData, {
+        headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percentCompleted);
+        }
+      });
+
+      const { summary } = res.data;
+      const msg = `Procesado: ${summary.processed} fotos importadas automáticamente.`;
+      if (summary.processed > 0) alertify.success(msg);
+      else alertify.warning('No se encontraron fotos asociadas a progresivas válidas en el documento.');
+    } catch (err) {
+      console.error("Error upload DOCX", err);
+      alertify.error('Error al procesar el archivo DOCX.');
+    } finally {
+      setIsUploadingDocx(false);
+      event.target.value = null;
+    }
+  };
 
   const handleViewEstratos = (progresiva) => {
     setViewingEstratos(progresiva);
@@ -316,20 +410,29 @@ const Progresivas = () => {
   }, [fetchProyectos]);
 
   // --- AUTO-OPEN LOGIC FROM DASHBOARD ---
+  // --- AUTO-OPEN LOGIC FROM DASHBOARD ---
+  // Simplificado al máximo para garantizar apertura
   useEffect(() => {
-    if (location.state?.openTramoId) {
-      console.log('[DEBUG Progresivas] Received openTramoId:', location.state.openTramoId, 'Progresivas loaded:', progresivas.length, 'ViewingDetails:', viewingDetails);
-    }
+    const targetId = location.state?.openTramoId;
 
-    if (location.state?.openTramoId && progresivas.length > 0 && !viewingDetails) {
-      const tramoId = Number(location.state.openTramoId);
-      const tramo = progresivas.find(p => p.id === tramoId);
+    // Solo intentar si hay un ID, hay datos cargados, y NO estamos viendo nada aún.
+    if (targetId && progresivas.length > 0 && !viewingDetails) {
+      console.log('[DEBUG DeepLink] Evaluando apertura. Target:', targetId);
+
+      // Buscar el tramo
+      const tramo = progresivas.find(p => p.id == targetId);
 
       if (tramo) {
+        console.log('[DEBUG DeepLink] ENCONTRADO. Ejecutando handleViewDetails para:', tramo.nombre);
         handleViewDetails(tramo);
+      } else {
+        // Log solo la primera vez o cuando deje de cargar
+        if (!loading) {
+          console.warn('[DEBUG DeepLink] NO ENCONTRADO. Lista de IDs:', progresivas.map(p => p.id));
+        }
       }
     }
-  }, [location.state, progresivas, viewingDetails]);
+  }, [location.state, progresivas, viewingDetails, loading]);
 
   const handleNavigateToGestor = () => {
     if (selectedIds.length !== 1) return;
@@ -1550,6 +1653,31 @@ const Progresivas = () => {
   };
 
 
+  // --- AUTO-SCROLL LOGIC FOR DEEP LINKS ---
+  useEffect(() => {
+    if (viewingDetails && location.state?.activeProgresivaId && subProgresivas.length > 0) {
+      const targetId = location.state.activeProgresivaId;
+      // Pequeño timeout para permitir que el DOM se pinte
+      const timer = setTimeout(() => {
+        const row = document.getElementById(`prog-row-${targetId}`);
+        if (row) {
+          console.log('[DEBUG Progresivas] Scrolling to row:', targetId);
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          row.style.backgroundColor = '#fffbeb'; // Light yellow highlight
+          row.style.transition = 'background-color 0.5s';
+          // Remover highlight después de unos segundos
+          setTimeout(() => {
+            row.style.backgroundColor = '';
+          }, 4000);
+        } else {
+          console.warn('[DEBUG Progresivas] Row not found for ID:', targetId);
+        }
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [viewingDetails, location.state, subProgresivas]);
+
+
   return (
     <div className="progresivas-container">
       <SeleccionarEstratosModal
@@ -1562,7 +1690,7 @@ const Progresivas = () => {
         data={importDataForSelection}
         onConfirm={handleConfirmarImportacionConEnsayos}
       />
-
+      {/* ... (rest of modals) ... */}
       {/* KML Progress Modal */}
       {showProgressModal && (
         <div className="progress-modal-overlay">
@@ -1866,7 +1994,7 @@ const Progresivas = () => {
                   </thead>
                   <tbody>
                     {subProgresivas.map((p, subIndex) => (
-                      <tr key={p.id}>
+                      <tr key={p.id} id={`prog-row-${p.id}`}>
                         <td>{subIndex + 1}</td>
                         <td>
                           {(() => {
@@ -1902,6 +2030,9 @@ const Progresivas = () => {
                         <td className="actions-cell">
                           <button className="manage-btn" onClick={(e) => { e.stopPropagation(); handleManageProgresiva(p); }}>
                             <ManageIcon /> Gestionar
+                          </button>
+                          <button className="gallery-btn" onClick={(e) => { e.stopPropagation(); handleOpenGallery(p); }} title="Ver Fotos" style={{ marginLeft: '5px', background: 'none', border: 'none', cursor: 'pointer', color: '#0d6efd' }}>
+                            <CameraIcon />
                           </button>
                         </td>
                       </tr>
@@ -2105,6 +2236,7 @@ const Progresivas = () => {
           onClose={() => setShowMapModal(false)}
           progresiva={selectedKmlProgresiva}
           subProgresivas={subProgresivas} // Pass all sub-progresivas data
+          canterasData={canterasData} // NEW: Pass canteras data for popups
         />
       )}
 
@@ -2206,6 +2338,16 @@ const Progresivas = () => {
                     {p.kml_trazado_id && ( // Conditionally render if KML exists
                       <button className="map-btn" onClick={() => handleViewKmlMap(p)} title="Ver KML en Mapa"><MapIcon /></button>
                     )}
+                    <label className="docx-upload-btn" title="Importar Panel Fotográfico (Word)" style={{ marginLeft: '5px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: '#2b5797' }} onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="file"
+                        accept=".docx"
+                        style={{ display: 'none' }}
+                        onChange={(e) => handleDocxUpload(e, p.id)}
+                        disabled={isUploadingDocx}
+                      />
+                      {isUploadingDocx ? <span style={{ fontSize: '10px' }}>...</span> : <WordIcon />}
+                    </label>
                   </td>
                 </tr>
               ))}
@@ -2258,6 +2400,44 @@ const Progresivas = () => {
           </button>
         </div>
       </div>
+      {showGalleryModal && (
+        <ProgresivaImageGalleryModal
+          isOpen={showGalleryModal}
+          onClose={() => setShowGalleryModal(false)}
+          progresiva={galleryProgresiva}
+        />
+      )}
+
+      {isUploadingDocx && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 999999, backdropFilter: 'blur(5px)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white'
+        }}>
+          {uploadProgress < 100 ? (
+            <>
+              <div style={{ width: '300px', height: '20px', backgroundColor: '#555', borderRadius: '10px', overflow: 'hidden', marginBottom: '15px' }}>
+                <div style={{
+                  height: '100%', width: `${uploadProgress}%`,
+                  backgroundColor: '#3498db', transition: 'width 0.2s ease'
+                }}></div>
+              </div>
+              <h3 style={{ fontFamily: 'sans-serif' }}>Subiendo documento: {uploadProgress}%</h3>
+              <p style={{ opacity: 0.8 }}>Por favor espere...</p>
+            </>
+          ) : (
+            <>
+              <div style={{
+                width: '60px', height: '60px', border: '6px solid #f3f3f3',
+                borderTop: '6px solid #2ecc71', borderRadius: '50%', animation: 'spin 1.5s linear infinite'
+              }}></div>
+              <h3 style={{ marginTop: '25px', fontFamily: 'sans-serif' }}>Procesando imágenes...</h3>
+              <p style={{ fontFamily: 'sans-serif', opacity: 0.9 }}>Extrayendo y organizando fotos.</p>
+            </>
+          )}
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
     </div>
   );
 };

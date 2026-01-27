@@ -172,7 +172,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
                   </li>
                 )}
                 {isNavItemVisible('/ingenieria/geologia') && (
-                  <li className={`${isActiveLink('/ingenieria/geologia') ? 'active' : ''} wip-item`}>
+                  <li className={`${isActiveLink('/ingenieria/geologia') ? 'active' : ''}`}>
                     <Link to="/ingenieria/geologia">
                       <i className="fas fa-mountain"></i><span>Geología</span>
                     </Link>

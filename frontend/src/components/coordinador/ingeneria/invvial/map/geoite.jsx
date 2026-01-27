@@ -27,6 +27,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
     const [calibrationData, setCalibrationData] = useState(null); // NEW: State for calibration
     const calibrationDataRef = useRef(null); // NEW: Ref to avoid stale closures
     const [activePopup, setActivePopup] = useState(null);
+    const [enlargedImage, setEnlargedImage] = useState(null); // State for lightbox preview
     const [showCities, setShowCities] = useState(true); // Toggle state for cities
     const showCitiesRef = useRef(true); // NEW: Ref to avoid stale closures in listeners
     showCitiesRef.current = showCities; // Always sync with state
@@ -1228,9 +1229,17 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         const loadInitialKml = async () => {
             try {
                 const response = await axiosInstance.get(`/api/proyectos/${projectId}/kml`);
-                if (response.data && response.data.url) {
+                let kmlUrl = response.data && response.data.url;
+
+                // HOTFIX: Override KML URL for Project 24
+                if (parseInt(projectId) === 24) {
+                    kmlUrl = "https://wtssndc4bmwklwss.public.blob.vercel-storage.com/1764685078654_tramofinalinvvial.kml";
+                    console.warn("geoite.jsx: HOTFIX - Overriding KML URL for Project 24 inside loadInitialKml");
+                }
+
+                if (kmlUrl) {
                     const showAlerts = !window.hasShownInitialKmlAlert;
-                    await loadKmlFromUrl(response.data.url, showAlerts);
+                    await loadKmlFromUrl(kmlUrl, showAlerts);
                     if (showAlerts) {
                         window.hasShownInitialKmlAlert = true;
                     }
@@ -1659,7 +1668,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
     }, [highlightedTramoId, map]); // Dependency on highlightedTramoId
 
     // Componente React para la galería de imágenes del popup
-    const ImageGallery = ({ imageProp, onShowDetails }) => {
+    const ImageGallery = ({ imageProp, onShowDetails, onEnlarge }) => {
         const [currentIndex, setCurrentIndex] = useState(0);
         const [isPaused, setIsPaused] = useState(false);
 
@@ -1713,8 +1722,12 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                     src={images[currentIndex].url}
                     alt={`Imagen ${currentIndex + 1}`}
                     className="popup-image"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                    onClick={() => setIsPaused(true)}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'zoom-in' }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setIsPaused(true);
+                        if (onEnlarge) onEnlarge(images[currentIndex]);
+                    }}
                 />
 
                 {images.length > 1 && (
@@ -1749,6 +1762,98 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                         </div>
                     </>
                 )}
+            </div>
+        );
+    };
+
+    // --- MODAL DE VISTA PREVIA DE IMAGEN (Lightbox) ---
+    const ImagePreviewModal = ({ image, onClose }) => {
+        if (!image) return null;
+
+        const handleDownload = () => {
+            const link = document.createElement('a');
+            link.href = image.url;
+            link.download = `imagen_detalle_${Date.now()}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        return (
+            <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                zIndex: 99999, // Max z-index
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column'
+            }} onClick={onClose}>
+                <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }} onClick={e => e.stopPropagation()}>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            position: 'absolute',
+                            top: '-40px',
+                            right: '-40px',
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'white',
+                            fontSize: '30px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        &times;
+                    </button>
+
+                    <img
+                        src={image.url}
+                        alt="Vista previa"
+                        style={{
+                            maxWidth: '100%',
+                            maxHeight: '85vh',
+                            border: '2px solid white',
+                            boxShadow: '0 0 20px rgba(0,0,0,0.5)'
+                        }}
+                    />
+
+                    <div style={{
+                        position: 'absolute',
+                        bottom: '10px',
+                        right: '10px',
+                        background: 'rgba(0,0,0,0.7)',
+                        padding: '10px',
+                        borderRadius: '5px',
+                        color: 'white',
+                        fontFamily: 'monospace',
+                        textAlign: 'right'
+                    }}>
+                        {image.panel_fotografico_codigo && <div>Ref: {image.panel_fotografico_codigo}</div>}
+                        {image.fecha_hora && <div>{image.fecha_hora}</div>}
+                        <div>{image.latitud && image.longitud ? `${image.latitud}, ${image.longitud}` : ''}</div>
+                    </div>
+
+                    <div style={{ marginTop: '10px', textAlign: 'center' }}>
+                        <button
+                            onClick={handleDownload}
+                            className="invvial-btn-success"
+                            style={{ padding: '8px 20px', fontSize: '14px' }}
+                        >
+                            <i className="fas fa-download"></i> Descargar
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="invvial-btn-danger"
+                            style={{ padding: '8px 20px', fontSize: '14px', marginLeft: '10px' }}
+                        >
+                            <i className="fas fa-times"></i> Cerrar
+                        </button>
+                    </div>
+                </div>
             </div>
         );
     };
@@ -1966,7 +2071,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                         marker.on('click', (e) => {
                             L.DomEvent.stop(e); // Keep this to prevent map click events
 
-                            const targetZoom = 18;
+                            const targetZoom = 15; // Reduced from 16 as requested
                             const latLng = [alcantarilla.latitud, alcantarilla.longitud];
 
                             // Proyectar a píxeles, restar offset en Y (mover centro arriba -> marcador baja), y desproyectar
@@ -2391,71 +2496,83 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
     }, [highlightedTramoId, map]);
 
 
-    return createPortal(
-        activePopup ? (
-            <div className="invvial-map-popup-card">
-                <div className="popup-header">
-                    {activePopup.typeLabel?.toUpperCase() || 'DETALLE'}
-                </div>
-
-                <div className="popup-content">
-                    <div className="popup-image-container">
-                        <ImageGallery imageProp={activePopup.images} onShowDetails={() => onShowDetails(activePopup)} />
-                    </div>
-
-                    <div className="popup-details-grid">
-                        <div className="detail-row">
-                            <span className="label">CÓDIGO:</span>
-                            <span className="value">{activePopup.idValue}</span>
+    return (
+        <>
+            {createPortal(
+                activePopup ? (
+                    <div className="invvial-map-popup-card">
+                        <div className="popup-header">
+                            {activePopup.typeLabel?.toUpperCase() || 'DETALLE'}
                         </div>
-                        {activePopup.estado && (
-                            <div className="detail-row">
-                                <span className="label">ESTADO:</span>
-                                <span className="value">{activePopup.estado}</span>
+
+                        <div className="popup-content">
+                            <div className="popup-image-container">
+                                <ImageGallery
+                                    imageProp={activePopup.images}
+                                    onShowDetails={() => onShowDetails(activePopup)}
+                                    onEnlarge={(img) => setEnlargedImage(img)}
+                                />
                             </div>
-                        )}
-                        <div className="detail-row">
-                            <span className="label">UBICACIÓN:</span>
-                            <span className="value">{activePopup.progresiva ? `KM ${activePopup.progresiva}` : (activePopup.km ? `KM ${activePopup.km}` : '---')}</span>
-                        </div>
-                        <div className="detail-row">
-                            <span className="label">COORDENADA:</span>
-                            <span className="value">
-                                {(() => {
-                                    if (typeof activePopup.latitud === 'number' && typeof activePopup.longitud === 'number') {
-                                        try {
-                                            const { easting, northing, zoneNum, zoneLetter } = fromLatLon(activePopup.latitud, activePopup.longitud);
-                                            return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
-                                        } catch (e) {
-                                            return `${activePopup.latitud.toFixed(6)}, ${activePopup.longitud.toFixed(6)}`;
-                                        }
-                                    }
-                                    return '---';
-                                })()}
-                            </span>
-                        </div>
-                        <div className="detail-row">
-                            <span className="label">CATEGORÍA:</span>
-                            <span className="value">{activePopup.cardTitle}</span>
-                        </div>
-                        {activePopup.entregable && (
-                            <div className="detail-row">
-                                <span className="label">ENTREGABLE:</span>
-                                <span className="value">{activePopup.entregable}</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
 
-                <button
-                    className="popup-footer-btn"
-                    onClick={() => onShowDetails(activePopup)}
-                >
-                    VER DETALLADO
-                </button>
-            </div>
-        ) : null,
-        popupContainer
+                            <div className="popup-details-grid">
+                                <div className="detail-row">
+                                    <span className="label">CÓDIGO:</span>
+                                    <span className="value">{activePopup.idValue}</span>
+                                </div>
+                                {activePopup.estado && (
+                                    <div className="detail-row">
+                                        <span className="label">ESTADO:</span>
+                                        <span className="value">{activePopup.estado}</span>
+                                    </div>
+                                )}
+                                <div className="detail-row">
+                                    <span className="label">UBICACIÓN:</span>
+                                    <span className="value">{activePopup.progresiva ? `KM ${activePopup.progresiva}` : (activePopup.km ? `KM ${activePopup.km}` : '---')}</span>
+                                </div>
+                                <div className="detail-row">
+                                    <span className="label">COORDENADA:</span>
+                                    <span className="value">
+                                        {(() => {
+                                            if (typeof activePopup.latitud === 'number' && typeof activePopup.longitud === 'number') {
+                                                try {
+                                                    const { easting, northing, zoneNum, zoneLetter } = fromLatLon(activePopup.latitud, activePopup.longitud);
+                                                    return <>{zoneNum}{zoneLetter} {easting.toFixed(2)} E<br />{northing.toFixed(2)} N</>;
+                                                } catch (e) {
+                                                    return `${activePopup.latitud.toFixed(6)}, ${activePopup.longitud.toFixed(6)}`;
+                                                }
+                                            }
+                                            return '---';
+                                        })()}
+                                    </span>
+                                </div>
+                                <div className="detail-row">
+                                    <span className="label">CATEGORÍA:</span>
+                                    <span className="value">{activePopup.cardTitle}</span>
+                                </div>
+                                {activePopup.entregable && (
+                                    <div className="detail-row">
+                                        <span className="label">ENTREGABLE:</span>
+                                        <span className="value">{activePopup.entregable}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <button
+                            className="popup-footer-btn"
+                            onClick={() => onShowDetails(activePopup)}
+                        >
+                            VER DETALLADO
+                        </button>
+                    </div>
+                ) : null,
+                popupContainer
+            )}
+            {enlargedImage && createPortal(
+                <ImagePreviewModal image={enlargedImage} onClose={() => setEnlargedImage(null)} />,
+                document.body
+            )}
+        </>
     );
 };
 

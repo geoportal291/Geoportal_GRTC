@@ -360,38 +360,126 @@ const parseProgresiva = (val) => {
     return isNaN(num) ? null : num;
 };
 
-const MarkerWithZoom = ({ point, graphicsImages, onShowDetails }) => {
-    const map = useMap();
 
-    const handleMarkerClick = (e) => {
-        const targetZoom = 17; // Reduced from 18 to show more map context as requested
-        const latLng = [point.lat, point.lng];
 
-        // Project to pixels, subtract offset, unproject back (matching geoite.jsx)
-        const p = map.project(latLng, targetZoom);
-        const targetP = p.subtract([0, 150]); // 150px offset upwards
-        const targetLatLng = map.unproject(targetP, targetZoom);
+// --- IMAGE PREVIEW MODAL (Ported from Geoite) ---
+const ImagePreviewModal = ({ src, alt, onClose, meta }) => {
+    if (!src) return null;
 
-        map.flyTo(targetLatLng, targetZoom, {
-            animate: true,
-            duration: 1.5
-        });
+    const handleDownload = () => {
+        const link = document.createElement('a');
+        link.href = src;
+        link.download = `imagen_detalle_${new Date().getTime()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
-    return (
-        <Marker
-            position={[point.lat, point.lng]}
-            icon={getIcon(point.type)}
-            eventHandlers={{ click: handleMarkerClick }}
-        >
-            <Popup>
-                <RichPopupContent point={point} graphicsImages={graphicsImages} onShowDetails={onShowDetails} />
-            </Popup>
-        </Marker>
+    return ReactDOM.createPortal(
+        <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            zIndex: 100000,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            flexDirection: 'column'
+        }} onClick={onClose}>
+            <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }} onClick={e => e.stopPropagation()}>
+                <img
+                    src={src}
+                    alt={alt || 'Vista previa'}
+                    style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '8px', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}
+                />
+
+                {/* Metadata Overlay */}
+                <div style={{
+                    position: 'absolute',
+                    bottom: '0',
+                    left: '0',
+                    right: '0',
+                    background: 'rgba(0, 0, 0, 0.7)',
+                    color: 'white',
+                    padding: '10px',
+                    borderBottomLeftRadius: '8px',
+                    borderBottomRightRadius: '8px',
+                    fontSize: '14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                }}>
+                    {meta && (
+                        <>
+                            {meta.code && <div><strong>Código:</strong> {meta.code}</div>}
+                            {meta.date && <div><strong>Fecha:</strong> {meta.date}</div>}
+                            {meta.coords && <div><strong>Coords:</strong> {meta.coords}</div>}
+                        </>
+                    )}
+                </div>
+
+                <div style={{ marginTop: '10px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    <button
+                        onClick={handleDownload}
+                        style={{
+                            padding: '10px 20px',
+                            background: '#3b82f6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '5px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                        }}
+                    >
+                        <i className="fa-solid fa-download"></i> Descargar
+                    </button>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            padding: '10px 20px',
+                            background: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '5px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                        }}
+                    >
+                        <i className="fa-solid fa-times"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+
+            <button
+                onClick={onClose}
+                style={{
+                    position: 'absolute',
+                    top: '20px',
+                    right: '20px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'white',
+                    fontSize: '30px',
+                    cursor: 'pointer'
+                }}
+            >
+                <i className="fa-solid fa-times"></i>
+            </button>
+        </div>,
+        document.body
     );
 };
 
-const SimpleImageGallery = ({ images }) => {
+const SimpleImageGallery = ({ images, onEnlarge }) => {
     const [index, setIndex] = useState(0);
 
     if (!images || images.length === 0) {
@@ -422,7 +510,16 @@ const SimpleImageGallery = ({ images }) => {
     return (
         <div className="popup-image-container">
             <div className="popup-img-wrapper">
-                <img src={imgUrl} alt={`Foto ${index + 1}`} onError={(e) => e.target.style.display = 'none'} />
+                <img
+                    src={imgUrl}
+                    alt={`Foto ${index + 1}`}
+                    onError={(e) => e.target.style.display = 'none'}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (onEnlarge) onEnlarge(currentImg);
+                    }}
+                    style={{ cursor: 'zoom-in' }}
+                />
             </div>
 
             {images.length > 1 && (
@@ -665,6 +762,42 @@ const MapLegend = ({ onClose }) => {
     );
 };
 
+const MarkerWithZoom = ({ point, graphicsImages, onShowDetails, onEnlarge }) => {
+    const map = useMap();
+
+    const handleMarkerClick = (e) => {
+        const targetZoom = 16;
+        const latLng = [point.lat, point.lng];
+
+        // Project to pixels, subtract offset, unproject back (matching geoite.jsx)
+        const p = map.project(latLng, targetZoom);
+        const targetP = p.subtract([0, 150]); // 150px offset upwards
+        const targetLatLng = map.unproject(targetP, targetZoom);
+
+        map.flyTo(targetLatLng, targetZoom, {
+            animate: true,
+            duration: 1.5
+        });
+    };
+
+    return (
+        <Marker
+            position={[point.lat, point.lng]}
+            icon={point.icon}
+            eventHandlers={{ click: handleMarkerClick }}
+        >
+            <Popup>
+                <RichPopupContent
+                    point={point}
+                    graphicsImages={graphicsImages}
+                    onShowDetails={onShowDetails}
+                    onEnlarge={onEnlarge}
+                />
+            </Popup>
+        </Marker>
+    );
+};
+
 const ExternalView = ({
     onExit,
     // ... (rest of props)
@@ -704,6 +837,7 @@ const ExternalView = ({
     const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
     const [routeGeoJson, setRouteGeoJson] = useState(null); // State for KML route
     const [isLoading, setIsLoading] = useState(true); // NEW: Loading state starts true
+    const [enlargedImage, setEnlargedImage] = useState(null); // NEW: State for enlarged image preview
     const [activeTool, setActiveTool] = useState(null); // Tools state
     const [mouseCoords, setMouseCoords] = useState(null); // Coords state
     const [searchText, setSearchText] = useState(''); // NEW: Search state
@@ -712,6 +846,8 @@ const ExternalView = ({
     const [filterMin, setFilterMin] = useState(''); // NEW: Min Progresiva
     const [filterMax, setFilterMax] = useState(''); // NEW: Max Progresiva
     const [autoCities, setAutoCities] = useState([]); // NEW: Ciudades detectadas automáticamente
+    const [kmlRoutes, setKmlRoutes] = useState([]); // NEW: Routes for calibration
+
 
     // NEW: Expanded sections state for right sidebar (collapsed by default)
     const [expandedSections, setExpandedSections] = useState({
@@ -752,6 +888,73 @@ const ExternalView = ({
         estructuras_existentes: true
     });
 
+    // --- Helper to convert progressive string to meters ---
+    const progressiveToMeters = (progStr) => {
+        if (!progStr) return NaN;
+        const clean = String(progStr).replace(/km/i, '').trim();
+        const parts = clean.split('+');
+        if (parts.length === 2) {
+            const km = parseFloat(parts[0]);
+            const m = parseFloat(parts[1]);
+            return (km * 1000) + m;
+        } else if (parts.length === 1) {
+            return parseFloat(parts[0]);
+        }
+        return NaN;
+    };
+
+    // --- Calculate Coords from Progressive using Calibration (Ported from DashboardMap) ---
+    const calculateCoords = (progresiva) => {
+        if (!progresiva || !kmlRoutes || kmlRoutes.length === 0) return null;
+
+        const targetMeters = progressiveToMeters(progresiva);
+        if (isNaN(targetMeters)) return null;
+
+        let selectedRoute = null;
+        let startMeters = 0;
+        let endMeters = 0;
+
+        // Note: ExternalView currently doesn't have 'calibrations' prop, 
+        // fallback to simple route matching or first route if calibrations missing.
+        // Ideally we should pass calibrations prop too.
+
+        // 1. Fallback to First Route (Simple Mode)
+        if (!selectedRoute) {
+            selectedRoute = kmlRoutes[0];
+            startMeters = 0;
+        }
+
+        if (!selectedRoute || !selectedRoute.coordinates || selectedRoute.coordinates.length < 2) return null;
+
+        try {
+            // Turf needs [Lng, Lat]
+            const lineCoords = selectedRoute.coordinates.map(p => [p[1], p[0]]);
+            const line = turf.lineString(lineCoords);
+            const routeLengthKm = turf.length(line, { units: 'kilometers' });
+
+            let distOnRouteKm = 0;
+
+            // Simple logic: assume start is 0
+            distOnRouteKm = targetMeters / 1000;
+
+            if (distOnRouteKm < 0) distOnRouteKm = 0;
+            if (distOnRouteKm > routeLengthKm) distOnRouteKm = routeLengthKm;
+
+            const point = turf.along(line, distOnRouteKm, { units: 'kilometers' });
+            if (point && point.geometry && point.geometry.coordinates) {
+                const [lng, lat] = point.geometry.coordinates;
+                if (isValidCoordinate(lat, lng)) {
+                    return { lat, lng };
+                }
+            }
+        } catch (e) {
+            console.error("Error calculating position:", e);
+        }
+
+        return null;
+    };
+
+
     // Helper to calculate coords (Progresiva -> LatLon) could be complex to bring here 1:1 without route data.
     // For now, we will rely on data points having 'latitud' and 'longitud' properties populated 
     // or rely on the fact that standard data usually has it.
@@ -775,9 +978,21 @@ const ExternalView = ({
                 // Parse Progresiva
                 const progValue = parseProgresiva(item.progresiva || item.prog_inicio || item.km);
 
-                if (isValidCoordinate(lat, lng)) {
+                let finalLat = lat;
+                let finalLng = lng;
+
+                // Fallback Calculation if coords are invalid
+                if (!isValidCoordinate(finalLat, finalLng) && (item.progresiva || item.prog_inicio)) {
+                    const calculated = calculateCoords(item.progresiva || item.prog_inicio);
+                    if (calculated) {
+                        finalLat = calculated.lat;
+                        finalLng = calculated.lng;
+                    }
+                }
+
+                if (isValidCoordinate(finalLat, finalLng)) {
                     points.push({
-                        lat, lng,
+                        lat: finalLat, lng: finalLng,
                         type: groupName,
                         displayType,
                         data: item,
@@ -1034,6 +1249,26 @@ const ExternalView = ({
                     const geoJson = kml(kmlDoc);
                     console.log("ExternalView: Converted GeoJSON:", geoJson);
                     setRouteGeoJson(geoJson);
+
+                    // EXTRACT ROUTES FOR TURF CALC
+                    const routes = [];
+                    geoJson.features.forEach(f => {
+                        if (f.geometry && f.geometry.type === 'LineString' && Array.isArray(f.geometry.coordinates)) {
+                            // Leaflet needs [Lat, Lng]
+                            const latLngs = f.geometry.coordinates
+                                .map(coord => [coord[1], coord[0]])
+                                .filter(c => isValidCoordinate(c[0], c[1])); // Filter invalid coords
+
+                            if (latLngs.length > 0) {
+                                const rawName = (f.properties && f.properties.name) ? f.properties.name : ("Tramo " + (routes.length + 1));
+                                const name = rawName.toUpperCase().trim();
+                                let color = '#3388ff';
+                                routes.push({ name, coordinates: latLngs, color });
+                            }
+                        }
+                    });
+                    setKmlRoutes(routes);
+
                 } else {
                     console.error("ExternalView: KML fetch failed not ok");
                 }
@@ -1273,6 +1508,7 @@ const ExternalView = ({
                             point={point}
                             graphicsImages={graphicsImages}
                             onShowDetails={onShowDetails}
+                            onEnlarge={(img) => setEnlargedImage(img)}
                         />
                     ))}
 

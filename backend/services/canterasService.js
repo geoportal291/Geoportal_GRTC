@@ -1,6 +1,11 @@
 const db = require('../conexion');
 const { put, del } = require('@vercel/blob');
 const fsp = require('fs').promises;
+const fs = require('fs');
+const path = require('path');
+const AdmZip = require('adm-zip');
+const { exec } = require('child_process');
+const { v4: uuidv4 } = require('uuid');
 
 // --- Funciones de Canteras ---
 
@@ -270,6 +275,36 @@ const deleteImagen = async (imagenId) => {
     }
 };
 
+const deleteBulkImagenes = async (imageIds) => {
+    if (!imageIds || imageIds.length === 0) return { deletedCount: 0 };
+
+    try {
+        // 1. Obtener URLs
+        const res = await db.query('SELECT imagen_url FROM cantera_imagenes WHERE id = ANY($1::int[])', [imageIds]);
+        const urls = res.rows.map(r => r.imagen_url).filter(Boolean);
+
+        // 2. Borrar de Blob (del acepta array de URLs)
+        if (urls.length > 0) {
+            let blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS || process.env.BLOB_READ_WRITE_TOKEN;
+            if (blobToken) {
+                try {
+                    await del(urls, { token: blobToken });
+                } catch (blobErr) {
+                    console.error('Error borrando de Vercel Blob (continuando DB delete):', blobErr);
+                }
+            }
+        }
+
+        // 3. Borrar de DB
+        const deleteRes = await db.query('DELETE FROM cantera_imagenes WHERE id = ANY($1::int[])', [imageIds]);
+
+        return { deletedCount: deleteRes.rowCount };
+    } catch (err) {
+        console.error('Error al eliminar imágenes masivas:', err);
+        throw new Error('Error al eliminar las imágenes.');
+    }
+};
+
 // --- Funciones de Estratos (sin cambios) ---
 
 const createCanteraEstrato = async (canteraId, estratoData) => {
@@ -336,14 +371,135 @@ const deleteCanteraEstrato = async (estratoId) => {
     }
 };
 
+const uploadBulkImages = async (files, canteraId, userId) => {
+    if (!files || files.length === 0) {
+        throw new Error('No se subieron archivos.');
+    }
+
+    let blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS || process.env.BLOB_READ_WRITE_TOKEN;
+    if (!blobToken) throw new Error('Token de Blob no configurado.');
+
+    const uploadedImages = [];
+    const tempDirs = [];
+
+    try {
+        for (const file of files) {
+            const ext = path.extname(file.originalname).toLowerCase();
+            const isArchive = ext === '.zip' || ext === '.rar';
+            const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.originalname);
+
+            if (isArchive) {
+                // --- ARCHIVO COMPRIMIDO (ZIP/RAR) ---
+                console.log(`Procesando archivo comprimido: ${file.originalname}`);
+                const extractionDir = path.join('/tmp', `bulk_cantera_${uuidv4()}`);
+                await fsp.mkdir(extractionDir, { recursive: true });
+                tempDirs.push(extractionDir);
+
+                try {
+                    if (ext === '.zip') {
+                        const zip = new AdmZip(file.path);
+                        zip.extractAllTo(extractionDir, true);
+                    } else if (ext === '.rar') {
+                        // Check if unrar exists before running? Assuming yes based on env.
+                        await new Promise((resolve, reject) => {
+                            exec(`unrar e -o+ "${file.path}" "${extractionDir}"`, (err) => err ? reject(err) : resolve());
+                        });
+                    }
+
+                    // Buscar imágenes extraídas recursivamente
+                    const getAllFiles = async (dir) => {
+                        const dirents = await fsp.readdir(dir, { withFileTypes: true });
+                        const res = await Promise.all(dirents.map(d => {
+                            const resPath = path.join(dir, d.name);
+                            return d.isDirectory() ? getAllFiles(resPath) : resPath;
+                        }));
+                        return res.flat();
+                    };
+
+                    const allExtracted = await getAllFiles(extractionDir);
+                    const imageFiles = allExtracted.filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
+
+                    // Ordenar por nombre (Natural Sort: 1, 2, 10...)
+                    imageFiles.sort((a, b) => {
+                        return path.basename(a).localeCompare(path.basename(b), undefined, { numeric: true, sensitivity: 'base' });
+                    });
+
+                    console.log(`Encontradas ${imageFiles.length} imágenes en el archivo comprimido.`);
+
+                    // Subir cada imagen
+                    for (const imgPath of imageFiles) {
+                        try {
+                            const imgBuffer = await fsp.readFile(imgPath);
+                            const originalName = path.basename(imgPath);
+                            const cleanName = originalName.replace(/[^a-zA-Z0-9-._]/g, '_');
+                            // Estructura: canteras/USER_ID/CANTERA_ID/TIMESTAMP_NAME
+                            const filename = `canteras/${userId}/${canteraId}/${Date.now()}_${cleanName}`;
+
+                            const blob = await put(filename, imgBuffer, { access: 'public', token: blobToken });
+
+                            const savedImg = await addImagenToCantera(canteraId, blob.url, 'Importación Masiva (ZIP)', originalName);
+                            uploadedImages.push(savedImg);
+                        } catch (imgErr) {
+                            console.error(`Error subiendo imagen individual del ZIP ${imgPath}:`, imgErr);
+                            // Continuar con las demás
+                        }
+                    }
+
+                } catch (archiveErr) {
+                    console.error('Error al procesar archivo comprimido:', archiveErr);
+                    // No bloquear el resto de archivos si uno falla
+                }
+
+            } else if (isImage) {
+                // --- IMAGEN SUELTA ---
+                console.log(`Procesando imagen suelta: ${file.originalname}`);
+                try {
+                    let fileBuffer;
+                    if (file.buffer) fileBuffer = file.buffer;
+                    else if (file.path) fileBuffer = await fsp.readFile(file.path);
+
+                    if (fileBuffer) {
+                        const cleanName = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
+                        const filename = `canteras/${userId}/${canteraId}/${Date.now()}_${cleanName}`;
+
+                        const blob = await put(filename, fileBuffer, { access: 'public', token: blobToken });
+
+                        const savedImg = await addImagenToCantera(canteraId, blob.url, 'Importación Masiva (Directa)', file.originalname);
+                        uploadedImages.push(savedImg);
+                    }
+                } catch (imgErr) {
+                    console.error(`Error subiendo imagen suelta ${file.originalname}:`, imgErr);
+                }
+            } else {
+                console.warn(`Archivo ignorado (formato no soportado): ${file.originalname}`);
+            }
+        }
+    } finally {
+        // Limpieza de temporales (carpetas de extracción)
+        for (const dir of tempDirs) {
+            try { await fsp.rm(dir, { recursive: true, force: true }); } catch (e) { }
+        }
+        // Limpieza de archivos de multer (SIAMPRE limpiar los uploaded files si son temporales)
+        for (const file of files) {
+            if (file.path && fs.existsSync(file.path)) {
+                try { await fsp.unlink(file.path); } catch (e) { }
+            }
+        }
+    }
+
+    return uploadedImages;
+};
+
 module.exports = {
     createCantera,
     updateCantera,
     getCanterasByTramoId,
     deleteCantera,
     uploadImage,
+    uploadBulkImages, // Exported
     addImagenToCantera,
     deleteImagen,
+    deleteBulkImagenes, // Exported
     createCanteraEstrato,
     updateCanteraEstrato,
     deleteCanteraEstrato,

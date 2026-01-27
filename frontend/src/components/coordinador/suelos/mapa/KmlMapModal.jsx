@@ -2,8 +2,8 @@ import React from 'react';
 import SuelosMap from './SuelosMap'; // Assuming SuelosMap is in the same directory
 import './KmlMapModal.css'; // We'll create this CSS file
 
-const KmlMapModal = ({ isOpen, onClose, progresiva, subProgresivas }) => {
-  console.log('[DEBUG] KmlMapModal.jsx - Received props:', { isOpen, progresiva, subProgresivas });
+const KmlMapModal = ({ isOpen, onClose, progresiva, subProgresivas, canterasData }) => {
+  console.log('[DEBUG] KmlMapModal.jsx - Received props:', { isOpen, progresiva, subProgresivas, canterasCount: canterasData?.length });
 
   // Extract KML Trazado ID and Puntos ID
   const kmlTrazadoId = progresiva?.kml_trazado_id;
@@ -46,6 +46,7 @@ const KmlMapModal = ({ isOpen, onClose, progresiva, subProgresivas }) => {
             initialZoom={14}
             kmlTrazadoIds={kmlIds}
             progresivasData={subProgresivas}
+            canterasData={canterasData} // NEW: Pass canteras to map
             defaultZone={progresiva.linea}
           />
         </div>

@@ -372,8 +372,16 @@ const Vialds = ({ isNavbarExpanded }) => {
         const projectRes = await axiosInstance.get(`/api/proyectos/${projectId}`, {
           headers: { Authorization: `Bearer ${user.token}` }
         });
-        console.log("vial.jsx: fetchProjectData response:", projectRes.data);
-        setProjectData(projectRes.data);
+
+        // HOTFIX: Override KML URL for Project 24 due to remote/local DB mismatch
+        const data = projectRes.data;
+        if (parseInt(projectId) === 24 || data.id === 24) {
+          data.url_kml = "https://wtssndc4bmwklwss.public.blob.vercel-storage.com/1764685078654_tramofinalinvvial.kml";
+          console.warn("vial.jsx: HOTFIX - Overriding KML URL for Project 24");
+        }
+
+        console.log("vial.jsx: fetchProjectData response:", data);
+        setProjectData(data);
       } catch (error) {
         console.error('Error fetching project data:', error);
         // If project endpoint fails, try to fetch KML directly

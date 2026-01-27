@@ -5,13 +5,17 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
-import { toLatLon } from 'utm';
+import { toLatLon, fromLatLon } from 'utm';
 import { kml } from '@tmcw/togeojson';
 import { DOMParser } from 'xmldom';
 import alertify from 'alertifyjs';
 import { saveAs } from 'file-saver';
+import { createRoot } from 'react-dom/client';
 import axiosInstance from '../../../../api/axios';
 import './SuelosMap.css';
+import CanteraMapPopup from './CanteraMapPopup';
+import ProgresivaMapPopup from './ProgresivaMapPopup';
+import { useAuth } from '../../../../data/contexts/AuthContext';
 
 // --- Helpers de Carga KML Seguro ---
 const safeParseKmlToGeoJson = (kmlText) => {
@@ -65,7 +69,8 @@ const MapLogic = ({
   layerContext, // NEW: 'dashboard' (default) or any unique string like 'modal-canteras'
   hideKmlPoints, // NEW: If true, ignore points from KML (only show lines/polygons)
   hideToolbar, // NEW: If true, hide measurement/draw toolbar
-  isSelecting // NEW: If true, change cursor to crosshair
+  isSelecting, // NEW: If true, change cursor to crosshair
+  authToken, // NEW: User token for image fetching
 }) => {
   const map = useMap();
   const navigate = useNavigate();
@@ -108,7 +113,7 @@ const MapLogic = ({
   const drawnItemsRef = useRef(new L.FeatureGroup());        // Dibujos del usuario
   const measurementLayersRef = useRef(new L.FeatureGroup()); // Mediciones
   const markerLayerRef = useRef(new L.FeatureGroup());       // Marcador único (Cantera)
-  const canterasLayerRef = useRef(window.canterasLayerGroupGlobal || new L.FeatureGroup()); // Capa de Canteras (Dashboard)
+  const canterasLayerRef = useRef(window.suelosCanterasLayerGroup || new L.FeatureGroup()); // Capa de Canteras (Dashboard)
 
   // LOGIC: Use global ref from LayersControl if available AND we are in the main dashboard context.
   // If we are in a modal (layerContext != undefined), we should use a local ref or a specific modal global ref.
@@ -117,11 +122,11 @@ const MapLogic = ({
   const useGlobalLayers = !layerContext || layerContext === 'dashboard';
 
   const progresivasLayerRef = useRef(
-    (useGlobalLayers && window.progresivasLayerGroupGlobal) ? window.progresivasLayerGroupGlobal : new L.FeatureGroup()
+    (useGlobalLayers && window.suelosProgresivasLayerGroup) ? window.suelosProgresivasLayerGroup : new L.FeatureGroup()
   );
 
   const activeCanterasLayerRef = useRef(
-    (useGlobalLayers && window.canterasLayerGroupGlobal) ? window.canterasLayerGroupGlobal : new L.FeatureGroup()
+    (useGlobalLayers && window.suelosCanterasLayerGroup) ? window.suelosCanterasLayerGroup : new L.FeatureGroup()
   );
 
   // FIX: User Interaction Tracking to prevent auto-fitBounds jumping
@@ -177,13 +182,13 @@ const MapLogic = ({
   // Listener for Layer Toggles (Remounting)
   useEffect(() => {
     const handleRefresh = (e) => {
-      if (e.detail === 'progresivasLayerGroupGlobal' || e.detail === 'canterasLayerGroupGlobal') {
+      if (e.detail === 'suelosProgresivasLayerGroup' || e.detail === 'suelosCanterasLayerGroup') {
         // console.log(`[SuelosMap] Layer ${e.detail} refreshed. Redrawing...`);
         setForceUpdate(prev => prev + 1);
       }
     };
-    window.addEventListener('layerRefreshed', handleRefresh);
-    return () => window.removeEventListener('layerRefreshed', handleRefresh);
+    window.addEventListener('suelosLayerRefreshed', handleRefresh);
+    return () => window.removeEventListener('suelosLayerRefreshed', handleRefresh);
   }, []);
 
   useEffect(() => {
@@ -204,38 +209,104 @@ const MapLogic = ({
 
     // Only add to map if it's NOT the global layer (which is managed by LayersControl in Dashboard)
     // OR if we are in a modal where there is no LayersControl wrapping these specific layers.
-    if (!useGlobalLayers || !window.progresivasLayerGroupGlobal) {
+    if (!useGlobalLayers || !window.suelosProgresivasLayerGroup) {
       progresivasLayerRef.current.addTo(map);
     }
-    if (!useGlobalLayers || !window.canterasLayerGroupGlobal) {
+    if (!useGlobalLayers || !window.suelosCanterasLayerGroup) {
       activeCanterasLayerRef.current.addTo(map);
     }
 
     // --- 1. Inicializar Controles (Dibujo, Coordenadas) ---
 
-    // Control de Dibujo
-    const drawControl = new L.Control.Draw({
-      edit: { featureGroup: drawnItemsRef.current, remove: true },
-      draw: {
-        polyline: false, polygon: false, rectangle: false, circle: false, marker: false // Desactivamos botones default, usamos custom
-      }
-    });
+    // --- 1. Inicializar Controles (Dibujo, Coordenadas) ---
 
+    // A) Control de Zoom (Nativo, Top Left es default, pero aseguramos)
+    // Se gestiona via prop zoomControl={true} en MapContainer, o componente <ZoomControl position="topleft" />
+
+    // B) Toolbar Personalizada (Izquierda) - Medir, Dibujar
     if (!hideToolbar) {
-      // Only add draw control if toolbar is enabled (it might be needed for measuring? drawControl is mostly for editing existing shapes if added natively)
-      // Actually drawControl is not added to map in previous code (commented out).
+      // 1. Grupo de Herramientas (Medir, Dibujar, Borrar)
+      const toolsContainer = L.DomUtil.create('div', 'leaflet-bar easy-button-container leaflet-control', map.getContainer());
+      toolsContainer.style.position = 'absolute';
+      toolsContainer.style.top = '80px';
+      toolsContainer.style.left = '10px';
+      toolsContainer.style.zIndex = 1000;
+      L.DomEvent.disableClickPropagation(toolsContainer);
+
+      toolsContainer.innerHTML = `
+         <button class="suelos-tool-btn" title="Medir Distancia/Área" id="btn-measure-tool"><i class="fas fa-ruler-combined"></i></button>
+         <button class="suelos-tool-btn" title="Dibujar Línea" id="btn-draw-line"><i class="fas fa-pencil-alt"></i></button>
+         <button class="suelos-tool-btn" title="Borrar Dibujos" id="btn-clear-draw"><i class="fas fa-trash-alt"></i></button>
+       `;
+
+      // 2. Grupo de Vista (Centrar) - Separado visualmente
+      const fitContainer = L.DomUtil.create('div', 'leaflet-bar easy-button-container leaflet-control', map.getContainer());
+      fitContainer.style.position = 'absolute';
+      fitContainer.style.top = '220px'; // Aumentado para separar claramente (80 + ~100 + gap)
+      fitContainer.style.left = '10px';
+      fitContainer.style.zIndex = 1000;
+      L.DomEvent.disableClickPropagation(fitContainer);
+
+      fitContainer.innerHTML = `
+         <button class="suelos-tool-btn" title="Centrar Trazado" id="btn-fit-bounds"><i class="fas fa-compress-arrows-alt"></i></button>
+       `;
+
+      // Bind Events
+      setTimeout(() => {
+        const btnMeasure = toolsContainer.querySelector('#btn-measure-tool');
+        const btnDraw = toolsContainer.querySelector('#btn-draw-line');
+        const btnClear = toolsContainer.querySelector('#btn-clear-draw');
+        const btnFit = fitContainer.querySelector('#btn-fit-bounds');
+
+        if (btnFit) btnFit.onclick = () => {
+          const group = new L.FeatureGroup();
+          if (displayLayersRef.current) group.addLayer(displayLayersRef.current);
+          if (progresivasLayerRef.current) group.addLayer(progresivasLayerRef.current);
+
+          const bounds = group.getBounds();
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [50, 50], animate: true });
+          } else {
+            map.setView([-12.930, -72.630], 13);
+          }
+        };
+
+        if (btnMeasure) btnMeasure.onclick = () => {
+          const modal = document.getElementById('suelos-menu-medir');
+          if (modal) modal.style.display = 'block';
+        };
+
+        if (btnDraw) btnDraw.onclick = () => {
+          new L.Draw.Polyline(map, { shapeOptions: { color: 'red' } }).enable();
+        };
+
+        if (btnClear) btnClear.onclick = () => {
+          drawnItemsRef.current.clearLayers();
+          measurementLayersRef.current.clearLayers();
+        };
+      }, 0);
     }
 
-    // map.addControl(drawControl); // Si queremos los nativos, descomentar. Usamos custom toolbar.
+    // Coordenadas en pantalla - CENTRADAS ABAJO (Posición Absoluta Manual)
+    // No usamos L.Control para evitar problemas de esquinas cortadas.
+    const coordContainer = L.DomUtil.create('div', 'leaflet-control-coordinates', map.getContainer());
 
-    // Coordenadas en pantalla
-    const coordContainer = L.DomUtil.create('div', 'leaflet-control-coordinates');
-    const coordControl = new L.Control({ position: 'bottomleft' });
-    coordControl.onAdd = () => coordContainer;
-    coordControl.addTo(map);
-
-    // Estilo coords
-    Object.assign(coordContainer.style, { backgroundColor: 'rgba(0, 0, 0, 0.7)', color: 'white', padding: '5px 10px', borderRadius: '5px', fontSize: '12px', fontFamily: 'monospace', display: 'none' });
+    // Estilo coords - Esquina Inferior Izquierda (Separado del borde)
+    Object.assign(coordContainer.style, {
+      position: 'absolute',
+      bottom: '25px',
+      left: '140px',
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      color: 'white',
+      padding: '5px 15px',
+      borderRadius: '20px',
+      fontSize: '13px',
+      fontFamily: 'monospace',
+      display: 'none',
+      zIndex: 2000,
+      whiteSpace: 'nowrap',
+      pointerEvents: 'none' // Click through
+    });
 
     map.on('mousemove', (e) => {
       coordContainer.style.display = 'block';
@@ -247,21 +318,21 @@ const MapLogic = ({
     // --- 2. Crear Modales Personalizados (Geoite Style) ---
 
     // A) Modal de Mediciones
-    const measureModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-blue', map.getContainer());
-    measureModal.id = "invvial-menu-medir";
+    const measureModal = L.DomUtil.create('div', 'suelos-flyout-card suelos-card-blue', map.getContainer());
+    measureModal.id = "suelos-menu-medir";
     L.DomEvent.disableClickPropagation(measureModal);
     measureModal.innerHTML = `
-            <div class="invvial-card-header invvial-header-blue">
+            <div class="suelos-card-header suelos-header-blue">
                 <span>Mediciones</span>
                 <i class="fas fa-times" style="cursor:pointer" id="measure-close"></i>
             </div>
-            <div class="invvial-card-body">
+            <div class="suelos-card-body">
                 <div style="display:flex; gap:10px; margin-bottom:10px;">
-                    <button class="invvial-btn-block" id="invvial-distanceButton"><i class="fas fa-ruler"></i> Distancia</button>
-                    <button class="invvial-btn-block" id="invvial-areaButton"><i class="fas fa-draw-polygon"></i> Área</button>
-                    <button class="invvial-btn-block" id="invvial-clearMeasureButton"><i class="fas fa-trash"></i> Limpiar</button>
+                    <button class="suelos-btn-block" id="suelos-distanceButton"><i class="fas fa-ruler"></i> Distancia</button>
+                    <button class="suelos-btn-block" id="suelos-areaButton"><i class="fas fa-draw-polygon"></i> Área</button>
+                    <button class="suelos-btn-block" id="suelos-clearMeasureButton"><i class="fas fa-trash"></i> Limpiar</button>
                 </div>
-                <div id="invvial-distanceDisplay" style="margin-bottom: 10px; font-weight: bold;">Seleccione una herramienta.</div>
+                <div id="suelos-distanceDisplay" style="margin-bottom: 10px; font-weight: bold;">Seleccione una herramienta.</div>
             </div>
         `;
     // Funcionalidad Medir (Simplificada del Geoite original pa no copiar 1000 lineas de lógica complexa, pero funcional)
@@ -278,7 +349,7 @@ const MapLogic = ({
           const latlngs = layer.getLatLngs();
           let dist = 0;
           for (let i = 0; i < latlngs.length - 1; i++) dist += latlngs[i].distanceTo(latlngs[i + 1]);
-          document.getElementById('invvial-distanceDisplay').innerText = `Distancia: ${(dist / 1000).toFixed(3)} km`;
+          document.getElementById('suelos-distanceDisplay').innerText = `Distancia: ${(dist / 1000).toFixed(3)} km`;
         });
       } else if (type === 'polygon') {
         activeMeasureHandler = new L.Draw.Polygon(map, { shapeOptions: { color: '#e74c3c' } });
@@ -287,37 +358,37 @@ const MapLogic = ({
           const layer = e.layer;
           measurementLayersRef.current.addLayer(layer);
           // Area calc logic needed? Geoite uses helpers. For now basic.
-          document.getElementById('invvial-distanceDisplay').innerText = `Área dibujada`;
+          document.getElementById('suelos-distanceDisplay').innerText = `Área dibujada`;
         });
       }
     };
 
     measureModal.querySelector('#measure-close').onclick = () => measureModal.style.display = 'none';
-    measureModal.querySelector('#invvial-distanceButton').onclick = () => startMeasure('polyline');
-    measureModal.querySelector('#invvial-areaButton').onclick = () => startMeasure('polygon');
-    measureModal.querySelector('#invvial-clearMeasureButton').onclick = () => {
+    measureModal.querySelector('#suelos-distanceButton').onclick = () => startMeasure('polyline');
+    measureModal.querySelector('#suelos-areaButton').onclick = () => startMeasure('polygon');
+    measureModal.querySelector('#suelos-clearMeasureButton').onclick = () => {
       measurementLayersRef.current.clearLayers();
-      document.getElementById('invvial-distanceDisplay').innerText = 'Seleccione una herramienta.';
+      document.getElementById('suelos-distanceDisplay').innerText = 'Seleccione una herramienta.';
     };
 
 
     // B) Modal de Dibujo
-    const drawModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-orange', map.getContainer());
-    drawModal.id = "invvial-menu-dibujo";
+    const drawModal = L.DomUtil.create('div', 'suelos-flyout-card suelos-card-orange', map.getContainer());
+    drawModal.id = "suelos-menu-dibujo";
     drawModal.style.width = '300px';
     L.DomEvent.disableClickPropagation(drawModal);
     drawModal.innerHTML = `
-            <div class="invvial-card-header invvial-header-orange">
+            <div class="suelos-card-header suelos-header-orange">
                 <span>Herramientas de Dibujo</span>
                 <i class="fas fa-times" style="cursor:pointer" id="draw-close"></i>
             </div>
-             <div class="invvial-card-body">
+             <div class="suelos-card-body">
                 <p>Dibuje puntos de interés o geometrías.</p>
-                <button id="invvial-drawPointBtn" class="invvial-btn-primary">MARCADOR</button>
+                <button id="suelos-drawPointBtn" class="suelos-btn-primary">MARCADOR</button>
              </div>
         `;
     drawModal.querySelector('#draw-close').onclick = () => drawModal.style.display = 'none';
-    drawModal.querySelector('#invvial-drawPointBtn').onclick = () => {
+    drawModal.querySelector('#suelos-drawPointBtn').onclick = () => {
       const markerDrawer = new L.Draw.Marker(map);
       markerDrawer.enable();
       map.on(L.Draw.Event.CREATED, (e) => {
@@ -327,17 +398,17 @@ const MapLogic = ({
     };
 
     // C) Modal de Descarga
-    const downloadModal = L.DomUtil.create('div', 'invvial-flyout-card invvial-card-purple', map.getContainer());
-    downloadModal.id = 'invvial-menu-kml-descarga';
+    const downloadModal = L.DomUtil.create('div', 'suelos-flyout-card suelos-card-purple', map.getContainer());
+    downloadModal.id = 'suelos-menu-kml-descarga';
     L.DomEvent.disableClickPropagation(downloadModal);
     downloadModal.innerHTML = `
-          <div class="invvial-card-header invvial-header-purple">
+          <div class="suelos-card-header suelos-header-purple">
               <span>Descargar Datos</span>
               <i class="fas fa-times" style="cursor:pointer" id="download-close"></i>
           </div>
-          <div class="invvial-card-body">
+          <div class="suelos-card-body">
               <p>Exportar geometrías dibujadas.</p>
-              <button id="invvial-exportKmlBtn" class="invvial-btn-block"><i class="fas fa-file-code"></i> Descargar KML</button>
+              <button id="suelos-exportKmlBtn" class="suelos-btn-block"><i class="fas fa-file-code"></i> Descargar KML</button>
           </div>
         `;
     downloadModal.querySelector('#download-close').onclick = () => downloadModal.style.display = 'none';
@@ -358,20 +429,20 @@ const MapLogic = ({
         alertify.error('Error exportando KML');
       }
     };
-    downloadModal.querySelector('#invvial-exportKmlBtn').onclick = handleExportKML;
+    downloadModal.querySelector('#suelos-exportKmlBtn').onclick = handleExportKML;
 
 
     // --- 3. Toolbar Principal (Left Vertical) ---
     if (!hideToolbar) {
-      const toolbarContainer = L.DomUtil.create('div', 'invvial-toolbar-container');
+      const toolbarContainer = L.DomUtil.create('div', 'suelos-map-toolbar'); // Used to be invvial-toolbar-container but css was invvial-map-toolbar
       toolbarContainer.innerHTML = `
-                <div class="invvial-tool-group">
-                    <button class="invvial-tool-btn" data-menu="invvial-menu-medir" title="Medir"><i class="fas fa-ruler-combined"></i></button>
-                    <button class="invvial-tool-btn" data-menu="invvial-menu-dibujo" title="Dibujar"><i class="fas fa-pencil-alt" style="color: #e67e22;"></i></button>
-                    <button class="invvial-tool-btn" data-menu="invvial-menu-kml-descarga" title="Descargar"><i class="fas fa-download" style="color: #6c5ce7;"></i></button>
+                <div class="suelos-tool-group">
+                    <button class="suelos-tool-btn" data-menu="suelos-menu-medir" title="Medir"><i class="fas fa-ruler-combined"></i></button>
+                    <button class="suelos-tool-btn" data-menu="suelos-menu-dibujo" title="Dibujar"><i class="fas fa-pencil-alt" style="color: #e67e22;"></i></button>
+                    <button class="suelos-tool-btn" data-menu="suelos-menu-kml-descarga" title="Descargar"><i class="fas fa-download" style="color: #6c5ce7;"></i></button>
                 </div>
-                <div class="invvial-tool-group">
-                    <button class="invvial-tool-btn" id="invvial-centerMap" title="Centrar"><i class="fas fa-crosshairs"></i></button>
+                <div class="suelos-tool-group">
+                    <button class="suelos-tool-btn" id="suelos-centerMap" title="Centrar"><i class="fas fa-crosshairs"></i></button>
                 </div>
             `;
 
@@ -386,7 +457,7 @@ const MapLogic = ({
         downloadModal.style.display = 'none';
       };
 
-      toolbarContainer.querySelectorAll('.invvial-tool-btn[data-menu]').forEach(btn => {
+      toolbarContainer.querySelectorAll('.suelos-tool-btn[data-menu]').forEach(btn => {
         btn.onclick = (e) => {
           e.stopPropagation();
           const menuId = btn.getAttribute('data-menu');
@@ -399,7 +470,7 @@ const MapLogic = ({
         };
       });
 
-      toolbarContainer.querySelector('#invvial-centerMap').onclick = () => {
+      toolbarContainer.querySelector('#suelos-centerMap').onclick = () => {
         // Centrar en los tramos cargados o default
         const bounds = displayLayersRef.current.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds);
@@ -423,22 +494,40 @@ const MapLogic = ({
     if (!map) return;
 
     // Dynamic lookup needed in case layer was just toggled
-    // Helper helper useGlobalLayers logic is in scope now
-    const layer = (useGlobalLayers && window.canterasLayerGroupGlobal) ? window.canterasLayerGroupGlobal : activeCanterasLayerRef.current;
+    const layer = (useGlobalLayers && window.suelosCanterasLayerGroup) ? window.suelosCanterasLayerGroup : activeCanterasLayerRef.current;
 
     if (layer) layer.clearLayers();
 
     if (!canterasData || canterasData.length === 0) return;
 
-    canterasData.forEach(c => {
-      // Validar coords
-      if (c.latitud && c.longitud) {
-        let lat = parseFloat(c.latitud);
-        let lon = parseFloat(c.longitud);
+    // console.log('[DEBUG SuelosMap] Drawing canterasData:', canterasData.length);
 
+    canterasData.forEach(c => {
+      // Validar coords - Permitir 'latitud'/'longitud' directas
+      let lat, lon;
+
+      if (c.latitud && c.longitud) {
+        lat = parseFloat(c.latitud);
+        lon = parseFloat(c.longitud);
+      } else if (c.coordenada_este && c.coordenada_norte && (c.lado || defaultZone)) {
+        // Fallback UTM conversion if only East/North provided
+        try {
+          const z = c.lado || defaultZone || '18L';
+          const zNum = parseInt(z.replace(/[A-Za-z]/g, ''));
+          const zLet = z.replace(/[0-9]/g, '') || 'L';
+          const res = toLatLon(parseFloat(c.coordenada_este), parseFloat(c.coordenada_norte), zNum, zLet);
+          lat = res.latitude;
+          lon = res.longitude;
+        } catch (e) {
+          console.warn('Invalid coords fallback for cantera:', c.nombre, e);
+          return;
+        }
+      }
+
+      if (lat && lon) {
         // Icono Cantera (Naranja/Montaña)
         const icon = L.divIcon({
-          className: 'cantera-marker-icon',
+          className: 'suelos-cantera-marker-icon', // Renamed
           html: `<div style="
                   background-color: #e67e22;
                   color: white;
@@ -454,37 +543,41 @@ const MapLogic = ({
 
         const marker = L.marker([lat, lon], {
           icon: icon,
-          title: c.nombre_cantera || 'Cantera'
+          title: c.nombre_cantera || c.nombre || 'Cantera'
         });
 
-        // Popup Content
-        const popupContent = document.createElement('div');
-        popupContent.style.textAlign = 'center';
-        popupContent.innerHTML = `
-          <h4 style="margin:0 0 5px 0; color:#d35400;">${c.nombre_cantera}</h4>
-          <p style="margin:0; font-size:12px;">${c.codigo_cantera || ''}</p>
-          <div style="margin-top:8px;">
-            <button class="invvial-btn-primary" style="padding:4px 8px; font-size:11px;">
-              <i class="fas fa-eye"></i> Ver Detalle
-            </button>
-          </div>
-        `;
-
-        // Add click listener to button
-        const btn = popupContent.querySelector('button');
-        if (btn) {
-          btn.onclick = () => {
-            navigate(`/suelos/canteras/${c.cantera_id}`);
-          };
-        }
-
-        marker.bindPopup(popupContent);
-
         if (layer) marker.addTo(layer);
+
+        // --- Render React Component into Popup ---
+        const container = document.createElement('div');
+        const root = createRoot(container);
+
+        root.render(
+          <CanteraMapPopup
+            cantera={c}
+            onNavigate={(cantera) => {
+              // Navigate to gestor de canteras selecting this cantera
+              navigate('/coordinador/suelos/canteras', {
+                state: {
+                  canteraId: cantera.id,
+                  selectedProjectId: cantera.proyecto_id
+                }
+              });
+            }}
+          />
+        );
+
+        marker.bindPopup(container, {
+          minWidth: 300,
+          maxWidth: 300,
+          closeButton: false, // We can hide default close button if we want our own, or styling overrides it
+          className: 'suelos-premium-popup'
+        });
+
       }
     });
 
-  }, [canterasData, map, forceUpdate]); // forceUpdate triggers redraw on toggle
+  }, [canterasData, map, forceUpdate, defaultZone]); // forceUpdate triggers redraw on toggle
 
   // --- NUEVA LÓGICA: DIBUJAR PROGRESIVAS DESDE DB ---
   useEffect(() => {
@@ -495,7 +588,7 @@ const MapLogic = ({
     if (!progresivasData) return;
 
     // Use dynamic reference
-    const progLayer = (useGlobalLayers && window.progresivasLayerGroupGlobal) ? window.progresivasLayerGroupGlobal : progresivasLayerRef.current;
+    const progLayer = (useGlobalLayers && window.suelosProgresivasLayerGroup) ? window.suelosProgresivasLayerGroup : progresivasLayerRef.current;
 
     if (progLayer) progLayer.clearLayers();
 
@@ -542,8 +635,8 @@ const MapLogic = ({
             if (isApproved) {
               // APROBADO: VERDE (Check)
               const icon = L.divIcon({
-                className: 'verified-marker-icon',
-                html: `<div class="verified-pin-body" style="animation: none;"><i class="fas fa-check"></i></div>`,
+                className: 'suelos-verified-marker-icon',
+                html: `<div class="suelos-verified-pin-body" style="animation: none;"><i class="fas fa-check"></i></div>`,
                 iconSize: [30, 30],
                 iconAnchor: [15, 15]
               });
@@ -558,8 +651,8 @@ const MapLogic = ({
             } else if (isReview) {
               // EN REVISION: AMARILLO (Reloj/Ojo)
               const icon = L.divIcon({
-                className: 'verified-marker-icon',
-                html: `<div class="verified-pin-body" style="background-color: #f1c40f; border-color: #fff; animation: none;"><i class="fas fa-clock" style="color: white;"></i></div>`,
+                className: 'suelos-verified-marker-icon',
+                html: `<div class="suelos-verified-pin-body" style="background-color: #f1c40f; border-color: #fff; animation: none;"><i class="fas fa-clock" style="color: white;"></i></div>`,
                 iconSize: [30, 30],
                 iconAnchor: [15, 15]
               });
@@ -574,7 +667,7 @@ const MapLogic = ({
             } else if (isInactive) {
               // INACTIVO: GRIS (Punto pequeño)
               const icon = L.divIcon({
-                className: 'kml-ref-point',
+                className: 'suelos-kml-ref-point',
                 html: `<div style="width:10px;height:10px;background-color:#95a5a6;border-radius:50%;border:1.5px solid white;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
                 iconSize: [10, 10],
                 iconAnchor: [5, 5]
@@ -614,40 +707,31 @@ const MapLogic = ({
               statusLabel = hasData ? 'Pendiente (Con Datos)' : 'Pendiente';
             }
 
-            const popupHtml = `
-              <div class="popup-premium-container">
-                <div class="popup-header">
-                  <i class="fas fa-map-marker-alt"></i>
-                  <span>${p.nombre || 'Progresiva Sin Nombre'}</span>
-                </div>
-                <div class="popup-body">
-                  <div class="popup-row">
-                    <span class="popup-label">Progresiva:</span>
-                    <span class="popup-value">${p.nombre}</span>
-                  </div>
-                  <div class="popup-row">
-                    <span class="popup-label">Estado:</span>
-                    <span class="popup-value ${statusClass}" style="${statusClass === 'status-warning' ? 'color: #f39c12;' : ''} ${statusClass === 'status-inactive' ? 'color: #7f8c8d;' : ''}">
-                      ${statusIconHtml} ${statusLabel}
-                    </span>
-                  </div>
-                  <div class="popup-divider"></div>
-                  <div class="popup-row compact">
-                    <span class="popup-label">Este:</span>
-                    <span class="popup-mono">${p.coordenada_este}</span>
-                  </div>
-                  <div class="popup-row compact">
-                    <span class="popup-label">Norte:</span>
-                    <span class="popup-mono">${p.coordenada_norte}</span>
-                  </div>
-                  <div class="popup-row compact">
-                    <span class="popup-label">Zona:</span>
-                    <span class="popup-mono">${zoneToUse}</span>
-                  </div>
-                </div>
-              </div>
-            `;
-            marker.bindPopup(popupHtml);
+            // --- POPUP DINÁMICO CON FOTOS ---
+            const popupNode = document.createElement('div');
+            const root = createRoot(popupNode);
+
+            root.render(
+              <ProgresivaMapPopup
+                progresiva={p}
+                token={authToken}
+                onNavigate={(prog) => {
+                  navigate('/coordinador/suelos/gestion-tramos', {
+                    state: {
+                      openTramoId: prog.parent_id,
+                      highlightProgresivaId: prog.id
+                    }
+                  });
+                }}
+              />
+            );
+
+            marker.bindPopup(popupNode, {
+              minWidth: 300,
+              maxWidth: 300,
+              closeButton: false,
+              className: 'suelos-premium-popup'
+            });
 
             marker.on('click', () => {
               if (onMapClick) {
@@ -670,8 +754,6 @@ const MapLogic = ({
         // if (shouldLog) console.log('[DEBUG SuelosMap] Missing coords or zone for:', p.codigo);
       }
     });
-
-    console.log(`[DEBUG SuelosMap] Total markers added: ${addedCount} `);
 
     // Auto-fit if we drew markers and user hasn't messed with map yet
     if (!userInteractedRef.current && addedCount > 0 && progLayer) {
@@ -770,10 +852,6 @@ const MapLogic = ({
               // --- FILTERING LOGIC ---
               const isTrazadoStrick = trazadoSet.has(id);
 
-              // DEBUG: Check feature types
-              const types = geojson.features.map(f => f.geometry.type);
-              console.log(`[SuelosMap DEBUG] KML ID: ${id}, IsStrict: ${isTrazadoStrick}, FeatureTypes:`, types);
-
               const layer = L.geoJSON(geojson, {
                 style: (feature) => {
                   if (feature.geometry.type === 'Point') return {};
@@ -797,72 +875,105 @@ const MapLogic = ({
                   }
 
                   const addToProgresivasLayer = (markerInstance) => {
-                    const group = (useGlobalLayers && window.progresivasLayerGroupGlobal) ? window.progresivasLayerGroupGlobal : progresivasLayerRef.current;
+                    const group = (useGlobalLayers && window.suelosProgresivasLayerGroup) ? window.suelosProgresivasLayerGroup : progresivasLayerRef.current;
                     if (group) markerInstance.addTo(group);
                   };
 
                   if (matchedProgresiva && matchedProgresiva.coordenada_este && matchedProgresiva.coordenada_norte) {
                     // Match found AND DB has coords -> Let DB layer handle it.
                     return null;
-                  } else {
+                  }
+
+                  let marker;
+                  let zIndex = -500;
+
+                  if (matchedProgresiva) {
+                    // Match found but NO DB coords -> Use KML coords + Premium Popup
+                    const hasData = matchedProgresiva.estratos_perfil && matchedProgresiva.estratos_perfil.length > 0;
+                    zIndex = 800;
                     let icon;
-                    let zIndex = -500;
-                    let popupHtml = `<b>${feature.properties?.name || 'Punto KML'}</b><br/>`;
-                    let interactive = true;
-                    let onClickHandler = null;
 
-                    if (matchedProgresiva) {
-                      // Match found but NO DB coords -> Use KML coords
-                      const hasData = matchedProgresiva.estratos_perfil && matchedProgresiva.estratos_perfil.length > 0;
-                      zIndex = 800;
-
-                      if (hasData) {
-                        icon = L.divIcon({
-                          className: 'verified-marker-icon',
-                          html: `<div class="verified-pin-body"><i class="fas fa-check"></i></div>`,
-                          iconSize: [30, 30],
-                          iconAnchor: [15, 15]
-                        });
-                        popupHtml += `Prog: ${matchedProgresiva.codigo}<br/><span style="color:green">Con Datos (Ubicación KML)</span>`;
-                      } else {
-                        icon = L.divIcon({
-                          className: '',
-                          html: `<div style="width:12px;height:12px;background-color:#3498db;border:2px solid white;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>`,
-                          iconSize: [12, 12],
-                          iconAnchor: [6, 6]
-                        });
-                        popupHtml += `Prog: ${matchedProgresiva.codigo}<br/><span style="color:orange">Pendiente (Ubicación KML)</span>`;
-                      }
-
-                      onClickHandler = () => {
-                        if (onMapClick) onMapClick({ type: 'progresiva', data: matchedProgresiva });
-                      };
-
-                    } else {
-                      // No Match in DB
-                      if (isTrazadoStrick) {
-                        return null; // Strict mode: Hide unmatched points
-                      }
-                      // Permissive mode: Grey point
-                      zIndex = 0;
+                    if (hasData) {
                       icon = L.divIcon({
-                        className: 'kml-ref-point',
-                        html: `<div style="width:10px;height:10px;background-color:#6c757d;border-radius:50%;border:1.5px solid white;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
-                        iconSize: [10, 10],
-                        iconAnchor: [5, 5]
+                        className: 'suelos-verified-marker-icon',
+                        html: `<div class="suelos-verified-pin-body"><i class="fas fa-check"></i></div>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
                       });
-                      popupHtml += `<span style="color:#6c757d; font-weight:bold;">Referencia Visual (Sin Reg. DB)</span>`;
+                    } else {
+                      icon = L.divIcon({
+                        className: '',
+                        html: `<div style="width:12px;height:12px;background-color:#3498db;border:2px solid white;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>`,
+                        iconSize: [12, 12],
+                        iconAnchor: [6, 6]
+                      });
                     }
 
-                    const marker = L.marker(latlng, {
-                      icon: icon, zIndexOffset: zIndex, interactive: interactive
+                    // Calculate UTM from KML LatLon for display
+                    const kmlUtm = fromLatLon(latlng.lat, latlng.lng);
+                    const progWithCoords = {
+                      ...matchedProgresiva,
+                      coordenada_este: kmlUtm.easting,
+                      coordenada_norte: kmlUtm.northing
+                    };
+
+                    const popupNode = document.createElement('div');
+                    const root = createRoot(popupNode);
+
+                    root.render(
+                      <ProgresivaMapPopup
+                        progresiva={progWithCoords}
+                        token={authToken}
+                        onNavigate={(prog) => {
+                          navigate('/coordinador/suelos/gestion-tramos', {
+                            state: {
+                              openTramoId: prog.parent_id,
+                              highlightProgresivaId: prog.id
+                            }
+                          });
+                        }}
+                      />
+                    );
+
+                    marker = L.marker(latlng, { icon, zIndexOffset: zIndex });
+                    marker.bindPopup(popupNode, {
+                      minWidth: 300,
+                      maxWidth: 300,
+                      closeButton: false,
+                      className: 'suelos-premium-popup'
+                    });
+
+                    marker.on('click', () => {
+                      if (onMapClick) onMapClick({ type: 'progresiva', data: matchedProgresiva });
+                    });
+
+                  } else {
+                    // No Match in DB
+                    if (isTrazadoStrick) {
+                      return null;
+                    }
+                    // Permissive mode: Grey point
+                    zIndex = 0;
+                    const icon = L.divIcon({
+                      className: 'suelos-kml-ref-point',
+                      html: `<div style="width:10px;height:10px;background-color:#6c757d;border-radius:50%;border:1.5px solid white;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
+                      iconSize: [10, 10],
+                      iconAnchor: [5, 5]
+                    });
+
+                    const popupHtml = `
+                      <div style="font-family:sans-serif;font-size:13px;color:#333;padding:5px;">
+                          <b>${feature.properties?.name || 'Punto KML'}</b><br/>
+                          <span style="color:#6c757d; font-weight:bold;">Referencia Visual (Sin Reg. DB)</span>
+                      </div>`;
+
+                    marker = L.marker(latlng, {
+                      icon: icon, zIndexOffset: zIndex
                     }).bindPopup(popupHtml);
-
-                    if (onClickHandler) marker.on('click', onClickHandler);
-
-                    addToProgresivasLayer(marker);
-                    return null; // Don't let L.geoJSON add it
                   }
+
+                  if (marker) addToProgresivasLayer(marker);
+                  return null;
                 },
                 onEachFeature: null
               });
@@ -876,9 +987,6 @@ const MapLogic = ({
                 if (Math.abs(center.lat) > 0.1 && Math.abs(center.lng) > 0.1) {
                   combinedBounds.extend(b);
                   hasBounds = true;
-                  console.log(`[SuelosMap DEBUG] Extended bounds with KML. New Center:`, combinedBounds.getCenter());
-                } else {
-                  console.warn(`[SuelosMap DEBUG] Ignored bounds near (0,0) for ID: ${id}`);
                 }
               }
             } catch (e) {
@@ -892,7 +1000,6 @@ const MapLogic = ({
         if (!fittedBoundsRef.current.has(boundsKey)) {
           setTimeout(() => {
             if (isMounted.current && map) {
-              console.log(`[SuelosMap DEBUG] Fitting bounds to:`, combinedBounds.toBBoxString());
               map.fitBounds(combinedBounds, { padding: [50, 50], maxZoom: 16, animate: true });
             }
           }, 100);
@@ -930,7 +1037,7 @@ const MapLogic = ({
 
       if (cantera && cantera.imagenes && cantera.imagenes.length > 0) {
         const imgUrl = cantera.imagenes[0].imagen_url;
-        const tooltipHtml = `<div class="map-tooltip-image-container"><img src="${imgUrl}" class="map-tooltip-image"/></div>`;
+        const tooltipHtml = `<div class="suelos-map-tooltip-image-container"><img src="${imgUrl}" class="suelos-map-tooltip-image"/></div>`;
         marker.bindTooltip(tooltipHtml, { permanent: false, direction: 'top', className: 'custom-img-tooltip' });
       } else if (cantera && cantera.nombre) {
         marker.bindTooltip(cantera.nombre);
@@ -955,7 +1062,7 @@ const FeatureGroupWithRef = ({ globalKey }) => {
       window[globalKey] = groupRef.current;
       // Auto add to map via parent LayersControl management usually
       // But we dispatch event just in case logic needs it
-      window.dispatchEvent(new CustomEvent('layerRefreshed', { detail: globalKey }));
+      window.dispatchEvent(new CustomEvent('suelosLayerRefreshed', { detail: globalKey }));
     }
   }, [globalKey]);
 
@@ -965,6 +1072,7 @@ const FeatureGroupWithRef = ({ globalKey }) => {
 // --- Componente Principal (Wrapper del Mapa) ---
 const SuelosMap = (props) => {
   const [showLayersControl, setShowLayersControl] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     // If explicitly 'modal' or 'modal-canteras', hide controls by default or specific rule
@@ -976,12 +1084,12 @@ const SuelosMap = (props) => {
   }, [props.layerContext]);
 
   return (
-    <div className={`map-container ${props.className || ''}`} style={props.style}>
+    <div className={`suelos-map-wrapper ${props.className || ''}`} style={props.style}>
       <MapContainer
         center={[-12.930, -72.630]} // Centro aprox Quillabamba
         zoom={13}
         style={{ height: '100%', width: '100%' }}
-        zoomControl={false} // Custom controls
+        zoomControl={true} // Enabled native zoom (topleft)
       >
         {!showLayersControl && (
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -997,15 +1105,15 @@ const SuelosMap = (props) => {
             </LayersControl.BaseLayer>
 
             <LayersControl.Overlay checked name="Progresivas">
-              <FeatureGroupWithRef globalKey="progresivasLayerGroupGlobal" />
+              <FeatureGroupWithRef globalKey="suelosProgresivasLayerGroup" />
             </LayersControl.Overlay>
             <LayersControl.Overlay checked name="Canteras">
-              <FeatureGroupWithRef globalKey="canterasLayerGroupGlobal" />
+              <FeatureGroupWithRef globalKey="suelosCanterasLayerGroup" />
             </LayersControl.Overlay>
           </LayersControl>
         )}
 
-        <MapLogic {...props} />
+        <MapLogic {...props} authToken={user?.token} />
       </MapContainer>
     </div>
   );

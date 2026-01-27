@@ -442,7 +442,7 @@ export default function GestorDeCanteras() {
                     isExpanded={mapExpanded}
                     onExpand={setMapExpanded}
                     kmlTrazadoIds={mapKmlIds}
-                    cantera={canteraSeleccionada} // <-- Pasar la cantera completa
+                    canterasData={[canteraSeleccionada]} // <-- Pasar como array 'canterasData' para usar el nuevo popup
                     onMarkerClick={() => handleOpenGallery(canteraSeleccionada)}
                     layerContext="gestor-canteras" // Contexto aislado
                     hideKmlPoints={true} // Ocultar puntos KML (progresivas)

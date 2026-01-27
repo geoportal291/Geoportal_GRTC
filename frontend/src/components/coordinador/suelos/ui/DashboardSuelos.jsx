@@ -17,6 +17,7 @@ import SuelosMap from '../mapa/SuelosMap';
 import 'leaflet/dist/leaflet.css'; // Asegurar estilos de Leaflet
 import './DashboardSuelos.css';
 import useProgresivasData from '../../../../hooks/useProgresivasData'; // <--- IMPORT CRÍTICO
+import ProgresivaImageGalleryModal from '../gestion_tramos/ProgresivaImageGalleryModal'; // Importar Modal de Galería
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
@@ -59,6 +60,7 @@ export default function DashboardSuelos() {
   // Estados KPIs (Mock)
   const [avanceStats, setAvanceStats] = useState({ val: 0, total: 100 });
   const [canterasMapData, setCanterasMapData] = useState([]); // NUEVO: Estado para canteras
+  const [viewingGallery, setViewingGallery] = useState(false); // Estado para la galería
 
   // Stats helpers
   const getTotalAssays = () => {
@@ -88,7 +90,6 @@ export default function DashboardSuelos() {
   // --- 1. Sincronizar datos del Hook con el Dashboard ---
   useEffect(() => {
     if (!hookLoading) {
-      console.log("Dashboard: Datos cargados desde useProgresivasData:", hookProgresivas.length);
 
       const syncData = async () => {
         let allData = [...hookProgresivas];
@@ -117,7 +118,6 @@ export default function DashboardSuelos() {
             const newChildren = allChildren.filter(c => !currentIds.has(c.id));
 
             if (newChildren.length > 0) {
-              console.log(`[Dashboard Fix] Se encontraron ${newChildren.length} hijos perdidos. Agregando al mapa.`);
               allData = [...allData, ...newChildren];
             }
           } catch (err) {
@@ -130,7 +130,6 @@ export default function DashboardSuelos() {
             const canterasPromises = parentIds.map(tramoId =>
               axiosInstance.get(`/api/tramos/${tramoId}/canteras`)
                 .then(res => {
-                  console.log(`[Dashboard] Canteras fetch tramo ${tramoId}:`, res.data);
                   return res.data || [];
                 })
                 .catch(err => {
@@ -141,7 +140,6 @@ export default function DashboardSuelos() {
 
             const canterasArrays = await Promise.all(canterasPromises);
             allCanteras = canterasArrays.flat();
-            console.log(`[Dashboard] Total canteras cargadas: ${allCanteras.length}`, allCanteras);
             setCanterasMapData(allCanteras);
 
           } catch (err) {
@@ -354,13 +352,17 @@ export default function DashboardSuelos() {
 
   const navigateToGestor = (viewMode) => {
     if (!selectedMapItem?.data?.id) return;
+
+    // Determine the Tramo ID (Parent). 
+    // If parent_id exists, it's a child; use parent_id.
+    // If no parent_id, it is likely the Tramo itself; use its own id.
     const parentId = selectedMapItem.data.progresiva_padre_id || selectedMapItem.data.tramo_id || selectedMapItem.data.parent_id;
-    console.log('[DEBUG Dashboard] Navigating with parentId:', parentId, 'Data:', selectedMapItem.data);
+    const tramoIdToOpen = parentId || selectedMapItem.data.id;
 
     navigate('/coordinador/recoleccion-datos/gestor-tramos', {
       state: {
-        activeProgresivaId: selectedMapItem.data.id,
-        openTramoId: parentId, // Match expected prop in Progresivas.jsx
+        activeProgresivaId: selectedMapItem.data.id, // Determine logic: if clicking parent, scroll to parent? Or just open?
+        openTramoId: tramoIdToOpen,
         initialViewMode: viewMode
       }
     });
@@ -379,7 +381,6 @@ export default function DashboardSuelos() {
 
           {/* MAPA (Flex Item 1) */}
           <div style={{ flex: 1, position: 'relative', height: '100%', minWidth: 0 }}>
-            {console.log('[DEBUG Dashboard] Datos pasando a SuelosMap:', { cant: progresivas.length, sample: progresivas[0] })}
             <SuelosMap
               kmlTrazadoIds={null} // Disable legacy
               trazadoIds={kmlTrazadoIdsStricto} // NEW PROP STRICT
@@ -471,7 +472,7 @@ export default function DashboardSuelos() {
                 </div>
 
 
-                <div className="sidebar-actions" style={{ display: 'flex', justifyContent: 'center' }}>
+                <div className="sidebar-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <button
                     className="sidebar-btn primary"
                     onClick={() => navigateToGestor('estratos')}
@@ -493,6 +494,29 @@ export default function DashboardSuelos() {
                   >
                     <i className="fas fa-layer-group"></i>
                     <span>Ver Detalle y Estratos</span>
+                  </button>
+                  <button
+                    className="sidebar-btn secondary"
+                    onClick={() => setViewingGallery(true)}
+                    style={{
+                      marginTop: '0.75rem',
+                      backgroundColor: '#ffffff',
+                      color: '#334155',
+                      border: '1px solid #cbd5e1',
+                      padding: '0.75rem 1.5rem',
+                      borderRadius: '0.5rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      fontWeight: 600,
+                      width: '100%',
+                      justifyContent: 'center',
+                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                    }}
+                  >
+                    <i className="fas fa-images"></i>
+                    <span>Ver Galería</span>
                   </button>
                 </div>
 
@@ -670,6 +694,13 @@ export default function DashboardSuelos() {
         </main >
       </section >
 
+      {viewingGallery && selectedMapItem && selectedMapItem.data && (
+        <ProgresivaImageGalleryModal
+          isOpen={viewingGallery}
+          onClose={() => setViewingGallery(false)}
+          progresiva={selectedMapItem.data}
+        />
+      )}
     </main >
   );
 }

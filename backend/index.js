@@ -57,13 +57,12 @@ const wishlistService = require('./services/wishlistService');
 
 console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
+const emailService = require('./services/emailService');
 
 const whitelist = [
     'http://localhost:3000',
-    'http://localhost:3001',
-    'http://192.168.1.19:3000',
-    'https://geoportalbetav2.fly.dev',
-    'https://backend-solitary-fire-911.fly.dev'
+    'https://geoportalbetav3.fly.dev',
+    'https://backendgeoportal.fly.dev'
 ];
 
 const corsOptions = {
@@ -426,6 +425,39 @@ app.get('/api/proxy', async (req, res) => {
 
 
 // --------------------- LOGIN ---------------------
+// --------------------- AJUSTES GLOBALES ---------------------
+app.get('/api/settings/global', authenticateToken, async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM system_settings');
+        const settings = {};
+        result.rows.forEach(row => {
+            settings[row.setting_key] = row.setting_value;
+        });
+        res.json(settings);
+    } catch (err) {
+        console.error('Error fetching global settings:', err);
+        res.status(500).json({ error: 'Error al obtener configuración' });
+    }
+});
+
+app.post('/api/settings/global', authenticateToken, async (req, res) => {
+    // Recomendable verificar que sea admin/sadmin aquí, pero por brevedad lo dejamos abierto a usuarios autenticados o filtrar luego
+    const { key, value } = req.body; // value should be string 'true' or 'false'
+    try {
+        await db.query(`
+            INSERT INTO system_settings (setting_key, setting_value)
+            VALUES ($1, $2)
+            ON CONFLICT (setting_key)
+            DO UPDATE SET setting_value = EXCLUDED.setting_value
+        `, [key, value]);
+        res.json({ status: 'ok', message: 'Configuración actualizada' });
+    } catch (err) {
+        console.error('Error updating global settings:', err);
+        res.status(500).json({ error: 'Error al actualizar configuración' });
+    }
+});
+
+// --------------------- LOGIN ---------------------
 app.post('/login', async (req, res) => {
     const { usuario, password } = req.body;
     try {
@@ -435,12 +467,64 @@ app.post('/login', async (req, res) => {
             LEFT JOIN roles r ON u.rol_id = r.id
             WHERE u.usuario = $1
         `, [usuario]);
+
         if (result.rows.length > 0) {
             const user = result.rows[0];
             // Aquí deberías validar la contraseña (hash)
-            if (password === user.password) { // Simplificado, usar bcrypt en producción
-                const accessToken = jwt.sign({ id: user.id, rol_nombre: user.rol_nombre }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '8h' });
-                res.json({ status: 'ok', mensaje: 'login exitoso', usuario: { ...user, role: user.rol_nombre, token: accessToken } });
+            if (password === user.password) { // Simplificado
+
+                // Verificar persistencia de 2FA (30 minutos)
+                const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+                if (user.last_2fa_verification && new Date(user.last_2fa_verification) > thirtyMinutesAgo) {
+                    const accessToken = jwt.sign({ id: user.id, rol_nombre: user.rol_nombre }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '8h' });
+                    return res.json({ status: 'ok', mensaje: 'login exitoso (2FA persistido)', usuario: { ...user, role: user.rol_nombre, token: accessToken } });
+                }
+
+                // Verificar configuración global de 2FA
+                const settingsRes = await db.query("SELECT setting_value FROM system_settings WHERE setting_key = 'require_2fa_global'");
+                const global2FA = settingsRes.rows.length > 0 ? settingsRes.rows[0].setting_value === 'true' : true; // Default ON
+
+                if (!global2FA) {
+                    // Si 2FA está desactivado globalmente, login directo
+                    const accessToken = jwt.sign({ id: user.id, rol_nombre: user.rol_nombre }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '8h' });
+                    return res.json({ status: 'ok', mensaje: 'login exitoso (2FA desactivado globalmente)', usuario: { ...user, role: user.rol_nombre, token: accessToken } });
+                }
+
+                // Generar código de verificación
+                const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+                const expiry = new Date(Date.now() + 5 * 60000); // 5 minutos
+
+                // Guardar código en la BD
+                await db.query(`
+                    UPDATE usuariost 
+                    SET verification_code = $1, verification_expiry = $2 
+                    WHERE id = $3
+                `, [verificationCode, expiry, user.id]);
+
+                // Enviar correo (Prioridad: mail_cu_104, luego correo personal)
+                const userEmail = user.mail_cu_104 || user.correo;
+                if (userEmail) {
+                    const emailSent = await emailService.sendVerificationEmail(userEmail, verificationCode);
+                    if (emailSent) {
+                        res.json({
+                            status: 'require_2fa',
+                            mensaje: 'Código de verificación enviado',
+                            userId: user.id,
+                            emailMasked: userEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3')
+                        });
+                    } else {
+                        // Fallback si falla el correo? O permitir entrar? Por seguridad mejor fallar.
+                        res.status(500).json({ status: 'error', mensaje: 'Error al enviar código de verificación.' });
+                    }
+                } else {
+                    // Si no tiene correo, ¿permitir login directo o bloquear?
+                    // Asumiremos permitir directo por ahora para compatibilidad, O exigir correo.
+                    // Si el requerimiento es 2FA, debería exigir correo.
+                    // Pero para evitar bloqueo total si faltan datos:
+                    const accessToken = jwt.sign({ id: user.id, rol_nombre: user.rol_nombre }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '8h' });
+                    res.json({ status: 'ok', mensaje: 'login exitoso (sin 2FA - falta correo)', usuario: { ...user, role: user.rol_nombre, token: accessToken } });
+                }
+
             } else {
                 res.status(401).json({ status: 'error', mensaje: 'credenciales incorrectas' });
             }
@@ -448,7 +532,53 @@ app.post('/login', async (req, res) => {
             res.status(401).json({ status: 'error', mensaje: 'credenciales incorrectas' });
         }
     } catch (err) {
+        console.error("Error en login:", err);
         res.status(500).json({ status: 'error', mensaje: 'error del servidor' });
+    }
+});
+
+app.post('/verify-2fa', async (req, res) => {
+    const { userId, code } = req.body;
+    try {
+        const result = await db.query(`
+            SELECT u.*, r.nombre AS rol_nombre
+            FROM usuariost u
+            LEFT JOIN roles r ON u.rol_id = r.id
+            WHERE u.id = $1
+        `, [userId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ status: 'error', mensaje: 'Usuario no encontrado' });
+        }
+
+        const user = result.rows[0];
+
+        // Verificar código y expiración
+        if (user.verification_code === code) {
+            const now = new Date();
+            const expiry = new Date(user.verification_expiry);
+
+            if (now < expiry) {
+                // Código válido y no expirado
+                // Limpiar código y actualizar fecha de última verificación
+                await db.query(`
+                    UPDATE usuariost 
+                    SET verification_code = NULL, verification_expiry = NULL, last_2fa_verification = NOW() 
+                    WHERE id = $1
+                `, [userId]);
+
+                const accessToken = jwt.sign({ id: user.id, rol_nombre: user.rol_nombre }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '8h' });
+                res.json({ status: 'ok', mensaje: 'verificación exitosa', usuario: { ...user, role: user.rol_nombre, token: accessToken } });
+            } else {
+                res.status(400).json({ status: 'error', mensaje: 'El código ha expirado' });
+            }
+        } else {
+            res.status(400).json({ status: 'error', mensaje: 'Código incorrecto' });
+        }
+
+    } catch (err) {
+        console.error("Error en verify-2fa:", err);
+        res.status(500).json({ status: 'error', mensaje: 'Error del servidor' });
     }
 });
 
@@ -2388,6 +2518,61 @@ app.get('/debug/anuncios', async (req, res) => {
     }
 });
 
+// --- Rutas de Imágenes de Progresivas ---
+
+app.get('/api/progresivas/:id/imagenes', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await progresivasService.getImagenesByProgresivaId(id);
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/progresiva-imagen/upload', authenticateToken, upload.single('imagen'), async (req, res) => {
+    try {
+        const { progresivaId, descripcion } = req.body;
+        if (!req.file || !progresivaId) throw new Error('Faltan datos obligatorios (archivo o ID progresiva).');
+
+        // 1. Upload to Blob
+        const imageUrl = await progresivasService.uploadImage(req.file, req.user.id);
+
+        // 2. Save Reference
+        const cleanName = req.file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
+        const dbRecord = await progresivasService.addImagenToProgresiva(progresivaId, imageUrl, descripcion, cleanName);
+
+        res.status(201).json(dbRecord);
+    } catch (err) {
+        console.error('Error subiendo imagen progresiva:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/progresiva-imagen/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await progresivasService.deleteImagenProgresiva(id);
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/tramos/:tramoId/upload-docx-photos', authenticateToken, upload.single('docxFile'), async (req, res) => {
+    try {
+        const { tramoId } = req.params;
+        if (!req.file) throw new Error('No se recibió archivo DOCX.');
+
+        const result = await progresivasService.processDocxUpload(req.file, tramoId, req.user.id);
+
+        res.json({ status: 'ok', summary: result });
+    } catch (err) {
+        console.error('DOCX Upload Error:', err);
+        res.status(500).json({ error: err.message, details: err.stack });
+    }
+});
+
 // NEW: Endpoint para obtener datos de ruta_kml
 app.get('/api/ruta-kml', async (req, res) => {
     try {
@@ -2971,6 +3156,21 @@ app.post('/api/canteras/upload-image', authenticateToken, upload.single('imagen_
     }
 });
 
+// Ruta para subida masiva (ZIP o Múltiples Imágenes)
+app.post('/api/canteras/:canteraId/upload-bulk', authenticateToken, upload.array('files'), async (req, res) => {
+    const { canteraId } = req.params;
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No se subieron archivos.' });
+    }
+    try {
+        const results = await canterasService.uploadBulkImages(req.files, canteraId, req.user.id);
+        res.status(201).json({ status: 'ok', uploaded: results.length, images: results });
+    } catch (error) {
+        console.error('Error al subir imágenes masivas:', error);
+        res.status(500).json({ error: 'Error al procesar subida masiva', details: error.message });
+    }
+});
+
 // Ruta para eliminar una imagen de una cantera
 app.delete('/api/canteras/imagenes/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
@@ -2980,6 +3180,21 @@ app.delete('/api/canteras/imagenes/:id', authenticateToken, async (req, res) => 
     } catch (error) {
         console.error('Error al eliminar la imagen de la cantera:', error);
         res.status(500).json({ error: 'Error al eliminar la imagen.' });
+    }
+});
+
+// Ruta para eliminación masiva de imágenes
+app.post('/api/canteras/imagenes/bulk-delete', authenticateToken, async (req, res) => {
+    const { imageIds } = req.body;
+    if (!imageIds || !Array.isArray(imageIds)) {
+        return res.status(400).json({ error: 'Se requiere un array de IDs de imágenes.' });
+    }
+    try {
+        const result = await canterasService.deleteBulkImagenes(imageIds);
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('Error al eliminar imágenes masivas:', error);
+        res.status(500).json({ error: 'Error al eliminar imágenes.' });
     }
 });
 

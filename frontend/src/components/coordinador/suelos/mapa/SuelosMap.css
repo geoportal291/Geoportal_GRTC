@@ -1,14 +1,15 @@
 /* SuelosMap.css - Optimized & Self-contained */
 
 /* CRITICAL: Force Leaflet Container Height to fill parent */
-.leaflet-container {
+/* SCOPED to avoid affecting other maps like Geoite */
+.suelos-map-wrapper .leaflet-container {
     height: 100% !important;
     width: 100% !important;
     z-index: 1;
 }
 
 /* Fix for SuelosMap wrapper div */
-.map-container {
+.suelos-map-wrapper {
     height: 100%;
     width: 100%;
     position: relative;
@@ -17,31 +18,31 @@
 }
 
 /* 1. Prevent Layer Drift (Efecto Fantasma/Retardo) */
-.leaflet-pane,
-.leaflet-tile,
-.leaflet-marker-icon,
-.leaflet-marker-shadow,
-.leaflet-tile-container,
-.leaflet-pane>svg,
-.leaflet-pane>svg path,
-.leaflet-zoom-animated,
-.leaflet-proxy {
+.suelos-map-wrapper .leaflet-pane,
+.suelos-map-wrapper .leaflet-tile,
+.suelos-map-wrapper .leaflet-marker-icon,
+.suelos-map-wrapper .leaflet-marker-shadow,
+.suelos-map-wrapper .leaflet-tile-container,
+.suelos-map-wrapper .leaflet-pane>svg,
+.suelos-map-wrapper .leaflet-pane>svg path,
+.suelos-map-wrapper .leaflet-zoom-animated,
+.suelos-map-wrapper .leaflet-proxy {
     transition: none !important;
 }
 
 /* Fix for vector layers drift */
-.leaflet-zoom-anim .leaflet-zoom-animated {
+.suelos-map-wrapper .leaflet-zoom-anim .leaflet-zoom-animated {
     transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1);
 }
 
 /* Nuke global transitions that might leak */
-.leaflet-container * {
+.suelos-map-wrapper .leaflet-container * {
     box-sizing: border-box;
 }
 
 /* 2. Fix Image/Tile sizing constraints */
-.leaflet-container img.leaflet-image-layer,
-.leaflet-container img.leaflet-tile {
+.suelos-map-wrapper .leaflet-container img.leaflet-image-layer,
+.suelos-map-wrapper .leaflet-container img.leaflet-tile {
     max-width: none !important;
     max-height: none !important;
     width: auto;
@@ -49,36 +50,36 @@
 }
 
 /* Sobrescribe los estilos de .leaflet-bar para un layout horizontal */
-.leaflet-bar.horizontal-controls {
+.suelos-map-wrapper .leaflet-bar.horizontal-controls {
     display: flex;
     flex-direction: row;
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.65);
     border-radius: 4px;
 }
 
-.leaflet-bar.horizontal-controls a.leaflet-control-custom-button,
-.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:hover {
+.suelos-map-wrapper .leaflet-bar.horizontal-controls a.leaflet-control-custom-button,
+.suelos-map-wrapper .leaflet-bar.horizontal-controls a.leaflet-control-custom-button:hover {
     border-bottom: none;
     border-right: 1px solid #ccc;
     border-radius: 0;
     margin: 0;
 }
 
-.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:first-child,
-.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:first-child:hover {
+.suelos-map-wrapper .leaflet-bar.horizontal-controls a.leaflet-control-custom-button:first-child,
+.suelos-map-wrapper .leaflet-bar.horizontal-controls a.leaflet-control-custom-button:first-child:hover {
     border-top-left-radius: 4px;
     border-bottom-left-radius: 4px;
 }
 
-.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:last-child,
-.leaflet-bar.horizontal-controls a.leaflet-control-custom-button:last-child:hover {
+.suelos-map-wrapper .leaflet-bar.horizontal-controls a.leaflet-control-custom-button:last-child,
+.suelos-map-wrapper .leaflet-bar.horizontal-controls a.leaflet-control-custom-button:last-child:hover {
     border-right: none;
     border-top-right-radius: 4px;
     border-bottom-right-radius: 4px;
 }
 
 /* Styles for dynamically created modals (measure and draw) */
-.measure-modal {
+.suelos-measure-modal {
     position: absolute;
     top: 50px;
     left: 50px;
@@ -94,7 +95,7 @@
     overflow: hidden;
 }
 
-.measure-modal-header {
+.suelos-measure-modal-header {
     padding: 8px 12px;
     background-color: #f0f0f0;
     cursor: grab;
@@ -108,7 +109,7 @@
     color: #333;
 }
 
-.measure-modal-title {
+.suelos-measure-modal-title {
     flex-grow: 1;
     text-align: center;
     font-size: 1.1em;
@@ -116,7 +117,7 @@
     margin: 0;
 }
 
-.measure-modal-close-btn {
+.suelos-measure-modal-close-btn {
     background-color: #e74c3c;
     color: white;
     border: none;
@@ -130,17 +131,17 @@
     transition: background-color 0.2s ease;
 }
 
-.measure-modal-close-btn:hover {
+.suelos-measure-modal-close-btn:hover {
     background-color: #c0392b;
 }
 
-.measure-modal-content {
+.suelos-measure-modal-content {
     padding: 15px;
     font-size: 0.9em;
     color: #555;
 }
 
-.measure-modal label {
+.suelos-measure-modal label {
     display: inline-block;
     width: 70px;
     text-align: right;
@@ -148,9 +149,9 @@
     font-weight: normal;
 }
 
-.measure-modal input[type="text"],
-.measure-modal input[type="number"],
-.measure-modal select {
+.suelos-measure-modal input[type="text"],
+.suelos-measure-modal input[type="number"],
+.suelos-measure-modal select {
     width: calc(100% - 80px);
     padding: 6px;
     margin-bottom: 5px;
@@ -159,7 +160,7 @@
     box-sizing: border-box;
 }
 
-.measure-modal button {
+.suelos-measure-modal button {
     background-color: #007bff;
     color: white;
     border: none;
@@ -170,42 +171,42 @@
     transition: background-color 0.2s;
 }
 
-.measure-modal button:hover {
+.suelos-measure-modal button:hover {
     background-color: #0056b3;
 }
 
-.measure-modal h3,
-.measure-modal h4 {
+.suelos-measure-modal h3,
+.suelos-measure-modal h4 {
     color: #333;
     margin-top: 0;
     margin-bottom: 10px;
     text-align: center;
 }
 
-.measure-modal div {
+.suelos-measure-modal div {
     margin-bottom: 8px;
 }
 
-.measure-modal .input-group {
+.suelos-measure-modal .input-group {
     display: flex;
     align-items: center;
     margin-bottom: 5px;
 }
 
-.measure-modal .input-group label {
+.suelos-measure-modal .input-group label {
     flex-shrink: 0;
     width: 70px;
     text-align: right;
     margin-right: 5px;
 }
 
-.measure-modal .input-group input,
-.measure-modal .input-group select {
+.suelos-measure-modal .input-group input,
+.suelos-measure-modal .input-group select {
     flex-grow: 1;
     margin-left: 0;
 }
 
-.measure-modal-ok-btn {
+.suelos-measure-modal-ok-btn {
     background-color: #007bff;
     color: white;
     border: none;
@@ -218,12 +219,12 @@
     transition: background-color 0.2s ease;
 }
 
-.measure-modal-ok-btn:hover {
+.suelos-measure-modal-ok-btn:hover {
     background-color: #0056b3;
 }
 
 /* Estilos para el tooltip de imagen en el mapa */
-.map-tooltip-image-container {
+.suelos-map-tooltip-image-container {
     max-width: 200px;
     max-height: 150px;
     overflow: hidden;
@@ -236,7 +237,7 @@
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-.map-tooltip-image {
+.suelos-map-tooltip-image {
     max-width: 100%;
     max-height: 100%;
     height: auto;
@@ -245,24 +246,24 @@
 }
 
 /* Ajustes SCOPED para el tooltip de Leaflet para imagenes */
-.leaflet-tooltip.custom-img-tooltip {
+.suelos-map-wrapper .leaflet-tooltip.custom-img-tooltip {
     padding: 0 !important;
     background-color: transparent !important;
     border: none !important;
     box-shadow: none !important;
 }
 
-.leaflet-tooltip.custom-img-tooltip.leaflet-tooltip-top:before {
+.suelos-map-wrapper .leaflet-tooltip.custom-img-tooltip.leaflet-tooltip-top:before {
     border-top-color: white !important;
 }
 
 /* NUEVO: Marcador para progresivas con datos */
-.verified-marker-icon {
+.suelos-verified-marker-icon {
     background: transparent;
     border: none;
 }
 
-.verified-pin-body {
+.suelos-verified-pin-body {
     background-color: #ffffff;
     border: 3px solid #16a34a;
     border-radius: 50%;
@@ -276,13 +277,13 @@
     animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.verified-pin-body i {
+.suelos-verified-pin-body i {
     color: #16a34a;
     font-size: 14px;
 }
 
 /* Marcador para referencia KML (Plomo) */
-.kml-ref-point {
+.suelos-kml-ref-point {
     background: transparent;
     border: none;
     display: flex;
@@ -302,9 +303,9 @@
     }
 }
 
-/* --- Geoite / Dashboard Styles Ported for SuelosMap --- */
+/* --- Geoite / Dashboard Styles Ported for SuelosMap (RENAMED to .suelos-*) --- */
 
-.invvial-map-toolbar {
+.suelos-map-toolbar {
     position: absolute;
     top: 20px;
     right: 60px;
@@ -315,7 +316,7 @@
     gap: 5px;
 }
 
-.invvial-tool-btn {
+.suelos-tool-btn {
     width: 32px;
     height: 32px;
     background-color: white;
@@ -331,13 +332,13 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
-.invvial-tool-btn:hover {
+.suelos-tool-btn:hover {
     background-color: #f4f4f4;
     color: #000;
 }
 
 /* Modal/Flyout Cards inside Map */
-.invvial-flyout-card {
+.suelos-flyout-card {
     position: absolute;
     top: 60px;
     left: 50px;
@@ -354,7 +355,7 @@
     font-family: 'Segoe UI', sans-serif;
 }
 
-.invvial-card-header {
+.suelos-card-header {
     padding: 10px 15px;
     display: flex;
     justify-content: space-between;
@@ -363,17 +364,30 @@
     font-size: 14px;
 }
 
-.invvial-header-blue {
+.suelos-header-blue {
     background-color: #f8f9fa;
     border-bottom: 1px solid #eee;
     color: #333;
 }
 
-.invvial-card-body {
+.suelos-header-orange {
+    background-color: #fff3e0;
+    border-bottom: 1px solid #ffebb6;
+    color: #e67e22;
+}
+
+.suelos-header-purple {
+    background-color: #f3e5f5;
+    border-bottom: 1px solid #e1bee7;
+    color: #8e24aa;
+}
+
+
+.suelos-card-body {
     padding: 15px;
 }
 
-.invvial-btn-block {
+.suelos-btn-block {
     display: block;
     width: 100%;
     padding: 8px;
@@ -388,11 +402,11 @@
     transition: background 0.2s;
 }
 
-.invvial-btn-block:hover {
+.suelos-btn-block:hover {
     background-color: #f0f0f0;
 }
 
-.invvial-btn-icon {
+.suelos-btn-icon {
     width: 36px;
     height: 36px;
     border: 1px solid #eee;
@@ -403,20 +417,20 @@
     margin: 2px;
 }
 
-.invvial-btn-icon:hover {
+.suelos-btn-icon:hover {
     background-color: #e6f7ff;
     color: #1890ff;
     border-color: #000000;
 }
 
-.invvial-draw-grid {
+.suelos-draw-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 5px;
 }
 
 /* FIX: Ensure Popups have a white background and proper styling */
-.leaflet-popup-content-wrapper {
+.suelos-map-wrapper .leaflet-popup-content-wrapper {
     background: #ffffff !important;
     color: #333333 !important;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
@@ -425,19 +439,20 @@
     overflow: hidden;
 }
 
-.leaflet-popup-tip {
+.suelos-map-wrapper .leaflet-popup-tip {
     background: #ffffff !important;
     box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4) !important;
 }
 
-.leaflet-popup-content {
+.suelos-map-wrapper .leaflet-popup-content {
     margin: 0 !important;
-    width: 280px !important;
+    width: auto !important;
+    /* Permitir que el ancho se adapte al contenedor (minWidth del popup) */
     line-height: 1.4;
     font-size: 13px;
 }
 
-.leaflet-popup-close-button {
+.suelos-map-wrapper .leaflet-popup-close-button {
     color: rgba(255, 255, 255, 0.8) !important;
     top: 12px !important;
     right: 12px !important;
@@ -445,17 +460,17 @@
     z-index: 10 !important;
 }
 
-.leaflet-popup-close-button:hover {
+.suelos-map-wrapper .leaflet-popup-close-button:hover {
     color: #ffffff !important;
 }
 
 /* --- PREMIUM POPUP STYLES --- */
-.popup-premium-container {
+.suelos-popup-premium-container {
     width: 100%;
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
-.popup-header {
+.suelos-popup-header {
     background-color: #1364dd;
     /* User Preferred Blue */
     color: #ffffff !important;
@@ -470,21 +485,21 @@
     border-bottom: 2px solid #2f74db;
 }
 
-.popup-header span {
+.suelos-popup-header span {
     color: #ffffff !important;
 }
 
-.popup-header i {
+.suelos-popup-header i {
     font-size: 16px;
     color: #ffffff !important;
     /* Make icon white too if preferred, or keep light blue */
 }
 
-.popup-body {
+.suelos-popup-body {
     padding: 12px 16px;
 }
 
-.popup-row {
+.suelos-popup-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -494,24 +509,24 @@
     /* Dark text for body */
 }
 
-.popup-row.compact {
+.suelos-popup-row.compact {
     margin-bottom: 2px;
 }
 
-.popup-label {
+.suelos-popup-label {
     color: #64748b;
     /* Slate 500 */
     font-weight: 500;
 }
 
-.popup-value {
+.suelos-popup-value {
     font-weight: 600;
     color: #0f172a;
     /* Slate 900 */
     text-align: right;
 }
 
-.popup-value.status-ok {
+.suelos-popup-value.status-ok {
     color: #10b981;
     /* Green */
     display: flex;
@@ -519,7 +534,7 @@
     gap: 4px;
 }
 
-.popup-value.status-pending {
+.suelos-popup-value.status-pending {
     color: #f59e0b;
     /* Amber */
     display: flex;
@@ -527,7 +542,7 @@
     gap: 4px;
 }
 
-.popup-mono {
+.suelos-popup-mono {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 12px;
     color: #475569;
@@ -537,13 +552,13 @@
     border: none;
 }
 
-.popup-divider {
+.suelos-popup-divider {
     height: 1px;
     background-color: #e2e8f0;
     margin: 8px 0;
 }
 
-.popup-footer {
+.suelos-popup-footer {
     margin-top: 10px;
     text-align: center;
     color: #94a3b8;

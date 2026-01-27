@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE || 'https://backend-solitary-fire-911.fly.dev'
+  baseURL: process.env.REACT_APP_API_BASE || 'https://backendgeoportal.fly.dev'
 });
 
 axiosInstance.interceptors.request.use(
