@@ -7,6 +7,9 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './data/contexts/AuthContext'; // Importar AuthProvider
+import * as Cesium from 'cesium';
+
+window.CESIUM_BASE_URL = '/cesium/';
 
 const originalConsoleError = console.error;
 console.error = (...args) => {

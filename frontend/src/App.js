@@ -23,6 +23,7 @@ import UserProjectAssignment from './components/coordinador/config/UserProjectAs
 import Auditoria from './components/coordinador/config/Auditoria'; // Nuevo
 import Calendario from './components/coordinador/calendario/calendar.jsx';
 import CoordinadorDashboard from './components/coordinador/cordinadords.jsx';
+import DashPrincipal from './components/coordinador/DashPrincipal.jsx'; // NUEVO: Importar DashPrincipal
 import AmigoSecretoDashboard from './components/eventos/AmigoSecretoDashboard'; // NUEVO
 import GestionarParticipantes from './components/eventos/GestionarParticipantes'; // NUEVO
 import VisualizacionAmigo from './components/eventos/visualizacionamigo.jsx'; // NUEVO
@@ -157,6 +158,7 @@ function AppContent() {
 
                 {/* Coordinador */}
                 <Route path="/coordinador/cordinadords" element={<RutaPrivada><Layout><CoordinadorDashboard /></Layout></RutaPrivada>} />
+                <Route path="/coordinador/dashboardprincipal" element={<RutaPrivada><Layout><DashPrincipal /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/ingenieria/mecanicadesuelos" element={<RutaPrivada><Layout><Mdesuelos /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/calendario/calendar" element={<RutaPrivada><Layout><Calendario /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/config/frmusuarios" element={<RutaPrivada><Layout><FrmUsuarios /></Layout></RutaPrivada>} />

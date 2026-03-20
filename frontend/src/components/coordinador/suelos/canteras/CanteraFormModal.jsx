@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import SuelosMap from '../mapa/SuelosMap'; // Mapa de suelos
@@ -6,6 +7,22 @@ import proj4 from 'proj4'; // Para conversión de coordenadas
 import { kml } from '@tmcw/togeojson'; // Conversión KML a GeoJSON
 import JSZip from 'jszip';
 import { useAuth } from '../../../../data/contexts/AuthContext'; // Import useAuth
+import '../gestion_tramos/Progresivas.css'; // Importar estilos de progresivas para el modal
+
+// Iconos (SVG) para coincidir con Progresivas.jsx
+const PlusIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"></line>
+    <line x1="5" y1="12" x2="19" y2="12"></line>
+  </svg>
+);
+
+const DeleteIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"></polyline>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+  </svg>
+);
 
 // Definiciones de proyecciones para proj4
 const wgs84 = 'EPSG:4326';
@@ -179,23 +196,30 @@ export default function CanteraFormModal({
     const file = event.target.files[0];
     if (!file) return;
 
-    // Helper para encontrar la primera coordenada en una estructura GeoJSON
-    const getFirstCoordinate = (geometry) => {
-      if (!geometry) return null;
-      switch (geometry.type) {
-        case 'Point':
-          return geometry.coordinates;
-        case 'LineString':
-        case 'MultiPoint':
-          return geometry.coordinates[0];
-        case 'Polygon':
-        case 'MultiLineString':
-          return geometry.coordinates[0][0];
-        case 'MultiPolygon':
-          return geometry.coordinates[0][0][0];
-        default:
+    // Helper robusto para encontrar el primer punto o coordenada en una estructura GeoJSON
+    const findFirstCoordinate = (geojson) => {
+      if (!geojson || !geojson.features || geojson.features.length === 0) return null;
+
+      // 1. Prioridad: Buscar el primer objeto 'Point' (Ideal para canteras)
+      const point = geojson.features.find(f => f.geometry?.type === 'Point');
+      if (point && point.geometry.coordinates) return point.geometry.coordinates;
+
+      // 2. Fallback: Buscar en cualquier geometría la primera coordenada disponible
+      for (const feature of geojson.features) {
+        const geom = feature.geometry;
+        if (!geom || !geom.coordinates) continue;
+
+        // Función recursiva para aplanar hasta encontrar un par [lon, lat]
+        const flatten = (coords) => {
+          if (Array.isArray(coords) && typeof coords[0] === 'number') return coords;
+          if (Array.isArray(coords) && coords.length > 0) return flatten(coords[0]);
           return null;
+        };
+
+        const result = flatten(geom.coordinates);
+        if (result) return result;
       }
+      return null;
     };
 
     try {
@@ -222,14 +246,13 @@ export default function CanteraFormModal({
       const geojson = kml(kmlDoc);
 
       if (!geojson || !geojson.features || geojson.features.length === 0) {
-        alertify.error('El archivo KML no contiene ninguna geometría (feature).');
+        alertify.error('El archivo KML no contiene ninguna geometría válida.');
         return;
       }
 
-      setUploadedKmlGeoJson(geojson); // Guardar el GeoJSON completo para visualización
+      setUploadedKmlGeoJson(geojson); // Guardar el GeoJSON completo para visualización en el mapa
 
-      const firstFeature = geojson.features[0];
-      const coords = getFirstCoordinate(firstFeature.geometry);
+      const coords = findFirstCoordinate(geojson);
 
       if (!coords || coords.length < 2) {
         alertify.error('No se pudieron extraer coordenadas válidas del KML.');
@@ -365,11 +388,18 @@ export default function CanteraFormModal({
 
   if (!showModal) return null;
 
-  return (
+  return createPortal(
     <div className="overlay" onClick={onClose}>
       <div className="progresivas-form-container" onClick={(e) => e.stopPropagation()}>
+        {isSubmitting && (
+          <div className="loading-overlay">
+            <div className="loading-spinner"></div>
+            <p>Guardando cantera...</p>
+          </div>
+        )}
+
         <form className="progresivas-form">
-          <h3>Nueva Cantera</h3>
+          <h3>{canteraToEdit ? 'Editar Cantera' : 'Nueva Cantera'}</h3>
 
           {/* Paso indicador */}
           <div className="stepper-container">
@@ -444,79 +474,81 @@ export default function CanteraFormModal({
 
                 {/* Archivo KML */}
                 <div className="form-group full-width">
-                  <label htmlFor="kml_upload">Importar KML/KMZ</label>
+                  <label htmlFor="kml_upload">Importar KML/KMZ (Ubicación)</label>
                   <input type="file" id="kml_upload" name="kml_upload" accept=".kml,.kmz" onChange={handleKmlUpload} />
                 </div>
 
                 {/* Mapa */}
-                <div className="form-group full-width" style={{ marginBottom: '20px' }}>
-                  <SuelosMap // Renderizar mapa
-                    displayMode="form"
-                    style={{ height: '400px', width: '100%' }}
-                    kmlTrazadoIds={kmlIdsMemo}
-                    markerPosition={canteraMarkerPosition}
-                    onMapClick={handleMapClick}
-                    center={mapCenter}
-                    transientGeoJson={uploadedKmlGeoJson} // Pasar el GeoJSON para renderizar
-                    isSelecting={isSelecting} // Pasar el estado de selección
-                    layerContext="modal" // Isolate map layers from global dashboard
-                    hideKmlPoints={true} // Clean view: only show tramo line, no points
-                    hideToolbar={true} // Hide toolbar in modal
-                  />
+                <div className="form-group full-width">
+                  <div className="map-section"> {/* Usamos la clase map-section de GestorDeCanteras.css */}
+                    <SuelosMap
+                      displayMode="form"
+                      style={{ height: '100%', width: '100%' }}
+                      kmlTrazadoIds={kmlIdsMemo}
+                      markerPosition={canteraMarkerPosition}
+                      onMapClick={handleMapClick}
+                      center={mapCenter}
+                      transientGeoJson={uploadedKmlGeoJson}
+                      isSelecting={isSelecting}
+                      layerContext="modal"
+                      hideKmlPoints={true}
+                      hideToolbar={true}
+                    />
+                  </div>
                 </div>
 
                 {/* Referencia de progresiva */}
                 <div className="form-group full-width">
-                  <hr style={{ margin: '20px 0', border: '1px solid #eee' }} />
-                  <h4 style={{ textAlign: 'center', color: '#555', marginBottom: '20px' }}>
-                    Referencia a Progresiva (Opcional)
-                  </h4>
-                </div>
+                  <fieldset>
+                    <legend>Referencia Geográfica (Opcional)</legend>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>Tramo de Referencia</label>
+                        <p className="form-static-text">{selectedTramoName || 'No seleccionado'}</p>
+                      </div>
 
-                <div className="form-group">
-                  <label>Tramo de Referencia</label>
-                  <span>{selectedTramoName || 'No seleccionado'}</span>
-                </div>
+                      <div className="form-group">
+                        <label htmlFor="id_progresiva_referencia">Progresiva de Referencia</label>
+                        <div className="select-with-loader">
+                          <select
+                            id="id_progresiva_referencia"
+                            name="id_progresiva_referencia"
+                            value={formData.id_progresiva_referencia}
+                            onChange={handleChange}
+                            disabled={!selectedTramoId || loadingProgresivas}
+                          >
+                            <option value="">Seleccione una progresiva</option>
+                            {progresivas.map((prog) => (
+                              <option key={prog.id} value={prog.id}>
+                                {formatProgresivaCodigo(prog.codigo)} - {prog.nombre}
+                              </option>
+                            ))}
+                          </select>
+                          {loadingProgresivas && <div className="loading-spinner-inline"></div>}
+                        </div>
+                      </div>
 
-                <div className="form-group">
-                  <label htmlFor="id_progresiva_referencia">Progresiva de Referencia</label>
-                  <div className="select-with-loader">
-                    <select
-                      id="id_progresiva_referencia"
-                      name="id_progresiva_referencia"
-                      value={formData.id_progresiva_referencia}
-                      onChange={handleChange}
-                      disabled={!selectedTramoId || loadingProgresivas}
-                    >
-                      <option value="">Seleccione una progresiva</option>
-                      {progresivas.map((prog) => (
-                        <option key={prog.id} value={prog.id}>
-                          {formatProgresivaCodigo(prog.codigo)} - {prog.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    {loadingProgresivas && <div className="loading-spinner-inline"></div>}
-                  </div>
-                </div>
+                      <div className="form-group">
+                        <label htmlFor="desplazamiento_km">Desplazamiento (km)</label>
+                        <input
+                          type="number"
+                          step="any"
+                          id="desplazamiento_km"
+                          name="desplazamiento_km"
+                          value={formData.desplazamiento_km}
+                          onChange={handleChange}
+                        />
+                      </div>
 
-                <div className="form-group">
-                  <label htmlFor="desplazamiento_km">Desplazamiento (km)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    id="desplazamiento_km"
-                    name="desplazamiento_km"
-                    value={formData.desplazamiento_km}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="lado">Lado</label>
-                  <select id="lado" name="lado" value={formData.lado} onChange={handleChange}>
-                    <option value="Izquierda">Izquierda</option>
-                    <option value="Derecha">Derecha</option>
-                  </select>
+                      <div className="form-group">
+                        <label htmlFor="lado">Lado</label>
+                        <select id="lado" name="lado" value={formData.lado} onChange={handleChange}>
+                          <option value="Izquierda">Izquierda</option>
+                          <option value="Derecha">Derecha</option>
+                        </select>
+                      </div>
+                    </div>
+                  </fieldset>
                 </div>
               </div>
             </div>
@@ -539,13 +571,14 @@ export default function CanteraFormModal({
                 </button>
               ) : (
                 <button type="button" className="submit-btn" disabled={isSubmitting} onClick={handleSubmit}>
-                  {isSubmitting ? 'Guardando...' : 'Guardar Cantera'}
+                  {isSubmitting ? 'Guardando...' : (canteraToEdit ? 'Actualizar Cantera' : 'Finalizar y Guardar')}
                 </button>
               )}
             </div>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

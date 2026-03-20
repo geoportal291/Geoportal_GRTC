@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAQUETA: Geoportal 3D - Gemelo Digital</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        :root {
+            --bg-main: #0a0a0c;
+            --sidebar-bg: rgba(15, 15, 18, 0.85);
+            --accent-cyan: #00f2ff;
+            --accent-purple: #7d2ae8;
+            --accent-green: #00ff88;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* Dashboard Layout */
+        .sidebar {
+            width: 320px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(20px);
+            z-index: 100;
+        }
+
+        .main-viewer {
+            flex-grow: 1;
+            position: relative;
+            background: #000;
+        }
+
+        .properties-panel {
+            width: 350px;
+            background: var(--sidebar-bg);
+            border-left: 1px solid var(--border-color);
+            backdrop-filter: blur(20px);
+            padding: 20px;
+            z-index: 100;
+        }
+
+        /* Components */
+        .header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo {
+            font-weight: 800;
+            font-size: 1.4rem;
+            letter-spacing: -0.5px;
+            background: linear-gradient(90deg, #fff, var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-section {
+            padding: 20px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .section-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .layer-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: var(--glass-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .layer-item:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 242, 255, 0.05);
+        }
+
+        .layer-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+            opacity: 0.7;
+        }
+
+        .toggle {
+            margin-left: auto;
+            width: 36px;
+            height: 18px;
+            background: #333;
+            border-radius: 20px;
+            position: relative;
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: #fff;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: 0.2s;
+        }
+
+        .toggle.active {
+            background: var(--accent-cyan);
+        }
+
+        .toggle.active::after {
+            left: 20px;
+        }
+
+        /* Floating Overlays on Map */
+        .map-overlay {
+            position: absolute;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            pointer-events: none;
+        }
+
+        .coords-bar {
+            bottom: 20px;
+            left: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+        }
+
+        .legend-box {
+            top: 20px;
+            right: 20px;
+            width: 180px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+            font-size: 0.8rem;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        /* NLP Intelligence Panel (Bottom) */
+        .nlp-intelligence {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 450px;
+            background: rgba(15, 15, 18, 0.95);
+            border: 1px solid var(--accent-purple);
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .nlp-header {
+            background: rgba(125, 42, 232, 0.2);
+            padding: 10px 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .nlp-body {
+            padding: 15px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .nlp-log {
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .nlp-success {
+            color: var(--accent-green);
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0% {
+                box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(0, 255, 136, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(0, 255, 136, 0);
+            }
+        }
+
+        /* 3D Property view */
+        .prop-group {
+            margin-bottom: 25px;
+        }
+
+        .prop-title {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-bottom: 10px;
+        }
+
+        .prop-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .prop-badge {
+            background: rgba(0, 242, 255, 0.1);
+            color: var(--accent-cyan);
+            padding: 4px 8px;
+            border-radius: 5px;
+            font-size: 0.75rem;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent-purple);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.3s;
+        }
+
+        .btn-action:hover {
+            opacity: 0.8;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Sidebar Izquierda: Capas y Proyecto -->
+    <aside class="sidebar">
+        <div class="header">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor" />
+                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                </svg>
+                GEOPORTAL 3D
+            </div>
+        </div>
+
+        <div class="nav-section">
+            <div class="section-label">PROYECTO ACTIVO</div>
+            <div style="font-weight: 600; margin-bottom: 30px;">Tramo Carretera Interoceánica PK 45+000</div>
+
+            <div class="section-label">CAPAS DE VISUALIZACIÓN <span>(LOD 1.0)</span></div>
+
+            <div class="layer-item">
+                <div class="layer-icon">🗺️</div>
+                <div>Topografía LandXML</div>
+                <div class="toggle active"></div>
+            </div>
+
+            <div class="layer-item">
+                <div class="layer-icon">🕳️</div>
+                <div>Perfiles de Suelo (Cyl)</div>
+                <div class="toggle active"></div>
+            </div>
+
+            <div class="layer-item">
+                <div class="layer-icon">🏙️</div>
+                <div>Modelo Estructural IFC</div>
+                <div class="toggle"></div>
+            </div>
+
+            <div class="layer-item">
+                <div class="layer-icon">🛰️</div>
+                <div>Orthophoto Satelital</div>
+                <div class="toggle"></div>
+            </div>
+
+            <div class="section-label" style="margin-top: 40px;">HERRAMIENTAS</div>
+            <div class="layer-item">
+                <div class="layer-icon">📏</div>
+                <div>Regla de Medición</div>
+            </div>
+            <div class="layer-item">
+                <div class="layer-icon">✂️</div>
+                <div>Corte Geológico (Clipping)</div>
+            </div>
+        </div>
+
+        <div class="header" style="border-top: 1px solid var(--border-color); border-bottom: none;">
+            <div style="font-size: 0.75rem; color: var(--text-secondary);">Render Engine: Three.js r128</div>
+        </div>
+    </aside>
+
+    <!-- Visualizador Central -->
+    <main class="main-viewer" id="three-container">
+
+        <div class="map-overlay coords-bar">
+            UTM: 32718 | X: 284,512.42 | Y: 8,642,109.15 | Z: 3,421.50
+        </div>
+
+        <div class="map-overlay legend-box">
+            <div class="prop-title">LEYENDA GEOTÉCNICA</div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #E07A5F;"></div> Grava Limosa (GM)
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #3D405B;"></div> Roca Basáltica
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #81B29A;"></div> Arena Arcillosa (SC)
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #F2CC8F;"></div> Arcilla Plástica
+            </div>
+        </div>
+
+        <!-- Ventana de Inteligencia NLP -->
+        <div class="nlp-intelligence">
+            <div class="nlp-header">
+                <div><span>🤖</span> ENGINE: NLP CLASSIFIER</div>
+                <div>STABLE</div>
+            </div>
+            <div class="nlp-body">
+                <div class="nlp-log">> Recibiendo texto: "Suelo de piedreria dura con bolones..."</div>
+                <div class="nlp-log">> Analizando semántica mediante diccionario...</div>
+                <div class="nlp-log nlp-success"><span class="pulse"></span> IA: Identificado como <b>GP-GM (Grava Mal
+                        Graduada)</b></div>
+                <div class="nlp-log nlp-success">> Color mapeado: #E07A5F | Aplicando a calicata C-04</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Panel de Propiedades Derecha -->
+    <aside class="properties-panel">
+        <div class="section-label">DETALLES DEL ELEMENTO</div>
+
+        <div class="prop-group">
+            <div class="prop-title">IDENTIFICADOR</div>
+            <div class="prop-value">Calicata C-004</div>
+            <span class="prop-badge">Tipo: Exploración Geotécnica</span>
+        </div>
+
+        <div class="prop-group">
+            <div class="prop-title">POSICIÓN RELATIVA</div>
+            <div style="display: flex; justify-content: space-between;">
+                <div>PK 45+210</div>
+                <div style="color: var(--accent-cyan);">Lado: Derecho</div>
+            </div>
+        </div>
+
+        <div class="prop-group">
+            <div class="prop-title">COMPOSICIÓN DE ESTRATOS</div>
+            <div
+                style="height: 200px; border: 1px dashed var(--border-color); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 4px;">
+                <div style="flex: 0.3; background: #E07A5F; border-radius: 4px; padding: 5px; font-size: 0.7rem;">0.00m
+                    - 1.50m: Capa Vegetal / GM</div>
+                <div style="flex: 0.5; background: #3D405B; border-radius: 4px; padding: 5px; font-size: 0.7rem;">1.50m
+                    - 4.20m: Roca Fracturada</div>
+                <div style="flex: 0.2; background: #81B29A; border-radius: 4px; padding: 5px; font-size: 0.7rem;">4.20m
+                    - 5.00m: Arena</div>
+            </div>
+        </div>
+
+        <div class="prop-group">
+            <div class="prop-title">DOCUMENTACIÓN ASOCIADA</div>
+            <div
+                style="font-size: 0.85rem; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; margin-bottom: 5px;">
+                📄 Reporte_Ensayos_LI.pdf</div>
+            <div style="font-size: 0.85rem; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 10px;">📸
+                Foto_Excavacion_452.jpg</div>
+        </div>
+
+        <button class="btn-action">Generar Perfil Estratigráfico</button>
+        <button class="btn-action"
+            style="background: transparent; border: 1px solid var(--accent-purple); color: var(--accent-purple);">Exportar
+            a LandXML</button>
+
+    </aside>
+
+    <script>
+        // --- MOTOR 3D (MAQUETA VISUAL) ---
+        const container = document.getElementById('three-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050505);
+
+        const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(40, 40, 40);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Luces
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0x00f2ff, 1);
+        pointLight.position.set(20, 50, 20);
+        scene.add(pointLight);
+
+        // Malla de Terreno (Simulación de LandXML)
+        const size = 100, segments = 60;
+        const terrainGeom = new THREE.PlaneGeometry(size, size, segments, segments);
+        terrainGeom.rotateX(-Math.PI / 2);
+
+        const posAttr = terrainGeom.attributes.position;
+        for (let i = 0; i < posAttr.count; i++) {
+            const x = posAttr.getX(i);
+            const z = posAttr.getZ(i);
+            // Ruido para montañas realistas
+            const elevation = (Math.sin(x * 0.1) * Math.cos(z * 0.1) * 3) +
+                (Math.cos(x * 0.05) * 4) +
+                (Math.random() * 0.2);
+            posAttr.setY(i, elevation);
+        }
+        terrainGeom.computeVertexNormals();
+
+        // Material con Shader simple para capas de color por altura
+        const terrainMat = new THREE.MeshPhongMaterial({
+            color: 0x1a1a1a,
+            wireframe: false,
+            flatShading: true,
+            side: THREE.DoubleSide
+        });
+
+        const terrainMesh = new THREE.Mesh(terrainGeom, terrainMat);
+        scene.add(terrainMesh);
+
+        // Grid Holográfica
+        const gridHelper = new THREE.GridHelper(size, 20, 0x00f2ff, 0x111111);
+        gridHelper.position.y = -5;
+        scene.add(gridHelper);
+
+        // Calicatas (Cilindros Geotécnicos)
+        function createCalicata(x, z, totalH) {
+            const group = new THREE.Group();
+
+            // Simular 3 capas
+            const heights = [totalH * 0.2, totalH * 0.5, totalH * 0.3];
+            const colors = [0xE07A5F, 0x3D405B, 0x81B29A];
+
+            let currentY = 0;
+            heights.forEach((h, i) => {
+                const geom = new THREE.CylinderGeometry(0.8, 0.8, h, 16);
+                const mat = new THREE.MeshPhongMaterial({ color: colors[i], emissive: colors[i], emissiveIntensity: 0.1 });
+                const mesh = new THREE.Mesh(geom, mat);
+                mesh.position.y = currentY - h / 2;
+                group.add(mesh);
+                currentY -= h;
+            });
+
+            // Etiqueta flotante
+            const labelGeom = new THREE.SphereGeometry(0.4, 8, 8);
+            const labelMat = new THREE.MeshBasicMaterial({ color: 0x00f2ff });
+            const label = new THREE.Mesh(labelGeom, labelMat);
+            label.position.y = 1;
+            group.add(label);
+
+            group.position.set(x, 5, z);
+            scene.add(group);
+            return group;
+        }
+
+        const calicatas = [];
+        for (let i = 0; i < 8; i++) {
+            const x = (Math.random() - 0.5) * 60;
+            const z = (Math.random() - 0.5) * 60;
+            calicatas.push(createCalicata(x, z, 10));
+        }
+
+        // Animación de bucle
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Sutil animación de las etiquetas
+            const time = Date.now() * 0.002;
+            calicatas.forEach((c, i) => {
+                c.children[3].position.y = 1 + Math.sin(time + i) * 0.5;
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Responsive
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // Interacción mock de capas
+        document.querySelectorAll('.layer-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const toggle = item.querySelector('.toggle');
+                toggle.classList.toggle('active');
+            });
+        });
+
+    </script>
+</body>
+
+</html>

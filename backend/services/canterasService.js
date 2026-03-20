@@ -171,14 +171,38 @@ const getCanterasByTramoId = async (tramoId) => {
 };
 
 const deleteCantera = async (id) => {
+    const client = await db.connect();
     try {
-        // ON DELETE CASCADE se encargará de eliminar imágenes y estratos asociados
+        await client.query('BEGIN');
+
+        // 1. Get all estratos of this cantera
+        const estratosResult = await client.query('SELECT id FROM estratos WHERE parent_type = \'cantera\' AND parent_id = $1', [id]);
+        const estratoIds = estratosResult.rows.map(r => r.id);
+
+        if (estratoIds.length > 0) {
+            // 2. Delete essays associated with these estratos
+            await client.query('DELETE FROM ensayos WHERE estrato_id = ANY($1::int[])', [estratoIds]);
+            // 3. Delete estratos
+            await client.query('DELETE FROM estratos WHERE parent_type = \'cantera\' AND parent_id = $1', [id]);
+        }
+
+        // 4. Delete images (reference in DB)
+        await client.query('DELETE FROM cantera_imagenes WHERE cantera_id = $1', [id]);
+
+        // 5. Delete the cantera itself
         const query = 'DELETE FROM canteras WHERE id = $1 RETURNING *;';
-        const result = await db.query(query, [id]);
+        const result = await client.query(query, [id]);
+
+        await client.query('COMMIT');
         return result.rows[0];
     } catch (err) {
+        if (client) await client.query('ROLLBACK');
         console.error('Error al eliminar cantera:', err);
-        throw new Error('Error al eliminar la cantera.');
+        throw new Error(`Error al eliminar la cantera: ${err.message}`);
+    } finally {
+        if (client) {
+            client.release();
+        }
     }
 };
 
@@ -361,13 +385,25 @@ const updateCanteraEstrato = async (estratoId, estratoData) => {
 };
 
 const deleteCanteraEstrato = async (estratoId) => {
+    const client = await db.connect();
     try {
+        await client.query('BEGIN');
+        // Delete assays first
+        await client.query('DELETE FROM ensayos WHERE estrato_id = $1', [estratoId]);
+        
         const query = 'DELETE FROM estratos WHERE id = $1 RETURNING *;';
-        const result = await db.query(query, [estratoId]);
+        const result = await client.query(query, [estratoId]);
+        
+        await client.query('COMMIT');
         return result.rows[0];
     } catch (err) {
+        if (client) await client.query('ROLLBACK');
         console.error('Error al eliminar estrato de cantera:', err);
-        throw new Error('Error al eliminar el estrato de la cantera.');
+        throw new Error(`Error al eliminar el estrato de la cantera: ${err.message}`);
+    } finally {
+        if (client) {
+            client.release();
+        }
     }
 };
 

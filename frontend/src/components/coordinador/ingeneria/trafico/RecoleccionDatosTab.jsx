@@ -2,20 +2,18 @@
 
 import React from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from 'react-leaflet';
-import FitBoundsControl from './FitBoundsControl';
+
 import ErrorBoundary from '../../../ErrorBoundary';
 
 const RecoleccionDatosTab = ({
-  cu104Route,
+  projectId,
   stationData,
   selectedStation,
   handleStationSelect,
-  showRoute,
-  setShowRoute,
   showTraffic,
   setShowTraffic
 }) => {
-  const mapKey = `map-${cu104Route.length}-${Object.keys(stationData).length}`;
+  const mapKey = `map-${Object.keys(stationData).length}`;
 
   return (
     <div style={{ width: '90%', margin: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', paddingBottom: '20px' }}>
@@ -26,16 +24,11 @@ const RecoleccionDatosTab = ({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
           />
-          <FitBoundsControl cu104Route={cu104Route} />
-          {showRoute && (
-            <Polyline
-              positions={cu104Route.map(point => [point.lat, point.lng])}
-              color="#e74c3c"
-              weight={4}
-              opacity={0.8}
-            />
-          )}
-          {showTraffic && Object.values(stationData).map((station) => (
+          {showTraffic && Object.values(stationData).map((station) => {
+            if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined || station.info.lat === null || station.info.lng === null) {
+              return null;
+            }
+            return (
             <CircleMarker
               key={station.info.id}
               center={[station.info.lat, station.info.lng]}
@@ -53,7 +46,8 @@ const RecoleccionDatosTab = ({
                 {station.info.descripcion}
               </Popup>
             </CircleMarker>
-          ))}
+          )})
+        }
         </MapContainer>
         </ErrorBoundary>
       </div>

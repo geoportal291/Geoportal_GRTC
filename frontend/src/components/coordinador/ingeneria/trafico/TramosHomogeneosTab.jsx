@@ -10,21 +10,14 @@ import 'alertifyjs/build/css/themes/default.min.css';
 import { CSSTransition } from 'react-transition-group';
 import './EstacionControlTab.css';
 import ErrorBoundary from '../../../ErrorBoundary';
+import Geoite from '../invvial/map/geoite';
 
 // Componente para manejar la vista del mapa
-const MapViewController = ({ sectionData, setView, view }) => {
+const MapViewController = ({ setView, view }) => {
   const map = useMap();
   const isInitialFitDone = useRef(false);
 
-  useEffect(() => {
-    if (sectionData && Object.keys(sectionData).length > 0 && !isInitialFitDone.current) {
-      const allCoords = Object.values(sectionData).flatMap(section => section.info.coordinates);
-      if (allCoords.length > 0) {
-        map.fitBounds(allCoords, { padding: [50, 50] });
-        isInitialFitDone.current = true;
-      }
-    }
-  }, [sectionData, map]);
+  // Removida la lógica de fitBounds basada en coordinates hardcodeadas
 
   const onMove = useCallback(() => {
     setView({ center: map.getCenter(), zoom: map.getZoom() });
@@ -43,6 +36,7 @@ const MapViewController = ({ sectionData, setView, view }) => {
 };
 
 const TramosHomogeneosTab = ({
+  projectId,
   sectionData,
   selectedSection,
   handleSectionSelect,
@@ -150,59 +144,9 @@ const TramosHomogeneosTab = ({
         <div style={{ flex: '3', display: 'flex', flexDirection: 'column' }}>
           <div style={{ height: '820px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
             <ErrorBoundary>
-              <MapContainer center={view.center} zoom={13} zoomControl={false} className="map-container-custom-controls" style={{ height: '100%', width: '100%' }}>
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution="&copy; OpenStreetMap contributors"
-                />
-                <MapViewController setView={setView} sectionData={sectionData} />
-                {Object.keys(sectionData).map(sectionId => {
-                  const section = sectionData[sectionId];
-                  const isSelected = selectedSection === sectionId;
-
-                  if (!visibility[sectionId] || !section.info.coordinates) {
-                    return null;
-                  }
-
-                  return (
-                    <Polyline
-                      key={`${sectionId}-${isSelected}`}
-                      positions={section.info.coordinates}
-                      pathOptions={{
-                        color: isSelected ? '#00FFFF' : (colors[sectionId] || '#3388ff'),
-                        weight: 8,
-                      }}
-                      eventHandlers={{
-                        click: (e) => {
-                          handleSectionSelect(sectionId);
-                        },
-                        mouseover: (e) => {
-                          e.target.openPopup();
-                        },
-                        mouseout: (e) => {
-                          e.target.closePopup();
-                        },
-                      }}
-                    >
-                      <Popup>
-                        Tramo: {section.info.nombre}<br />
-                        {section.info.imagenes && section.info.imagenes.filter(img => img.source_type === 'tramo').length > 0 && (() => {
-                          const filteredImages = section.info.imagenes.filter(img => img.source_type === 'tramo');
-                          const randomIndex = Math.floor(Math.random() * filteredImages.length);
-                          const randomImage = filteredImages[randomIndex];
-                          return (
-                            <div style={{ marginTop: '10px', textAlign: 'center' }}>
-                              <img src={randomImage.image_url} alt={randomImage.description || 'Imagen del tramo'} style={{ maxWidth: '150px', maxHeight: '100px', objectFit: 'cover', borderRadius: '4px' }} />
-                              <p style={{ fontSize: '0.8em', margin: '5px 0 0 0' }}>{randomImage.description || 'Imagen'}</p>
-                            </div>
-                          );
-                        })()}
-                        <p style={{ fontSize: '0.9em', margin: '5px 0 0 0' }}>Ubicación: {section.info.ubicacion}</p>
-                      </Popup>
-                    </Polyline>
-                  );
-                })}
-              </MapContainer>
+              <Geoite height="100%" projectId={projectId} section="trafico">
+                <MapViewController setView={setView} />
+              </Geoite>
             </ErrorBoundary>
           </div>
           <div style={{ display: 'grid', gap: '20px', marginTop: '12px' }}>

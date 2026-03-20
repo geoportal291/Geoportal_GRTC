@@ -1,0 +1,64 @@
+================================================================================
+          PLAN MAESTRO ESTRATÉGICO: GEOPORTAL 3D, BIM Y GEMELO DIGITAL
+================================================================================
+
+Este documento detalla la hoja de ruta técnica (Roadmap) y el análisis de 
+riesgos críticos para la evolución del Visor 3D del Geoportal hacia una 
+plataforma "Digital Twin" de clase mundial (Topografía, Geotecnia, IFC y GIS).
+
+--------------------------------------------------------------------------------
+FASES DE DESARROLLO (ROADMAP)
+--------------------------------------------------------------------------------
+
+FASE 1: ESTABILIZACIÓN DEL ENTORNO GLOBAL Y TOPOGRAFÍA (Corto Plazo)
+Objetivo: Migrar a un globo esférico realista con capacidades topográficas avanzadas.
+- [Realizado] Estabilizar Visor CesiumJS: Migración de Three.js a CesiumJS para entorno global. Implementación de cielo, relieve base y control total sobre clicks nativos erráticos.
+- [Realizado] Controles de Cámara y Modo "Caminante": Implementación de límites de colisión ("Hard Iron") para la cámara de primera persona, techos de cristal, muros virtuales de Chunk y transiciones limpias y bloqueadas de Satélite a Primera Persona.
+- [Realizado] Precisión Geográfica Extrema: Corrección automática de inversión de ejes (X/Y) y detección inteligente de Zonas UTM (18S/19S) usando la librería proj4.
+- [Realizado] Interfaz Profesional: Panel lateral dinámico, deslizable; opciones conmutables de Satélite y Calles, y slider de opacidad general para la tierra (Rayos X).
+- [Realizado] Renderizado Topográfico de Ingeniería (LandXML): Carga asíncrona de polígonos .obj procesados por Python con renderizado personalizado de primitivas gráficas (Solid y Wireframe), forzando orden de física DepthTest y BoundingSpheres para asegurar representación exacta sin ser ocultados por el terreno fotogramétrico base de Cesium.
+
+FASE 2: GEOTECNIA Y ESTRATOS SUBTERRÁNEOS (Corto/Medio Plazo)
+Objetivo: Visualizar los resultados de sondajes y geología bajo la piel de la tierra.
+- [Realizado] Motor de Inteligencia Artificial (NLP): Clasificador semántico en Python que analiza texto humano y asigna estandarización de tipos de suelo y colores hexadecimales.
+- [En Proceso] Visualización Masiva de Estratos: Integrar los resultados del NLP para que Cesium dibuje cilindros tridimensionales de sondajes a sus profundidades correspondientes bajo la malla de la orografía.
+
+FASE 3: INTEGRACIÓN BIM Y ESTRUCTURAL - EL ESTÁNDAR IFC (Medio/Largo Plazo)
+Objetivo: Ver cómo los modelos arquitectónicos y civiles se superponen al terreno.
+- [Pendiente] Integrar la librería WebAssembly `web-ifc` en el frontend React temporalmente, o delegar en un pipeline backend completo `IfcOpenShell`.
+- [Pendiente] Cargar archivos estructurales pesados (IFC) y pintarlos en sus coordenadas UTM exactas. Sincronizar altitud y permitir selección para metadatos constructivos y operativos del activo.
+
+FASE 4: FOTOGRAMETRÍA Y VISIÓN "GOOGLE STREET VIEW" (Medio Plazo)
+Objetivo: Dotar de inmersión visual fotográfica real sobre el plano.
+- [Pendiente] Visión Geográfica Local: Aplicar texturas satelitales ultra delineadas o renders fotogramétricos de dron a las mallas LandXML.
+- [Pendiente] Fotografías 360°: Marcadores interactivos que transporten la cámara a burbujas inmersivas en primera persona.
+
+FASE 5: EL ESCALADO MASIVO - ARQUITECTURA "CHUNKS" (Largo Plazo)
+Objetivo: Desplegar carreteras de 50 o 100 kilómetros sin saturar el sistema.
+- [En Proceso] Aislamiento Básico Logrado: El sistema actual ya aísla la cámara del usuario al rectángulo geográfico circundante al modelo activo ("Frustum Box") para limitar la ram.
+- [Pendiente] Streaming Dinámico: El Backend (Python) debe empezar a proveer Topografías e IFCs picados mediante estándar "3D Tiles" reales (OGC) para transmitir kilómetros de vía bajo demanda visual (LOD).
+
+--------------------------------------------------------------------------------
+ERRORES CRÍTICOS Y VERDADERAS AMENAZAS EN PRODUCCIÓN (RISK ASSESSMENT)
+--------------------------------------------------------------------------------
+
+1. COLAPSO DE MEMORIA RAM EN EL NAVEGADOR DEL USUARIO FINAL ("Aw, Snap!")
+- Estado: Mitigado inicialmente no cargando masivamente hasta solicitud manual.
+- Solución Final: Strict LOD (Level of Detail) e implementación formal de Cesium 3D Tiles para streaming asíncrono, similar a juegos de mundo abierto o Google Earth.
+
+2. COLAPSO DE MEMORIA EN EL SERVIDOR (OOM Python Worker Error 500)
+- Estado: Se experimentaron problemas resolviendo IFCs pesados y modelos LandXml astronómicos.
+- Solución: Pasar a `iterparse` (Streaming) en Python o forzar un límite de subida (Hard Limit ≈ 50-80MB), requiriendo que se suban tramos y no una carretera troncal completa a la vez.
+
+3. CONFLICTO FATAL DE COORDENADAS (SRID)
+- Estado: [SOLUCIONADO].
+- Solución Aplicada: Librerías cartográficas proj4 detectando automáticamente desfases, zonas UTM (18 o 19) e invenciones de AutoCad (X por Y) inyectando a grados universales (WGS84 Lat/Lon).
+
+4. EL CHOQUE DEL SUBSUELO Y Z-FIGHTING (El conflicto Z o Altitud)
+- Estado: [CORREGIDO PARA TOPOGRAFÍA, PENDIENTE PARA ESTRATOS]
+- Solución Aplicada: Deshabilitar temporalmente las físicas y renderizar las capas LandXML explícitamente medio metro por encima de la cota natural para que emerjan.
+- Problema Pendiente: El dibujo de sondajes bajo tierra (Estratos). Necesitamos un "Rayo Inverso" matemático que impacte contra el suelo para determinar la Cota 0 y empezar a perforar cilindros hacia abajo de allí usando opacidad de terreno en la Fase 2.
+
+5. ERROR HUMANO Y DATOS NO ESTRUCTURADOS DE INGENIERÍA
+- Estado: [SOLUCIONADO].
+- Solución Aplicada: Motor IA NLP conectando el vocabulario caprichoso humano a colores hexadecimales deterministas rígidos (Pipeline). Falta la inyección a la Base de Datos general.

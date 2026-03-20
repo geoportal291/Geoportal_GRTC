@@ -1,0 +1,946 @@
+body {
+    margin: 0;
+    background-color: #f4f7f6;
+    font-family: 'Segoe UI', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* --- 1. BARRA VERTICAL --- */
+.geolmap-toolbar-container {
+    position: absolute;
+    top: 70px;
+    left: 0px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    /* Separación entre bloques */
+}
+
+.geolmap-tool-group {
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* Bordes redondeados */
+}
+
+.geolmap-tool-btn {
+    width: 36px;
+    height: 36px;
+    background: white;
+    border: none;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    color: #666;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.geolmap-tool-btn:last-child {
+    border-bottom: none;
+}
+
+.geolmap-tool-btn:hover {
+    background-color: #f9f9f9;
+    color: #333;
+}
+
+/* Estado Activo: Se pone azul cuando su menú está abierto */
+.geolmap-tool-btn.active {
+    background-color: #eef6ff;
+    color: #0056b3;
+    border-left: 3px solid #0056b3;
+    /* Borde azul a la izquierda */
+    padding-right: 3px;
+    /* Compensar el borde para centrar icono */
+}
+
+
+/* --- 2. TARJETAS FLOTANTES (CORREGIDO VERSION 2) --- */
+.geolmap-flyout-card-v2 {
+    /* IMPORTANTE: Fixed para que ignore cualquier contenedor padre y use coordenadas de pantalla */
+    position: fixed;
+    width: 280px;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e0e0e0;
+    display: none;
+    z-index: 2000;
+    /* Siempre encima de todo */
+    animation: geolmap-fadeInRight 0.2s ease-out;
+    --arrow-top: 16px;
+    /* Valor por defecto */
+}
+
+/* Modal de Calibración más ancho */
+#geolmap-menu-calibrar {
+    width: 350px !important;
+}
+
+/* La flechita que apunta hacia la izquierda al botón - POSICIÓN DINÁMICA */
+.geolmap-flyout-card-v2::before {
+    content: "";
+    position: absolute;
+    top: var(--arrow-top);
+    /* Posición dinámica calculada por JavaScript */
+    left: -8px;
+    /* Posicionada en el lado izquierdo del modal */
+    width: 14px;
+    height: 14px;
+    background: inherit;
+    /* Hereda el color del header o body */
+    transform: rotate(45deg);
+    border-left: 1px solid #e0e0e0;
+    border-bottom: 1px solid #e0e0e0;
+    z-index: -1;
+}
+
+
+@keyframes geolmap-fadeInRight {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Headers de Colores */
+.geolmap-card-header {
+    padding: 12px 15px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Color específico para la flecha según el header */
+/* Azul */
+.geolmap-header-blue {
+    background-color: #004080;
+}
+
+.geolmap-card-blue::before {
+    background-color: #004080;
+    border-left: 1px solid #003366;
+    border-bottom: 1px solid #003366;
+}
+
+/* Naranja */
+.geolmap-header-orange {
+    background-color: #e67e22;
+}
+
+.geolmap-card-orange::before {
+    background-color: #e67e22;
+    border-left: 1px solid #d35400;
+    border-bottom: 1px solid #d35400;
+}
+
+/* Morado */
+.geolmap-header-purple {
+    background-color: #6c5ce7;
+}
+
+.geolmap-card-purple::before {
+    background-color: #6c5ce7;
+    border-left: 1px solid #5b4bc4;
+    border-bottom: 1px solid #5b4bc4;
+}
+
+.geolmap-card-body {
+    padding: 15px;
+    font-size: 14px;
+}
+
+/* Elementos UI dentro del menú */
+.geolmap-ui-row {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.geolmap-btn-block {
+    width: 100%;
+    padding: 8px;
+    background: #f1f1f1;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 5px;
+    color: #444;
+}
+
+.geolmap-btn-block:hover {
+    background: #e2e2e2;
+}
+
+.geolmap-input-flex {
+    display: flex;
+    gap: 0;
+}
+
+.geolmap-input-flex input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    outline: none;
+}
+
+.geolmap-input-flex button {
+    padding: 8px 15px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+}
+
+/* --- Estilos para Popups de Alcantarillas/Badenes/Puentes/Muros --- */
+/* --- Estilos para Popups de Alcantarillas/Badenes/Puentes/Muros --- */
+/* Reset Leaflet default wrapper to avoid double-box effect */
+.leaflet-popup-content-wrapper {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+}
+
+.leaflet-popup-content {
+    margin: 0 !important;
+    width: 260px !important;
+    /* Force fixed width for correct centering */
+    line-height: inherit !important;
+}
+
+/* Imagen del popup */
+.geolmap-popup-image {
+    width: 100% !important;
+    max-width: 220px !important;
+    height: auto !important;
+    min-height: 140px !important;
+    max-height: 160px !important;
+    object-fit: cover !important;
+    border-radius: 5px !important;
+    margin-top: 6px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Botones del popup */
+.leaflet-popup-content button {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+
+.leaflet-popup-content button:hover {
+    opacity: 0.9 !important;
+    transform: translateY(-1px) !important;
+}
+
+.leaflet-popup-content button:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* Contador de imágenes */
+.leaflet-popup-content span {
+    font-size: 11px !important;
+    color: #666 !important;
+}
+
+/* Título del popup más visible */
+.leaflet-popup-content b {
+    font-size: 14px !important;
+    color: #333 !important;
+    display: block !important;
+    margin-bottom: 6px !important;
+}
+
+/* --- Estilos para Formularios de Modales --- */
+.geolmap-card-body {
+    padding: 12px;
+    overflow: hidden;
+}
+
+.geolmap-card-body * {
+    box-sizing: border-box;
+}
+
+.geolmap-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.geolmap-input-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2c3e50;
+    min-width: 85px;
+    margin: 0;
+}
+
+/* Selects mejorados */
+.geolmap-form-select,
+.geolmap-input-group select {
+    flex: 1;
+    padding: 7px 28px 7px 10px;
+    border: 2px solid #dce4ec;
+    border-radius: 5px;
+    font-size: 12px;
+    color: #2c3e50;
+    background-color: #ffffff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.geolmap-form-select:hover,
+.geolmap-input-group select:hover {
+    border-color: #3498db;
+    background-color: #f8fbff;
+}
+
+.geolmap-form-select:focus,
+.geolmap-input-group select:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+    background-color: #ffffff;
+}
+
+/* Inputs mejorados */
+.geolmap-form-input,
+.geolmap-input-flex input {
+    flex: 1;
+    padding: 7px 10px;
+    border: 2px solid #dce4ec;
+    border-radius: 5px;
+    outline: none;
+    font-size: 12px;
+    color: #2c3e50;
+    background-color: #ffffff;
+    transition: all 0.3s ease;
+}
+
+.geolmap-form-input:hover,
+.geolmap-input-flex input:hover {
+    border-color: #3498db;
+    background-color: #f8fbff;
+}
+
+.geolmap-form-input:focus,
+.geolmap-input-flex input:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+    background-color: #ffffff;
+}
+
+.geolmap-form-input::placeholder,
+.geolmap-input-flex input::placeholder {
+    color: #95a5a6;
+    font-size: 11px;
+}
+
+.geolmap-input-flex {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    max-width: 100%;
+}
+
+.geolmap-input-flex input {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.geolmap-gms-input {
+    max-width: 60px;
+    text-align: center;
+}
+
+/* Botones primarios (azul) */
+.geolmap-btn-primary {
+    flex: 1;
+    padding: 9px 14px;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    border: none;
+    border-radius: 5px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+}
+
+.geolmap-btn-primary:hover {
+    background: linear-gradient(135deg, #2980b9 0%, #21618c 100%);
+    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
+    transform: translateY(-1px);
+}
+
+.geolmap-btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+}
+
+/* Botones secundarios (gris) */
+.geolmap-btn-secondary {
+    flex: 1;
+    padding: 9px 14px;
+    background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+    border: none;
+    border-radius: 5px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(127, 140, 141, 0.3);
+}
+
+.geolmap-btn-secondary:hover {
+    background: linear-gradient(135deg, #7f8c8d 0%, #6c7a7b 100%);
+    box-shadow: 0 4px 8px rgba(127, 140, 141, 0.4);
+    transform: translateY(-1px);
+}
+
+.geolmap-btn-secondary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(127, 140, 141, 0.3);
+}
+
+/* Botones genéricos (mantener compatibilidad) */
+.geolmap-btn-block {
+    width: 100%;
+    padding: 8px 12px;
+    background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-bottom: 6px;
+    color: #495057;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.geolmap-btn-block:hover {
+    background: linear-gradient(to bottom, #e9ecef, #dee2e6);
+    border-color: #adb5bd;
+}
+
+.geolmap-btn-block:active {
+    background: #dee2e6;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Separadores visuales */
+.geolmap-card-body>div {
+    padding-bottom: 4px;
+}
+
+#geolmap-coordinateInputSection {
+    border-top: 1px solid #e9ecef;
+    padding-top: 12px;
+    margin-top: 8px;
+}
+
+/* --- Estilos para Tabla de Calibración --- */
+.geolmap-card-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+    font-size: 11px;
+}
+
+.geolmap-card-body table thead {
+    background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+}
+
+.geolmap-card-body table th {
+    padding: 8px 6px;
+    border: 1px solid #dee2e6;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    font-size: 11px;
+}
+
+.geolmap-card-body table td {
+    padding: 6px;
+    border: 1px solid #dee2e6;
+    font-size: 11px;
+    color: #495057;
+}
+
+.geolmap-card-body table td:first-child {
+    font-weight: 500;
+    background-color: #f8f9fa;
+}
+
+/* Inputs dentro de la tabla */
+.geolmap-card-body table input.geolmap-calib-input {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 11px;
+    outline: none;
+    transition: all 0.2s;
+    background-color: #ffffff;
+}
+
+.geolmap-card-body table input.geolmap-calib-input:hover {
+    border-color: #3498db;
+    background-color: #f8fbff;
+}
+
+.geolmap-card-body table input.geolmap-calib-input:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.15);
+}
+
+.geolmap-card-body table input.geolmap-calib-input::placeholder {
+    color: #adb5bd;
+    font-size: 10px;
+}
+
+/* Texto descriptivo */
+.geolmap-card-body p {
+    font-size: 11px;
+    color: #6c757d;
+    margin: 0 0 10px 0;
+    line-height: 1.4;
+}
+
+/* Botones mejorados para calibración */
+#geolmap-saveCalibrationBtn,
+#geolmap-deleteCalibrationBtn {
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 6px;
+}
+
+#geolmap-saveCalibrationBtn {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+#geolmap-saveCalibrationBtn:hover {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+    transform: translateY(-1px);
+}
+
+#geolmap-deleteCalibrationBtn {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+#geolmap-deleteCalibrationBtn:hover {
+    background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Ancho de columnas de la tabla */
+.geolmap-card-body table th:first-child,
+.geolmap-card-body table td:first-child {
+    width: 80px;
+    min-width: 80px;
+    white-space: nowrap;
+}
+
+/* --- ESTILOS DE POPUP TIPO TARJETA --- */
+/* --- ESTILOS DE POPUP TIPO TARJETA (NAMESPACEADO) --- */
+.geolmap-internal-map-container {
+    --header-bg-geoite: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    --close-btn-color-geoite: #ffffff;
+}
+
+/* Reset Leaflet default wrapper to avoid double-box effect */
+.geolmap-internal-map-container .leaflet-popup-content-wrapper {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    border: none !important;
+}
+
+.geolmap-internal-map-container .leaflet-popup-content {
+    margin: 0 !important;
+    width: 280px !important;
+    line-height: inherit !important;
+}
+
+.geolmap-internal-map-container .leaflet-popup-tip-container {
+    display: none !important;
+}
+
+.geolmap-map-popup-card {
+    width: 280px;
+    font-family: 'Arial', sans-serif;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.geolmap-map-popup-card .popup-header {
+    background: var(--header-bg-geoite);
+    border-bottom: none;
+    padding: 12px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: white;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+/* Custom styling for Leaflet Close Button */
+.geolmap-internal-map-container .leaflet-popup-close-button {
+    color: var(--close-btn-color-geoite) !important;
+    font-size: 24px !important;
+    font-weight: 300 !important;
+    top: 9px !important;
+    right: 18px !important;
+    /* Moved significantly left as requested */
+    text-shadow: none !important;
+    opacity: 0.9 !important;
+    z-index: 100 !important;
+    width: 24px !important;
+    height: 24px !important;
+    line-height: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+}
+
+.geolmap-internal-map-container .leaflet-popup-close-button:hover {
+    color: #fff !important;
+    opacity: 1 !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 50%;
+}
+
+.geolmap-map-popup-card .popup-content {
+    padding: 0;
+}
+
+.geolmap-map-popup-card .popup-image-container {
+    width: 100%;
+    height: 140px;
+    overflow: hidden;
+    background: #eee;
+    position: relative;
+}
+
+.geolmap-map-popup-card .popup-image-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.geolmap-map-popup-card .popup-details-grid {
+    padding: 8px 12px;
+    font-size: 11px;
+}
+
+.geolmap-map-popup-card .detail-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 3px;
+}
+
+.geolmap-map-popup-card .detail-row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.geolmap-map-popup-card .detail-row .label {
+    font-weight: bold;
+    color: #555;
+    text-transform: uppercase;
+}
+
+.geolmap-map-popup-card .detail-row .value {
+    text-align: right;
+    color: #000;
+    font-weight: 500;
+}
+
+.geolmap-map-popup-card .popup-footer-btn {
+    width: 100%;
+    background-color: #2c3e50;
+    color: white;
+    border: none;
+    padding: 8px;
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-radius: 0 0 8px 8px;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.geolmap-map-popup-card .popup-footer-btn:hover {
+    background-color: #1a252f;
+}
+
+/* POI Tooltip Styling */
+.poi-tooltip {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: white !important;
+    font-weight: bold;
+    text-shadow:
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000,
+        1px 1px 0 #000;
+    font-size: 13px;
+    padding: 0;
+    margin-left: 5px;
+}
+
+/* --- GESTOR DE CAPAS SHAPEFILES --- */
+.geolmap-shp-manager-btn {
+    font-size: 18px !important;
+    background: white !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+    color: #3b82f6 !important;
+    border: none !important;
+}
+
+.geolmap-shp-manager-btn:hover {
+    background-color: #f8fafc !important;
+    transform: scale(1.05);
+    color: #2563eb !important;
+}
+
+.geotech-layer-panel-v2 {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 280px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0,0,0,0.08);
+    z-index: 1050;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    animation: fadeInScale 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.geotech-layer-header {
+    background: transparent;
+    color: #1e293b;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+.geotech-layer-header button {
+    background: rgba(0,0,0,0.04);
+    border: none;
+    color: #64748b;
+    font-size: 16px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.geotech-layer-header button:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    transform: scale(1.05);
+}
+
+.geotech-layer-body {
+    padding: 8px;
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.geotech-layer-body::-webkit-scrollbar {
+    width: 6px;
+}
+.geotech-layer-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+.geotech-layer-body::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.5);
+    border-radius: 10px;
+}
+
+.geotech-layer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    transition: all 0.2s ease;
+    border-bottom: none;
+    background-color: transparent;
+}
+
+.geotech-layer-item:hover {
+    background-color: rgba(241, 245, 249, 0.8);
+}
+
+.geotech-layer-item label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #334155;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    user-select: none;
+}
+
+.geotech-layer-item input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #cbd5e1;
+    border-radius: 4px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    background-color: white;
+    flex-shrink: 0;
+    margin: 0; 
+}
+
+.geotech-layer-item input[type="checkbox"]:checked {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+}
+
+.geotech-layer-item input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.geotech-layer-item input[type="checkbox"]:hover {
+    border-color: #94a3b8;
+}
+
+.layer-color-indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+        transform-origin: top right;
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+        transform-origin: top right;
+    }
+}
+
+.shp-point-square div {
+    border-radius: 1px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}

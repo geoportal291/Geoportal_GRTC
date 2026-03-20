@@ -28,7 +28,7 @@ const tramoData = {
     }
 };
 
-const ZonasCriticas = ({ onEditElementSelect, zonasCriticasData, graphicsImages, canUpload, showModal, canComment }) => {
+const ZonasCriticas = ({ projectId, onEditElementSelect, zonasCriticasData, graphicsImages, canUpload, showModal, canComment }) => {
 
     const [highlightedTramoId, setHighlightedTramoId] = useState('TRAMO 1');
     const [kmlRoute, setKmlRoute] = useState([]); // Estado para la ruta del KML
@@ -271,6 +271,8 @@ const ZonasCriticas = ({ onEditElementSelect, zonasCriticasData, graphicsImages,
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                     {/* Reuse Geoite but pass ZonasCriticas data. Geoite expects 'alcantarillasData' prop for general elements */}
                     <Geoite
+                        projectId={projectId}
+                        section="invvial"
                         onTramoSelect={handleTramoSelectFromMap}
                         highlightedTramoId={highlightedTramoId}
                         alcantarillasData={zonasWithImages}

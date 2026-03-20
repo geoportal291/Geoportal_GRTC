@@ -28,7 +28,7 @@ const tramoData = {
     }
 };
 
-const Muros = ({ onEditElementSelect, murosData, graphicsImages, canUpload, showModal, canComment }) => {
+const Muros = ({ projectId, onEditElementSelect, murosData, graphicsImages, canUpload, showModal, canComment }) => {
 
     const [highlightedTramoId, setHighlightedTramoId] = useState('TRAMO 1');
     const [kmlRoute, setKmlRoute] = useState([]); // Estado para la ruta del KML
@@ -264,7 +264,7 @@ const Muros = ({ onEditElementSelect, murosData, graphicsImages, canUpload, show
         <div className="alcantarillas-tab-wrapper" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', gap: '20px', flex: 1, minHeight: 0, height: '100%' }}>        {/* Columna del Mapa - Izquierda */}
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
-                    <Geoite onTramoSelect={handleTramoSelectFromMap} highlightedTramoId={highlightedTramoId} alcantarillasData={murosWithImages} onAlcantarillaClick={handleMuroClick} selectedAlcantarilla={selectedMuro} onRouteLoaded={setKmlRoute} onShowDetails={handleShowDetails} />
+                    <Geoite projectId={projectId} section="invvial" onTramoSelect={handleTramoSelectFromMap} highlightedTramoId={highlightedTramoId} alcantarillasData={murosWithImages} onAlcantarillaClick={handleMuroClick} selectedAlcantarilla={selectedMuro} onRouteLoaded={setKmlRoute} onShowDetails={handleShowDetails} />
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                         {canUpload && (
                             <div onClick={() => { if (showModal) showModal(true); }} style={{ display: 'inline-block' }}>

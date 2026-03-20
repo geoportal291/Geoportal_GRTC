@@ -174,6 +174,8 @@ const HitosKilometricos = ({ hitosData, graphicsImages, canUpload, showModal, on
 
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                     <Geoite
+                        projectId={projectId}
+                        section="invvial"
                         alcantarillasData={hitosWithImages}
                         type="hitos_kilometricos"
                         onAlcantarillaClick={handleHitoClick}

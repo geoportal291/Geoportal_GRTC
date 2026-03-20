@@ -18,7 +18,7 @@ import { saveAs } from 'file-saver';
 
 
 // Este componente encapsula TODA la lógica imperativa para no causar re-renders.
-const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails, graphicsImages }) => {
+const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails, graphicsImages }) => {
     const map = useMap();
     const geoJsonLayerRef = React.useRef(null);
     const poiLayerRef = React.useRef(new L.FeatureGroup()); // NEW: FeatureGroup para POIs (Start/End/Cities)
@@ -31,6 +31,14 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
     const [showCities, setShowCities] = useState(true); // Toggle state for cities
     const showCitiesRef = useRef(true); // NEW: Ref to avoid stale closures in listeners
     showCitiesRef.current = showCities; // Always sync with state
+    
+    // NEW: refs to avoid stale closures for project/section
+    const projectIdRef = useRef(projectId);
+    const sectionRef = useRef(section);
+    useEffect(() => {
+        projectIdRef.current = projectId;
+        sectionRef.current = section;
+    }, [projectId, section]);
 
     // NEW: Refs for dynamic loading moved to top level
     // Map<Key, { marker: L.Marker, type: string }>
@@ -532,13 +540,58 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         L.DomEvent.disableClickPropagation(downloadModal);
 
 
+        const extractStylesForExport = (featureGroup) => {
+            const features = [];
+            if (!featureGroup) return features;
+            
+            featureGroup.eachLayer(layer => {
+                if (layer.toGeoJSON) {
+                    const geojson = layer.toGeoJSON();
+                    
+                    const processFeature = (f, l) => {
+                        f.properties = f.properties || {};
+                        // Ensure it has a name for tokml
+                        if (!f.properties.nombre && !f.properties.name) {
+                            f.properties.nombre = f.properties._layer_name || f.properties.layer || 'Elemento';
+                        }
+                        
+                        if (l.options) {
+                            if (l.options.color) f.properties.stroke = l.options.color;
+                            if (l.options.weight) f.properties['stroke-width'] = l.options.weight;
+                            if (l.options.opacity !== undefined) f.properties['stroke-opacity'] = l.options.opacity;
+                            if (l.options.fillColor) f.properties.fill = l.options.fillColor;
+                            if (l.options.fillOpacity !== undefined) f.properties['fill-opacity'] = l.options.fillOpacity;
+                            
+                            if (f.geometry?.type === 'Point' && l.options.icon && l.options.icon.options?.html) {
+                                const html = l.options.icon.options.html;
+                                const match = html.match(/background-color:\s*([^;]+);/);
+                                if (match) f.properties['marker-color'] = match[1].trim();
+                            }
+                        }
+                        return f;
+                    };
+
+                    if (geojson.type === 'FeatureCollection') {
+                        geojson.features.forEach((f, i) => {
+                            const childLayer = layer.getLayers ? layer.getLayers()[i] : null;
+                            if (childLayer) features.push(processFeature(f, childLayer));
+                            else features.push(f);
+                        });
+                    } else {
+                        features.push(processFeature(geojson, layer));
+                    }
+                }
+            });
+            return features;
+        };
+
         const handleExportKML = async () => {
-            const geoJsonDrawn = drawnItems.toGeoJSON();
-            const geoJsonMeasured = measurementLayers.toGeoJSON();
+            const drawnFeatures = extractStylesForExport(drawnItems);
+            const measuredFeatures = extractStylesForExport(measurementLayers);
 
             const geoJsonToExport = {
                 type: 'FeatureCollection',
-                features: [...geoJsonDrawn.features, ...geoJsonMeasured.features]
+                features: [...drawnFeatures, ...measuredFeatures]
             };
 
             if (geoJsonToExport.features.length === 0) {
@@ -560,12 +613,12 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
         };
 
         const handleExportShapefile = async () => {
-            const geoJsonDrawn = drawnItems.toGeoJSON();
-            const geoJsonMeasured = measurementLayers.toGeoJSON();
+            const drawnFeatures = extractStylesForExport(drawnItems);
+            const measuredFeatures = extractStylesForExport(measurementLayers);
 
             const geoJsonToExport = {
                 type: 'FeatureCollection',
-                features: [...geoJsonDrawn.features, ...geoJsonMeasured.features]
+                features: [...drawnFeatures, ...measuredFeatures]
             };
 
             if (geoJsonToExport.features.length === 0) {
@@ -857,7 +910,10 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 alertify.success('Archivo subido correctamente.');
 
                 // Persist the new URL to the project
-                await axiosInstance.post(`/api/proyectos/${projectId}/kml`, { url: newUrl });
+                await axiosInstance.post(`/api/proyectos/${projectIdRef.current}/kml`, { 
+                    url: newUrl, 
+                    section: sectionRef.current 
+                });
                 alertify.message('Asociando KML con el proyecto.');
 
                 uploadModal.style.display = 'none';
@@ -1224,18 +1280,13 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
 
 
         // --- KML Persistence ---
-        const projectId = 24;
-
         const loadInitialKml = async () => {
+            if (!projectId) return;
             try {
-                const response = await axiosInstance.get(`/api/proyectos/${projectId}/kml`);
+                const response = await axiosInstance.get(`/api/proyectos/${projectId}/kml`, {
+                    params: { section: section }
+                });
                 let kmlUrl = response.data && response.data.url;
-
-                // HOTFIX: Override KML URL for Project 24
-                if (parseInt(projectId) === 24) {
-                    kmlUrl = "https://wtssndc4bmwklwss.public.blob.vercel-storage.com/1764685078654_tramofinalinvvial.kml";
-                    console.warn("geoite.jsx: HOTFIX - Overriding KML URL for Project 24 inside loadInitialKml");
-                }
 
                 if (kmlUrl) {
                     const showAlerts = !window.hasShownInitialKmlAlert;
@@ -1246,6 +1297,7 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 }
             } catch (error) {
                 if (error.response && error.response.status !== 404) {
+                    console.error("Error loading initial KML:", error);
                 }
             }
         };
@@ -1364,7 +1416,9 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
                 async function () {
                     try {
                         alertify.message('Eliminando KML...');
-                        await axiosInstance.delete(`/api/proyectos/${projectId}/kml`);
+                        await axiosInstance.delete(`/api/proyectos/${projectIdRef.current}/kml`, {
+                            params: { section: sectionRef.current }
+                        });
                         drawnItems.clearLayers();
                         alertify.success('El KML ha sido eliminado del proyecto.');
                     } catch (error) {
@@ -2576,12 +2630,12 @@ const MapLogic = ({ initialRoute, onTramoSelect, highlightedTramoId, alcantarill
     );
 };
 
-const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails, graphicsImages }) => {
+const Geoite = ({ projectId, section = 'invvial', children, onTramoSelect, highlightedTramoId, height = '700px', alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails, graphicsImages }) => {
     // Coordenadas para centrar el mapa en Perú, ya que no hay ruta inicial
     const center = [-12, -75];
 
     return (
-        <div className="geoite-internal-map-container" style={{ height: '700px', width: '100%', minHeight: 0 }}>
+        <div className="geoite-internal-map-container" style={{ height: height, width: '100%', minHeight: 0 }}>
             <MapContainer center={center} zoom={6} style={{ height: '100%', width: '100%' }}>
                 <LayersControl position="topright" key="layers-v2">
                     <LayersControl.BaseLayer name="Estándar">
@@ -2595,6 +2649,8 @@ const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantaril
                     </LayersControl.BaseLayer>
                 </LayersControl>
                 <MapLogic
+                    projectId={projectId}
+                    section={section}
                     initialRoute={null}
                     onTramoSelect={onTramoSelect}
                     highlightedTramoId={highlightedTramoId}
@@ -2604,6 +2660,7 @@ const Geoite = ({ onTramoSelect, highlightedTramoId, height = '90vh', alcantaril
                     onShowDetails={onShowDetails}
                     graphicsImages={graphicsImages}
                 />
+                {children}
             </MapContainer>
         </div>
     );

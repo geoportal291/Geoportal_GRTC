@@ -256,6 +256,8 @@ const InterferenciasElectricas = ({ onEditElementSelect, interferenciasData, gra
             <div style={{ display: 'flex', gap: '20px', flex: 1, minHeight: 0, height: '100%' }}>
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                     <Geoite
+                        projectId={projectId}
+                        section="invvial"
                         onTramoSelect={handleTramoSelectFromMap}
                         highlightedTramoId={highlightedTramoId}
                         alcantarillasData={interferenciasWithImages}

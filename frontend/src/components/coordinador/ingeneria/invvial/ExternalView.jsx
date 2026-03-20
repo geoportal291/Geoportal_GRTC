@@ -997,7 +997,8 @@ const ExternalView = ({
                         displayType,
                         data: item,
                         state, // Normalized state property
-                        prog: progValue // Numeric progresiva
+                        prog: progValue, // Numeric progresiva
+                        icon: getIcon(groupName)
                     });
                 }
             });

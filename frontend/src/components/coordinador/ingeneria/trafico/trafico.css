@@ -14,8 +14,8 @@
   height: 100%;
   /* Ajustado de 100vh a 100% para ajustarse al contenedor padre */
   background-color: #f0f2f5;
-  padding-top: 0;
-  /* Eliminado padding-top de 60px ya que layout.jsx maneja el espaciado */
+  padding-top: 60px;
+  /* Restaurado padding-top de 60px para evitar superposición con el header fijo */
   overflow: hidden;
   /* Prevent body scroll */
 }
@@ -813,14 +813,6 @@
   border: 1px solid #e2e8f0;
   padding: 20px;
   flex: 1;
-}
-
-.stations-container-box {
-  /* margin-right: 10px; Removed to fix alignment */
-}
-
-.legend-container-box {
-  /* margin-left: 10px; Removed to fix alignment */
 }
 
 .stations-header,

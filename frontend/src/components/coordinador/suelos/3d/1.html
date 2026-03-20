@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BIM Infrastructure Environment</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: #1a1a1a;
+            color: white;
+            overflow: hidden;
+        }
+
+        /* Layout Principal */
+        #ui-wrapper {
+            display: grid;
+            grid-template-columns: 280px 1fr 300px;
+            grid-template-rows: 60px 1fr 200px;
+            height: 100vh;
+        }
+
+        /* Toolbar Superior */
+        header {
+            grid-column: 1 / 4;
+            background: #252526;
+            border-bottom: 1px solid #3e3e3e;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 20px;
+        }
+
+        .tool {
+            padding: 8px 15px;
+            background: #333;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            border: 1px solid #444;
+        }
+
+        .tool:hover {
+            background: #444;
+            border-color: #007acc;
+        }
+
+        /* Paneles Laterales */
+        aside {
+            background: #252526;
+            padding: 15px;
+            border: 1px solid #3e3e3e;
+            font-size: 13px;
+            overflow-y: auto;
+        }
+
+        h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+        }
+
+        .tree-item {
+            padding: 5px 0;
+            cursor: pointer;
+            color: #ccc;
+        }
+
+        .tree-item:hover {
+            color: #007acc;
+        }
+
+        /* Viewport 3D */
+        #viewport {
+            position: relative;
+            background: #000;
+            grid-column: 2;
+            grid-row: 2;
+            cursor: crosshair;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Panel Inferior (Perfil Longitudinal) */
+        footer {
+            grid-column: 2;
+            background: #1e1e1e;
+            border-top: 1px solid #3e3e3e;
+            padding: 10px;
+            position: relative;
+        }
+
+        .profile-view {
+            width: 100%;
+            height: 100%;
+            border: 1px dashed #444;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+        }
+
+        .profile-line {
+            width: 90%;
+            height: 2px;
+            background: #007acc;
+            position: relative;
+        }
+
+        .profile-line::before {
+            content: 'Rasante';
+            position: absolute;
+            top: -20px;
+            color: #007acc;
+            font-size: 10px;
+        }
+
+        /* Estilo de Inputs en Propiedades */
+        .prop-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+        }
+
+        .prop-val {
+            color: #4ec9b0;
+            font-family: monospace;
+        }
+
+        /* Etiquetas flotantes en el 3D */
+        .badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            border-left: 3px solid #007acc;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui-wrapper">
+        <header>
+            <div style="font-weight: bold; color: #007acc; margin-right: 20px;">GEO-BIM v1.0</div>
+            <div class="tool">🛣️ Alineamiento</div>
+            <div class="tool">🌉 Estructuras</div>
+            <div class="tool">🌍 Terreno</div>
+            <div class="tool">📊 Cubicaciones</div>
+        </header>
+
+        <aside id="project-browser">
+            <h3>Explorador de Proyecto</h3>
+            <div class="tree-item">📂 Carretera Central v2</div>
+            <div class="tree-item"> └ 📈 Eje Horizontal principal</div>
+            <div class="tree-item"> └ ⛰️ Superficie TIN (Dron)</div>
+            <div class="tree-item"> └ 🌉 Puente KM 1+240</div>
+            <div class="tree-item"> └ 🛣️ Corredor: Sección Tipo A</div>
+        </aside>
+
+        <main id="viewport">
+            <div class="badge">Vista: Perspectiva 3D | EPSG:4326</div>
+            <div id="canvas-container"></div>
+        </main>
+
+        <aside id="properties">
+            <h3>Propiedades de Objeto</h3>
+            <div class="prop-row"><span>Nombre:</span> <span class="prop-val">Tramo Curvo A</span></div>
+            <div class="prop-row"><span>Radio:</span> <span class="prop-val">450.00 m</span></div>
+            <div class="prop-row"><span>Peralte:</span> <span class="prop-val">4.5%</span></div>
+            <div class="prop-row"><span>Velocidad:</span> <span class="prop-val">80 km/h</span></div>
+            <div class="prop-row"><span>Material:</span> <span class="prop-val">Asfalto Caliente</span></div>
+            <div style="margin-top: 20px;">
+                <h3>Análisis de Colisión</h3>
+                <div style="color: #f44336; font-size: 11px;">⚠️ Interferencia con tubería de gas en KM 1+150</div>
+            </div>
+        </aside>
+
+        <footer>
+            <h3>Perfil Longitudinal - Eje Principal</h3>
+            <div class="profile-view">
+                <div class="profile-line"></div>
+                <svg style="position:absolute; width:90%; height:100px; bottom:20px" viewBox="0 0 1000 100">
+                    <path d="M0,80 Q250,20 500,70 T1000,40" fill="none" stroke="#555" stroke-width="1" />
+                </svg>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Configuración básica de Three.js
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x121212);
+
+        const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // Luces
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 7.5).normalize();
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        // Simulación de "Carretera" (Una cinta curva)
+        const curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(-20, 0, 10),
+            new THREE.Vector3(-10, 1, 5),
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(10, -1, -5),
+            new THREE.Vector3(25, 0, -10)
+        ]);
+
+        const geometry = new THREE.TubeGeometry(curve, 100, 2, 8, false);
+        const material = new THREE.MeshPhongMaterial({ color: 0x333333, wireframe: false });
+        const road = new THREE.Mesh(geometry, material);
+        scene.add(road);
+
+        // Línea central de la carretera
+        const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const lineGeom = new THREE.TubeGeometry(curve, 100, 0.1, 8, false);
+        const line = new THREE.Mesh(lineGeom, lineMaterial);
+        scene.add(line);
+
+        // Simulación de Terreno (Grid)
+        const grid = new THREE.GridHelper(100, 50, 0x444444, 0x222222);
+        grid.position.y = -2;
+        scene.add(grid);
+
+        // Simulación de Puente (Cajas simples)
+        const bridgeGeom = new THREE.BoxGeometry(4, 8, 4);
+        const bridgeMat = new THREE.MeshPhongMaterial({ color: 0x888888 });
+        const pillar = new THREE.Mesh(bridgeGeom, bridgeMat);
+        pillar.position.set(0, -4, 0);
+        scene.add(pillar);
+
+        camera.position.set(15, 15, 25);
+
+        // Controles de ratón
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        // Animación
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Ajuste de ventana
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>

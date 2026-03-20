@@ -12,17 +12,8 @@ import { CSSTransition } from 'react-transition-group';
 import './EstacionControlTab.css';
 
 // Componente para manejar la vista del mapa
-const MapViewController = ({ cu104Route, setView, view }) => {
+const MapViewController = ({ setView, view }) => {
   const map = useMap();
-  const isInitialFitDone = useRef(false);
-
-  useEffect(() => {
-    if (cu104Route && cu104Route.length > 0 && !isInitialFitDone.current) {
-      const latLngs = cu104Route.map(point => [point.lat, point.lng]);
-      map.fitBounds(latLngs, { padding: [50, 50] });
-      isInitialFitDone.current = true;
-    }
-  }, [cu104Route, map]);
 
   const onMove = useCallback(() => {
     setView({ center: map.getCenter(), zoom: map.getZoom() });
@@ -42,12 +33,9 @@ const MapViewController = ({ cu104Route, setView, view }) => {
 
 
 const DataUploadTab = ({ 
-  cu104Route,
   stationData,
   selectedStation,
   handleStationSelect,
-  showRoute,
-  setShowRoute,
   showTraffic,
   setShowTraffic,
   refreshStationData,
@@ -56,6 +44,7 @@ const DataUploadTab = ({
   isNavbarExpanded
 }) => {
   const [view, setView] = useState({ center: [-12.5, -72.5], zoom: 11 });
+  const [showRoute, setShowRoute] = useState(false); // Local state for route toggle if needed, but cu104Route is gone
   const currentStationData = stationData[selectedStation];
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [stationIdToUpload, setStationIdToUpload] = useState(null);
@@ -134,16 +123,11 @@ const DataUploadTab = ({
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution="&copy; OpenStreetMap contributors"
               />
-              <MapViewController setView={setView} cu104Route={cu104Route} />
-              {showRoute && (
-                <Polyline
-                  positions={cu104Route.map(point => [point.lat, point.lng])}
-                  color="#e74c3c"
-                  weight={4}
-                  opacity={0.8}
-                />
-              )}
+              <MapViewController setView={setView} />
               {showTraffic && Object.values(stationData).map((station) => {
+                if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined || station.info.lat === null || station.info.lng === null) {
+                  return null;
+                }
                 const images = station.info.imagenes;
                 let randomImageUrl = null;
                 if (images && images.length > 0) {
@@ -354,7 +338,7 @@ const DataUploadTab = ({
                       <div className="legend-icon" style={{color: '#e74c3c'}}>
                         <i className="fas fa-route"></i>
                       </div>
-                      <span className="legend-label">Ruta CU-104</span>
+                      <span className="legend-label">Trazado KML</span>
                       <label className="toggle-switch small">
                         <input
                           type="checkbox"

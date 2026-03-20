@@ -256,6 +256,8 @@ const EstructurasExistentes = ({ projectId, isVisible, graphicsImages, canCommen
                 {/* Columna del Mapa - Izquierda */}
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                     <Geoite
+                        projectId={projectId}
+                        section="invvial"
                         alcantarillasData={enrichedEstructurasData}
                         onAlcantarillaClick={handleStructureClick}
                         selectedAlcantarilla={selectedStructure}

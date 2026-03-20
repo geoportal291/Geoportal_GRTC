@@ -11,19 +11,13 @@ import 'alertifyjs/build/css/themes/default.min.css';
 import { CSSTransition } from 'react-transition-group';
 import './EstacionControlTab.css';
 import ErrorBoundary from '../../../ErrorBoundary';
-
+import Geoite from '../invvial/map/geoite';
 // Componente para manejar la vista del mapa
-const MapViewController = ({ cu104Route, setView, view }) => {
+const MapViewController = ({ setView, view }) => {
   const map = useMap();
   const isInitialFitDone = useRef(false);
 
-  useEffect(() => {
-    if (cu104Route && cu104Route.length > 0 && !isInitialFitDone.current) {
-      const latLngs = cu104Route.map(point => [point.lat, point.lng]);
-      map.fitBounds(latLngs, { padding: [50, 50] });
-      isInitialFitDone.current = true;
-    }
-  }, [cu104Route, map]);
+  // Removida la lógica de fitBounds basada en cu104Route
 
   const onMove = useCallback(() => {
     setView({ center: map.getCenter(), zoom: map.getZoom() });
@@ -43,7 +37,7 @@ const MapViewController = ({ cu104Route, setView, view }) => {
 
 
 const EncuestaOrigenDestinoTab = ({
-  cu104Route,
+  projectId,
   stationData,
   selectedStation,
   handleStationSelect,
@@ -167,27 +161,12 @@ const EncuestaOrigenDestinoTab = ({
         <div style={{ flex: '3', display: 'flex', flexDirection: 'column' }}>
           <div style={{ height: '820px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
             <ErrorBoundary>
-              <MapContainer center={view.center} zoom={view.zoom} zoomControl={false} className="map-container-custom-controls" style={{ height: '100%', width: '100%' }}>
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution="&copy; OpenStreetMap contributors"
-                />
-                <MapViewController setView={setView} cu104Route={cu104Route} />
-                {showRoute && cu104Route && cu104Route.length > 0 && (
-                  <Polyline
-                    positions={cu104Route.map(point => [point.lat, point.lng]).filter(p => p[0] !== undefined && p[1] !== undefined)}
-                    color="#e74c3c"
-                    weight={4}
-                    opacity={0.8}
-                  />
-                )}
+              <Geoite height="100%" projectId={projectId} section="trafico">
+                <MapViewController setView={setView} />
                 {showTraffic && Object.values(stationData).map((station) => {
-                  // Add defensive check for station.info and its properties
-                  if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined) {
-                    console.warn("Skipping marker for station due to missing lat/lng:", station);
-                    return null; // Don't render marker if lat or lng is missing
+                  if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined || station.info.lat === null || station.info.lng === null) {
+                    return null;
                   }
-
                   const images = station.info.imagenes.filter(img => img.source_type === 'encuesta_origen_destino_image');
                   let randomImageUrl = null;
                   if (images && images.length > 0) {
@@ -255,7 +234,7 @@ const EncuestaOrigenDestinoTab = ({
                     </Marker>
                   );
                 })}
-              </MapContainer>
+              </Geoite>
             </ErrorBoundary>
           </div>
           <div style={{ display: 'grid', gap: '20px', marginTop: '12px' }}>
@@ -406,7 +385,7 @@ const EncuestaOrigenDestinoTab = ({
                       <div className="legend-icon" style={{ color: '#e74c3c' }}>
                         <i className="fas fa-route"></i>
                       </div>
-                      <span className="legend-label">Ruta CU-104</span>
+                      <span className="legend-label">Trazado KML</span>
                       <label className="toggle-switch small">
                         <input
                           type="checkbox"

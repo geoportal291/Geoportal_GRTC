@@ -57,7 +57,7 @@ export const fetchNearbyPlaces = async (bounds) => {
         });
 
         if (!response.ok) {
-            throw new Error(`Overpass API error: ${response.statusText}`);
+            throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
@@ -88,8 +88,10 @@ export const fetchNearbyPlaces = async (bounds) => {
         return places;
 
     } catch (error) {
-        console.error("Error fetching nearby places:", error);
-        // alertify.error("No se pudieron cargar ciudades cercanas (Overpass API).");
+        // Silent catch for common network congestion errors (429/504) to avoid console spam
+        if (!error.message?.includes('429') && !error.message?.includes('504')) {
+            console.error("Error fetching nearby places:", error);
+        }
         return [];
     }
 };

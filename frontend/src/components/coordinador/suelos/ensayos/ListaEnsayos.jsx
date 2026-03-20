@@ -110,7 +110,11 @@ const ListaEnsayos = ({ estrato, estratoRealId }) => {
                                 </div>
                                 <div className="detail-item">
                                     <span className="detail-label">Resultado</span>
-                                    <span className="detail-value">{ensayo.resultado}</span>
+                                    <span className="detail-value">
+                                        {typeof ensayo.resultado === 'object' && ensayo.resultado !== null 
+                                            ? 'Ver detalles' 
+                                            : (ensayo.resultado || '—')}
+                                    </span>
                                 </div>
                                 <div className="detail-item">
                                     <span className="detail-label">Responsable</span>

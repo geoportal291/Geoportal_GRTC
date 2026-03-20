@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-const URL = process.env.REACT_APP_API_BASE || 'https://backend-solitary-fire-911.fly.dev';
+const URL = process.env.REACT_APP_API_BASE || 'https://geoportal-backend-123.fly.dev';
 
 export const socket = io(URL, {
     autoConnect: false,

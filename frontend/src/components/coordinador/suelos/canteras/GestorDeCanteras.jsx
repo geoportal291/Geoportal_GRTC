@@ -344,7 +344,7 @@ export default function GestorDeCanteras() {
             <div class="modal-detail-item">
                 <i class="fas fa-chart-bar"></i>
                 <span class="modal-detail-label">Resultado:</span>
-                <span class="modal-detail-value">${ensayo.resultado}</span>
+                <span class="modal-detail-value">${typeof ensayo.resultado === 'object' && ensayo.resultado !== null ? 'Ver detalles' : (ensayo.resultado || '—')}</span>
             </div>
             <div class="modal-detail-item">
                 <i class="fas fa-user"></i>

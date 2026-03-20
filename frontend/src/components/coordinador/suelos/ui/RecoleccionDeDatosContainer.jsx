@@ -6,11 +6,12 @@ import GestorDeCanteras from '../canteras/GestorDeCanteras';
 import GestorDeFuentesDeAgua from './GestorDeFuentesDeAgua';
 import GestorDeMaterialesContainer from './GestorDeMaterialesContainer'; // Importar el nuevo contenedor
 import DashboardSuelos from './DashboardSuelos'; // NEW: Import Dashboard
+import Vista3D from '../3d/Vista3D'; // IMPORTAR VISTA 3D
 
 export default function RecoleccionDeDatosContainer() {
   const navigate = useNavigate();
-  const location = useLocation(); 
-  const [activeMainModule, setActiveMainModule] = useState('dashboard'); // 'dashboard', 'recoleccion' or 'materiales'
+  const location = useLocation();
+  const [activeMainModule, setActiveMainModule] = useState('dashboard'); // 'dashboard', 'recoleccion', 'materiales' or '3d'
 
   // Derive activeGestor directly from the URL
   const getActiveGestorFromPath = (pathname) => {
@@ -36,6 +37,8 @@ export default function RecoleccionDeDatosContainer() {
   useEffect(() => {
     if (location.pathname.includes('/uso-materiales')) {
       setActiveMainModule('materiales');
+    } else if (location.pathname.includes('/3d')) {
+      setActiveMainModule('3d');
     } else if (location.pathname.includes('gestor-tramos') || location.pathname.includes('gestor-canteras') || location.pathname.includes('gestor-fuentes')) {
       setActiveMainModule('recoleccion');
     } else {
@@ -64,7 +67,11 @@ export default function RecoleccionDeDatosContainer() {
     } else if (module === 'recoleccion') {
       navigate('/coordinador/recoleccion-datos/gestor-tramos');
     } else if (module === 'materiales') {
-      navigate('/coordinador/uso-materiales/gestor-materiales');
+      // Usaremos la ruta hija dentro del contenedor para que App.js no rompa el layout
+      navigate('/coordinador/recoleccion-datos/uso-materiales');
+    } else if (module === '3d') {
+      // Usamos la ruta hija para que siga montado RecoleccionDeDatosContainer
+      navigate('/coordinador/recoleccion-datos/3d');
     }
   };
 
@@ -91,6 +98,12 @@ export default function RecoleccionDeDatosContainer() {
             onClick={() => handleMainModuleChange('materiales')}
           >
             Uso de materiales
+          </div>
+          <div
+            className={`nav-level-1-item ${activeMainModule === '3d' ? 'active' : ''}`}
+            onClick={() => handleMainModuleChange('3d')}
+          >
+            3D
           </div>
         </nav>
 
@@ -137,6 +150,7 @@ export default function RecoleccionDeDatosContainer() {
         {activeMainModule === 'dashboard' && <DashboardSuelos />}
         {activeMainModule === 'recoleccion' && renderActiveGestor()}
         {activeMainModule === 'materiales' && <GestorDeMaterialesContainer />}
+        {activeMainModule === '3d' && <Vista3D />}
       </div>
     </div>
   );

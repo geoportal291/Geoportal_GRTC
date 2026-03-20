@@ -708,20 +708,28 @@ const removeUserFromProjectDb = async (projectId, userId, actorId) => {
 // Obtener asignaciones de un proyecto
 const getProjectAssignments = async (projectId) => {
     try {
+        // 1. Obtener el nombre del tramo del proyecto para buscar coincidencias
+        const projRes = await db.query('SELECT nombre_tramo FROM proyectos WHERE id = $1', [projectId]);
+        const nombreTramo = projRes.rows[0]?.nombre_tramo;
+
         const result = await db.query(
-            `SELECT
-                pu.usuario_id,
-                pu.rol_proyecto,
+            `SELECT DISTINCT ON (u.id)
+                u.id AS usuario_id,
+                COALESCE(pu.rol_proyecto, 'Asignado por Tramo') as rol_proyecto,
                 u.nombre,
                 u.ap_paterno,
                 u.ap_materno,
                 u.rol_id,
                 r.nombre AS rol_nombre
-            FROM proyecto_usuarios pu
-            JOIN usuariost u ON pu.usuario_id = u.id
+            FROM usuariost u
+            LEFT JOIN proyecto_usuarios pu ON u.id = pu.usuario_id AND pu.proyecto_id = $1
             JOIN roles r ON u.rol_id = r.id
-            WHERE pu.proyecto_id = $1`,
-            [projectId]
+            WHERE 
+                pu.proyecto_id = $1
+                OR ($2::text IS NOT NULL AND u.tramo ILIKE '%' || $2 || '%')
+                OR ($2::text IS NOT NULL AND u.mail_cu_104 ILIKE '%' || $2 || '%')
+            `,
+            [projectId, nombreTramo]
         );
         return result.rows;
     } catch (err) {

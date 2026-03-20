@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Exportacion Geoportal</name><description>Archivo KML exportado desde Geoportal</description><Placemark><ExtendedData><Data name="name"><value>Test Point</value></Data></ExtendedData><Point><coordinates>-77,-12</coordinates></Point></Placemark></Document></kml>

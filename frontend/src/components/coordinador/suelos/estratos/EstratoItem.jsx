@@ -142,16 +142,22 @@ const EstratoItem = React.memo(React.forwardRef(({
                 <div className="estrato-info">
                     <div
                         className="estrato-color"
-                        style={{ backgroundColor: estrato?.color || '#8d6e63' }}
+                        style={{ backgroundColor: estrato?.nlp_color_hex || estrato?.color || '#8d6e63' }}
                     ></div>
 
                     <div className="estrato-details">
                         <p className="estrato-depth">
                             <strong>Profundidad:</strong>{' '}
                             {estrato?.profundidad_inicial ?? estrato?.cota_inicial ?? 0}m - {estrato?.profundidad_final ?? estrato?.cota_final ?? 0}m
+                            {(estrato?.nlp_clasificacion_sucs || estrato?.nlp_clasificacion_aashto) && (
+                                <span className="estrato-nlp-badges">
+                                    {estrato.nlp_clasificacion_sucs && <span className="nlp-badge sucs">{estrato.nlp_clasificacion_sucs}</span>}
+                                    {estrato.nlp_clasificacion_aashto && <span className="nlp-badge aashto">{estrato.nlp_clasificacion_aashto}</span>}
+                                </span>
+                            )}
                         </p>
                         <h4 className="estrato-name">{estrato?.nombre || estrato?.descripcion || 'Estrato sin nombre'}</h4>
-                        {estrato?.nombre && estrato?.descripcion && (
+                        {(estrato?.nombre || estrato?.nlp_clasificacion_sucs) && estrato?.descripcion && (
                             <p className="estrato-description">{estrato.descripcion}</p>
                         )}
                     </div>
@@ -235,7 +241,11 @@ const EstratoItem = React.memo(React.forwardRef(({
                                         </div>
                                         <div className="detail-item">
                                             <span className="detail-label">Resultado:</span>
-                                            <span className="detail-value">{ensayo?.resultado ?? '—'}</span>
+                                            <span className="detail-value">
+                                                {typeof ensayo?.resultado === 'object' && ensayo?.resultado !== null 
+                                                    ? 'Ver detalles' 
+                                                    : (ensayo?.resultado || '—')}
+                                            </span>
                                         </div>
                                         <div className="detail-item">
                                             <span className="detail-label">Responsable:</span>

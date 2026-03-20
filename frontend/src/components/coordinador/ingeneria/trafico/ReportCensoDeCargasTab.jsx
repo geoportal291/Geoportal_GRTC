@@ -66,17 +66,8 @@ ChartJS.register(
 );
 
 // El resto del código permanece igual...
-const MapViewController = ({ cu104Route, setView, view }) => {
+const MapViewController = ({ setView, view }) => {
   const map = useMap();
-  const isInitialFitDone = useRef(false);
-
-  useEffect(() => {
-    if (cu104Route && cu104Route.length > 0 && !isInitialFitDone.current) {
-      const latLngs = cu104Route.map(point => [point.lat, point.lng]);
-      map.fitBounds(latLngs, { padding: [50, 50] });
-      isInitialFitDone.current = true;
-    }
-  }, [cu104Route, map]);
 
   const onMove = useCallback(() => {
     setView({ center: map.getCenter(), zoom: map.getZoom() });
@@ -96,8 +87,8 @@ const MapViewController = ({ cu104Route, setView, view }) => {
 
 
 
-const ReportEncuestaOrigenDestinoTab = ({ cu104Route, stationData, selectedStation, handleStationSelect, showRoute, setShowRoute, showTraffic, setShowTraffic, refreshStationData, setIsLoadingImages, isLoadingImages, isNavbarExpanded }) => {
-  console.log('ReportEncuestaOrigenDestinoTab se está renderizando.');
+const ReportCensoDeCargasTab = ({ stationData, selectedStation, handleStationSelect, showRoute, setShowRoute, showTraffic, setShowTraffic, refreshStationData, setIsLoadingImages, isLoadingImages, isNavbarExpanded }) => {
+  console.log('ReportCensoDeCargasTab se está renderizando.');
 
   const staticData = {
     labels: ['Ruta A', 'Ruta B', 'Ruta C', 'Ruta D', 'Ruta E'],
@@ -506,22 +497,12 @@ useEffect(() => {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution="&copy; OpenStreetMap contributors"
               />
-              <MapViewController setView={setView} cu104Route={cu104Route} />
-              {showRoute && cu104Route && cu104Route.length > 0 && (
-                <Polyline
-                  positions={cu104Route.map(point => [point.lat, point.lng]).filter(p => p[0] !== undefined && p[1] !== undefined)}
-                  color="#e74c3c"
-                  weight={4}
-                  opacity={0.8}
-                />
-              )}
+              <MapViewController setView={setView} />
               {showTraffic && Object.values(stationData)
                 .filter(station => !['E-02', 'E-03'].includes(station.info.id)) // Filter out E-02 and E-03
                 .map((station) => {
-                // Add defensive check for station.info and its properties
-                if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined) {
-                  console.warn("Skipping marker for station due to missing lat/lng:", station);
-                  return null; // Don't render marker if lat or lng is missing
+                if (!station || !station.info || station.info.lat === undefined || station.info.lng === undefined || station.info.lat === null || station.info.lng === null) {
+                  return null;
                 }
 
                 const images = station.info.imagenes.filter(img => img.source_type === 'conteo_vehicular_image');
@@ -1006,4 +987,4 @@ useEffect(() => {
   );
 };
 
-export default ReportEncuestaOrigenDestinoTab;
+export default ReportCensoDeCargasTab;

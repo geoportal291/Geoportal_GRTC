@@ -37,7 +37,7 @@ export default function Login() {
         const user = res.data.usuario;
         login(user);
         alertify.success('Inicio de sesión exitoso');
-        navigate('/coordinador/cordinadords');
+        navigate('/coordinador/dashboardprincipal');
       } else if (res.data.status === 'require_2fa') {
         // Requiere 2FA
         setStep('verification');
@@ -69,7 +69,7 @@ export default function Login() {
         const user = res.data.usuario;
         login(user);
         alertify.success('Verificación exitosa');
-        navigate('/coordinador/cordinadords');
+        navigate('/coordinador/dashboardprincipal');
       } else {
         alertify.error(res.data.mensaje || 'Código inválido');
       }

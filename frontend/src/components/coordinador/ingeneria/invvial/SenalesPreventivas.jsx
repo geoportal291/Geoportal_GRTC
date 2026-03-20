@@ -180,6 +180,8 @@ const SenalesPreventivas = ({ senalesData, graphicsImages, canUpload, showModal,
                 {/* Left Column: Map + Buttons */}
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                     <Geoite
+                        projectId={projectId}
+                        section="invvial"
                         alcantarillasData={senalesWithImages} // Use processed data with images
                         type="senales_preventivas"
                         onAlcantarillaClick={handleSenalClick} // Reusing prop name

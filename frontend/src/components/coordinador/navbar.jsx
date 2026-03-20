@@ -90,6 +90,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
       if (isActiveLink('/coordinador/recoleccion-datos')) return 'Mecánica de Suelos';
     }
     if (menu === 'configuracion') {
+      if (isActiveLink('/coordinador/Progresivas')) return 'Gestión de Tramos';
       if (isActiveLink('/coordinador/config/frmusuarios2')) return 'Usuarios';
       if (isActiveLink('/coordinador/config/PermisosManagement')) return 'Permisos';
       if (isActiveLink('/coordinador/config/UserProjectAssignment')) return 'Asignación de Proyectos';
@@ -120,8 +121,8 @@ export default function Navbar({ onToggle, isCollapsed }) {
       <nav>
         <ul>
           {isNavItemVisible('/coordinador/cordinadords') && (
-            <li className={isActiveLink('/coordinador/cordinadords') ? 'active' : ''}>
-              <Link to="/coordinador/cordinadords">
+            <li className={isActiveLink('/coordinador/dashboardprincipal') ? 'active' : ''}>
+              <Link to="/coordinador/dashboardprincipal">
                 <i className="fas fa-home"></i>
                 <span>Inicio</span>
               </Link>
@@ -309,6 +310,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
           {/* CONFIGURACIÓN */}
           {isNavItemVisible('configuracion') && (
             <li className={`has-submenu ${openMenu.configuracion ? 'open' : ''} ${[
+              '/coordinador/Progresivas',
               '/coordinador/config/frmusuarios2',
               '/coordinador/config/PermisosManagement',
               '/coordinador/config/UserProjectAssignment',
@@ -333,6 +335,11 @@ export default function Navbar({ onToggle, isCollapsed }) {
                 )}
               </div>
               <ul className={`submenu ${openMenu.configuracion && !isCollapsed ? 'show' : ''}`}>
+                <li className={isActiveLink('/coordinador/Progresivas') ? 'active' : ''}>
+                  <Link to="/coordinador/Progresivas">
+                    <i className="fas fa-route"></i><span>Gestión de Tramos</span>
+                  </Link>
+                </li>
                 {isNavItemVisible('/coordinador/config/frmusuarios2') && (
                   <li className={isActiveLink('/coordinador/config/frmusuarios2') ? 'active' : ''}>
                     <Link to="/coordinador/config/frmusuarios2">

@@ -236,7 +236,7 @@
     font-family: 'Courier New', Courier, monospace;
 }
 
-canvas {
+.ensayo-tab-content canvas {
     max-height: 500px;
     width: 100%;
 }

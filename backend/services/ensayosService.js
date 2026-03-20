@@ -1,6 +1,48 @@
 const db = require('../conexion');
 const XLSX = require('xlsx');
 
+// --- Función para asegurar la integridad de las columnas en la tabla ensayos ---
+const asegurarColumnasEnsayos = async (client) => {
+    try {
+        // Asegurar que datos_formulario y resultado sean JSONB (vital para evitar el error de VARCHAR(100))
+        await client.query(`
+            DO $$ 
+            BEGIN 
+                -- Asegurar datos_formulario
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ensayos' AND column_name = 'datos_formulario' AND data_type = 'character varying') THEN
+                    ALTER TABLE ensayos ALTER COLUMN datos_formulario TYPE JSONB USING datos_formulario::JSONB;
+                ELSIF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ensayos' AND column_name = 'datos_formulario') THEN
+                    ALTER TABLE ensayos ADD COLUMN datos_formulario JSONB DEFAULT '{}';
+                END IF;
+
+                -- Asegurar resultado
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ensayos' AND column_name = 'resultado' AND data_type = 'character varying') THEN
+                    ALTER TABLE ensayos ALTER COLUMN resultado TYPE JSONB USING resultado::JSONB;
+                ELSIF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ensayos' AND column_name = 'resultado') THEN
+                    ALTER TABLE ensayos ADD COLUMN resultado JSONB DEFAULT '{}';
+                END IF;
+
+                -- Asegurar otros campos comunes
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ensayos' AND column_name = 'nombre_ensayo') THEN
+                    ALTER TABLE ensayos ADD COLUMN nombre_ensayo VARCHAR(255);
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ensayos' AND column_name = 'proyecto_id') THEN
+                    ALTER TABLE ensayos ADD COLUMN proyecto_id INTEGER;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ensayos' AND column_name = 'estado') THEN
+                    ALTER TABLE ensayos ADD COLUMN estado VARCHAR(50) DEFAULT 'pendiente';
+                ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ensayos' AND column_name = 'estado' AND character_maximum_length < 50) THEN
+                    ALTER TABLE ensayos ALTER COLUMN estado TYPE VARCHAR(50);
+                END IF;
+            END $$;
+        `);
+    } catch (error) {
+        console.warn('Advertencia al verificar columnas de ensayos:', error.message);
+    }
+};
+
 // --- Helper Functions for Data Structure ---
 const setNestedProperty = (obj, path, value) => {
     if (!path) return;
@@ -142,23 +184,26 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
     const client = await db.connect();
     try {
         await client.query('BEGIN');
+        
+        // --- Migración y aseguramiento de esquema ---
+        await asegurarColumnasEnsayos(client);
 
-        // Extraemos 'datos_ensayo' explícitamente del payload que manda el frontend
-        // y lo renombramos a 'datos_formulario' para que coincida con la variable de la consulta SQL.
+        console.log(`[DEBUG] createOrUpdateFullAssay: ${ensayoId ? 'ACTUALIZANDO' : 'CREANDO'} ensayo.`);
+        console.log('[DEBUG] createOrUpdateFullAssay payload:', JSON.stringify({ ensayoId, ...assayData }));
+
         const {
             nombre_ensayo,
             tipo_ensayo_id,
             estrato_id,
-            datos_ensayo: datos_formulario,
-            resultado // <--- Nuevo campo recibido
+            datos_ensayo: datos_formulario = {},
+            resultado = {}
         } = assayData;
-        // -----------------------------
 
         let proyectoId = null;
         if (estrato_id) {
             const estratoInfoResult = await client.query(`
                 SELECT parent_type, parent_id FROM estratos WHERE id = $1
-            `, [estrato_id]);
+            `, [parseInt(estrato_id, 10)]);
 
             if (estratoInfoResult.rows.length > 0) {
                 const { parent_type, parent_id } = estratoInfoResult.rows[0];
@@ -202,33 +247,33 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
                 WHERE id = $8
             `;
             const values = [
-                nombre_ensayo,
-                tipo_ensayo_id,
-                estrato_id,
+                nombre_ensayo || null,
+                tipo_ensayo_id ? parseInt(tipo_ensayo_id, 10) : null,
+                estrato_id ? parseInt(estrato_id, 10) : null,
                 datos_formulario,
                 'actualizado',
-                proyectoId,
-                resultado, // <--- Guardar resultado
-                currentEnsayoId
+                proyectoId ? parseInt(proyectoId, 10) : null,
+                resultado,
+                parseInt(currentEnsayoId, 10)
             ];
             await client.query(query, values);
 
         } else { // Modo Creación
-            const codigo_ensayo = generateUniqueCode('ENS'); // Generar código único
+            const codigo_ensayo = generateUniqueCode('ENS');
             const query = `
                 INSERT INTO ensayos (nombre_ensayo, tipo_ensayo, estrato_id, datos_formulario, fecha, estado, proyecto_id, codigo_ensayo, resultado)
                 VALUES ($1, $2, $3, $4, CURRENT_DATE, $5, $6, $7, $8)
                 RETURNING id;
             `;
             const values = [
-                nombre_ensayo,
-                tipo_ensayo_id,
-                estrato_id,
+                nombre_ensayo || null,
+                tipo_ensayo_id ? parseInt(tipo_ensayo_id, 10) : null,
+                estrato_id ? parseInt(estrato_id, 10) : null,
                 datos_formulario,
                 'pendiente',
-                proyectoId,
+                proyectoId ? parseInt(proyectoId, 10) : null,
                 codigo_ensayo,
-                resultado // <--- Guardar resultado
+                resultado
             ];
             const result = await client.query(query, values);
             currentEnsayoId = result.rows[0].id;
@@ -238,11 +283,11 @@ const createOrUpdateFullAssay = async (ensayoId, assayData) => {
         return { ensayoId: currentEnsayoId, status: 'ok' };
 
     } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Error en la transacción de createOrUpdateFullAssay:', err);
-        throw new Error('La transacción falló: ' + err.message);
+        if (client) await client.query('ROLLBACK');
+        console.error('Error Crítico en createOrUpdateFullAssay:', err);
+        throw new Error('La transacción falló: ' + (err.hint || err.message));
     } finally {
-        client.release();
+        if (client) client.release();
     }
 };
 

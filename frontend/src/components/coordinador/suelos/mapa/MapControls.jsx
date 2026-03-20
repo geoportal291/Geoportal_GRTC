@@ -593,8 +593,58 @@ const DrawTools = ({ map, displayLayers, onCloseModal }) => { // Remove editable
 
 // --- DownloadTools Component ---
 const DownloadTools = ({ displayLayers, onCloseModal }) => {
+    const extractStylesForExport = (featureGroup) => {
+        const features = [];
+        if (!featureGroup) return features;
+        
+        featureGroup.eachLayer(layer => {
+            if (layer.toGeoJSON) {
+                const geojson = layer.toGeoJSON();
+                
+                const processFeature = (f, l) => {
+                    f.properties = f.properties || {};
+                    // Ensure it has a name for tokml
+                    if (!f.properties.nombre && !f.properties.name) {
+                        f.properties.nombre = f.properties._layer_name || f.properties.layer || 'Elemento';
+                    }
+                    
+                    if (l.options) {
+                        if (l.options.color) f.properties.stroke = l.options.color;
+                        if (l.options.weight) f.properties['stroke-width'] = l.options.weight;
+                        if (l.options.opacity !== undefined) f.properties['stroke-opacity'] = l.options.opacity;
+                        if (l.options.fillColor) f.properties.fill = l.options.fillColor;
+                        if (l.options.fillOpacity !== undefined) f.properties['fill-opacity'] = l.options.fillOpacity;
+                        
+                        if (f.geometry?.type === 'Point' && l.options.icon && l.options.icon.options?.html) {
+                            const html = l.options.icon.options.html;
+                            const match = html.match(/background-color:\s*([^;]+);/);
+                            if (match) f.properties['marker-color'] = match[1].trim();
+                        }
+                    }
+                    return f;
+                };
+
+                if (geojson.type === 'FeatureCollection') {
+                    geojson.features.forEach((f, i) => {
+                        const childLayer = layer.getLayers ? layer.getLayers()[i] : null;
+                        if (childLayer) features.push(processFeature(f, childLayer));
+                        else features.push(f);
+                    });
+                } else {
+                    features.push(processFeature(geojson, layer));
+                }
+            }
+        });
+        return features;
+    };
+
     const handleExportKML = async () => {
-        const geoJsonToExport = displayLayers.toGeoJSON();
+        const drawnFeatures = extractStylesForExport(displayLayers);
+
+        const geoJsonToExport = {
+            type: 'FeatureCollection',
+            features: drawnFeatures
+        };
 
         if (geoJsonToExport.features.length === 0) {
             alertify.error('No hay elementos dibujados para exportar.');
@@ -616,7 +666,12 @@ const DownloadTools = ({ displayLayers, onCloseModal }) => {
     };
 
     const handleExportShapefile = async () => {
-        const geoJsonToExport = displayLayers.toGeoJSON();
+        const drawnFeatures = extractStylesForExport(displayLayers);
+
+        const geoJsonToExport = {
+            type: 'FeatureCollection',
+            features: drawnFeatures
+        };
 
         if (geoJsonToExport.features.length === 0) {
             alertify.error('No hay elementos dibujados para exportar.');
@@ -660,8 +715,8 @@ const MapControls = ({ displayMode, map, displayLayers, measurementLayers, persi
     return (
         <>
             {/* Contenedor para los botones principales */}
-            <div className="leaflet-top leaflet-left" style={{ zIndex: 1000, top: '200px' }}> {/* Revert top offset to 200px */}
-                <div className="leaflet-control leaflet-bar">
+            <div className="leaflet-top leaflet-left" style={{ zIndex: 1000, top: '200px' }}>
+                <div className="leaflet-control leaflet-bar vertical-controls">
                     <button
                         className="leaflet-control-custom-button"
                         title="Abrir Mediciones"
@@ -696,6 +751,26 @@ const MapControls = ({ displayMode, map, displayLayers, measurementLayers, persi
                             </button>
                         </>
                     )}
+                </div>
+            </div>
+
+            {/* BOTÓN INDEPENDIENTE PARA CENTRAR (Abajo a la Derecha) */}
+            <div className="leaflet-bottom leaflet-right" style={{ zIndex: 1000, marginBottom: '25px', marginRight: '10px' }}>
+                <div className="leaflet-control">
+                    <button
+                        className="leaflet-control-center-button"
+                        title="Centrar Mapa en el Tramo"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (displayLayers && displayLayers.getBounds && displayLayers.getBounds().isValid()) {
+                                map.fitBounds(displayLayers.getBounds(), { padding: [50, 50] });
+                            } else {
+                                alertify.message('No hay tramos cargados para centrar.');
+                            }
+                        }}
+                    >
+                        <i className="fas fa-crosshairs"></i>
+                    </button>
                 </div>
             </div>
 

@@ -10,6 +10,7 @@ import 'alertifyjs/build/css/themes/default.min.css';
 import { CSSTransition } from 'react-transition-group';
 import './EstacionControlTab.css';
 import ErrorBoundary from '../../../ErrorBoundary';
+import Geoite from '../invvial/map/geoite';
 
 // Componente para manejar la vista del mapa
 const MapViewController = ({ sectionData, setView, view }) => {
@@ -42,7 +43,8 @@ const MapViewController = ({ sectionData, setView, view }) => {
   return null;
 };
 
-const TramosHomogeneosTab = ({
+const EncuestaVelocidadTab = ({
+  projectId,
   sectionData,
   selectedSection,
   handleSectionSelect,
@@ -191,17 +193,13 @@ const TramosHomogeneosTab = ({
         <div style={{ flex: '3', display: 'flex', flexDirection: 'column' }}>
           <div style={{ height: '820px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
             <ErrorBoundary>
-              <MapContainer center={view.center} zoom={13} zoomControl={false} className="map-container-custom-controls" style={{ height: '100%', width: '100%' }}>
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution="&copy; OpenStreetMap contributors"
-                />
+              <Geoite height="100%" projectId={projectId} section="trafico">
                 <MapViewController setView={setView} sectionData={sectionData} />
                 {Object.keys(sectionData).map(sectionId => {
                   const section = sectionData[sectionId];
                   const isSelected = selectedSection === sectionId;
 
-                  if (!visibility[sectionId] || !section.info.coordinates) {
+                  if (!visibility[sectionId] || !section.info.coordinates || !Array.isArray(section.info.coordinates) || section.info.coordinates.length === 0) {
                     return null;
                   }
 
@@ -243,7 +241,7 @@ const TramosHomogeneosTab = ({
                     </Polyline>
                   );
                 })}
-              </MapContainer>
+              </Geoite>
             </ErrorBoundary>
           </div>
           <div style={{ display: 'grid', gap: '20px', marginTop: '12px' }}>
@@ -624,4 +622,4 @@ const TramosHomogeneosTab = ({
   );
 };
 
-export default TramosHomogeneosTab;
+export default EncuestaVelocidadTab;

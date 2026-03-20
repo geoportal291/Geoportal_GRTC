@@ -822,3 +822,322 @@ LEFT JOIN usuariost creador ON a.creador_id = creador.id
 LEFT JOIN usuariost asignado ON a.usuario_id = asignado.id
 WHERE CURRENT_DATE BETWEEN a.fecha_inicio::date AND a.fecha_fin::date
 ORDER BY a.fecha_inicio DESC;
+-- Script de Recuperación de Esquema - Geoportal
+-- Objetivo: Reconstruir tablas PROYECTOS, PROGRESIVAS, KML y configuraciones faltantes.
+
+BEGIN;
+
+-- 1. Tabla kml_trazados (Dependencia de proyectos)
+CREATE TABLE IF NOT EXISTS public.kml_trazados (
+    id SERIAL PRIMARY KEY,
+    datos_kml TEXT,
+    kml_filename VARCHAR(255),
+    kml_uploaded_at TIMESTAMP WITH TIME ZONE,
+    created_by INTEGER
+);
+
+-- 2. Tabla proyectos (Core)
+CREATE TABLE IF NOT EXISTS public.proyectos (
+    id SERIAL PRIMARY KEY,
+    codigo VARCHAR(100),
+    nombre_proyecto TEXT,
+    descripcion_proyecto TEXT,
+    estado VARCHAR(50) DEFAULT 'Activo',
+    nombre_tramo VARCHAR(255),
+    proyecto_nom VARCHAR(255),
+    solicitante VARCHAR(255),
+    departamento VARCHAR(100),
+    provincia VARCHAR(100),
+    distrito VARCHAR(100),
+    localidad VARCHAR(255),
+    longitud_total NUMERIC,
+    progresiva_inicial NUMERIC,
+    tipo_via VARCHAR(50),
+    intervalo_manual NUMERIC,
+    is_interval_manual BOOLEAN DEFAULT FALSE,
+    descripcion_larga TEXT,
+    create_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    update_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    kml_trazado_id INTEGER REFERENCES public.kml_trazados(id) ON DELETE SET NULL,
+    url_kml TEXT
+);
+
+-- 3. Tabla proyecto_usuarios (Asignaciones)
+CREATE TABLE IF NOT EXISTS public.proyecto_usuarios (
+    proyecto_id INTEGER NOT NULL REFERENCES public.proyectos(id) ON DELETE CASCADE,
+    usuario_id INTEGER NOT NULL,
+    rol_proyecto VARCHAR(50) DEFAULT 'view',
+    asignado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (proyecto_id, usuario_id)
+);
+
+-- 4. Tabla progresivas (Tramos/Sub-tramos)
+CREATE TABLE IF NOT EXISTS public.progresivas (
+    id SERIAL PRIMARY KEY,
+    proyecto_id INTEGER REFERENCES public.proyectos(id) ON DELETE CASCADE,
+    parent_id INTEGER REFERENCES public.progresivas(id) ON DELETE CASCADE,
+    codigo VARCHAR(100),
+    nombre VARCHAR(255),
+    descripcion TEXT,
+    progresiva_inicial NUMERIC,
+    progresiva_final NUMERIC,
+    estado VARCHAR(50) DEFAULT 'pendiente',
+    coordenada_este NUMERIC,
+    coordenada_norte NUMERIC,
+    linea VARCHAR(50),
+    longitud_total NUMERIC,
+    tipo_via VARCHAR(50),
+    intervalo_manual NUMERIC,
+    es_principal BOOLEAN DEFAULT FALSE,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    estrato_id INTEGER
+);
+
+-- 5. Tabla proyecto_calibracion_tramos
+CREATE TABLE IF NOT EXISTS public.proyecto_calibracion_tramos (
+    id SERIAL PRIMARY KEY,
+    id_proyecto INTEGER REFERENCES public.proyectos(id) ON DELETE CASCADE,
+    nombre_tramo VARCHAR(255),
+    progresiva_inicio NUMERIC,
+    progresiva_fin NUMERIC
+);
+
+-- 6. Tabla system_settings (Configuración Global / 2FA)
+CREATE TABLE IF NOT EXISTS public.system_settings (
+    id SERIAL PRIMARY KEY,
+    setting_key VARCHAR(255) UNIQUE NOT NULL,
+    setting_value TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+-- Insertar valor por defecto si no existe
+INSERT INTO public.system_settings (setting_key, setting_value)
+VALUES ('require_2fa_global', 'true')
+ON CONFLICT (setting_key) DO NOTHING;
+
+-- 7. Tabla observaciones_invvial
+CREATE TABLE IF NOT EXISTS public.observaciones_invvial (
+    id SERIAL PRIMARY KEY,
+    proyecto_id INTEGER REFERENCES public.proyectos(id) ON DELETE CASCADE,
+    elemento_id INTEGER,
+    tipo_elemento VARCHAR(50),
+    observacion TEXT,
+    usuario_id INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 8. Tabla senales_reguladoras
+CREATE TABLE IF NOT EXISTS public.senales_reguladoras (
+    id_senal_reguladora SERIAL PRIMARY KEY,
+    id_proyecto INTEGER REFERENCES public.proyectos(id) ON DELETE CASCADE,
+    codigo VARCHAR(50),
+    progresiva VARCHAR(50),
+    lado VARCHAR(50),
+    tipo VARCHAR(100),
+    clasificacion VARCHAR(100),
+    material VARCHAR(100),
+    latitud DECIMAL(10,8),
+    longitud DECIMAL(11,8),
+    altitud DECIMAL(10,2),
+    condicion VARCHAR(50),
+    observaciones TEXT,
+    panel_fotografico_codigo VARCHAR(100),
+    entregable VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 9. Restaurar Foreign Keys faltantes en tablas existentes (ej. Alcantarillas)
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'alcantarillas') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_alcantarillas_proyecto') THEN
+            ALTER TABLE public.alcantarillas 
+            ADD CONSTRAINT fk_alcantarillas_proyecto 
+            FOREIGN KEY (id_proyecto) REFERENCES public.proyectos(id) ON DELETE CASCADE;
+        END IF;
+    END IF;
+END $$;
+
+COMMIT;
+
+
+UPDATE usuariost
+SET mail_cu_104 = 'renzospro12@gmail.com'
+WHERE id = 14;
+
+select * from usuariost
+
+
+SELECT column_name 
+FROM information_schema.columns 
+WHERE table_name = 'proyectos' 
+AND column_name IN ('kml_trazado_id', 'url_kml');
+
+-- Agregar columnas faltantes para 2FA en tabla usuariost
+ALTER TABLE public.usuariost
+ADD COLUMN IF NOT EXISTS verification_code VARCHAR(10),
+ADD COLUMN IF NOT EXISTS verification_expiry TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS last_2fa_verification TIMESTAMP WITH TIME ZONE;
+
+
+-- =========================================================================
+-- MODULO GEOLOGIA (Nuevas Tablas Dinamicas)
+-- =========================================================================
+
+-- Tabla de Canteras
+CREATE TABLE IF NOT EXISTS geo_canteras (
+    id SERIAL PRIMARY KEY,
+    id_proyecto INTEGER REFERENCES proyectos(id) ON DELETE CASCADE,
+    codigo VARCHAR(20) NOT NULL,
+    nombre VARCHAR(150),
+    material_tipo VARCHAR(100),
+    uso_previsto VARCHAR(150),
+    volumen_estimado VARCHAR(50),
+    estado_ambiental VARCHAR(50),
+    latitud NUMERIC(10, 6),
+    longitud NUMERIC(10, 6),
+    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de Fuentes de Agua
+CREATE TABLE IF NOT EXISTS geo_fuentes_agua (
+    id SERIAL PRIMARY KEY,
+    id_proyecto INTEGER REFERENCES proyectos(id) ON DELETE CASCADE,
+    codigo VARCHAR(20) NOT NULL,
+    nombre_cuerpo VARCHAR(150),
+    caudal VARCHAR(50),
+    calidad_obs TEXT,
+    uso_previsto VARCHAR(150),
+    tipo_fuente VARCHAR(50), -- Permanente / Estacional
+    latitud NUMERIC(10, 6),
+    longitud NUMERIC(10, 6)
+);
+
+-- Tabla de DMEs (Depositos de Material Excedente)
+CREATE TABLE IF NOT EXISTS geo_dmes (
+    id SERIAL PRIMARY KEY,
+    id_proyecto INTEGER REFERENCES proyectos(id) ON DELETE CASCADE,
+    codigo VARCHAR(20) NOT NULL,
+    ubicacion VARCHAR(100),
+    area_ha NUMERIC(10, 2),
+    capacidad_m3 NUMERIC(15, 2),
+    tipo_terreno VARCHAR(150),
+    latitud NUMERIC(10, 6),
+    longitud NUMERIC(10, 6)
+);
+
+-- Tabla de Puntos Criticos (Geodinamica)
+CREATE TABLE IF NOT EXISTS geo_puntos_criticos (
+    id SERIAL PRIMARY KEY,
+    id_proyecto INTEGER REFERENCES proyectos(id) ON DELETE CASCADE,
+    tipo_proceso VARCHAR(100), -- Deslizamiento, Huayco, Derrumbe
+    nivel_riesgo VARCHAR(50),  -- Alto, Medio, Bajo
+    descripcion TEXT,
+    control_estructural BOOLEAN DEFAULT false,
+    latitud NUMERIC(10, 6),
+    longitud NUMERIC(10, 6)
+);
+
+-- Tabla de Taludes Criticos (Estabilidad de Taludes)
+CREATE TABLE IF NOT EXISTS geo_taludes_criticos (
+    id SERIAL PRIMARY KEY,
+    id_proyecto INTEGER REFERENCES proyectos(id) ON DELETE CASCADE,
+    ubicacion_progresiva VARCHAR(50),
+    fs_estatico NUMERIC(5, 2),
+    fs_pseudoestatico NUMERIC(5, 2),
+    condicion_estabilidad VARCHAR(50), -- Estable, Marginal, Inestable
+    recomendacion_obra TEXT,
+    latitud NUMERIC(10, 6),
+    longitud NUMERIC(10, 6)
+);
+
+
+
+-- Geologia Capas
+CREATE TABLE IF NOT EXISTS geologia_capas (
+    id SERIAL PRIMARY KEY,
+    proyecto_id INTEGER REFERENCES proyectos(id) ON DELETE CASCADE,
+    tab_name VARCHAR(50) NOT NULL,
+    file_url TEXT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (proyecto_id, tab_name)
+);
+
+
+-- Tabla para almacenar las capas (KML/KMZ) del módulo de Geología
+CREATE TABLE IF NOT EXISTS geologia_capas (
+    id SERIAL PRIMARY KEY,
+    proyecto_id INTEGER NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+    tab_name VARCHAR(50) NOT NULL,
+    file_url TEXT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (proyecto_id, tab_name)
+);
+
+
+-- GEOLOGIA: Agregar columna geojson_data para shapefiles convertidos
+ALTER TABLE geologia_capas ADD COLUMN IF NOT EXISTS geojson_data JSONB;
+- -   A c t u a l i z a c i � n   d e   g e o l o g i a _ m u e s t r a s 
+ A L T E R   T A B L E   g e o l o g i a _ m u e s t r a s   R E N A M E   C O L U M N   t i p o   T O   t i p o _ r o c a ; 
+ A L T E R   T A B L E   g e o l o g i a _ m u e s t r a s   R E N A M E   C O L U M N   p r o f u n d i d a d   T O   f o r m a c i o n _ l i t o l o g i c a ; 
+ A L T E R   T A B L E   g e o l o g i a _ m u e s t r a s   A L T E R   C O L U M N   f o r m a c i o n _ l i t o l o g i c a   T Y P E   V A R C H A R ( 1 5 0 ) ;  
+ 
+-- ==========================================
+-- CLASIFICACION DE MATERIALES
+-- ==========================================
+CREATE TABLE IF NOT EXISTS clasificacion_materiales (
+    id SERIAL PRIMARY KEY,
+    proyecto_id INTEGER NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+    prog_inicio VARCHAR(20),
+    prog_fin VARCHAR(20),
+    descripcion_geotecnica VARCHAR(150),
+    simbolo VARCHAR(10),
+    tramo_m NUMERIC(10,2),
+    pct_roca_fija NUMERIC(5,2),
+    pct_roca_suelta NUMERIC(5,2),
+    pct_material_suelto NUMERIC(5,2),
+    corte_talud VARCHAR(100),
+    long_roca_fija NUMERIC(10,2),
+    long_roca_suelta NUMERIC(10,2),
+    long_material_suelto NUMERIC(10,2),
+    porcentaje NUMERIC(5,2),
+    grupo_formacion TEXT,
+    descripcion_detallada TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Tabla para gestionar KMLs por sección (Tráfico, Inventario Vial, etc)
+CREATE TABLE IF NOT EXISTS proyectos_secciones_kml (
+    id SERIAL PRIMARY KEY,
+    id_proyecto INTEGER NOT NULL,
+    seccion VARCHAR(50) NOT NULL,
+    kml_url TEXT NOT NULL,
+    UNIQUE(id_proyecto, seccion)
+);
+
+-- INSERT KML trafico en proyectos_secciones_kml (2026-03-19)
+INSERT INTO proyectos_secciones_kml (id_proyecto, seccion, kml_url)
+VALUES (1, 'trafico', 'https://6ytk0cgnuwntlh3t.public.blob.vercel-storage.com/tramoinv/1764685078654_tramofinalinvvial.kml');
+
+-- INSERT KML trafico corregido para id_proyecto=24 (Proyecto Quellouno) (2026-03-19)
+INSERT INTO proyectos_secciones_kml (id_proyecto, seccion, kml_url)
+VALUES (24, 'trafico', 'https://6ytk0cgnuwntlh3t.public.blob.vercel-storage.com/tramoinv/1764685078654_tramofinalinvvial.kml');
+
+-- INSERT KML geologia para id_proyecto=24 (Proyecto Quellouno) (2026-03-19)
+INSERT INTO proyectos_secciones_kml (id_proyecto, seccion, kml_url)
+VALUES (24, 'geologia', 'https://6ytk0cgnuwntlh3t.public.blob.vercel-storage.com/tramoinv/1764685078654_tramofinalinvvial.kml');
+
+-- [PANEL FOTOGRAFICO] Tabla para registro de fotos georeferenciadas extra�das de KMZ
+CREATE TABLE IF NOT EXISTS geologia_fotos_panel (
+    id SERIAL PRIMARY KEY,
+    proyecto_id INTEGER NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+    nombre TEXT,
+    descripcion TEXT,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    image_url TEXT NOT NULL,
+    original_filename TEXT,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

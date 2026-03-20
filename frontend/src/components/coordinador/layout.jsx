@@ -43,9 +43,17 @@ export default function Layout({ children, setPageTitle }) {
 
   const calculatedMarginLeft = getCalculatedMarginLeft();
 
+  const isFullWidthRoute = [
+    '/coordinador/ingenieria/trafico/trafico',
+    '/ingenieria/inventario-vial',
+    '/coordinador/dashboardprincipal',
+    '/ingenieria/geologia'
+  ].includes(location.pathname);
+
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {!isAmigoSecretoRoute && (
+      {!isAmigoSecretoRoute && location.pathname !== '/coordinador/dashboardprincipal' && (
         <Header
           sidebarCollapsed={collapsed}
           setPageTitle={setPageTitle}
@@ -71,10 +79,10 @@ export default function Layout({ children, setPageTitle }) {
             overflowY: 'auto',
             marginLeft: calculatedMarginLeft,
             transition: 'margin-left 0.3s ease',
-            paddingLeft: (location.pathname === '/coordinador/ingenieria/trafico/trafico' || location.pathname === '/ingenieria/inventario-vial') ? '0px' : '40px',
-            paddingTop: (location.pathname === '/coordinador/ingenieria/trafico/trafico' || location.pathname === '/ingenieria/inventario-vial') ? '60px' : (isAmigoSecretoRoute ? '20px' : '80px'),
-            paddingRight: (location.pathname === '/coordinador/ingenieria/trafico/trafico' || location.pathname === '/ingenieria/inventario-vial') ? '0px' : '40px',
-            paddingBottom: (location.pathname === '/coordinador/ingenieria/trafico/trafico' || location.pathname === '/ingenieria/inventario-vial') ? '0px' : '40px',
+            paddingLeft: isFullWidthRoute ? '0px' : '40px',
+            paddingTop: isFullWidthRoute ? '0px' : (isAmigoSecretoRoute ? '20px' : '80px'),
+            paddingRight: isFullWidthRoute ? '0px' : '40px',
+            paddingBottom: isFullWidthRoute ? '0px' : '40px',
             backgroundColor: '#f5f7fa',
             width: '100%',
             maxWidth: 'none',

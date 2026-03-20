@@ -1177,6 +1177,43 @@ const Progresivas = () => {
 
         const headers = getAuthHeaders();
 
+        // --- INICIO CLASIFICADOR NLP BATCH ---
+        const descripciones = [];
+        reconstructedSubProgresivas.forEach(prog => {
+          if (prog.estratos_perfil) {
+            prog.estratos_perfil.forEach(est => {
+              if (est.descripcion) descripciones.push(est.descripcion);
+            });
+          }
+        });
+
+        if (descripciones.length > 0) {
+          try {
+            const currentApiUrl = API_URL || process.env.REACT_APP_API_URL || '';
+            const nlpRes = await axios.post(`${currentApiUrl}/api/clasificar-suelo-nlp-batch`, { textos: descripciones }, { headers });
+            const clasificaciones = nlpRes.data;
+
+            // Asignar los resultados a los estratos
+            reconstructedSubProgresivas.forEach(prog => {
+              if (prog.estratos_perfil) {
+                prog.estratos_perfil.forEach(est => {
+                  if (est.descripcion) {
+                    const clasif = clasificaciones.find(c => c.texto === est.descripcion);
+                    if (clasif && clasif.resultado && clasif.resultado.clasificacion_sucs !== "DESCONOCIDO (Requiere Revisión)") {
+                      est.nlp_color_hex = clasif.resultado.color_hex_sugerido;
+                      est.nlp_clasificacion_sucs = clasif.resultado.clasificacion_sucs;
+                      est.nlp_clasificacion_aashto = clasif.resultado.clasificacion_aashto;
+                    }
+                  }
+                });
+              }
+            });
+          } catch (nlpErr) {
+            console.warn('No se pudo clasificar los suelos con NLP en el frontend:', nlpErr);
+          }
+        }
+        // --- FIN CLASIFICADOR NLP BATCH ---
+
         // En lugar de enviar al backend, abre el modal de selección de estratos
         setImportDataForSelection({
           parentProgresiva,
@@ -1374,7 +1411,8 @@ const Progresivas = () => {
       case 'inactivo': return 'status-inactivo';
       case 'completado': return 'status-completado';
       case 'pendiente': return 'status-pendiente';
-      case 'en revicion': return 'status-en-revicion';
+      case 'en revision': return 'status-en-revicion';
+      case 'aprobado': return 'status-completado'; // Visualmente similar a completado
       default: return '';
     }
   };
@@ -2084,6 +2122,9 @@ const Progresivas = () => {
                     <option value="activo">Activo</option>
                     <option value="inactivo">Inactivo</option>
                     <option value="completado">Completado</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="en revision">En Revisión</option>
+                    <option value="aprobado">Aprobado</option>
                   </select>
                 </div>
                 <div className="form-group full-width">

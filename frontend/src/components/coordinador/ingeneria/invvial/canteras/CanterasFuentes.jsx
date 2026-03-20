@@ -272,6 +272,8 @@ const CanterasFuentes = ({ canterasData, fuentesData, projectId, canUpload, onUp
                 {/* Columna Mapa */}
                 <div style={{ flex: '4', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                     <Geoite
+                        projectId={projectId}
+                        section="invvial"
                         onTramoSelect={handleTramoSelectFromMap}
                         highlightedTramoId={highlightedTramoId}
                         alcantarillasData={combinedMapData}

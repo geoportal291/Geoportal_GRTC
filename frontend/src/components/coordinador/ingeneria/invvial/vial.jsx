@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import axiosInstance from '../../../../api/axios';
 import './vial.css';
 import './map/loading.css'; // Import Full Screen Loader CSS
@@ -61,22 +62,58 @@ const findClosestVertexIndex = (targetLatLng, routeCoords) => {
 };
 
 
-// --- Dropdown Tab Component ---
+// --- Dropdown Tab Component with Portal ---
 const DropdownTab = ({ title, options, activeOption, onOptionSelect, isActive }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0, minWidth: 0 });
+  const buttonRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const toggleOpen = (e) => {
+    // Prevent default to avoid immediate close or weird focus
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const scrollY = window.scrollY || document.documentElement.scrollTop;
+      const scrollX = window.scrollX || document.documentElement.scrollLeft;
+
+      setCoords({
+        top: rect.bottom + scrollY + 4, // 4px gap
+        left: rect.left + scrollX,
+        minWidth: rect.width
+      });
+    }
+    setIsOpen(!isOpen);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      // Check if click is outside both button AND menu
+      const clickedButton = buttonRef.current && buttonRef.current.contains(event.target);
+      const clickedMenu = menuRef.current && menuRef.current.contains(event.target);
+
+      if (!clickedButton && !clickedMenu) {
         setIsOpen(false);
       }
     };
+
+    const handleScroll = () => {
+      if (isOpen) setIsOpen(false); // Close on scroll to avoid detached menu
+    };
+
+    // Add logic to update position on scroll/resize if desired, but closing is easier
     document.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", handleScroll);
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleScroll);
     };
-  }, [dropdownRef]);
+  }, [isOpen]);
 
   const handleSelect = (option) => {
     onOptionSelect(option);
@@ -84,15 +121,26 @@ const DropdownTab = ({ title, options, activeOption, onOptionSelect, isActive })
   };
 
   return (
-    <div className="invvial-dropdown-tab" ref={dropdownRef}>
+    <div className="invvial-dropdown-tab">
       <button
+        ref={buttonRef}
         className={`invvial-tabs-button ${isActive ? 'active' : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={toggleOpen}
       >
         {title} <span className="invvial-dropdown-arrow">{isOpen ? '▲' : '▼'}</span>
       </button>
-      {isOpen && (
-        <div className="invvial-dropdown-menu">
+      {isOpen && createPortal(
+        <div
+          ref={menuRef}
+          className="invvial-dropdown-menu"
+          style={{
+            position: 'absolute',
+            top: coords.top,
+            left: coords.left,
+            minWidth: Math.max(200, coords.minWidth),
+            zIndex: 9999 // Very high z-index
+          }}
+        >
           {options.map(option => (
             <a
               key={option}
@@ -103,7 +151,8 @@ const DropdownTab = ({ title, options, activeOption, onOptionSelect, isActive })
               {option}
             </a>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -387,6 +436,7 @@ const Vialds = ({ isNavbarExpanded }) => {
         // If project endpoint fails, try to fetch KML directly
         try {
           const kmlRes = await axiosInstance.get(`/api/proyectos/${projectId}/kml`, {
+            params: { section: 'invvial' },
             headers: { Authorization: `Bearer ${user.token}` }
           });
           if (kmlRes.data && kmlRes.data.url) {

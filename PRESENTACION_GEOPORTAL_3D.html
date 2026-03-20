@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geoportal 3D - Plan Maestro Estratégico</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #050505;
+            --accent-cyan: #00f2ff;
+            --accent-purple: #7000ff;
+            --text-main: #ffffff;
+            --text-dim: #a0a0a0;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow-x: hidden;
+        }
+
+        /* Hero Section */
+        #hero {
+            height: 100vh;
+            width: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 0 10%;
+            background: radial-gradient(circle at 80% 50%, rgba(112, 0, 255, 0.15), transparent);
+            z-index: 2;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .hero-content {
+            max-width: 600px;
+            z-index: 10;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 15px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
+        }
+
+        h1 {
+            font-size: 4rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            background: linear-gradient(to bottom, #fff, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-desc {
+            font-size: 1.2rem;
+            color: var(--text-dim);
+            margin-bottom: 40px;
+        }
+
+        /* Roadmap Grid */
+        .section-title {
+            text-align: center;
+            padding: 100px 0 50px;
+            font-size: 2.5rem;
+        }
+
+        .roadmap-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            padding: 0 10% 100px;
+        }
+
+        .card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: var(--accent-cyan);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .card h3 {
+            color: var(--accent-cyan);
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .card p {
+            color: var(--text-dim);
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .card .status {
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status.done {
+            color: #00ff88;
+        }
+
+        .status.pending {
+            color: #ffcc00;
+        }
+
+        .status.proceso {
+            color: #00a2ff;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        /* AI Section Highlighting NLP */
+        #ai-highlight {
+            padding: 100px 10%;
+            background: linear-gradient(180deg, transparent, rgba(112, 0, 255, 0.05), transparent);
+            text-align: center;
+        }
+
+        .ai-box {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--accent-purple);
+            border-radius: 30px;
+            padding: 60px;
+            position: relative;
+            max-width: 900px;
+            margin: 0 auto;
+            box-shadow: 0 0 50px rgba(112, 0, 255, 0.2);
+        }
+
+        .ai-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        /* Risk Mitigation */
+        .risks-section {
+            padding: 100px 10%;
+        }
+
+        .risk-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 30px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .risk-item h4 {
+            width: 30%;
+            font-size: 1.3rem;
+        }
+
+        .risk-item .solution {
+            width: 65%;
+            color: var(--text-dim);
+            font-size: 1rem;
+        }
+
+        .highlight-success {
+            color: #00ff88;
+            font-weight: 600;
+        }
+
+        footer {
+            padding: 50px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero-content {
+                text-align: center;
+            }
+
+            #hero {
+                justify-content: center;
+            }
+
+            .risk-item {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .risk-item h4,
+            .risk-item .solution {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-container"></div>
+
+    <section id="hero">
+        <div class="hero-content">
+            <span class="badge">Digital Twin Engineering</span>
+            <h1>Geoportal 3D<br>Next-Gen BIM</h1>
+            <p class="hero-desc">Visualización avanzada, integración de datos geotécnicos y motor de IA para el futuro
+                de la ingeniería civil.</p>
+            <div style="display: flex; gap: 15px;">
+                <button onclick="document.getElementById('roadmap').scrollIntoView({behavior: 'smooth'})"
+                    style="padding: 15px 30px; border-radius: 10px; border: none; background: #fff; color: #000; font-weight: 600; cursor: pointer;">Ver
+                    Plan Maestro</button>
+            </div>
+        </div>
+    </section>
+
+    <h2 class="section-title" id="roadmap">Hoja de Ruta Tecnológica</h2>
+    <div class="roadmap-container">
+        <!-- Fase 1 -->
+        <div class="card">
+            <div class="status done"><span class="dot"></span> COMPLETADO / EN EJECUCIÓN</div>
+            <h3>Fase 1: Estabilización</h3>
+            <p>Importación LandXML exitosa, mapas de color HSL por altitud y motor <b>NLP (IA)</b> para clasificación
+                dinámica de suelos.</p>
+        </div>
+        <!-- Fase 2 -->
+        <div class="card">
+            <div class="status proceso"><span class="dot"></span> MEDIO PLAZO</div>
+            <h3>Fase 2: Fotogrametría</h3>
+            <p>Inmersión total: Mapeo de texturas satelitales (UV Mapping) y puntos de vista 360° interactivos dentro
+                del modelo.</p>
+        </div>
+        <!-- Fase 3 -->
+        <div class="card">
+            <div class="status pending"><span class="dot"></span> MEDIO/LARGO PLAZO</div>
+            <h3>Fase 3: Integración BIM</h3>
+            <p>Carga de archivos IFC (estructuras) en coordenadas UTM. Visualización de cimientos bajo tierra con
+                transparencia dinámica.</p>
+        </div>
+        <!-- Fase 4 -->
+        <div class="card">
+            <div class="status pending"><span class="dot"></span> ESCALADO</div>
+            <h3>Fase 4: Chunks & Streaming</h3>
+            <p>Arquitectura de renderizado por sectores (1x1 km) para carreteras de larga distancia sin degradar el
+                rendimiento.</p>
+        </div>
+        <!-- Fase 5 -->
+        <div class="card">
+            <div class="status pending"><span class="dot"></span> GLOBAL</div>
+            <h3>Fase 5: CesiumJS Earth</h3>
+            <p>Salto al entorno real global sincronizado con mapas topográficos en vivo tipo Google Earth.</p>
+        </div>
+    </div>
+
+    <section id="ai-highlight">
+        <div class="ai-box">
+            <div class="ai-icon">🧠</div>
+            <h2 style="font-size: 2.5rem; margin-bottom: 20px;">Motor NLP: IA de Clasificación</h2>
+            <p style="font-size: 1.2rem; margin-bottom: 30px; color: var(--text-dim);">
+                Nuestro mayor avance preventivo. La IA ahora actúa como un traductor inteligente que unifica la
+                inconsistencia del lenguaje técnico humano.
+            </p>
+            <div style="display: flex; justify-content: center; gap: 40px; margin-top: 20px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 0.8rem; color: var(--accent-cyan);">ENTRADA (Caos)</div>
+                    <div
+                        style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; margin-top: 5px;">
+                        "Piedra dura", "Boloneria", "Gravel mix"</div>
+                </div>
+                <div style="font-size: 1.5rem; display: flex; align-items: center;">➔</div>
+                <div style="text-align: center;">
+                    <div style="font-size: 0.8rem; color: #00ff88;">SALIDA (Estandarizado)</div>
+                    <div
+                        style="background: rgba(0,255,136,0.1); padding: 10px; border-radius: 5px; margin-top: 5px; color: #00ff88;">
+                        GP-GM (SUCS) / #E07A5F (Hex)</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="risks-section">
+        <h2 class="section-title">Análisis de Riesgos Críticos</h2>
+        <div class="risk-item">
+            <h4>Crasheo de Memoria (RAM)</h4>
+            <div class="solution">Solución mediante el sistema de <b>Chunks</b> y Level of Detail (LOD) estricto.</div>
+        </div>
+        <div class="risk-item">
+            <h4>Conflicto de Coordenadas</h4>
+            <div class="solution">Estandarización forzada a <b>EPSG:32718 (UTM 18S)</b> en tiempo real durante la carga.
+            </div>
+        </div>
+        <div class="risk-item">
+            <h4>Error Humano (Texto libre)</h4>
+            <div class="solution" class="highlight-success">
+                <span class="highlight-success">● SOLUCIONADO:</span> Motor NLP integrado que pre-clasifica y valida
+                colores antes del renderizado.
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>Propuesta Estratégica Geoportal 3D © 2026 - Plan Maestro BIM</p>
+    </footer>
+
+    <script>
+        // Interactive 3D Background with Three.js
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Ground Wireframe (Terrain simulation)
+        const geometry = new THREE.PlaneGeometry(100, 100, 40, 40);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0x7000ff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.15
+        });
+        const plane = new THREE.Mesh(geometry, material);
+        plane.rotation.x = -Math.PI / 2.5;
+        scene.add(plane);
+
+        // Deform plane once to look like terrain
+        const positions = plane.geometry.attributes.position.array;
+        for (let i = 0; i < positions.length; i += 3) {
+            positions[i + 2] = Math.sin(positions[i] * 0.1) * Math.cos(positions[i + 1] * 0.1) * 3;
+        }
+        plane.geometry.attributes.position.needsUpdate = true;
+
+        // Boreholes (Cylinders) simulation
+        const cylinderGroup = new THREE.Group();
+        const cylinderColors = [0x00f2ff, 0x00ff88, 0x7000ff, 0xffcc00];
+
+        for (let i = 0; i < 15; i++) {
+            const h = Math.random() * 5 + 2;
+            const cylGeom = new THREE.CylinderGeometry(0.5, 0.5, h, 8);
+            const cylMat = new THREE.MeshBasicMaterial({
+                color: cylinderColors[Math.floor(Math.random() * cylinderColors.length)],
+                transparent: true,
+                opacity: 0.6
+            });
+            const cyl = new THREE.Mesh(cylGeom, cylMat);
+
+            cyl.position.x = (Math.random() - 0.5) * 40;
+            cyl.position.z = (Math.random() - 0.5) * 40;
+            cyl.position.y = -h / 2 + 2;
+            cylinderGroup.add(cyl);
+        }
+        scene.add(cylinderGroup);
+
+        camera.position.z = 30;
+        camera.position.y = 15;
+        camera.lookAt(0, 0, 0);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            plane.rotation.z += 0.001;
+            cylinderGroup.rotation.y += 0.002;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animations on load
+        gsap.from(".hero-content > *", {
+            duration: 1,
+            y: 50,
+            opacity: 0,
+            stagger: 0.2,
+            ease: "power3.out"
+        });
+    </script>
+</body>
+
+</html>

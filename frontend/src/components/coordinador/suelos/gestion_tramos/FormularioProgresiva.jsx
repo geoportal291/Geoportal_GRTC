@@ -176,6 +176,7 @@ const FormularioProgresiva = ({ onClose, onSave, proyectoId, progresivaData }) =
             fecha_ejecucion: formData.fecha_ejecucion,
             estado: formData.estado,
             estratos_perfil: estratosPerfil.map(ep => ({
+                id: ep.id, // CRUCIAL: Preserve existing ID for smart update
                 estrato_id: (ep.estrato_id !== null && ep.estrato_id !== '') ? Number(ep.estrato_id) : null,
                 profundidad_inicial: Number(ep.profundidad_inicial),
                 profundidad_final: Number(ep.profundidad_final),
@@ -300,9 +301,11 @@ const FormularioProgresiva = ({ onClose, onSave, proyectoId, progresivaData }) =
                         <div className="form-group">
                             <label>Estado</label>
                             <select name="estado" value={formData.estado} onChange={handleInputChange} required>
+                                <option value="activo">Activo</option>
                                 <option value="pendiente">Pendiente</option>
                                 <option value="en revision">En Revisión</option>
                                 <option value="aprobado">Aprobado</option>
+                                <option value="completado">Completado</option>
                                 <option value="inactivo">Inactivo</option>
                             </select>
                         </div>

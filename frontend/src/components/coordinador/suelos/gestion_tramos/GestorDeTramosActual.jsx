@@ -728,7 +728,7 @@ export default function GestorDeTramosActual() {
             <div class="modal-detail-item">
                 <i class="fas fa-chart-bar"></i>
                 <span class="modal-detail-label">Resultado:</span>
-                <span class="modal-detail-value">${ensayo.resultado}</span>
+                <span class="modal-detail-value">${typeof ensayo.resultado === 'object' && ensayo.resultado !== null ? 'Ver detalles' : (ensayo.resultado || '—')}</span>
             </div>
             <div class="modal-detail-item">
                 <i class="fas fa-user"></i>
@@ -1014,9 +1014,11 @@ export default function GestorDeTramosActual() {
                                 <div className="form-group">
                                     <label>Estado</label>
                                     <select name="estado" value={progresivaFormData.estado} onChange={handleProgresivaFormChange} required>
+                                        <option value="activo">Activo</option>
                                         <option value="pendiente">Pendiente</option>
                                         <option value="en revision">En Revisión</option>
                                         <option value="aprobado">Aprobado</option>
+                                        <option value="completado">Completado</option>
                                         <option value="inactivo">Inactivo</option>
                                     </select>
                                 </div>
@@ -1062,7 +1064,19 @@ export default function GestorDeTramosActual() {
                                                     <td>{index + 1}</td>
                                                     <td>{estrato.profundidad_inicial}</td>
                                                     <td>{estrato.profundidad_final}</td>
-                                                    <td>{estrato.descripcion}</td>
+                                                    <td>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <div style={{
+                                                                width: '12px',
+                                                                height: '12px',
+                                                                borderRadius: '2px',
+                                                                backgroundColor: estrato.nlp_color_hex || estrato.color || '#8d6e63',
+                                                                border: '1px solid rgba(0,0,0,0.1)'
+                                                            }}></div>
+                                                            {estrato.descripcion}
+                                                            {estrato.nlp_clasificacion_sucs && <span className="nlp-badge sucs" style={{ fontSize: '0.65rem' }}>{estrato.nlp_clasificacion_sucs}</span>}
+                                                        </div>
+                                                    </td>
                                                     <td>
                                                         <button className="action-btn view" onClick={(e) => { e.stopPropagation(); toggleEnsayos(estrato.id); }}>
                                                             <i className="fas fa-eye"></i> Ver Ensayos ({estrato.ensayos ? estrato.ensayos.length : 0})
