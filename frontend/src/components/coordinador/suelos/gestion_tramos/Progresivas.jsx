@@ -111,27 +111,26 @@ const MapIcon = () => (
 );
 
 const convertProgresivaToMeters = (progresivaCode) => {
-  if (!progresivaCode || typeof progresivaCode !== 'string') {
-    return 0;
-  }
-  // If it's in "km+m" format (old), convert it
-  if (progresivaCode.includes('+')) {
-    const parts = progresivaCode.split('+');
+  if (!progresivaCode) return null;
+  const s = String(progresivaCode).trim().replace(/[km\s]/gi, '');
+  
+  if (s.includes('+')) {
+    const parts = s.split('+');
     const km = parseInt(parts[0], 10);
-    const meters = parseInt(parts[1], 10);
-    if (!isNaN(km) && !isNaN(meters)) {
-      return km * 1000 + meters;
-    }
-  } else { // Assume it's in "kmmeters" format (new)
-    const metersPart = progresivaCode.substring(progresivaCode.length - 3);
-    const kmPart = progresivaCode.substring(0, progresivaCode.length - 3);
-    const km = parseInt(kmPart, 10);
-    const meters = parseInt(metersPart, 10);
-    if (!isNaN(km) && !isNaN(meters)) {
-      return km * 1000 + meters;
-    }
+    const m = parseInt(parts[1], 10);
+    if (!isNaN(km) && !isNaN(m)) return km * 1000 + m;
   }
-  return 0; // Default or error case
+  
+  if (/^\d+$/.test(s)) {
+    if (s.length >= 4) {
+      const m = parseInt(s.substring(s.length - 3), 10);
+      const km = parseInt(s.substring(0, s.length - 3), 10);
+      return km * 1000 + m;
+    }
+    return parseInt(s, 10); // Metros planos
+  }
+  
+  return null;
 };
 
 const convertMetersToProgresiva = (meters) => {
@@ -396,7 +395,7 @@ const Progresivas = () => {
   const fetchProyectos = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/proyectos`, { headers });
+      const res = await axios.get(`${API_URL}/api/proyectos`, { headers });
       setProyectos(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       if (err.message !== 'Token no proporcionado') {
@@ -600,6 +599,7 @@ const Progresivas = () => {
       return;
     }
 
+    console.log(`[DEBUG Progresivas] handleSubmit called. editingId: ${editingId}`);
     setSubmitting(true);
     setComponentError(null);
     setIsLoadingCreation(true);
@@ -621,7 +621,7 @@ const Progresivas = () => {
           intervalo_manual: formData.intervalo_manual === '' ? null : Number(formData.intervalo_manual),
           tipo_via: Number(formData.tipo_via),
           kml_trazado_id: formData.kml_trazado_id, // Add this line
-          generatedChildren: generatedSubProgresivas,
+          generatedChildren: generatedSubProgresivas.length > 0 ? generatedSubProgresivas : undefined,
         };
 
         const headers = getAuthHeaders();
@@ -1514,10 +1514,11 @@ const Progresivas = () => {
       if (!geojson || !geojson.features) {
         throw new Error('No se encontraron datos geográficos válidos.');
       }
+      console.log(`[DEBUG Import KML] GeoJSON features found: ${geojson.features.length}`);
 
       const updates = [];
+      const newPoints = [];
       let matchedCount = 0;
-      let ignoredCount = 0;
 
       geojson.features.forEach(feature => {
         if (feature.geometry && feature.geometry.type === 'Point') {
@@ -1528,20 +1529,36 @@ const Progresivas = () => {
           const cleanName = name.trim().replace(/\s/g, '').replace(/km/i, '').replace(/m/i, '');
           // Si tiene decimales como 0+100.00, quitarlos si no son relevantes o parsear
           // convertProgresivaToMeters maneja "0+100" -> 100.
-          const meters = convertProgresivaToMeters(cleanName);
-          const targetCode = convertMetersToProgresiva(meters); // "0100"
+            const meters = convertProgresivaToMeters(cleanName);
+            if (meters === null) return; // Skip non-progressive points
 
-          if (targetCode) {
+            const targetCode = convertMetersToProgresiva(meters);
+
+            console.log(`[DEBUG Import KML] Point: "${name}", Meters: ${meters}, TargetCode: "${targetCode}"`);
+
             const zoneStr = progresivaDetails.linea || '18L';
             const zoneNum = parseInt(zoneStr.match(/\d+/)?.[0] || '18', 10);
-            const utmCoords = fromLatLon(lat, lon, zoneNum);
-            const este = parseFloat(utmCoords.easting.toFixed(2));
-            const norte = parseFloat(utmCoords.northing.toFixed(2));
+            
+            console.log(`[DEBUG UTM] Processing feature: "${name}". Raw coords:`, feature.geometry.coordinates);
+            
+            let este = null;
+            let norte = null;
+            
+            try {
+              const utmCoords = fromLatLon(lat, lon, zoneNum);
+              este = parseFloat(utmCoords.easting.toFixed(6)); // More precision
+              norte = parseFloat(utmCoords.northing.toFixed(6));
+              console.log(`[DEBUG UTM] Sucessful Conversion: Lat: ${lat}, Lon: ${lon}, Zone: ${zoneNum} -> Este: ${este}, Norte: ${norte}`);
+            } catch (utmErr) {
+              console.error(`[DEBUG UTM] Error converting Lat/Lon (${lat}, ${lon}) for Zone ${zoneNum}:`, utmErr);
+              // Fallback to coordinates if they already look like UTM? (Optional)
+            }
 
-            // MATCHING ROBUSTO: Comparar sufijo (ej: "349-0100" vs "0100")
             const match = subProgresivas.find(sp => {
-              const spCodeSuffix = String(sp.codigo).split('-').pop(); // obtener la parte "0100"
-              return spCodeSuffix === targetCode || sp.codigo === targetCode;
+              const spCodeSuffix = String(sp.codigo).split('-').pop(); 
+              const matchFound = (spCodeSuffix === targetCode || sp.codigo === targetCode);
+              if (matchFound) console.log(`[DEBUG Import KML] Match found for ${targetCode} -> ID: ${sp.id}`);
+              return matchFound;
             });
 
             if (match) {
@@ -1559,19 +1576,36 @@ const Progresivas = () => {
               });
               matchedCount++;
             } else {
-              // NO AGREGAR A INSERTS. Simplemente contar como ignorado (solo para visualización)
-              ignoredCount++;
+              // PREPARAR PARA CREACIÓN
+              newPoints.push({
+                proyecto_id: progresivaDetails.proyecto_id,
+                parent_id: progresivaDetails.id,
+                codigo: targetCode,
+                nombre: `KML: ${name || targetCode}`,
+                descripcion: 'Importado desde KML',
+                coordenada_este: este,
+                coordenada_norte: norte,
+                linea: zoneStr,
+                lado: 'C',
+                estado: 'pendiente'
+              });
             }
           }
-        }
-      });
+        });
+
+      console.log(`[DEBUG Import KML] Final Result - Matches: ${updates.length}, New Points: ${newPoints.length}`);
+
+      if (updates.length === 0 && newPoints.length === 0) {
+        alertify.alert('Sin Puntos Procesables', 'No se encontraron puntos en el KML que coincidan con progresivas existentes o que tengan nombres válidos para crear nuevas (ej: "0+100" o "100"). Revise los nombres de los puntos en Google Earth.');
+        return;
+      }
 
       alertify.confirm(
         'Confirmar Procesamiento KML/KMZ',
         `Se procesará el archivo: <strong>${file.name}</strong><br/>
          - <b>Trazado Completo:</b> Se guardará para visualizar en el mapa.<br/>
-         - <b>Actualizaciones de Coordenadas:</b> ${matchedCount} (para progresivas existentes).<br/>
-         - <b>Puntos Ignorados (Solo Visuales):</b> ${ignoredCount}<br/><br/>
+         - <b>Actualizaciones:</b> ${matchedCount} (coordenadas de progresivas existentes).<br/>
+         - <b>Nuevas Progresivas:</b> ${newPoints.length} (se crearán en el tramo).<br/><br/>
          ¿Desea continuar?`,
         async () => {
           // Initialize Progress Modal
@@ -1602,7 +1636,7 @@ const Progresivas = () => {
             formData.append('type', uploadType);
 
             // Usamos un endpoint específico para el TRAMO (progresiva padre)
-            await axios.post(`${API_URL}/api/progresivas/${progresivaDetails.id}/upload-kml`, formData, {
+            const uploadRes = await axios.post(`${API_URL}/api/progresivas/${progresivaDetails.id}/upload-kml`, formData, {
               headers: { ...headers, 'Content-Type': 'multipart/form-data' },
               onUploadProgress: (progressEvent) => {
                 const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -1613,22 +1647,26 @@ const Progresivas = () => {
               }
             });
 
+            // Actualizar el estado local con la respuesta del backend (nuevos IDs de KML)
+            if (uploadRes.data && uploadRes.data.progresiva) {
+              setProgresivaDetails(prev => ({
+                ...prev,
+                ...uploadRes.data.progresiva
+              }));
+            }
+
+
+            const totalItems = updates.length + newPoints.length;
+            let currentItem = 0;
+
             // 2. ACTUALIZAR PROGRESIVAS EXISTENTES
-            // Progress 40% -> 100% reserved for processing updates
-            setProgress(40);
-            setProgressMessage('Procesando actualizaciones de coordenadas...');
-
-            const totalUpdates = updates.length;
-
-            if (totalUpdates > 0) {
-              for (let i = 0; i < totalUpdates; i++) {
-                const updatedProg = updates[i];
-                // Update progress relative to the remaining 60%
-                const currentStepProgress = 40 + Math.round(((i + 1) / totalUpdates) * 60);
+            if (updates.length > 0) {
+              for (const updatedProg of updates) {
+                currentItem++;
+                const currentStepProgress = 40 + Math.round((currentItem / totalItems) * 60);
                 setProgress(currentStepProgress);
-                setProgressMessage(`Actualizando progresiva ${i + 1} de ${totalUpdates}...`);
+                setProgressMessage(`Actualizando progresiva ${currentItem} de ${totalItems}...`);
 
-                // Sanear estratos para evitar errores en backend
                 const cleanEstratos = (updatedProg.estratos_perfil || []).map(est => ({
                   ...est,
                   profundidad_inicial: est.profundidad_inicial !== null && est.profundidad_inicial !== undefined
@@ -1639,7 +1677,6 @@ const Progresivas = () => {
                     : 0,
                 }));
 
-                // Hacer la petición PUT para actualizar cada sub-progresiva
                 try {
                   await axios.put(`${API_URL}/api/progresivas/child/${updatedProg.id}`, {
                     coordenada_este: updatedProg.coordenada_este,
@@ -1653,11 +1690,28 @@ const Progresivas = () => {
                   success++;
                 } catch (putErr) {
                   console.error(`Error updating child ${updatedProg.id}:`, putErr.response?.data || putErr.message);
-                  // Continue with others but maybe flag error? For now just log.
                 }
               }
-            } else {
-              // If no updates, jump to 100
+            }
+
+            // 3. CREAR NUEVAS PROGRESIVAS
+            if (newPoints.length > 0) {
+              for (const newProg of newPoints) {
+                currentItem++;
+                const currentStepProgress = 40 + Math.round((currentItem / totalItems) * 60);
+                setProgress(currentStepProgress);
+                setProgressMessage(`Creando nueva progresiva ${currentItem} de ${totalItems}...`);
+
+                try {
+                  await axios.post(`${API_URL}/api/progresivas`, newProg, { headers });
+                  success++;
+                } catch (postErr) {
+                  console.error(`Error creating progressive ${newProg.codigo}:`, postErr.response?.data || postErr.message);
+                }
+              }
+            }
+
+            if (totalItems === 0) {
               setProgress(100);
             }
 
@@ -1666,7 +1720,7 @@ const Progresivas = () => {
             // Short delay to show 100% before closing
             setTimeout(() => {
               setShowProgressModal(false);
-              alertify.success(`Proceso finalizado. ${success} coordenadas actualizadas.`);
+              alertify.success(`Proceso finalizado. ${success} de ${totalItems} registros procesados con éxito.`);
               handleViewDetails(progresivaDetails);
             }, 800);
 

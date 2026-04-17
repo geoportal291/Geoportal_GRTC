@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 
 import GestorDeTramosActual from '../gestion_tramos/GestorDeTramosActual';
 import GestorDeCanteras from '../canteras/GestorDeCanteras';
@@ -7,30 +7,39 @@ import GestorDeFuentesDeAgua from './GestorDeFuentesDeAgua';
 import GestorDeMaterialesContainer from './GestorDeMaterialesContainer'; // Importar el nuevo contenedor
 import DashboardSuelos from './DashboardSuelos'; // NEW: Import Dashboard
 import Vista3D from '../3d/Vista3D'; // IMPORTAR VISTA 3D
+import EnsayosContainer from '../ensayos/EnsayosContainer';
 
-export default function RecoleccionDeDatosContainer() {
+import '../proyectos/GestorProyectos.css'; // Importar los estilos de navegación unificada
+
+export default function RecoleccionDeDatosContainer({ viewMode }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeMainModule, setActiveMainModule] = useState('dashboard'); // 'dashboard', 'recoleccion', 'materiales' or '3d'
+  const [activeMainModule, setActiveMainModule] = useState('dashboard'); // Siempre inicializar en dashboard
 
   // Derive activeGestor directly from the URL
   const getActiveGestorFromPath = (pathname) => {
-    const parts = pathname.split('/');
-    const lastSegment = parts[parts.length - 1];
-
-    if (lastSegment === 'gestor-canteras') return 'canteras';
-    if (lastSegment === 'gestor-fuentes') return 'fuentes';
+    if (pathname.includes('gestor-canteras')) return 'canteras';
+    if (pathname.includes('gestor-fuentes')) return 'fuentes';
+    if (pathname.includes('gestor-ensayos')) return 'ensayos';
     // Default to tramos if the last segment is 'gestor-tramos' or if it's the base path
     return 'tramos';
   };
 
   const activeGestor = getActiveGestorFromPath(location.pathname);
+  const baseRoute = '/coordinador/recoleccion-datos';
 
   const handleGestorChange = (gestor) => {
-    // Navigate to the specific gestor route relative to the current base path
-    if (gestor === 'tramos') navigate('gestor-tramos');
-    else if (gestor === 'canteras') navigate('gestor-canteras');
-    else if (gestor === 'fuentes') navigate('gestor-fuentes');
+    if (gestor === 'tramos') navigate(`${baseRoute}/gestor-tramos`);
+    else if (gestor === 'canteras') navigate(`${baseRoute}/gestor-canteras`);
+    else if (gestor === 'fuentes') navigate(`${baseRoute}/gestor-fuentes`);
+    else if (gestor === 'ensayos') {
+      const lastId = sessionStorage.getItem('lastSelectedTramoId');
+      if (lastId) {
+        navigate(`${baseRoute}/gestor-ensayos/tramos/${lastId}`);
+      } else {
+        navigate(`${baseRoute}/gestor-ensayos/tramos`);
+      }
+    }
   };
 
   // Effect to set activeMainModule based on URL
@@ -39,39 +48,28 @@ export default function RecoleccionDeDatosContainer() {
       setActiveMainModule('materiales');
     } else if (location.pathname.includes('/3d')) {
       setActiveMainModule('3d');
-    } else if (location.pathname.includes('gestor-tramos') || location.pathname.includes('gestor-canteras') || location.pathname.includes('gestor-fuentes')) {
+    } else if (
+      location.pathname.includes('gestor-tramos') ||
+      location.pathname.includes('gestor-canteras') ||
+      location.pathname.includes('gestor-fuentes') ||
+      location.pathname.includes('gestor-ensayos')
+    ) {
       setActiveMainModule('recoleccion');
     } else {
       setActiveMainModule('dashboard');
     }
   }, [location.pathname]);
 
-  // Render the active gestor component
-  const renderActiveGestor = () => {
-    switch (activeGestor) {
-      case 'tramos':
-        return <GestorDeTramosActual />;
-      case 'canteras':
-        return <GestorDeCanteras />;
-      case 'fuentes':
-        return <GestorDeFuentesDeAgua />;
-      default:
-        return <GestorDeTramosActual />;
-    }
-  };
-
   const handleMainModuleChange = (module) => {
     setActiveMainModule(module);
     if (module === 'dashboard') {
-      navigate('/coordinador/recoleccion-datos/dashboard');
+      navigate(`${baseRoute}/dashboard`);
     } else if (module === 'recoleccion') {
-      navigate('/coordinador/recoleccion-datos/gestor-tramos');
+      navigate(`${baseRoute}/gestor-tramos`);
     } else if (module === 'materiales') {
-      // Usaremos la ruta hija dentro del contenedor para que App.js no rompa el layout
-      navigate('/coordinador/recoleccion-datos/uso-materiales');
+      navigate(`${baseRoute}/uso-materiales`);
     } else if (module === '3d') {
-      // Usamos la ruta hija para que siga montado RecoleccionDeDatosContainer
-      navigate('/coordinador/recoleccion-datos/3d');
+      navigate(`${baseRoute}/3d`);
     }
   };
 
@@ -85,29 +83,29 @@ export default function RecoleccionDeDatosContainer() {
             className={`nav-level-1-item ${activeMainModule === 'dashboard' ? 'active' : ''}`}
             onClick={() => handleMainModuleChange('dashboard')}
           >
-            Dashboard Principal
+            Dashboard
           </div>
           <div
             className={`nav-level-1-item ${activeMainModule === 'recoleccion' ? 'active' : ''}`}
             onClick={() => handleMainModuleChange('recoleccion')}
           >
-            Recolección de datos
+            Datos de Suelos
           </div>
           <div
             className={`nav-level-1-item ${activeMainModule === 'materiales' ? 'active' : ''}`}
             onClick={() => handleMainModuleChange('materiales')}
           >
-            Uso de materiales
+            Materiales
           </div>
           <div
             className={`nav-level-1-item ${activeMainModule === '3d' ? 'active' : ''}`}
             onClick={() => handleMainModuleChange('3d')}
           >
-            3D
+            Entorno 3D
           </div>
         </nav>
 
-        <div className="nav-separator"></div>
+        {activeMainModule === 'recoleccion' && <div className="nav-separator"></div>}
 
         {/* Level 2 Navigation */}
         {activeMainModule === 'recoleccion' && (
@@ -116,19 +114,25 @@ export default function RecoleccionDeDatosContainer() {
               className={`nav-level-2-item ${activeGestor === 'tramos' ? 'active' : ''}`}
               onClick={() => handleGestorChange('tramos')}
             >
-              Gestor de Tramos
+              Progresivas
             </div>
             <div
               className={`nav-level-2-item ${activeGestor === 'canteras' ? 'active' : ''}`}
               onClick={() => handleGestorChange('canteras')}
             >
-              Gestor de Canteras
+              Canteras
             </div>
             <div
               className={`nav-level-2-item ${activeGestor === 'fuentes' ? 'active' : ''}`}
               onClick={() => handleGestorChange('fuentes')}
             >
-              Gestor de Fuentes de Agua
+              Fuentes
+            </div>
+            <div
+              className={`nav-level-2-item ${activeGestor === 'ensayos' ? 'active' : ''}`}
+              onClick={() => handleGestorChange('ensayos')}
+            >
+              Ensayos
             </div>
           </nav>
         )}
@@ -146,11 +150,22 @@ export default function RecoleccionDeDatosContainer() {
       </div>
 
       {/* Content Area */}
-      <div className="content-card">
-        {activeMainModule === 'dashboard' && <DashboardSuelos />}
-        {activeMainModule === 'recoleccion' && renderActiveGestor()}
-        {activeMainModule === 'materiales' && <GestorDeMaterialesContainer />}
-        {activeMainModule === '3d' && <Vista3D />}
+      <div className={`content-card 
+        ${activeMainModule === '3d' ? 'content-card-3d' : ''} 
+        ${activeGestor === 'ensayos' ? 'content-card-no-scroll' : ''}
+      `}>
+        <Routes>
+          <Route path="dashboard" element={<DashboardSuelos />} />
+          <Route path="gestor-tramos/*" element={<GestorDeTramosActual />} />
+          <Route path="gestor-canteras/*" element={<GestorDeCanteras />} />
+          <Route path="gestor-fuentes/*" element={<GestorDeFuentesDeAgua />} />
+          <Route path="gestor-ensayos/*" element={<EnsayosContainer />} />
+          <Route path="uso-materiales/*" element={<GestorDeMaterialesContainer />} />
+          <Route path="3d" element={<Vista3D />} />
+          {/* Default and Index */}
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="*" element={<Navigate to="dashboard" replace />} />
+        </Routes>
       </div>
     </div>
   );

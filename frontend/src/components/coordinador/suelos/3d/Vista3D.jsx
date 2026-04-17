@@ -1,1652 +1,1431 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
-import * as Cesium from "cesium";
-import "cesium/Build/Cesium/Widgets/widgets.css";
-import proj4 from 'proj4';
+import { utmToWgs84, processCoordinates, getUtmZoneFromLon, chunkedSampleTerrain } from '../../../../utils/geoUtils';
+import { FullTramoEngine } from './FullTramoEngine';
+import { useAuth } from '../../../../data/contexts/AuthContext';
+import useProgresivasData from '../../../../hooks/useProgresivasData';
 import './Vista3D.css';
 
-// 1. CONFIGURACIÓN GLOBAL
-const ION_TOKEN = process.env.REACT_APP_CESIUM_TOKEN;
-if (typeof window !== 'undefined') {
-    window.CESIUM_BASE_URL = '/cesium';
-}
-
+const Cesium = window.Cesium;
 const API_BASE = process.env.REACT_APP_API_BASE || process.env.REACT_APP_API_URL || 'https://backendgeoportal.fly.dev';
-const UTM_18S = "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs";
-const UTM_19S = "+proj=utm +zone=19 +south +datum=WGS84 +units=m +no_defs";
-const WGS84 = "EPSG:4326";
+const ION_TOKEN = process.env.REACT_APP_CESIUM_TOKEN;
 
 export default function Vista3D() {
+    const { selectedProjectId, user } = useAuth();
+
+    // DEPURACIÓN TEMPORAL: Queremos ver qué hay dentro de Cesium
+    console.log("[Vista3D] Contenido del objeto Cesium:", Cesium);
+
+    // DESESTRUCTURACIÓN SEGURA
+    const {
+        Viewer, Ion, Terrain, Cartesian3, Cartographic, Geometry, GeometryAttribute,
+        ComponentDatatype, PrimitiveType, BoundingSphere, GeometryPipeline, Primitive,
+        PerInstanceColorAppearance, ColorGeometryInstanceAttribute, Color,
+        MaterialAppearance, Material, GeometryInstance, IonImageryProvider,
+        ArcGisMapServerImageryProvider, UrlTemplateImageryProvider,
+        sampleTerrainMostDetailed, EllipsoidTerrainProvider,
+        KmlDataSource, LabelStyle, VerticalOrigin, Cartesian2
+    } = Cesium;
+
+    const [soilData, setSoilData] = useState(null); // NUEVO: Mover aquí para evitar TDZ
+
+    useEffect(() => {
+        if (soilData) {
+            console.log("[Vista3D] Datos de suelo cargados:", {
+                trazados: soilData.tracks?.length,
+                progresivas: soilData.progresivas?.length
+            });
+        }
+    }, [soilData]);
+
+    // --- ESTADOS Y REFERENCIAS (Definidos al inicio para evitar TDZ) ---
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [modelos, setModelos] = useState([]);
     const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [isGlobalLoading, setIsGlobalLoading] = useState(false);
     const [selectedModelo, setSelectedModelo] = useState(null);
-    const [mapOpacity, setMapOpacity] = useState(1.0); // Estado para el slider de transparencia
-    const [isRightOpen, setIsRightOpen] = useState(true); // Estado para colapsar panel derecho
-    const [isGroundMode, setIsGroundMode] = useState(false); // Modo primera persona - Desactivado por defecto
-    const [isChunkLoading, setIsChunkLoading] = useState(false); // Cargando chunk en RAM
-    const [isTerrainLoaded, setIsTerrainLoaded] = useState(false); // Estado del relieve
-    const [subProgresivas, setSubProgresivas] = useState([]); // Boreholes del tramo
-    const [selectedBorehole, setSelectedBorehole] = useState(null); // Borehole seleccionado
+    const [mapOpacity, setMapOpacity] = useState(1.0);
+    const [zExag, setZExag] = useState(15.0);
+    const [isViewerReady, setIsViewerReady] = useState(false); // NUEVO: Control de ciclo de vida del visor
+    const [isRightOpen, setIsRightOpen] = useState(false);
+    const [isLeftOpen, setIsLeftOpen] = useState(false);
+    const [isGroundMode, setIsGroundMode] = useState(false);
+    const [subProgresivas, setSubProgresivas] = useState([]);
     const [isFetchingBoreholes, setIsFetchingBoreholes] = useState(false);
+    const [mapStyle, setMapStyle] = useState('hipso');
+    const [showEstratosLayer, setShowEstratosLayer] = useState(false);
+    const [projectZone, setProjectZone] = useState('18S'); // NUEVO: Zona detectada automáticamente
 
-    // VISUALIZACIÓN DEL MODELO IMPORTADO
-    const [mapStyle, setMapStyle] = useState('hipso'); // 'hipso', 'topo', o 'malla'
-    const [selectedEstrato, setSelectedEstrato] = useState(null); // 0, 1, 2 para resaltar estratos
-    const [showEstratosLayer, setShowEstratosLayer] = useState(false); // Activado por botón manual
+    // --- DERIVADOS Y HELPERS PARA UI ---
+    const statusMessage = isUploading 
+        ? `Subiendo: ${uploadProgress}%` 
+        : isGlobalLoading 
+        ? "Cargando datos..." 
+        : "";
+
+    const toggleFullScreen = () => setIsFullscreen(prev => !prev);
+
     const mapStyleRef = useRef('hipso');
+    const currentModelDataRef = useRef(null);
     const hipsoPrimitiveRef = useRef(null);
     const mallaSolidRef = useRef(null);
     const mallaWireRef = useRef(null);
     const boundaryWireRef = useRef(null);
     const estratosRefs = useRef([]);
-
     const containerRef = useRef(null);
     const viewerRef = useRef(null);
+    const isMounted = useRef(false);
     const fileInputRef = useRef(null);
-    const chunkRectangleRef = useRef(null); // Referencia para el límite del "Cubo/Chunk"
-    const boreholesEntitiesRef = useRef([]); // Referencia para los cilindros de sondajes
+    const focusImageryLayerRef = useRef(null);
+    const chunkRectangleRef = useRef(null);
+    const boreholesEntitiesRef = useRef([]);
+    const soilEntitiesRef = useRef([]); // Referencia para cilindros de estratos
+    const kmlDataSourcesRef = useRef([]); // Referencia para líneas de trazado KML
+    const fullTramoWallEntitiesRef = useRef([]);
+    const abortControllersRef = useRef(new Map());
 
-    // Sincronizar estado visual y aplicarlo a los primitivos reales sin re-parsear
-    useEffect(() => {
-        mapStyleRef.current = mapStyle;
-        if (hipsoPrimitiveRef.current && mallaSolidRef.current && mallaWireRef.current) {
-            // El modo 'estratos' oculta el hipso y permite que el toggle de estratos tome el control
-            hipsoPrimitiveRef.current.show = mapStyle === 'hipso';
-            
-            mallaSolidRef.current.show = mapStyle === 'malla';
-            mallaWireRef.current.show = mapStyle === 'malla';
-            
-            if (boundaryWireRef.current) {
-                boundaryWireRef.current.show = mapStyle !== 'malla';
-            }
+    // --- MOTOR DE PROGRESIVAS ---
+    useProgresivasData();
 
-            if (viewerRef.current) viewerRef.current.scene.requestRender();
-        }
-    }, [mapStyle]);
+    // --- FUNCIONES CORE (Definidas antes que los efectos para evitar ReferenceError) ---
 
-    // EFECTO: Control de visibilidad de Sondajes (Boreholes)
-    useEffect(() => {
-        if (viewerRef.current) {
-            const viewer = viewerRef.current;
-            const isXray = mapStyle === 'estratos' && mapOpacity === 0.0 && showEstratosLayer;
-            
-            if (boreholesEntitiesRef.current) {
-                boreholesEntitiesRef.current.forEach(entity => {
-                    entity.show = isXray;
-                });
-            }
-            viewer.scene.requestRender();
-        }
-    }, [mapOpacity, showEstratosLayer, mapStyle]);
-
-    useEffect(() => {
-        fetchModelos();
-    }, []);
-
-    useEffect(() => {
-        const initCesium = async () => {
-            if (!containerRef.current || viewerRef.current) return;
-
-            try {
-                console.log("[CESIUM] Activando RELIEVE 3D y atmósfera...");
-
-                if (ION_TOKEN) {
-                    Cesium.Ion.defaultAccessToken = ION_TOKEN;
-                }
-
-                // 1. CARGA DE TERRENO REAL (ELEVACIÓN)
-                let terrainProvider;
-                try {
-                    terrainProvider = await Cesium.createWorldTerrainAsync({
-                        requestVertexNormals: true, // Sombras realistas sobre relieve
-                        requestWaterMask: true      // Efectos de agua
-                    });
-                    setIsTerrainLoaded(true);
-                } catch (e) {
-                    console.warn("Fallo carga de terreno 3D. Usando elipsoide básico.");
-                    terrainProvider = new Cesium.EllipsoidTerrainProvider();
-                    setIsTerrainLoaded(false);
-                }
-
-                const viewer = new Cesium.Viewer(containerRef.current, {
-                    terrainProvider: terrainProvider,
-                    baseLayerPicker: false,
-                    timeline: false,
-                    animation: false,
-                    geocoder: false,
-                    homeButton: false,
-                    sceneModePicker: false,
-                    navigationHelpButton: false,
-                    infoBox: false,
-                    selectionIndicator: false,
-                    // Omitimos skyBox y skyAtmosphere para que Cesium use sus valores por defecto (objetos reales)
-                    // y evitar el error de TypeError al pasar un booleano 'true'.
-                    requestRenderMode: true,
-                    maximumRenderTimeChange: Infinity,
-                    msaaSamples: 1,
-                    contextOptions: {
-                        webgl: {
-                            preserveDrawingBuffer: true,
-                            antialias: false,
-                            failIfMajorPerformanceCaveat: false
-                        }
-                    }
-                });
-
-                viewer.resolutionScale = Math.min(window.devicePixelRatio || 1.0, 1.5);
-                viewer.useBrowserRecommendedResolution = true;
-
-                // Deshabilitar el rastreo de entidades y zoom automático por doble clic (Vista de 1era persona accidental)
-                viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-                viewer.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-
-                try {
-                    const imageryLayer = Cesium.ImageryLayer.fromWorldImagery({
-                        style: Cesium.IonWorldImageryStyle.AERIAL
-                    });
-                    imageryLayer.minificationFilter = Cesium.TextureMinificationFilter.LINEAR;
-                    imageryLayer.magnificationFilter = Cesium.TextureMinificationFilter.LINEAR;
-                    viewer.imageryLayers.add(imageryLayer);
-                } catch (e) {
-                    console.warn("Falló carga de capa satelital.");
-                }
-
-                // --- CONFIGURACIÓN DE RENDIMIENTO EXTREMO (CHUNKS) ---
-                viewer.scene.globe.showGroundAtmosphere = false;
-                viewer.scene.highDynamicRange = false;
-                viewer.scene.globe.enableLighting = false;
-                viewer.scene.shadowMap.enabled = false;
-
-                // Desactivar post-procesado
-                viewer.scene.postProcessStages.fxaa.enabled = false;
-
-                // NIEBLA LIGERA 
-                viewer.scene.fog.enabled = true;
-                viewer.scene.fog.density = 0.0001;
-
-                // ESTRATEGIA DE MEMORIA OPTIMIZADA (Evita lag en relieve)
-                viewer.scene.globe.tileCacheSize = 100; // Balanceado para no ahogar la RAM
-                viewer.scene.globe.loadingDescendantLimit = 10; // Carga simultánea más ligera
-                viewer.scene.globe.preloadAncestors = false; // Prioriza lo que está en cámara
-                viewer.scene.globe.preloadSiblings = false;
-
-                viewer.scene.logarithmicDepthBuffer = false;
-                viewer.resolutionScale = 0.85;
-
-                // VISTA GLOBAL
-                viewer.camera.setView({
-                    destination: Cesium.Cartesian3.fromDegrees(-75.0, -12.0, 10000000),
-                    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 }
-                });
-
-                viewerRef.current = viewer;
-
-                // --- MANEJO DE INTERACCIÓN (PICKING) DE SONDAJES ---
-                const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-                handler.setInputAction((movement) => {
-                    const pickedObject = viewer.scene.pick(movement.position);
-                    if (Cesium.defined(pickedObject)) {
-                        const entity = pickedObject.id;
-                        // El dato está vinculado en renderBoreholes como entity.boreholeData
-                        if (entity && entity.boreholeData) {
-                            setSelectedBorehole(entity.boreholeData);
-                            setSelectedEstrato(null); 
-                            setIsRightOpen(true); // Asegurar que el panel se abra
-                            console.log("[3D] Sondaje seleccionado via picking:", entity.boreholeData.nombre);
-                        }
-                    }
-                }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-                // Guardar para limpieza
-                viewer.handler = handler;
-
-                console.log("[CESIUM] Motor configurado con RELIEVE REAL.");
-            } catch (err) {
-                console.error("[CESIUM] Error en inicio:", err);
-            }
-        };
-
-        const timer = setTimeout(initCesium, 100);
-        return () => {
-            clearTimeout(timer);
-            if (viewerRef.current) {
-                console.log("[CESIUM] Destruyendo visor...");
-                try {
-                    const v = viewerRef.current;
-                    viewerRef.current = null; // Evitar accesos asíncronos
-                    v.destroy();
-                } catch (e) {
-                    console.warn("Error en destroy:", e);
-                }
-            }
-        };
-    }, []);
-
-    // EFECTO: Control de opacidad dinámico del mapa base y aparición de Estratos
-    useEffect(() => {
-        if (viewerRef.current) {
-            const viewer = viewerRef.current;
-            
-            // 1. Atenuar todas las capas satelitales (Bing Maps, Sentinel, etc.)
-            for (let i = 0; i < viewer.imageryLayers.length; i++) {
-                const layer = viewer.imageryLayers.get(i);
-                layer.alpha = mapOpacity;
-            }
-
-            // 2. Controlar la visibilidad de los estratos: 
-            // Solo visibles en modo ESTRATIGRÁFICO, cuando la capa ha sido activada manualmente, y el suelo real está en opacidad 0%.
-            const isXray = mapStyle === 'estratos' && mapOpacity === 0.0 && showEstratosLayer;
-            
-            if (estratosRefs.current) {
-                estratosRefs.current.forEach(prim => {
-                    if (prim) prim.show = isXray;
-                });
-            }
-
-            // También controlar visibilidad de sondajes individuales
-            if (boreholesEntitiesRef.current) {
-                boreholesEntitiesRef.current.forEach(entity => {
-                    entity.show = isXray;
-                });
-            }
-
-            viewer.scene.requestRender();
-        }
-    }, [mapOpacity, showEstratosLayer, mapStyle]);
-
-    // EFECTO: Resaltado visual del estrato seleccionado en el panel
-    useEffect(() => {
-        if (!estratosRefs.current || estratosRefs.current.length < 3 || !viewerRef.current) return;
-        
-        const hexes = ['#A67D5D', '#b8a99a', '#858585'];
-        
-        estratosRefs.current.forEach((prim, index) => {
-            if (!prim || !prim.appearance || !prim.appearance.material) return;
-            const mat = prim.appearance.material;
-            const originalColor = Cesium.Color.fromCssColorString(hexes[index]);
-            
-            if (selectedEstrato === null) {
-                // Estado normal: Todos opacos
-                mat.uniforms.u_baseColor = originalColor.withAlpha(1.0);
-            } else {
-                if (selectedEstrato === index) {
-                    // Seleccionado
-                    mat.uniforms.u_baseColor = originalColor.withAlpha(1.0);
-                } else {
-                    // No seleccionado: Opaco/translúcido (apenas visible)
-                    mat.uniforms.u_baseColor = originalColor.withAlpha(0.15);
-                }
-            }
-        });
-        
-        viewerRef.current.scene.requestRender();
-    }, [selectedEstrato]);
-
-    // REPARACIÓN: Forzar a Cesium a recalcular su tamaño al cambiar a pantalla completa
-    useEffect(() => {
-        if (viewerRef.current) {
-            console.log("[CESIUM] Reajustando tamaño para modo:", isFullscreen ? "FULLSCREEN" : "NORMAL");
-
-            // Intentar reajustar en varios intervalos para asegurar captura del nuevo tamaño del DOM tras el portal
-            const intervals = [10, 100, 300, 600, 1000];
-            const timers = intervals.map(ms => setTimeout(() => {
-                if (viewerRef.current) {
-                    viewerRef.current.resize();
-                    viewerRef.current.scene.requestRender();
-                }
-            }, ms));
-
-            return () => timers.forEach(t => clearTimeout(t));
-        }
-    }, [isFullscreen]);
-
-    // EFECTO: Gestión Dinámica de Controles y Bloqueo de Eje (Anti-Inclinación)
-    useEffect(() => {
-        if (!viewerRef.current) return;
+    /**
+     * Renderiza la malla LandXML final combinando capas visuales y estratos.
+     */
+    const renderFinalMesh = useCallback((verticesInfo, elevationData, minZ, maxZ, indicesTriangulos, indicesBoundary, indicesBordesFull) => {
         const viewer = viewerRef.current;
-        const controller = viewer.scene.screenSpaceCameraController;
+        console.log("[Vista3D] renderFinalMesh invocado. Vértices:", verticesInfo?.length);
+        if (!viewer || viewer.isDestroyed() || !verticesInfo || verticesInfo.length === 0) {
+            console.warn("[Vista3D] renderFinalMesh abortado: viewer inválido o sin vértices.");
+            return;
+        }
 
-        // Función para mantener la cámara siempre "parada" y gestionar límites
-        const monitorCamera = () => {
-            if (!viewer.camera || viewer.isDestroyed()) return;
+        const midZ = minZ + (maxZ - minZ) / 2.0;
 
-            if (isGroundMode) {
-                const pos = viewer.camera.positionCartographic;
+        const vertices = verticesInfo.map(vi => {
+            const exaggeratedZ = (vi.z - midZ) * (zExag / 15.0) + midZ;
+            return Cartesian3.fromDegrees(vi.lon, vi.lat, exaggeratedZ + 2.5);
+        });
 
-                // Salvavidas Anti-Crasheo: Si por un cálculo agresivo del mouse la cámara pierde sus valores matemáticos, abortamos.
-                if (!pos || isNaN(pos.longitude) || isNaN(pos.latitude) || isNaN(pos.height) ||
-                    isNaN(viewer.camera.heading) || isNaN(viewer.camera.pitch)) {
-                    return;
-                }
+        // Limpieza de previos
+        const primitivesToRemove = [];
+        for (let i = 0; i < viewer.scene.primitives.length; i++) {
+            const prim = viewer.scene.primitives.get(i);
+            if (prim.isCustomTopography) primitivesToRemove.push(prim);
+        }
+        primitivesToRemove.forEach(p => viewer.scene.primitives.remove(p));
 
-                let corrected = false;
-                let newLon = pos.longitude;
-                let newLat = pos.latitude;
-                let newHeight = pos.height;
+        const positions64 = new Float64Array(vertices.length * 3);
+        const colors8 = new Uint8Array(vertices.length * 4);
+        const zRange = maxZ - minZ || 1.0;
 
-                // 1. MUROS VIRTUALES EXTREMOS: Respaldar 'cartographicLimitRectangle' nativo con un rebote estricto por código
-                if (chunkRectangleRef.current) {
-                    const rect = chunkRectangleRef.current;
-                    const b = 0.000001; // Pequeño buffer interno
-                    if (newLon <= rect.west) { newLon = rect.west + b; corrected = true; }
-                    if (newLon >= rect.east) { newLon = rect.east - b; corrected = true; }
-                    if (newLat <= rect.south) { newLat = rect.south + b; corrected = true; }
-                    if (newLat >= rect.north) { newLat = rect.north - b; corrected = true; }
-                }
+        for (let i = 0; i < vertices.length; i++) {
+            positions64[i * 3] = vertices[i].x;
+            positions64[i * 3 + 1] = vertices[i].y;
+            positions64[i * 3 + 2] = vertices[i].z;
+            const normalizedZ = (elevationData[i] - minZ) / zRange;
+            const hue = (1.0 - normalizedZ) * (1.0 / 3.0);
+            const vColor = Color.fromHsl(hue, 1.0, 0.45, 1.0);
+            colors8[i * 4] = vColor.red * 255;
+            colors8[i * 4 + 1] = vColor.green * 255;
+            colors8[i * 4 + 2] = vColor.blue * 255;
+            colors8[i * 4 + 3] = 255;
+        }
 
-                // 2. SUELO DE HIERRO: Evitar caer al inframundo/vacío estelar al hacer zoom cerca de los bordes
-                // Prevenir cámara subterránea consultando la elevación del mosaico 3D exacto debajo nuestro
-                const terrainHeight = viewer.scene.globe.getHeight(pos) || 0;
+        // --- GEOMETRÍA SÓLIDA ---
+        let solidGeometryHipso = new Geometry({
+            attributes: {
+                position: new GeometryAttribute({ componentDatatype: ComponentDatatype.DOUBLE, componentsPerAttribute: 3, values: positions64 }),
+                color: new GeometryAttribute({ componentDatatype: ComponentDatatype.UNSIGNED_BYTE, componentsPerAttribute: 4, values: colors8, normalize: true })
+            },
+            indices: new Uint32Array(indicesTriangulos),
+            primitiveType: PrimitiveType.TRIANGLES,
+            boundingSphere: BoundingSphere.fromPoints(vertices)
+        });
 
-                // Mantenemos una estatura mínima de 1.5 metros (altura de humano) para nunca cruzar las normales del terreno
-                if (newHeight < terrainHeight + 1.5) {
-                    newHeight = terrainHeight + 1.5;
-                    corrected = true;
-                }
+        let solidGeometryTopo = new Geometry({
+            attributes: { position: new GeometryAttribute({ componentDatatype: ComponentDatatype.DOUBLE, componentsPerAttribute: 3, values: positions64 }) },
+            indices: new Uint32Array(indicesTriangulos),
+            primitiveType: PrimitiveType.TRIANGLES,
+            boundingSphere: BoundingSphere.fromPoints(vertices)
+        });
 
-                // 3. TECHO DE CRISTAL RELATIVO: Evitar que un zoom fortísimo al cielo envíe la cámara a la estratósfera.
-                // Se usa la altura del terreno (+2000m) en lugar de un número absoluto, dado que en Perú los terrenos pueden estar a >4000 msnm.
-                const maxAllowedHeight = terrainHeight + 2000.0;
-                if (newHeight > maxAllowedHeight) {
-                    newHeight = maxAllowedHeight;
-                    corrected = true;
-                }
+        try {
+            solidGeometryHipso = GeometryPipeline.computeNormal(solidGeometryHipso);
+            solidGeometryTopo = GeometryPipeline.computeNormal(solidGeometryTopo);
+        } catch (e) { }
 
-                // 4. BLOQUEO ANTI-MAREO: Evitar que el mundo se tuerza
-                if (viewer.camera.roll !== 0) {
-                    corrected = true;
-                }
+        // --- PRIMITIVOS ---
+        const solidPrimitiveHipso = new Primitive({
+            geometryInstances: new GeometryInstance({ geometry: solidGeometryHipso }),
+            appearance: new PerInstanceColorAppearance({ flat: false, translucent: false, closed: false }),
+            asynchronous: false,
+            show: mapStyle === 'hipso'
+        });
+        solidPrimitiveHipso.isCustomTopography = true;
 
-                if (corrected) {
-                    try {
-                        viewer.camera.setView({
-                            destination: Cesium.Cartesian3.fromRadians(newLon, newLat, newHeight),
-                            orientation: {
-                                heading: viewer.camera.heading,
-                                pitch: viewer.camera.pitch,
-                                roll: 0.0 // Siempre restaurar Anti-Roll
-                            }
-                        });
-                    } catch (e) { /* Suprimir error silencioso si el math interno de Cesium aún escupe NaN */ }
-                }
-            }
+        const solidPrimitiveMalla = new Primitive({
+            geometryInstances: new GeometryInstance({
+                geometry: solidGeometryTopo,
+                attributes: { color: ColorGeometryInstanceAttribute.fromColor(Color.RED.withAlpha(0.25)) }
+            }),
+            appearance: new PerInstanceColorAppearance({ flat: true, translucent: true, closed: false }),
+            asynchronous: false,
+            show: mapStyle === 'malla'
+        });
+        solidPrimitiveMalla.isCustomTopography = true;
+
+        const wirePrimitiveMalla = new Primitive({
+            geometryInstances: new GeometryInstance({
+                geometry: new Geometry({
+                    attributes: { position: new GeometryAttribute({ componentDatatype: ComponentDatatype.DOUBLE, componentsPerAttribute: 3, values: positions64 }) },
+                    indices: new Uint32Array(indicesBordesFull),
+                    primitiveType: PrimitiveType.LINES,
+                    boundingSphere: BoundingSphere.fromPoints(vertices)
+                }),
+                attributes: { color: ColorGeometryInstanceAttribute.fromColor(Color.RED.withAlpha(1.0)) }
+            }),
+            appearance: new PerInstanceColorAppearance({ flat: true, translucent: false }),
+            asynchronous: false,
+            show: mapStyle === 'malla'
+        });
+        wirePrimitiveMalla.isCustomTopography = true;
+
+        const wirePrimitiveBoundary = new Primitive({
+            geometryInstances: new GeometryInstance({
+                geometry: new Geometry({
+                    attributes: { position: new GeometryAttribute({ componentDatatype: ComponentDatatype.DOUBLE, componentsPerAttribute: 3, values: positions64 }) },
+                    indices: new Uint32Array(indicesBoundary),
+                    primitiveType: PrimitiveType.LINES,
+                    boundingSphere: BoundingSphere.fromPoints(vertices)
+                }),
+                attributes: { color: ColorGeometryInstanceAttribute.fromColor(Color.RED.withAlpha(1.0)) }
+            }),
+            appearance: new PerInstanceColorAppearance({ flat: true, translucent: false }),
+            asynchronous: false,
+            show: mapStyle !== 'malla'
+        });
+        wirePrimitiveBoundary.isCustomTopography = true;
+
+        hipsoPrimitiveRef.current = solidPrimitiveHipso;
+        mallaSolidRef.current = solidPrimitiveMalla;
+        mallaWireRef.current = wirePrimitiveMalla;
+        boundaryWireRef.current = wirePrimitiveBoundary;
+
+        // --- ESTRATOS 3D ---
+        const getBoundaryNoise = (vertexIdx, boundaryLevel) => {
+            if (boundaryLevel === 0) return 0.0;
+            const v = vertices[vertexIdx];
+            const x = v.x % 1000.0, y = v.y % 1000.0;
+            return (Math.sin(x * 0.05 + y * 0.05) * 2.5 + Math.cos(x * 0.1 - y * 0.08) * 1.5) * (1.0 + boundaryLevel * 0.1);
         };
 
-        if (isGroundMode) {
-            console.log("[CESIUM] Aplicando Cuarto Aislado (Muros Nativos de Chunk).");
+        const createStratumSlice = (topBias, botBias, topLvl, botLvl, hex) => {
+            const count = vertices.length;
+            const lPos = new Float64Array(count * 2 * 3);
+            const lSt = new Float32Array(count * 2 * 2);
+            const normal = new Cartesian3();
 
-            if (chunkRectangleRef.current) {
-                // Al colocar esto, Cesium pone una barrera física invisible donde el jugador simplemente "choca" con los bordes
-                viewer.scene.globe.cartographicLimitRectangle = chunkRectangleRef.current;
+            for (let i = 0; i < count; i++) {
+                const v = vertices[i];
+                const finalTop = (topBias * zExag) + getBoundaryNoise(i, topLvl);
+                const finalBot = (botBias * zExag) + getBoundaryNoise(i, botLvl);
+                Cartesian3.normalize(v, normal);
+                const pTop = Cartesian3.add(v, Cartesian3.multiplyByScalar(normal, -finalTop, new Cartesian3()), new Cartesian3());
+                lPos[i * 3] = pTop.x; lPos[i * 3 + 1] = pTop.y; lPos[i * 3 + 2] = pTop.z;
+                lSt[i * 2] = (v.x % 1000) * 0.1; lSt[i * 2 + 1] = (v.y % 1000) * 0.1;
+                const pBot = Cartesian3.add(v, Cartesian3.multiplyByScalar(normal, -finalBot, new Cartesian3()), new Cartesian3());
+                lPos[(i + count) * 3] = pBot.x; lPos[(i + count) * 3 + 1] = pBot.y; lPos[(i + count) * 3 + 2] = pBot.z;
+                lSt[(i + count) * 2] = (v.x % 1000) * 0.1; lSt[(i + count) * 2 + 1] = (v.y % 1000) * 0.1;
             }
 
-            controller.translateEventTypes = [Cesium.CameraEventType.LEFT_DRAG];
-            controller.rotateEventTypes = [];
-            controller.lookEventTypes = [Cesium.CameraEventType.RIGHT_DRAG];
-            controller.zoomEventTypes = [Cesium.CameraEventType.WHEEL, Cesium.CameraEventType.PINCH];
-            controller.tiltEventTypes = [];
-
-            // Inercia para un giro fluido y sin estirones
-            controller.inertiaSpin = 0.2;
-            controller.inertiaTranslate = 0.2;
-            controller.enableCollisionDetection = true;
-            controller.minimumZoomDistance = 3.0;
-            controller.maximumZoomDistance = Number.POSITIVE_INFINITY; // Dejamos el techo a discreción del preRender inteligente para evitar entierros absolutos
-
-            // Alta definición porque ya está cargado en caché
-            viewer.scene.globe.maximumScreenSpaceError = 1.2;
-
-            viewer.scene.preRender.addEventListener(monitorCamera);
-
-            return () => {
-                if (!viewer.isDestroyed()) {
-                    viewer.scene.preRender.removeEventListener(monitorCamera);
-                }
-            };
-        } else {
-            console.log("[CESIUM] Regresando a Vista Planetaria (2D Absoluto).");
-            if (!viewer.isDestroyed()) {
-                viewer.scene.globe.cartographicLimitRectangle = undefined;
-                viewer.scene.globe.maximumScreenSpaceError = 2.0;
-
-                controller.translateEventTypes = [Cesium.CameraEventType.LEFT_DRAG];
-                controller.rotateEventTypes = [Cesium.CameraEventType.LEFT_DRAG]; // Restaurar el paneo (arrastre) del planeta
-                controller.zoomEventTypes = [Cesium.CameraEventType.RIGHT_DRAG, Cesium.CameraEventType.WHEEL, Cesium.CameraEventType.PINCH];
-
-                // Tilt desactivado para evitar vista 3D en satélite, asegurando el aspecto 2D plano desde arriba
-                controller.tiltEventTypes = [];
-
-                // Borrar lookEventTypes (la propiedad clave "mirar alrededor" de los FPS) para devolverle al mouse izquierdo su pan nativo
-                controller.lookEventTypes = undefined;
-
-                controller.inertiaSpin = 0.9;
-                controller.inertiaTranslate = 0.9;
-                controller.enableCollisionDetection = false;
-                controller.minimumZoomDistance = 150.0;
-                controller.maximumZoomDistance = Number.POSITIVE_INFINITY;
-
-                // Forzar a la cámara a mirar siempre hacia abajo (nadir) para la experiencia 2D
-                viewer.scene.camera.setView({
-                    orientation: {
-                        heading: viewer.scene.camera.heading,
-                        pitch: Cesium.Math.toRadians(-90.0), // Restablecer picado total para mapa plano
-                        roll: 0.0
-                    }
-                });
+            const lInd = [];
+            for (let i = 0; i < indicesTriangulos.length; i += 3) {
+                lInd.push(indicesTriangulos[i], indicesTriangulos[i + 1], indicesTriangulos[i + 2]);
+                lInd.push(indicesTriangulos[i] + count, indicesTriangulos[i + 2] + count, indicesTriangulos[i + 1] + count);
             }
-        }
-    }, [isGroundMode]);
-
-    // Vuelo de cámara al seleccionar modelo + Marcador Visual
-    useEffect(() => {
-        if (selectedModelo?.metadata?.centro_utm && viewerRef.current) {
-            const viewer = viewerRef.current;
-
-            // 1. CANCELAR VUELOS PREVIOS (Evita parpadeos y tirones)
-            viewer.camera.cancelFlight();
-
-            let { x, y } = selectedModelo.metadata.centro_utm;
-
-            console.log("%c [3D] COORDINATES DEBUG ", "background: #222; color: #bada55; font-size: 12px; font-weight: bold;");
-            console.log("Valores originales del archivo -> X:", x, "Y:", y);
-
-            // CORRECCIÓN AUTOMÁTICA DE INVERSIÓN:
-            // En Perú, Norte (Y) siempre es > 2,000,000 y Este (X) está entre 100k y 999k.
-            if (x > y) {
-                console.log("[3D] Detectada inversión de ejes (X > Y). Corrigiendo...");
-                const temp = x;
-                x = y;
-                y = temp;
+            for (let i = 0; i < indicesBoundary.length; i += 2) {
+                const ta = indicesBoundary[i], tb = indicesBoundary[i + 1], ba = ta + count, bb = tb + count;
+                lInd.push(ta, ba, tb); lInd.push(ba, bb, tb);
             }
 
-            // DETECCIÓN DE ZONA AUTOMÁTICA (Cusco/Sierra vs Lima/Costa):
-            // En el sur de Perú, la Zona 19S empieza con valores de Este bajos (~160k).
-            // Si el valor está en el rango de los 200k, es Cusco (Zona 19S).
-            const projection = x < 400000 ? UTM_19S : UTM_18S;
-
-            console.log("Valores corregidos -> Este(X):", x, "Norte(Y):", y);
-            console.log("Usando Proyección:", projection === UTM_19S ? "Zona 19S (Cusco/Puno/Sierra)" : "Zona 18S (Lima/Costa)");
-
-            try {
-                const projection = x < 400000 ? UTM_19S : UTM_18S;
-                const [lon, lat] = proj4(projection, WGS84, [x, y]);
-
-                console.log(`WGS84 Calculado: LON=${lon}, LAT=${lat}`);
-
-                // --- 1. RENDERIZACIÓN DE LA MALLA (LANDXML -> OBJ -> CESIUM) "Con Borde Rojo" ---
-                // Limpiar entidades planas nativas y meshes de la sesión anterior
-                viewer.entities.removeAll();
-                
-                // Buscar primitivas custom que hayan sido añadidas por nuestro obj-loader y borrarlas
-                const primitivesToRemove = [];
-                for (let i = 0; i < viewer.scene.primitives.length; i++) {
-                    const prim = viewer.scene.primitives.get(i);
-                    if (prim.isCustomTopography) {
-                        primitivesToRemove.push(prim);
-                    }
-                }
-                primitivesToRemove.forEach(p => viewer.scene.primitives.remove(p));
-
-                if (selectedModelo.url_archivo && selectedModelo.url_archivo !== 'PENDIENTE') {
-                    console.log(`[3D] Descargando malla espacial desde: ${selectedModelo.url_archivo}`);
-                    
-                    // PROMESA 1: Obtener la altura real del planeta Cesium en el Centro del modelo para el Drop-to-Ground
-                    const getTerrainPromise = Cesium.sampleTerrainMostDetailed(
-                        viewer.terrainProvider, 
-                        [Cesium.Cartographic.fromDegrees(lon, lat)]
-                    ).then(samples => samples[0].height || 0).catch(() => 0);
-
-                    // PROMESA 2: Descargar el modelo LandXML (.obj backend)
-                    const fetchModelPromise = fetch(selectedModelo.url_archivo).then(r => r.text());
-
-                    Promise.all([getTerrainPromise, fetchModelPromise])
-                    .then(([terrainCenterZ, objText]) => {
-                        console.log(`[DEBUG 3D] Offset Z Planeta: ${terrainCenterZ}m | Texto: ${objText.length} bytes.`);
-                        const lines = objText.split('\n');
-                        
-                        const verticesInfo = []; // Array temporal (lon, lat, rawZ)
-                        const indicesTriangulos = [];
-                        const indicesBordesFull = [];
-                        const elevationData = []; 
-                        let minZ = Infinity;
-                        let maxZ = -Infinity;
-
-                        for (const line of lines) {
-                            if (line.startsWith('v ')) {
-                                const parts = line.trim().split(/\s+/);
-                                let py = parseFloat(parts[1]); 
-                                let px = parseFloat(parts[2]);
-                                let pz = parseFloat(parts[3]);
-                                
-                                minZ = Math.min(minZ, pz);
-                                maxZ = Math.max(maxZ, pz);
-                                // Conservamos la elevación original para pintar el gradiente Hipsométrico matemáticamente idéntico
-                                elevationData.push(pz);
-
-                                if (px > py) { const t = px; px = py; py = t; }
-                                const [vLon, vLat] = proj4(projection, WGS84, [px, py]);
-                                
-                                verticesInfo.push({ lon: vLon, lat: vLat, z: pz });
-                            } else if (line.startsWith('f ')) {
-                                const parts = line.trim().split(/\s+/);
-                                const v1 = parseInt(parts[1]) - 1;
-                                const v2 = parseInt(parts[2]) - 1;
-                                const v3 = parseInt(parts[3]) - 1;
-                                
-                                indicesTriangulos.push(v1, v2, v3);
-                                indicesBordesFull.push(v1, v2, v2, v3, v3, v1);
-                            }
+            const prim = new Primitive({
+                geometryInstances: new GeometryInstance({
+                    geometry: new Geometry({
+                        attributes: {
+                            position: new GeometryAttribute({ componentDatatype: ComponentDatatype.DOUBLE, componentsPerAttribute: 3, values: lPos }),
+                            st: new GeometryAttribute({ componentDatatype: ComponentDatatype.FLOAT, componentsPerAttribute: 2, values: lSt })
+                        },
+                        indices: new Uint32Array(lInd),
+                        primitiveType: PrimitiveType.TRIANGLES,
+                        boundingSphere: BoundingSphere.fromPoints(vertices)
+                    })
+                }),
+                appearance: new MaterialAppearance({
+                    material: new Material({
+                        fabric: {
+                            uniforms: { u_baseColor: Color.fromCssColorString(hex).withAlpha(1.0) },
+                            source: `czm_material czm_getMaterial(czm_materialInput materialInput){ czm_material m = czm_getDefaultMaterial(materialInput); m.diffuse = u_baseColor.rgb; m.alpha = u_baseColor.a; return m; }`
                         }
-
-                        // CÁLCULO DE DROP-TO-GROUND (ADAPTACIÓN AL TERRENO):
-                        // Calculamos el centro vertical del modelo original
-                        const modelCenterZ = minZ + ((maxZ - minZ) / 2.0);
-                        // El delta para hundir el modelo entero (Offset)
-                        // Atamos el centro de masa del archivo a la altura de las montañas de Cesium, 
-                        // con 2.0m de amortiguador para que no haya colisiones ("Z-fighting") satelitales.
-                        let deltaZ = terrainCenterZ - modelCenterZ;
-                        
-                        // Si el terreno satelital falló al cargar y dice '0' (modo offline o error de API), no hundimos ciegamente
-                        if (Math.abs(terrainCenterZ) < 1.0) deltaZ = 0; 
-                        
-                        console.log(`[3D DROP-TO-GROUND] Altura SRTM Terreno: ${terrainCenterZ}m | Centro Modelo Importado: ${modelCenterZ}m | Offset de Adaptación: ${deltaZ}m`);
-
-                        const vertices = [];
-                        for (let i = 0; i < verticesInfo.length; i++) {
-                            const vi = verticesInfo[i];
-                            // Adaptamos (hundimos) su altura original según la discrepancia satelital calculada
-                            const droppedZ = vi.z + deltaZ + 2.0;
-                            vertices.push(Cesium.Cartesian3.fromDegrees(vi.lon, vi.lat, droppedZ));
-                        }
-
-                        console.log(`[DEBUG 3D] Vertices generados y adaptados: ${vertices.length}`);
-                        console.log(`[DEBUG 3D] Índices de Triángulos: ${indicesTriangulos.length} (${indicesTriangulos.length/3} caras)`);
-
-                        // Calcular el borde exterior real del modelo para el "borde rojo"
-                        const edgeMap = new Map();
-                        for (let i = 0; i < indicesTriangulos.length; i += 3) {
-                            const v1 = indicesTriangulos[i];
-                            const v2 = indicesTriangulos[i+1];
-                            const v3 = indicesTriangulos[i+2];
-
-                            const addEdge = (a, b) => {
-                                const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-                                edgeMap.set(key, (edgeMap.get(key) || 0) + 1);
-                            };
-
-                            addEdge(v1, v2);
-                            addEdge(v2, v3);
-                            addEdge(v3, v1);
-                        }
-
-                        const indicesBoundary = [];
-                        for (const [key, count] of edgeMap.entries()) {
-                            if (count === 1) { // Límite exterior, ya que solo pertenece a un polígono
-                                const [a, b] = key.split('-').map(Number);
-                                indicesBoundary.push(a, b);
-                            }
-                        }
-
-                        if (vertices.length > 0) {
-                            const positions64 = new Float64Array(vertices.length * 3);
-                            const colors8 = new Uint8Array(vertices.length * 4); // Para color per-vertex (hipsometría)
-                            
-                            const zRange = maxZ - minZ || 1.0;
-
-                            for (let i = 0; i < vertices.length; i++) {
-                                positions64[i * 3] = vertices[i].x;
-                                positions64[i * 3 + 1] = vertices[i].y;
-                                positions64[i * 3 + 2] = vertices[i].z;
-
-                                // --- Mapa Hipsométrico ---
-                                // normalizedZ = 0 (bajo) a 1 (alto)
-                                const normalizedZ = (elevationData[i] - minZ) / zRange;
-                                // Hue en Cesium: Verde es ~0.33, Rojo es 0.0. Interpolar.
-                                const hue = (1.0 - normalizedZ) * (1.0 / 3.0);
-                                const vColor = Cesium.Color.fromHsl(hue, 1.0, 0.45, 1.0); // Algo menos luminoso para lucir sólido con sombreado
-                                
-                                colors8[i * 4] = vColor.red * 255;
-                                colors8[i * 4 + 1] = vColor.green * 255;
-                                colors8[i * 4 + 2] = vColor.blue * 255;
-                                colors8[i * 4 + 3] = 255;
-                            }
-
-                            // Geometría Sólida HIPSOMÉTRICA (Color por vértice)
-                            let solidGeometryHipso = new Cesium.Geometry({
-                                attributes: {
-                                    position: new Cesium.GeometryAttribute({
-                                        componentDatatype: Cesium.ComponentDatatype.DOUBLE,
-                                        componentsPerAttribute: 3,
-                                        values: positions64
-                                    }),
-                                    color: new Cesium.GeometryAttribute({
-                                        componentDatatype: Cesium.ComponentDatatype.UNSIGNED_BYTE,
-                                        componentsPerAttribute: 4,
-                                        values: colors8,
-                                        normalize: true
-                                    })
-                                },
-                                indices: new Uint32Array(indicesTriangulos),
-                                primitiveType: Cesium.PrimitiveType.TRIANGLES,
-                                boundingSphere: Cesium.BoundingSphere.fromPoints(vertices)
-                            });
-
-                            // Geometría Sólida TOPOGRÁFICA (Tierra)
-                            let solidGeometryTopo = new Cesium.Geometry({
-                                attributes: {
-                                    position: new Cesium.GeometryAttribute({
-                                        componentDatatype: Cesium.ComponentDatatype.DOUBLE,
-                                        componentsPerAttribute: 3,
-                                        values: positions64
-                                    })
-                                },
-                                indices: new Uint32Array(indicesTriangulos),
-                                primitiveType: Cesium.PrimitiveType.TRIANGLES,
-                                boundingSphere: Cesium.BoundingSphere.fromPoints(vertices)
-                            });
-
-                            // Computar normales
-                            try {
-                                solidGeometryHipso = Cesium.GeometryPipeline.computeNormal(solidGeometryHipso);
-                                solidGeometryTopo = Cesium.GeometryPipeline.computeNormal(solidGeometryTopo);
-                            } catch (e) {
-                                console.warn("[3D] No se pudieron computar las normales, la iluminación será degradada:", e);
-                            }
-
-                            const solidPrimitiveHipso = new Cesium.Primitive({
-                                geometryInstances: new Cesium.GeometryInstance({ geometry: solidGeometryHipso }),
-                                appearance: new Cesium.PerInstanceColorAppearance({
-                                    flat: false, translucent: false, closed: false, renderState: { cull: { enabled: false }, depthTest: { enabled: true } }
-                                }),
-                                asynchronous: false,
-                                show: mapStyleRef.current === 'hipso'
-                            });
-                            solidPrimitiveHipso.isCustomTopography = true;
-
-                            // -------------------------
-                            // GEOMETRÍAS MALLA ORIGINAL
-                            // -------------------------
-                            const solidInstanceMalla = new Cesium.GeometryInstance({
-                                geometry: solidGeometryTopo, // Reutilizamos topología base (coordenadas)
-                                attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.RED.withAlpha(0.25)) } // Rojo translúcido
-                            });
-                            
-                            const solidPrimitiveMalla = new Cesium.Primitive({
-                                geometryInstances: solidInstanceMalla,
-                                appearance: new Cesium.PerInstanceColorAppearance({
-                                    flat: true, translucent: true, closed: false,
-                                    renderState: { cull: { enabled: false }, depthTest: { enabled: true } }
-                                }),
-                                asynchronous: false,
-                                show: mapStyleRef.current === 'malla'
-                            });
-                            solidPrimitiveMalla.isCustomTopography = true;
-
-                            const wireGeometryMalla = new Cesium.Geometry({
-                                attributes: {
-                                    position: new Cesium.GeometryAttribute({
-                                        componentDatatype: Cesium.ComponentDatatype.DOUBLE,
-                                        componentsPerAttribute: 3,
-                                        values: positions64
-                                    })
-                                },
-                                indices: new Uint32Array(indicesBordesFull),
-                                primitiveType: Cesium.PrimitiveType.LINES,
-                                boundingSphere: Cesium.BoundingSphere.fromPoints(vertices)
-                            });
-
-                            const wirePrimitiveMalla = new Cesium.Primitive({
-                                geometryInstances: new Cesium.GeometryInstance({
-                                    geometry: wireGeometryMalla,
-                                    attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.RED.withAlpha(1.0)) }
-                                }),
-                                appearance: new Cesium.PerInstanceColorAppearance({
-                                    flat: true, translucent: false,
-                                    renderState: { cull: { enabled: false }, depthTest: { enabled: true } }
-                                }),
-                                asynchronous: false,
-                                show: mapStyleRef.current === 'malla'
-                            });
-                            wirePrimitiveMalla.isCustomTopography = true;
-
-                            hipsoPrimitiveRef.current = solidPrimitiveHipso;
-                            mallaSolidRef.current = solidPrimitiveMalla;
-                            mallaWireRef.current = wirePrimitiveMalla;
-
-                            // Geometría Wireframe (SOLO Borde Rojo Exterior)
-                            const wireGeometry = new Cesium.Geometry({
-                                attributes: {
-                                    position: new Cesium.GeometryAttribute({
-                                        componentDatatype: Cesium.ComponentDatatype.DOUBLE,
-                                        componentsPerAttribute: 3,
-                                        values: positions64
-                                    })
-                                },
-                                indices: new Uint32Array(indicesBoundary),
-                                primitiveType: Cesium.PrimitiveType.LINES,
-                                boundingSphere: Cesium.BoundingSphere.fromPoints(vertices)
-                            });
-
-                            const bs = Cesium.BoundingSphere.fromPoints(vertices);
-                            console.log(`[DEBUG 3D] BoundingSphere Válido -> Centro X: ${bs.center.x.toFixed(2)}, Radio: ${bs.radius.toFixed(2)}`);
-
-                            const wireInstance = new Cesium.GeometryInstance({
-                                geometry: wireGeometry,
-                                attributes: {
-                                    color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.RED.withAlpha(1.0))
-                                }
-                            });
-
-                            const wirePrimitive = new Cesium.Primitive({
-                                geometryInstances: wireInstance,
-                                appearance: new Cesium.PerInstanceColorAppearance({ 
-                                    flat: true, // Líneas no necesitan sombreado
-                                    translucent: false,
-                                    renderState: {
-                                        cull: { enabled: false },
-                                        depthTest: { enabled: true }
-                                    }
-                                }),
-                                asynchronous: false,
-                                show: mapStyleRef.current !== 'malla' // Oculto cuando estamos en 'malla', visible en 'hipso' y 'topo'
-                            });
-                            wirePrimitive.isCustomTopography = true;
-                            boundaryWireRef.current = wirePrimitive;
-
-                            // --- CONSTRUCCIÓN DE ESTRATOS 3D (Subterráneos) ---
-                            // Generador de Ruido Geológico para hacer ondas naturales en las capas en lugar de cortes rectos:
-                            const getBoundaryNoise = (vertexIdx, boundaryLevel) => {
-                                if (boundaryLevel === 0) return 0.0; // El nivel 0 debe ser plano para no perforar el mapa original (Topografía)
-                                const v = vertices[vertexIdx];
-                                // Normalizamos coordenadas grandes ECEF
-                                const x = v.x % 1000.0; 
-                                const y = v.y % 1000.0;
-                                // Ondas trigonométricas normalizadas a rango [0, 1] para que el ruido SIEMPRE empuje hacia abajo (profundidad),
-                                // y NUNCA hacia arriba (valores negativos), porque empujar arriba causaba que crucen/perforen la malla topográfica superficial.
-                                const wave1 = (Math.sin(x * 0.05 + y * 0.05) * 0.5 + 0.5) * 5.0; // Ondas largas 
-                                const wave2 = (Math.cos(x * 0.1 - y * 0.08) * 0.5 + 0.5) * 2.0;  // Irregularidad
-                                const wave3 = (Math.sin(x * 0.2 + boundaryLevel * 2.0) * 0.5 + 0.5) * 1.5; // Desplazamiento por nivel
-                                return (wave1 + wave2 + wave3) * (1.0 + boundaryLevel * 0.15); 
-                            };
-
-                            const createStratumSlice = (topOffsetBase, botOffsetBase, topBoundaryLvl, botBoundaryLvl, hexColor) => {
-                                const Z_EXAG = 15.0; // Exageración vertical para visualización 3D
-                                
-                                const count = vertices.length;
-                                const lPos = new Float64Array(count * 2 * 3);
-                                const lSt = new Float32Array(count * 2 * 2); // Textura Fake (ST) requerida por MaterialAppearance
-                                
-                                const normal = new Cesium.Cartesian3();
-                                const pushDownVectorTop = new Cesium.Cartesian3();
-                                const pushDownVectorBot = new Cesium.Cartesian3();
-                                const newPos = new Cesium.Cartesian3();
-
-                                for (let i = 0; i < count; i++) {
-                                    const v = vertices[i];
-                                    
-                                    // Calculamos el ruido topológico para que esta interfaz empate perfectamente con la siguiente si tienen el mismo Level:
-                                    const topNoise = getBoundaryNoise(i, topBoundaryLvl);
-                                    const botNoise = getBoundaryNoise(i, botBoundaryLvl);
-                                    
-                                    const finalTop = (topOffsetBase * Z_EXAG) + topNoise;
-                                    const finalBot = (botOffsetBase * Z_EXAG) + botNoise;
-                                    
-                                    Cesium.Cartesian3.normalize(v, normal);
-                                    
-                                    // TOP
-                                    Cesium.Cartesian3.multiplyByScalar(normal, -finalTop, pushDownVectorTop);
-                                    Cesium.Cartesian3.add(v, pushDownVectorTop, newPos);
-                                    lPos[i * 3] = newPos.x;
-                                    lPos[i * 3 + 1] = newPos.y;
-                                    lPos[i * 3 + 2] = newPos.z;
-                                    
-                                    // Usamos coordenadas espaciales truncadas como mapa UV (ST) para anclar visualmente el Shader
-                                    // Usamos escala 0.1 para que el ruido tenga el balance de escala correcto
-                                    lSt[i * 2] = (v.x % 1000.0) * 0.1; 
-                                    lSt[i * 2 + 1] = (v.y % 1000.0) * 0.1;
-                                    
-                                    // BOT
-                                    Cesium.Cartesian3.multiplyByScalar(normal, -finalBot, pushDownVectorBot);
-                                    Cesium.Cartesian3.add(v, pushDownVectorBot, newPos);
-                                    lPos[(i + count) * 3] = newPos.x;
-                                    lPos[(i + count) * 3 + 1] = newPos.y;
-                                    lPos[(i + count) * 3 + 2] = newPos.z;
-                                    
-                                    lSt[(i + count) * 2] = (v.x % 1000.0) * 0.1; 
-                                    lSt[(i + count) * 2 + 1] = (v.y % 1000.0) * 0.1;
-                                }
-
-                                const lInd = [];
-                                // Ordenar polígonos
-                                for (let i = 0; i < indicesTriangulos.length; i += 3) {
-                                    lInd.push(indicesTriangulos[i], indicesTriangulos[i + 1], indicesTriangulos[i + 2]);
-                                    lInd.push(indicesTriangulos[i] + count, indicesTriangulos[i + 2] + count, indicesTriangulos[i + 1] + count);
-                                }
-
-                                // Paredes verticales
-                                for (let i = 0; i < indicesBoundary.length; i += 2) {
-                                    const ta = indicesBoundary[i];
-                                    const tb = indicesBoundary[i + 1];
-                                    const ba = ta + count;
-                                    const bb = tb + count;
-                                    lInd.push(ta, ba, tb);
-                                    lInd.push(ba, bb, tb);
-                                }
-
-                                let geom = new Cesium.Geometry({
-                                    attributes: {
-                                        position: new Cesium.GeometryAttribute({
-                                            componentDatatype: Cesium.ComponentDatatype.DOUBLE,
-                                            componentsPerAttribute: 3,
-                                            values: lPos
-                                        }),
-                                        st: new Cesium.GeometryAttribute({
-                                            componentDatatype: Cesium.ComponentDatatype.FLOAT,
-                                            componentsPerAttribute: 2,
-                                            values: lSt
-                                        })
-                                    },
-                                    indices: new Uint32Array(lInd),
-                                    primitiveType: Cesium.PrimitiveType.TRIANGLES,
-                                    boundingSphere: Cesium.BoundingSphere.fromPoints(vertices)
-                                });
-                                
-                                try { geom = Cesium.GeometryPipeline.computeNormal(geom); } catch(e){}
-
-                                // SHADER DE RUIDO GLSL (Realismo de Tierra/Arena):
-                                const materialGLSL = `
-                                    czm_material czm_getMaterial(czm_materialInput materialInput) {
-                                        czm_material material = czm_getDefaultMaterial(materialInput);
-                                        
-                                        // EXTRAEMOS LAS COORDENADAS ST DE LA GEOMETRÍA:
-                                        // Como asignamos ST a nivel global en JS, el textura se "ancla" a la roca, parando la ilusión de que "nada" (swimming).
-                                        vec2 pos = materialInput.st;
-                                        
-                                        // Ruido granulado pseudo-aleatorio de textura (Efecto Arena/Porosidad de Roca)
-                                        float noiseGrain = fract(sin(dot(pos.xy, vec2(12.9898, 78.233))) * 43758.5453);
-                                        
-                                        // Ondas sedimentarias súper suaves para insinuar capas de tierra formadas por gravedad
-                                        float bandNoise = sin(pos.x * 0.2 + pos.y * 0.15) * 0.5 + 0.5;
-
-                                        vec3 finalColor = u_baseColor.rgb;
-                                        
-                                        // MODULACIÓN SUTIL MANTENIENDO EL COLOR BASE INTACTO:
-                                        // Solución para que la Tierra/Roca no se vea Negra/Gris. Oscurecemos MAX un 15%, 
-                                        // así el Afirmado sigue café, Grava clara y Piedra gris sólido.
-                                        finalColor = mix(finalColor, finalColor * 0.88, bandNoise * 0.15); // Sedimentos suaves (12% más oscuros)
-                                        finalColor = mix(finalColor, finalColor * 0.85, noiseGrain * 0.20); // Porosidades de arena (15% más oscuros)
-                                        
-                                        material.diffuse = finalColor;
-                                        material.alpha = u_baseColor.a;
-                                        return material;
-                                    }
-                                `;
-
-                                const prim = new Cesium.Primitive({
-                                    geometryInstances: new Cesium.GeometryInstance({ geometry: geom }),
-                                    appearance: new Cesium.MaterialAppearance({
-                                        material: new Cesium.Material({
-                                            fabric: {
-                                                // Al NO definir un 'type', Cesium crea un Custom Material anónimo. 
-                                                // Definir type: 'Color' colapsaba porque Cesium no permite reescribir shaders del core.
-                                                uniforms: { u_baseColor: Cesium.Color.fromCssColorString(hexColor).withAlpha(1.0) },
-                                                source: materialGLSL
-                                            }
-                                        }),
-                                        // 'translucent' en true permite que podamos bajar el alpha dinámicamente si el usuario selecciona otro estrato
-                                        flat: false, translucent: true, closed: true,
-                                        renderState: { cull: { enabled: false }, depthTest: { enabled: true } }
-                                    }),
-                                    asynchronous: false
-                                });
-                                prim.isCustomTopography = true;
-                                return prim;
-                            };
-
-                            // PROFUNDIDADES EXACTAS + NOISE LEVELS:
-                            // Pasamos un límite superior e inferior (topLvl, botLvl) para que las costuras conecten los estratos ondulados mutuamente.
-                            // El estrato 1 conecta Lvl 0 (Liso con la superficie) con Lvl 1 (Ondulado inferior).
-                            const estrato1 = createStratumSlice(0.01, 0.20, 0, 1, '#A67D5D'); // AFIRMADO 
-                            const estrato2 = createStratumSlice(0.20, 1.00, 1, 2, '#b8a99a'); // MATERIA SUELTO GRAVA 
-                            const estrato3 = createStratumSlice(1.00, 1.50, 2, 3, '#858585'); // BOLONERIA PIEDRA
-
-                            // Guardamos referencia para ocultarlos en opacidad 100% de suelo
-                            estratosRefs.current = [estrato1, estrato2, estrato3];
-                            // Iniciamos su visibilidad actual 
-                            const initialXray = mapStyleRef.current === 'estratos' && mapOpacity === 0.0 && showEstratosLayer;
-                            estrato1.show = initialXray;
-                            estrato2.show = initialXray;
-                            estrato3.show = initialXray;
-
-                            // Añadir a la escena (de abajo hacia arriba para manejar la física y transparencias)
-                            viewer.scene.primitives.add(estrato3);
-                            viewer.scene.primitives.add(estrato2);
-                            viewer.scene.primitives.add(estrato1);
-
-                            // Malla de superficie
-                            viewer.scene.primitives.add(solidPrimitiveHipso);
-                            viewer.scene.primitives.add(solidPrimitiveMalla);
-                            viewer.scene.primitives.add(wirePrimitiveMalla);
-                            viewer.scene.primitives.add(wirePrimitive);
-
-                            console.log("[CESIUM] MALLA RENDERIZADA: Vértices parseados ->", vertices.length, "Caras ->", indicesTriangulos.length / 3);
-                        }
-                    }).catch(err => console.error("Error cargando malla obj:", err));
-                }
-
-                // --- DEFINIR EL "CUBO/CHUNK" GEOGRÁFICO ---
-                // Creamos un área de ~3km alrededor del punto para restringir RAM
-                const buffer = 0.015; // Aproximadamente 1.5km en cada dirección
-                chunkRectangleRef.current = new Cesium.Rectangle(
-                    Cesium.Math.toRadians(lon - buffer),
-                    Cesium.Math.toRadians(lat - buffer),
-                    Cesium.Math.toRadians(lon + buffer),
-                    Cesium.Math.toRadians(lat + buffer)
-                );
-
-                console.log("[CHUNK] Cubo de carga definido alrededor del modelo.");
-                console.log("------------------------------------------");
-
-                // Calcular la elevación real del archivo base para el marcador y el vuelo
-                const zMeta = selectedModelo.metadata?.centro_utm?.z || 0;
-
-                // Añadir marcador visual (Pin rojo flotando por encima de la topología importada)
-                viewer.entities.add({
-                    position: Cesium.Cartesian3.fromDegrees(lon, lat, zMeta > 0 ? zMeta + 30.0 : 0),
-                    billboard: {
-                        image: 'https://cdn-icons-png.flaticon.com/512/9131/9131546.png',
-                        width: 48,
-                        height: 48,
-                        heightReference: zMeta > 0 ? Cesium.HeightReference.NONE : Cesium.HeightReference.CLAMP_TO_GROUND,
-                        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-                        disableDepthTestDistance: Number.POSITIVE_INFINITY
-                    }
-                });
-
-                const safeFlightHeight = zMeta > 0 ? zMeta + 2000 : 2500;
-
-                viewer.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(lon, lat, safeFlightHeight),
-                    duration: 3,
-                    easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
-                    complete: () => console.log("[3D] Vuelo finalizado.")
-                });
-            } catch (err) {
-                console.error("[3D] Error CRÍTICO en transformación o vuelo:", err);
-            }
-        }
-    }, [selectedModelo]);
-
-    // EFECTO: Cargar sub-progresivas (Sondajes) cuando se selecciona un modelo con tramo_id
-    useEffect(() => {
-        if (selectedModelo?.tramo_id) {
-            fetchSubProgresivas(selectedModelo.tramo_id);
-        } else {
-            setSubProgresivas([]);
-        }
-    }, [selectedModelo]);
-
-    const fetchSubProgresivas = async (tramoId) => {
-        setIsFetchingBoreholes(true);
-        try {
-            const token = JSON.parse(localStorage.getItem('user'))?.token;
-            const res = await fetch(`${API_BASE}/api/progresivas/${tramoId}/children/all`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    flat: false, translucent: true, closed: true
+                }),
+                asynchronous: false
             });
-            if (res.ok) {
+            prim.isCustomTopography = true;
+            return prim;
+        };
+
+        const estrato1 = createStratumSlice(0.01, 0.20, 0, 1, '#A67D5D');
+        const estrato2 = createStratumSlice(0.20, 1.00, 1, 2, '#b8a99a');
+        const estrato3 = createStratumSlice(1.00, 1.50, 2, 3, '#858585');
+
+        estratosRefs.current = [estrato1, estrato2, estrato3];
+        const reveal = (mapStyle === 'estratos' || (mapOpacity === 0 && showEstratosLayer));
+        estratosRefs.current.forEach(e => e.show = reveal);
+
+        [estrato3, estrato2, estrato1, solidPrimitiveHipso, solidPrimitiveMalla, wirePrimitiveMalla, wirePrimitiveBoundary].forEach(p => viewer.scene.primitives.add(p));
+        viewer.scene.requestRender();
+    }, [zExag, mapStyle, mapOpacity, showEstratosLayer]);
+
+    /**
+     * Renderiza cilindros 3D para sondajes.
+     */
+    const renderBoreholes = useCallback(async (boreholes) => {
+        if (!viewerRef.current || !boreholes) return;
+        const viewer = viewerRef.current;
+        boreholesEntitiesRef.current.forEach(ent => viewer.entities.remove(ent));
+        boreholesEntitiesRef.current = [];
+
+        const cartographics = boreholes.map(bh => {
+            const { lon, lat } = utmToWgs84(bh.coordenada_este, bh.coordenada_norte);
+            return Cartographic.fromDegrees(lon, lat);
+        });
+
+        try {
+            const tProvider = viewer.scene.terrainProvider || viewer.terrainProvider;
+            const sampled = await chunkedSampleTerrain(Cesium, tProvider, cartographics);
+            boreholes.forEach((bh, i) => {
+                const surfaceZ = (sampled[i]?.height || 0);
+                const { lon, lat } = utmToWgs84(bh.coordenada_este, bh.coordenada_norte);
+                const ent = viewer.entities.add({
+                    position: Cartesian3.fromDegrees(lon, lat, surfaceZ - 22.5),
+                    cylinder: { length: 45.0, topRadius: 1.0, bottomRadius: 1.0, material: Color.fromCssColorString('#10B981').withAlpha(0.8) }
+                });
+                boreholesEntitiesRef.current.push(ent);
+            });
+            viewer.scene.requestRender();
+        } catch (e) { }
+    }, []);
+
+    const fetchModelos = useCallback(async () => {
+        if (!selectedProjectId) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/modelos-3d?proyecto_id=${selectedProjectId}`, {
+                headers: { 'Authorization': `Bearer ${user?.token}` }
+            });
+            if (res.ok && isMounted.current) {
                 const data = await res.json();
-                console.log("[3D] Sub-progresivas (Sondajes) cargadas:", data.length);
-                setSubProgresivas(data);
+                setModelos(data);
                 if (data.length > 0) {
-                    renderBoreholes(data);
+                    setSelectedModelo(prev => prev || data[0]);
                 }
             }
         } catch (e) {
-            console.error("Error cargando sub-progresivas para 3D:", e);
-        } finally {
-            setIsFetchingBoreholes(false);
+            console.error("[Vista3D] Error fetching modelos:", e);
         }
-    };
+    }, [selectedProjectId, user?.token]);
 
-    const renderBoreholes = async (boreholes) => {
+    const fetchSoilData = useCallback(async () => {
+        if (!selectedProjectId) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/3d/datos-suelos/${selectedProjectId}`, {
+                headers: { 'Authorization': `Bearer ${user?.token}` }
+            });
+            if (res.ok && isMounted.current) {
+                const data = await res.json();
+                console.log("[Vista3D] --- INSPECCIÓN DE DATOS DE SUELO ---");
+                console.log("[Vista3D] Trazados recibidos:", data.tracks);
+                console.log("[Vista3D] Progresivas recibidas (ejemplo 1era):", data.progresivas?.[0]);
+                setSoilData(data);
+            } else {
+                console.error("[Vista3D] Error en respuesta de API Suelos:", res.status);
+            }
+        } catch (e) {
+            console.error("[Vista3D] Error fetching soil data:", e);
+        }
+    }, [selectedProjectId, user?.token]);
+
+    const flyToProgressive = useCallback((p) => {
         if (!viewerRef.current) return;
+        const { lon, lat } = utmToWgs84(p.coordenada_este, p.coordenada_norte, projectZone);
+        // Aumentamos el offset Z a 1200m para una vista panorámica más cómoda
+        const z = (p.elevacion ? parseFloat(p.elevacion) : 500) + 1200;
+        viewerRef.current.camera.flyTo({
+            destination: Cartesian3.fromDegrees(lon, lat, z),
+            duration: 1.5,
+            orientation: {
+                heading: 0,
+                pitch: Cesium.Math.toRadians(-90), // Vista cenital
+                roll: 0
+            }
+        });
+    }, [utmToWgs84, projectZone]);
+
+    // --- EFECTO: RENDERIZADO DE SUELOS Y TRAZADOS (INTELIGENTE: Auto-Zona y Elevación Real) ---
+    useEffect(() => {
         const viewer = viewerRef.current;
-
-        // Limpiar boreholes previos
-        // Note: We use entities for boreholes because they are easier to handle individually
-        if (boreholesEntitiesRef.current) {
-            boreholesEntitiesRef.current.forEach(e => viewer.entities.remove(e));
+        if (!viewer || viewer.isDestroyed() || !soilData || !isViewerReady) {
+            console.warn("[Vista3D] Renderizado de suelos en espera: Visor no listo, destruido o sin datos.");
+            return;
         }
-        boreholesEntitiesRef.current = [];
 
-        console.log("[3D] Renderizando sondajes...");
+        console.log("[Vista3D] --- INICIANDO RENDERIZADO 3D (AUTO) ---");
 
-        for (const bh of boreholes) {
-            if (!bh.coordenada_este || !bh.coordenada_norte) continue;
+        // 1. Limpiar previos
+        kmlDataSourcesRef.current.forEach(ds => viewer.dataSources.remove(ds));
+        kmlDataSourcesRef.current = [];
+        soilEntitiesRef.current.forEach(ent => viewer.entities.remove(ent));
+        soilEntitiesRef.current = [];
 
-            const x = parseFloat(bh.coordenada_este);
-            const y = parseFloat(bh.coordenada_norte);
-            const projection = x < 400000 ? UTM_19S : UTM_18S;
-            const [lon, lat] = proj4(projection, WGS84, [x, y]);
+        // 2. Renderizar Tracks y Detectar Zona
+        const loadTracks = async () => {
+            console.log("%c[Vista3D] 🚀 INICIANDO CARGA DE TRACKS KML...", "color: #3498db; font-weight: bold; font-size: 14px;");
 
-            // Obtener altura del terreno en este punto (RAYO INVERSO / SAMPLE)
-            const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-            const heightArr = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, [carto]);
-            const surfaceZ = heightArr[0].height || 0;
+            if (!soilData.tracks || soilData.tracks.length === 0) {
+                console.warn("[Vista3D] ⚠️ No hay tracks en soilData.tracks");
+                return;
+            }
 
-            if (bh.estratos_perfil && bh.estratos_perfil.length > 0) {
-                bh.estratos_perfil.forEach((estrato, idx) => {
-                    const profIni = parseFloat(estrato.profundidad_inicial);
-                    const profFin = parseFloat(estrato.profundidad_final);
-                    if (isNaN(profIni) || isNaN(profFin)) return;
+            let zoneDetected = false;
+            for (const track of (soilData.tracks || [])) {
+                try {
+                    console.log(`[Vista3D] 🛰️ Procesando track: ${track.nombre || 'Sin nombre'} (ID Tramo: ${track.tramo_id})`);
 
-                    const height = (profFin - profIni) * 15.0; // Exageración Z consistente con las mallas
-                    const centerZ = surfaceZ - (profIni * 15.0) - (height / 2.0);
+                    if (!track.kml_content) {
+                        console.error(`[Vista3D] ❌ El track ${track.nombre} no tiene contenido KML.`);
+                        continue;
+                    }
 
-                    const color = estrato.nlp_color_hex ? Cesium.Color.fromCssColorString(estrato.nlp_color_hex) : Cesium.Color.GRAY;
+                    console.log(`[Vista3D] ℹ️ Longitud KML: ${track.kml_content.length} caracteres. Empieza con: ${track.kml_content.substring(0, 50)}...`);
 
-                    const boreholeEntity = viewer.entities.add({
-                        name: `Sondaje: ${bh.nombre} - ${estrato.nombre || 'Estrato ' + (idx + 1)}`,
-                        position: Cesium.Cartesian3.fromDegrees(lon, lat, centerZ),
-                        boreholeData: bh, // Vincular datos originales para el picking
-                        description: `
-                            <div style="font-family: sans-serif; padding: 10px; color: white;">
-                                <h3 style="margin: 0 0 5px 0; font-size: 14px; color: #60a5fa;">${bh.nombre}</h3>
-                                <b>Estrato:</b> ${estrato.nombre || 'N/A'}<br/>
-                                <b>Prof:</b> ${profIni}m - ${profFin}m<br/>
-                                <hr style="border: 0; border-top: 1px solid #334155; margin: 8px 0;"/>
-                                <b>Clasif SUCS:</b> ${estrato.nlp_clasificacion_sucs || 'N/A'}<br/>
-                                <b>Clasif AASHTO:</b> ${estrato.nlp_clasificacion_aashto || 'N/A'}
-                            </div>
-                        `,
-                        cylinder: {
-                            length: height,
-                            topRadius: 4.0,
-                            bottomRadius: 4.0,
-                            material: color.withAlpha(0.9),
-                            outline: true,
-                            outlineColor: Cesium.Color.BLACK.withAlpha(0.5),
-                            heightReference: Cesium.HeightReference.NONE
-                        },
-                        show: mapStyle === 'estratos' && mapOpacity === 0.0 && showEstratosLayer
+                    // --- HACK: INYECTAR TESSELLATE ---
+                    // Si el KML no tiene tessellate, Cesium ignora el clampToGround o crashea.
+                    // Lo inyectamos por fuerza bruta en el string XML.
+                    let kmlPrepared = track.kml_content;
+                    if (!kmlPrepared.includes("<tessellate>1</tessellate>")) {
+                        kmlPrepared = kmlPrepared.replace(/<LineString>/g, "<LineString><tessellate>1</tessellate>");
+                    }
+
+                    // CORRECCIÓN CRÍTICA: Cesium.KmlDataSource.load trata strings como URLs.
+                    // Para cargar XML puro, debemos encapsularlo en un Blob.
+                    const kmlBlob = new Blob([kmlPrepared], { type: 'application/vnd.google-earth.kml+xml' });
+
+                    const ds = await Cesium.KmlDataSource.load(kmlBlob, {
+                        camera: viewer.camera,
+                        canvas: viewer.canvas,
+                        clampToGround: true
                     });
 
-                    boreholesEntitiesRef.current.push(boreholeEntity);
-                });
+                    const entities = ds.entities.values;
+                    console.log(`%c[Vista3D] ✅ Trazado '${track.nombre}' cargado con ${entities.length} entidades.`, "color: #2ecc71; font-weight: bold;");
 
-                // Añadir etiqueta en la superficie
-                const tagEntity = viewer.entities.add({
-                    position: Cesium.Cartesian3.fromDegrees(lon, lat, surfaceZ + 5.0),
-                    boreholeData: bh, // También permitir picking desde la etiqueta
-                    label: {
-                        text: `${bh.nombre}`,
-                        font: 'bold 12px monospace',
-                        fillColor: Cesium.Color.WHITE,
-                        outlineColor: Cesium.Color.BLACK,
-                        outlineWidth: 2,
-                        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-                        pixelOffset: new Cesium.Cartesian2(0, -10),
-                        heightReference: Cesium.HeightReference.NONE,
-                        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5000)
-                    },
-                    show: mapStyle === 'estratos' && mapOpacity === 0.0 && showEstratosLayer
-                });
-                boreholesEntitiesRef.current.push(tagEntity);
-            }
-        }
-        viewer.scene.requestRender();
-    };
+                    if (entities.length === 0) {
+                        console.warn(`[Vista3D] ⚠️ El KML '${track.nombre}' no tiene entidades válidas (Puntos/Líneas).`);
+                    }
 
-    const fetchModelos = async () => {
-        try {
-            const token = JSON.parse(localStorage.getItem('user'))?.token;
-            const res = await fetch(`${API_BASE}/api/modelos-3d`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.ok) setModelos(await res.json());
-        } catch (e) { console.error(e); }
-    };
-
-    const handleUploadClick = () => fileInputRef.current?.click();
-    const handleFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append('archivo', file);
-        try {
-            const token = JSON.parse(localStorage.getItem('user'))?.token;
-            const res = await fetch(`${API_BASE}/api/modelos-3d`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formData
-            });
-
-            if (res.ok) {
-                const nuevo = await res.json();
-                console.log("[3D] Servidor respondió con el nuevo modelo:", nuevo);
-                console.log("[3D] Metadatos del nuevo modelo:", nuevo.metadata);
-
-                // Forzar actualización de la lista primero
-                await fetchModelos();
-
-                // Seleccionar automáticamente para disparar el flyTo
-                setSelectedModelo(nuevo);
-
-                Swal.fire({
-                    title: 'Modelo Importado',
-                    text: 'El archivo se ha procesado. La cámara se dirigirá a la ubicación del modelo.',
-                    icon: 'success',
-                    timer: 2500,
-                    showConfirmButton: false
-                });
-            } else {
-                const err = await res.json();
-                Swal.fire('Error', err.error || 'No se pudo subir el modelo', 'error');
-            }
-        } catch (err) {
-            console.error(err);
-            Swal.fire('Error', 'Fallo la conexión con el servidor', 'error');
-        } finally {
-            setIsUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = null;
-        }
-    };
-
-    const handleDelete = async (id) => {
-        const confirm = await Swal.fire({ title: '¿Borrar?', icon: 'warning', showCancelButton: true });
-        if (confirm.isConfirmed) {
-            const token = JSON.parse(localStorage.getItem('user'))?.token;
-            await fetch(`${API_BASE}/api/modelos-3d/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-            fetchModelos();
-        }
-    };
-
-    const displayCoords = useMemo(() => {
-        if (!selectedModelo?.metadata?.centro_utm) return null;
-        let { x, y } = selectedModelo.metadata.centro_utm;
-        // Regla: En Perú, el Norte (Y) siempre es el millonario. El Este (X) son 6 cifras.
-        // Si vienen al revés, los corregimos solo para el display del panel lateral.
-        if (x > y) {
-            return { este: y, norte: x, elevacion: selectedModelo.metadata?.centro_utm?.z };
-        }
-        return { este: x, norte: y, elevacion: selectedModelo.metadata?.centro_utm?.z };
-    }, [selectedModelo]);
-
-    const formatBytes = (bytes) => {
-        if (!+bytes) return '0 B';
-        const k = 1024, i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${['B', 'KB', 'MB', 'GB'][i]}`;
-    };
-
-    const handleToggleGroundMode = () => {
-        if (!viewerRef.current) return;
-
-        if (!isGroundMode) {
-            setIsChunkLoading(true); // START LOADING
-
-            const viewer = viewerRef.current;
-            viewer.scene.globe.maximumScreenSpaceError = 1.2; // Alta calidad para cargar el chunk en full detalle
-            viewer.scene.globe.tileCacheSize = 2500; // MEGA caché para mantener TODO el rededor en memoria RAM
-            viewer.scene.globe.preloadAncestors = true;
-            viewer.scene.globe.preloadSiblings = true;
-            viewer.scene.globe.loadingDescendantLimit = 40; // Descargas masivas simultáneas ocultas por el overlay
-
-            if (selectedModelo?.metadata?.centro_utm) {
-                let { x, y } = selectedModelo.metadata.centro_utm;
-                if (x > y) { const t = x; x = y; y = t; }
-                const projection = x < 400000 ? UTM_19S : UTM_18S;
-                const [lon, lat] = proj4(projection, WGS84, [x, y]);
-
-                // Asignar altura de aterrizaje segura usando metadata Z si existe,
-                // Esto previene en entierro inicial si el terreno es altísimo
-                const landingZ = selectedModelo.metadata?.centro_utm?.z ? selectedModelo.metadata.centro_utm.z + 10 : 15.0;
-
-                viewer.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(lon, lat, landingZ),
-                    orientation: {
-                        heading: Cesium.Math.toRadians(0),
-                        pitch: Cesium.Math.toRadians(-10.0),
-                        roll: 0
-                    },
-                    duration: 0.5, // Viaje instantáneo por debajo de la pantalla de carga
-                    complete: () => {
-                        const finalizeLoading = () => {
-                            setIsChunkLoading(false);
-                            setIsGroundMode(true);
-                        };
-
-                        if (!viewer || viewer.isDestroyed()) return finalizeLoading();
-
-                        if (viewer.scene.globe.tilesLoaded) {
-                            finalizeLoading();
-                        } else {
-                            const removeListener = viewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedCount) => {
-                                if (queuedCount === 0) {
-                                    removeListener();
-                                    finalizeLoading();
-                                }
-                            });
-
-                            // Timeout de 7 segundos: si se pega (ej. red inestable), liberamos la vista igual
-                            setTimeout(() => {
-                                setIsChunkLoading(prev => {
-                                    if (prev) {
-                                        removeListener();
-                                        setIsGroundMode(true);
-                                        return false;
-                                    }
-                                    return prev;
-                                });
-                            }, 7000);
+                    // DETECCIÓN AUTOMÁTICA DE ZONA UTM DESDE EL KML
+                    if (!zoneDetected && entities.length > 0) {
+                        const firstEnt = entities.find(e => e.position);
+                        if (firstEnt) {
+                            const pos = firstEnt.position.getValue(Cesium.JulianDate.now());
+                            if (pos) {
+                                const carto = Cartographic.fromCartesian(pos);
+                                const lonDeg = Cesium.Math.toDegrees(carto.longitude);
+                                const zone = getUtmZoneFromLon(lonDeg);
+                                console.log(`[Vista3D] 📍 Zona UTM detectada automáticamente: ${zone}`);
+                                setProjectZone(zone);
+                                zoneDetected = true;
+                            }
                         }
                     }
-                });
-            } else {
-                setIsChunkLoading(false);
-                setIsGroundMode(true);
-            }
-        } else {
-            // SALIR DE MODO SUELO: Limpiar variables pesadas
-            setIsGroundMode(false);
-            const viewer = viewerRef.current;
 
-            Swal.fire({
-                title: 'Vista Satelital Restablecida',
-                text: 'Has salido del cuarto aislante de 1ra persona. Perspectiva 2D recuperada.',
-                icon: 'success',
-                timer: 3000,
-                showConfirmButton: false,
-                toast: true,
-                position: 'top-end'
-            });
+                    entities.forEach(entity => {
+                        if (entity.polyline) {
+                            // Cambiamos el color a Azul (DodgerBlue) para coincidir con la estética de la página
+                            entity.polyline.material = Color.DODGERBLUE.withAlpha(0.9);
+                            entity.polyline.width = 8.0;
+                            entity.polyline.clampToGround = true;
+                            entity.polyline.arcType = Cesium.ArcType.GEODESIC;
+                            entity.polyline.show = true;
+                        }
+                    });
 
-            viewer.scene.globe.maximumScreenSpaceError = 2.0;
-            viewer.scene.globe.tileCacheSize = 100; // Vaciamos RAM
-            viewer.scene.globe.preloadAncestors = false;
-            viewer.scene.globe.preloadSiblings = false;
-            viewer.scene.globe.loadingDescendantLimit = 10;
+                    viewer.dataSources.add(ds);
+                    kmlDataSourcesRef.current.push(ds);
 
-            if (selectedModelo?.metadata?.centro_utm) {
-                let { x, y } = selectedModelo.metadata.centro_utm;
-                if (x > y) { const t = x; x = y; y = t; }
-                const projection = x < 400000 ? UTM_19S : UTM_18S;
-                const [lon, lat] = proj4(projection, WGS84, [x, y]);
+                    // AUTO-ENFOQUE: Volar al primer trazado cargado para validación visual
+                    if (!zoneDetected) {
+                        console.log("[Vista3D] ✈️ Volando al trazado...");
+                        viewer.flyTo(ds, {
+                            duration: 2,
+                            offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
+                        });
+                    }
 
-                // Recoger la altura actual del caminante para impulsarlo verticalmente, en vez de usar un valor fijo que podría estar subterráneo
-                const currentHeight = viewer.camera.positionCartographic?.height || 0;
-                const escapeZ = Math.max(currentHeight + 2000, (selectedModelo.metadata?.centro_utm?.z || 0) + 2000);
-
-                viewer.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(lon, lat, escapeZ),
-                    orientation: {
-                        heading: Cesium.Math.toRadians(0),
-                        pitch: Cesium.Math.toRadians(-90.0), // Reestablecer cámara mirando al suelo
-                        roll: 0
-                    },
-                    duration: 2
-                });
-            }
-        }
-    };
-
-    const handleToggleFullscreen = () => {
-        const container = document.getElementById('visor3DContainer');
-        if (!container) return;
-
-        if (!document.fullscreenElement) {
-            container.requestFullscreen().catch(err => {
-                console.error(`Error intentando activar pantalla completa: ${err.message}`);
-                setIsFullscreen(true); // Fallback al modo CSS si falla
-            });
-        } else {
-            document.exitFullscreen();
-        }
-    };
-
-    // Escuchar cambios de pantalla completa nativa para sincronizar el estado
-    useEffect(() => {
-        const handleFsChange = () => {
-            const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-            setIsFullscreen(isFs);
-
-            // Forzar reajuste de Cesium con un pequeño debounce visual
-            if (viewerRef.current) {
-                const v = viewerRef.current;
-                setTimeout(() => {
-                    v.resize();
-                    v.scene.requestRender();
-                }, 150);
+                } catch (e) {
+                    console.error(`[Vista3D] ❌ Error crítico cargando track ${track.nombre}:`, e);
+                }
             }
         };
 
-        document.addEventListener('fullscreenchange', handleFsChange);
-        return () => document.removeEventListener('fullscreenchange', handleFsChange);
+        // 3. RENDERIZADO DE ESTRATOS (Cilindros)
+        const renderHoles = async () => {
+            const calicatasConCoords = (soilData.progresivas || []).filter(p => p.coordenada_este && p.coordenada_norte && p.estratos && p.estratos.length > 0);
+            if (calicatasConCoords.length === 0) return;
+
+            // Muestreamos terreno solo para las que NO tienen elevación en DB
+            const cartographicsToSample = calicatasConCoords
+                .filter(p => !p.elevacion)
+                .map(p => {
+                    const { lon, lat } = utmToWgs84(p.coordenada_este, p.coordenada_norte, projectZone);
+                    return Cartographic.fromDegrees(lon, lat);
+                });
+
+            let sampledMap = {};
+            if (cartographicsToSample.length > 0) {
+                // Cesium 1.104+ usa scene.terrainProvider. El getter viewer.terrainProvider puede ser undefined.
+                const tProvider = viewer.scene.terrainProvider || viewer.terrainProvider;
+
+                console.log("[Vista3D] Muestreando terreno para calicatas. Provider detected:", tProvider?.constructor?.name || "None");
+
+                try {
+                    const sampled = await chunkedSampleTerrain(Cesium, tProvider, cartographicsToSample);
+                    cartographicsToSample.forEach((c, idx) => {
+                        sampledMap[`${c.longitude}_${c.latitude}`] = sampled[idx]?.height || 0;
+                    });
+                } catch (sampleErr) {
+                    console.error("[Vista3D] Error crítico en muestreo de terreno:", sampleErr);
+                }
+            }
+
+            try {
+                calicatasConCoords.forEach((p) => {
+                    const { lon, lat } = utmToWgs84(p.coordenada_este, p.coordenada_norte, projectZone);
+
+                    // PRIORIDAD DE ELEVACIÓN: 1. DB (Topografía Real) | 2. Terreno Cesium
+                    let surfaceZ = 0;
+                    if (p.elevacion && parseFloat(p.elevacion) !== 0) {
+                        surfaceZ = parseFloat(p.elevacion);
+                    } else {
+                        const key = `${Cesium.Math.toRadians(lon)}_${Cesium.Math.toRadians(lat)}`;
+                        surfaceZ = sampledMap[key] || 0;
+                    }
+
+                    // --- NUEVO: MARCADOR Y ETIQUETA PREMIUM (Estilo Maqueta) ---
+                    const markerId = `prog-marker-${p.id}`;
+                    if (!viewer.entities.getById(markerId)) {
+                        const markerEntity = viewer.entities.add({
+                            id: markerId,
+                            name: `Progresiva: ${p.nombre}`,
+                            position: Cartesian3.fromDegrees(lon, lat, surfaceZ + 1.0), // 1 metro sobre el relieve
+                            point: {
+                                pixelSize: 10,
+                                color: Color.CYAN,
+                                outlineColor: Color.BLACK,
+                                outlineWidth: 2
+                            },
+                            label: {
+                                text: p.nombre,
+                                font: '14pt Outfit, sans-serif',
+                                fillColor: Color.WHITE,
+                                outlineColor: Color.BLACK,
+                                outlineWidth: 3,
+                                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                                verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                                pixelOffset: new Cesium.Cartesian2(0, -20),
+                                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3000)
+                            }
+                        });
+                        soilEntitiesRef.current.push(markerEntity);
+                    }
+
+                    let cumulativeDepth = 0;
+                    if (!p.estratos || p.estratos.length === 0) {
+                        const noEstratoId = `calicata-empty-${p.id}`;
+                        if (!viewer.entities.getById(noEstratoId)) {
+                            const entity = viewer.entities.add({
+                                id: noEstratoId,
+                                name: `Calicata: ${p.nombre} (Sin estratos)`,
+                                position: Cartesian3.fromDegrees(lon, lat, surfaceZ - 7.0), // Centro del cilindro a -7m
+                                cylinder: {
+                                    length: 14.0, topRadius: 1.2, bottomRadius: 1.2,
+                                    material: Color.GRAY.withAlpha(0.6), 
+                                    outline: true
+                                }
+                            });
+                            soilEntitiesRef.current.push(entity);
+                        }
+                    } else {
+                        p.estratos.forEach((estrato, eIdx) => {
+                            const thickness = Math.abs(estrato.cota_final - estrato.cota_inicial) || 0.5;
+                            const centerDepth = cumulativeDepth + (thickness / 2);
+                            const color = estrato.nlp_color_hex || '#858585';
+                            const estratoId = `estrato-${p.id}-${eIdx}`;
+
+                            if (!viewer.entities.getById(estratoId)) {
+                                const entity = viewer.entities.add({
+                                    id: estratoId,
+                                    name: `P: ${p.nombre} | ${estrato.nombre || 'Estrato'}`,
+                                    description: `Profundidad: ${estrato.cota_inicial}m - ${estrato.cota_final}m<br/>${estrato.descripcion || ''}`,
+                                    position: Cartesian3.fromDegrees(lon, lat, surfaceZ - centerDepth), // Offset negativo desde el suelo
+                                    cylinder: {
+                                        length: thickness, topRadius: 1.5, bottomRadius: 1.5,
+                                        material: Color.fromCssColorString(color).withAlpha(0.95),
+                                        outline: true, outlineColor: Color.BLACK.withAlpha(0.6), outlineWidth: 1
+                                    }
+                                });
+                                soilEntitiesRef.current.push(entity);
+                            }
+                            cumulativeDepth += thickness;
+                        });
+                    }
+                });
+                viewer.scene.requestRender();
+            } catch (e) {
+                console.error("[Vista3D] Error en renderizado 3D de calicatas:", e);
+            }
+        };
+
+        const initialize3D = async () => {
+            await loadTracks();
+            await renderHoles();
+        };
+
+        initialize3D();
+    }, [soilData, isViewerReady, projectZone]);
+
+    const fetchAllData = useCallback(async () => {
+        setIsGlobalLoading(true);
+        await Promise.all([fetchModelos(), fetchSoilData()]);
+        setIsGlobalLoading(false);
+    }, [fetchModelos, fetchSoilData]);
+
+    // --- EFECTO DE CARGA INICIAL ---
+    useEffect(() => {
+        if (selectedProjectId) {
+            fetchAllData();
+        }
+    }, [selectedProjectId, fetchAllData]);
+
+    // --- EFECTO PANTALLA COMPLETA ---
+    useEffect(() => {
+        const container = document.getElementById('visor3DContainer');
+        if (!container) return;
+
+        const handleFullscreenChange = () => {
+            const isNowFullscreen = !!document.fullscreenElement;
+            setIsFullscreen(isNowFullscreen);
+
+            // Forzar redimensionamiento de Cesium después de que el DOM se asiente
+            setTimeout(() => {
+                if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+                    viewerRef.current.resize();
+                    viewerRef.current.scene.requestRender();
+                }
+            }, 100);
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+        // Sincronizar estado con API del navegador
+        if (isFullscreen && !document.fullscreenElement) {
+            container.requestFullscreen().catch(err => {
+                console.error(`[Vista3D] Error Fullscreen: ${err.message}`);
+                setIsFullscreen(false);
+            });
+        } else if (!isFullscreen && document.fullscreenElement) {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(() => { });
+            }
+        }
+
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        };
+    }, [isFullscreen]);
+
+    useEffect(() => {
+        isMounted.current = true;
+        console.log("[Vista3D] Montando el visor ..");
+
+        let viewer;
+
+        const initializeViewer = async () => {
+            try {
+                if (!containerRef.current || !isMounted.current) return;
+
+                if (Ion) { Ion.defaultAccessToken = ION_TOKEN || ''; }
+
+                // Inicialización de Terreno con Fallback robusto
+                let terrainProviderOption = {};
+                try {
+                    if (Terrain && typeof Terrain.fromWorldTerrain === 'function') {
+                        // API Moderna (Cesium 1.104+)
+                        terrainProviderOption = { terrain: Terrain.fromWorldTerrain({ requestVertexNormals: true }) };
+                    } else if (typeof Cesium.createWorldTerrainAsync === 'function') {
+                        // API Async (Cesium 1.100 - 1.103)
+                        terrainProviderOption = { terrainProvider: await Cesium.createWorldTerrainAsync({ requestVertexNormals: true }) };
+                    } else if (typeof Cesium.createWorldTerrain === 'function') {
+                        // API Antigua
+                        terrainProviderOption = { terrainProvider: Cesium.createWorldTerrain({ requestVertexNormals: true }) };
+                    }
+                } catch (terrainErr) {
+                    console.warn("[Vista3D] No se pudo cargar terreno global, usando elipsoide por defecto.", terrainErr);
+                }
+
+                viewer = new Viewer(containerRef.current, {
+                    ...terrainProviderOption,
+                    animation: false,
+                    baseLayerPicker: false,
+                    homeButton: false,
+                    geocoder: false,
+                    timeline: false,
+                    navigationHelpButton: false,
+                    sceneModePicker: false,
+                    selectionIndicator: false,
+                    infoBox: false
+                });
+
+                if (!isMounted.current || viewer.isDestroyed()) {
+                    viewer.destroy();
+                    return;
+                }
+
+                // Optimizaciones de Escena
+                viewer.scene.globe.enableLighting = true;
+                viewer.scene.globe.depthTestAgainstTerrain = true;
+                viewer.scene.highDynamicRange = true;
+                viewer.scene.postProcessStages.fxaa.enabled = true;
+
+                // Limpieza de capas por defecto para control total
+                const imageryLayers = viewer.imageryLayers;
+                if (imageryLayers) {
+                    imageryLayers.removeAll();
+                }
+
+                // Capa Base Global (Sentinel-2 vía Ion con Fallback a ESRI)
+                try {
+                    const ionLayer = await IonImageryProvider.fromAssetId(2);
+                    if (isMounted.current && !viewer.isDestroyed()) {
+                        imageryLayers.addImageryProvider(ionLayer);
+                    }
+                } catch (e) {
+                    console.warn("[Vista3D] Falló Sentinel-2 Ion, usando ESRI como fallback.");
+                    if (isMounted.current && !viewer.isDestroyed()) {
+                        imageryLayers.addImageryProvider(new ArcGisMapServerImageryProvider({
+                            url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+                            enablePickFeatures: false
+                        }));
+                    }
+                }
+
+                // Verificación de seguridad tras await
+                if (!isMounted.current || viewer.isDestroyed()) {
+                    if (!viewer.isDestroyed()) viewer.destroy();
+                    return;
+                }
+
+                // Capa Focal (Para el área del modelo LandXML)
+                const focusLayer = imageryLayers.addImageryProvider(new UrlTemplateImageryProvider({
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                    maximumLevel: 19
+                }));
+                focusLayer.alpha = 0.0;
+                focusImageryLayerRef.current = focusLayer;
+
+                const controller = viewer.scene.screenSpaceCameraController;
+                if (controller) {
+                    controller.inertiaSpin = 0.7;
+                    controller.inertiaTranslate = 0.7;
+                    controller.inertiaZoom = 0.7;
+                }
+
+                if (isMounted.current) {
+                    console.log("[Vista3D] ✅ Visor Cesium inicializado con éxito.");
+                    viewerRef.current = viewer;
+                    setIsViewerReady(true); // DIPARAR RENDERIZADO DE DATOS
+                } else {
+                    viewer.destroy();
+                }
+
+            } catch (e) {
+                console.error("Error crítico inicializando el motor Cesium:", e);
+                if (viewer && !viewer.isDestroyed()) viewer.destroy();
+            }
+        };
+
+        initializeViewer();
+
+        return () => {
+            console.log("[Vista3D] Desmontando visor ..");
+            isMounted.current = false;
+            if (viewer && !viewer.isDestroyed()) {
+                viewer.destroy();
+            }
+            viewerRef.current = null;
+        };
     }, []);
 
-    const dashboardContent = (
-        <div id="visor3DContainer" className={`visor-3d-root flex flex-col border border-slate-700 bg-slate-900 ${isFullscreen ? 'is-fullscreen-native' : 'h-full'}`}>
-            <div className="h-12 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-4 z-20 shadow-lg">
-                <div className="flex items-center gap-2">
-                    <i className="fa-brands fa-unity text-white text-lg"></i>
-                    <h2 className="text-white text-xs font-bold uppercase tracking-widest italic">Visor Geotécnico 3D</h2>
-                </div>
-                <div className="flex gap-2">
-                    {selectedModelo && (
+
+    // --- MANEJO DE ARCHIVOS ---
+
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Limpieza previa y estados iniciales
+        setIsUploading(true);
+        setUploadProgress(0);
+
+        const formData = new FormData();
+        formData.append('archivo', file);
+        formData.append('proyecto_id', selectedProjectId);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE}/api/modelos-3d`, true);
+        xhr.setRequestHeader('Authorization', `Bearer ${user?.token}`);
+
+        // Tiempo límite de 10 minutos para procesar modelos pesados
+        xhr.timeout = 600000;
+
+        xhr.upload.onprogress = (ev) => {
+            if (ev.lengthComputable) {
+                setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+            }
+        };
+
+        xhr.onload = () => {
+            setIsUploading(false);
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    const newModel = JSON.parse(xhr.responseText);
+
+                    // Caso: El servidor terminó pero el procesamiento 3D falló
+                    if (newModel.estado === 'ERROR_PROCESAMIENTO') {
+                        throw new Error(newModel.metadata?.detalle || 'El motor 3D no pudo interpretar este archivo.');
+                    }
+
+                    Swal.fire({
+                        title: '¡IMPORTACIÓN EXITOSA!',
+                        text: 'El modelo se ha procesado y renderizado correctamente.',
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false,
+                        background: '#0f172a',
+                        color: '#f8fafc',
+                        customClass: {
+                            popup: 'rounded-2xl border border-slate-800 shadow-2xl',
+                            title: 'text-sm font-black uppercase tracking-widest',
+                        }
+                    });
+
+                    fetchModelos();
+                    setSelectedModelo(newModel);
+                } catch (err) {
+                    Swal.fire({
+                        title: 'FALLO DE PROCESAMIENTO',
+                        text: err.message,
+                        icon: 'error',
+                        background: '#0f172a',
+                        color: '#f8fafc',
+                        customClass: {
+                            popup: 'rounded-2xl border border-slate-800 shadow-2xl',
+                            title: 'text-sm font-black uppercase tracking-widest',
+                        }
+                    });
+                }
+            } else {
+                // Manejo de códigos de error HTTP específicos
+                let errorTitle = 'ERROR DE IMPORTACIÓN';
+                let errorMsg = 'No se pudo completar la operación.';
+
+                if (xhr.status === 413) errorMsg = 'El archivo es demasiado grande para ser procesado por el servidor.';
+                if (xhr.status === 401 || xhr.status === 403) errorMsg = 'Tu sesión ha expirado o no tienes permisos suficientes.';
+                if (xhr.status === 500) {
+                    try {
+                        const res = JSON.parse(xhr.responseText);
+                        errorMsg = res.error || 'Fallo crítico en el servidor.';
+                    } catch (e) {
+                        errorMsg = 'Fallo interno en el procesamiento de la malla 3D.';
+                    }
+                }
+
+                Swal.fire({
+                    title: errorTitle,
+                    text: errorMsg,
+                    icon: 'error',
+                    background: '#0f172a',
+                    color: '#f8fafc',
+                    customClass: {
+                        popup: 'rounded-2xl border border-slate-800 shadow-2xl',
+                        title: 'text-sm font-black uppercase tracking-widest',
+                    }
+                });
+            }
+            e.target.value = ''; // Limpiar input para permitir re-subida
+        };
+
+        xhr.onerror = () => {
+            setIsUploading(false);
+            Swal.fire({
+                title: 'FALLO DE CONEXIÓN',
+                text: 'La conexión fue interrumpida. Revisa tu velocidad de internet o estabilidad de red.',
+                icon: 'error',
+                background: '#0f172a',
+                color: '#f8fafc',
+                customClass: {
+                    popup: 'rounded-2xl border border-slate-800 shadow-2xl',
+                    title: 'text-sm font-black uppercase tracking-widest',
+                }
+            });
+            e.target.value = '';
+        };
+
+        xhr.ontimeout = () => {
+            setIsUploading(false);
+            Swal.fire({
+                title: 'TIEMPO AGOTADO',
+                text: 'La subida ha tardado demasiado (más de 10 min). Tu conexión es muy lenta para el tamaño de este archivo.',
+                icon: 'warning',
+                background: '#0f172a',
+                color: '#f8fafc',
+                customClass: {
+                    popup: 'rounded-2xl border border-slate-800 shadow-2xl',
+                    title: 'text-sm font-black uppercase tracking-widest',
+                }
+            });
+            e.target.value = '';
+        };
+
+        xhr.send(formData);
+    };
+
+    const handleDelete = async (id) => {
+        const result = await Swal.fire({
+            title: '¿Eliminar Modelo?',
+            text: "Se borrará la malla 3D y su configuración asociada.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#1e293b',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            background: '#0f172a',
+            color: '#f8fafc',
+            customClass: {
+                popup: 'rounded-2xl border border-slate-800 shadow-2xl',
+                title: 'text-sm font-black uppercase tracking-widest',
+                htmlContainer: 'text-xs text-slate-400',
+                confirmButton: 'text-[10px] font-bold uppercase tracking-widest px-6 py-3',
+                cancelButton: 'text-[10px] font-bold uppercase tracking-widest px-6 py-3'
+            }
+        });
+
+        if (result.isConfirmed) {
+            try {
+                const res = await fetch(`${API_BASE}/api/modelos-3d/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${user?.token}` }
+                });
+                if (res.ok) {
+                    fetchModelos();
+                    Swal.fire({
+                        title: 'Eliminado',
+                        text: 'El modelo ha sido removido correctamente.',
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false,
+                        background: '#0f172a',
+                        color: '#f8fafc'
+                    });
+                }
+            } catch (e) {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'No se pudo eliminar el modelo.',
+                    icon: 'error',
+                    background: '#0f172a',
+                    color: '#f8fafc'
+                });
+            }
+        }
+    };
+
+
+    // --- SELECCIÓN DE MODELO ---
+    useEffect(() => {
+        console.log("[Vista3D] useEffect selectedModelo disparado. Modelo:", selectedModelo?.id, "Viewer:", !!viewerRef.current);
+        if (!selectedModelo || !viewerRef.current) {
+            console.log("[Vista3D] Abortando efecto: No hay modelo o viewer.");
+            return;
+        }
+        const viewer = viewerRef.current;
+        console.log("[Vista3D] Procesando modelo:", selectedModelo.nombre_archivo || selectedModelo.id);
+
+        // CASO ESPECIAL: Si es un Tramo Maestro (Streaming), no hay malla fija que procesar
+        if (selectedModelo.url_archivo === 'STREAMING_LOCAL_SIN_MALLA') {
+            console.log("[Vista3D] Detectado modelo de STREAMING");
+            if (selectedModelo.metadata && selectedModelo.metadata.centro_utm) {
+                const { x, y } = selectedModelo.metadata.centro_utm;
+                console.log("[Vista3D] Centro UTM detectado:", x, y);
+                const wgs = utmToWgs84(x, y, 18, 'S');
+                console.log("[Vista3D] Conversión WGS84 para vuelo:", wgs);
+                viewer.camera.flyTo({
+                    destination: Cartesian3.fromDegrees(wgs.lon, wgs.lat, 1200), // Vista más amplia para tramos
+                    duration: 1.5
+                });
+            } else {
+                console.warn("[Vista3D] El modelo streaming no tiene metadatos de centro_utm:", selectedModelo.metadata);
+            }
+            setIsGlobalLoading(false);
+            return;
+        }
+
+        // CASO NORMAL: Procesamiento de malla OBJ
+        (async () => {
+            try {
+                // VALIDACIÓN CRÍTICA: Si el modelo está pendiente, no intentar fetch (evita cargar index.html como OBJ)
+                if (selectedModelo.url_archivo === 'PENDIENTE' || !selectedModelo.url_archivo) {
+                    setIsGlobalLoading(false);
+                    Swal.fire({
+                        title: 'Modelo no procesado',
+                        text: 'Este modelo aún no ha sido convertido a 3D por el servidor o el proceso falló durante la subida.',
+                        icon: 'error',
+                        background: '#0f172a',
+                        color: '#f8fafc'
+                    });
+                    console.error("[Vista3D] Abortando carga: url_archivo es PENDIENTE.");
+                    return;
+                }
+
+                setIsGlobalLoading(true);
+                console.log("[Vista3D] Cargando malla OBJ...");
+                let objData = null;
+
+                if (selectedModelo.url_archivo === 'DB_EMBEDDED_OBJ') {
+                    console.log("[Vista3D] Extrayendo malla desde la Base de Datos (PostgreSQL)...");
+                    objData = selectedModelo.metadata?.obj_content;
+                    if (!objData) throw new Error("No se encontró el contenido OBJ en los metadatos de la DB.");
+                } else {
+                    console.log("[Vista3D] Descargando malla desde URL externa:", selectedModelo.url_archivo);
+                    const resp = await fetch(selectedModelo.url_archivo);
+                    if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+                    objData = await resp.text();
+                }
+
+                if (objData === 'PENDIENTE') {
+                    throw new Error("El modelo aún está siendo procesado por el servidor.");
+                }
+
+                if (!objData || objData.trim().startsWith('<!DOCTYPE html>') || objData.trim().startsWith('<html')) {
+                    throw new Error("El servidor devolvió una página HTML en lugar de un objeto 3D o el archivo no se generó correctamente.");
+                }
+
+                console.log("[Vista3D] Datos OBJ listos, longitud:", objData?.length || 0);
+
+                const verticesInfo = [], elevationData = [], indicesTriangulos = [], indicesBordesFull = [];
+                let minZ = Infinity, maxZ = -Infinity;
+                let sumLon = 0, sumLat = 0;
+
+                const lines = objData.split('\n');
+                const len = lines.length;
+                console.log("[Vista3D] Procesando", len, "líneas del OBJ...");
+
+                for (let i = 0; i < len; i++) {
+                    const line = lines[i];
+                    if (line.startsWith('v ')) {
+                        const parts = line.trim().split(/\s+/);
+                        const vx = parseFloat(parts[2]), vy = parseFloat(parts[1]), vz = parseFloat(parts[3]);
+                        const { lon, lat } = utmToWgs84(vx, vy);
+
+                        verticesInfo.push({ lon, lat, z: vz });
+                        elevationData.push(vz);
+                        sumLon += lon; sumLat += lat;
+
+                        if (vz < minZ) minZ = vz; if (vz > maxZ) maxZ = vz;
+                    } else if (line.startsWith('f ')) {
+                        const parts = line.trim().split(/\s+/);
+                        if (parts.length >= 4) {
+                            const v1 = parseInt(parts[1]) - 1, v2 = parseInt(parts[2]) - 1, v3 = parseInt(parts[3]) - 1;
+                            indicesTriangulos.push(v1, v2, v3);
+                            indicesBordesFull.push(v1, v2, v2, v3, v3, v1);
+                        }
+                    }
+
+                    if (i % 15000 === 0 && i > 0) await new Promise(resolve => setTimeout(resolve, 0));
+                }
+
+                console.log("[Vista3D] Procesamiento finalizado. Vértices:", verticesInfo.length, "Triángulos:", indicesTriangulos.length / 3);
+                currentModelDataRef.current = { verticesInfo, elevationData, minZ, maxZ, indicesTriangulos, indicesBoundary: [], indicesBordesFull };
+                const midZ = minZ + (maxZ - minZ) / 2.0;
+
+                renderFinalMesh(verticesInfo, elevationData, minZ, maxZ, indicesTriangulos, [], indicesBordesFull);
+
+                setIsGlobalLoading(false);
+
+                if (verticesInfo.length > 0) {
+                    const centerLon = sumLon / verticesInfo.length;
+                    const centerLat = sumLat / verticesInfo.length;
+                    console.log("[Vista3D] Volando a centro de malla:", centerLon, centerLat, "Altitud:", midZ + 800);
+                    viewer.camera.flyTo({
+                        destination: Cartesian3.fromDegrees(centerLon, centerLat, midZ + 800),
+                        duration: 2.0
+                    });
+                } else {
+                    console.warn("[Vista3D] No se encontraron vértices válidos en el OBJ.");
+                }
+            } catch (e) {
+                console.error("[Vista3D] Error crítico cargando modelo:", e);
+                setIsGlobalLoading(false);
+            }
+        })();
+    }, [selectedModelo, renderFinalMesh]);
+
+    const centerMap = useCallback(() => {
+        const viewer = viewerRef.current;
+        if (!viewer) return;
+
+        // Prioridad 1: Vuelo a la malla LandXML actual
+        if (currentModelDataRef.current && currentModelDataRef.current.verticesInfo && currentModelDataRef.current.verticesInfo.length > 0) {
+            const { verticesInfo, minZ, maxZ } = currentModelDataRef.current;
+            const midZ = minZ + (maxZ - minZ) / 2.0;
+            let sumLon = 0, sumLat = 0;
+            verticesInfo.forEach(v => { sumLon += v.lon; sumLat += v.lat; });
+            const centerLon = sumLon / verticesInfo.length;
+            const centerLat = sumLat / verticesInfo.length;
+            viewer.camera.flyTo({
+                destination: Cartesian3.fromDegrees(centerLon, centerLat, midZ + 1500),
+                duration: 2.0,
+                orientation: {
+                    heading: 0,
+                    pitch: Cesium.Math.toRadians(-90),
+                    roll: 0
+                }
+            });
+            return;
+        }
+
+        // Prioridad 2: Vuelo a los DataSources KML (Trazados)
+        if (kmlDataSourcesRef.current && kmlDataSourcesRef.current.length > 0) {
+            viewer.flyTo(kmlDataSourcesRef.current[0], {
+                duration: 2.0,
+                offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
+            });
+            return;
+        }
+
+        // Prioridad 3: Vuelo a Sólidos / Calicatas
+        if (soilEntitiesRef.current && soilEntitiesRef.current.length > 0) {
+            viewer.flyTo(soilEntitiesRef.current, {
+                duration: 2.0,
+                offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
+            });
+            return;
+        }
+    }, [Cartesian3]);
+
+    // --- UI RENDER (dashboardContent y loadingOverlay) ---
+    // (Keeping them at the end to ensure all references are initialized)
+
+    return (
+        <div id="visor3DContainer" className="visor-3d-root flex-1 w-full relative bg-slate-950 overflow-hidden flex flex-col font-sans">
+            {/* 1. TOP BAR (HEADER) - Estética "Navy Vertical High-Contrast" */}
+            <div className="w-full h-14 border-b border-blue-900/40 bg-gradient-to-b from-white to-blue-200/30 flex items-center justify-between px-6 z-50 shrink-0 shadow-sm">
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2 pr-4 border-r border-slate-200">
                         <button
-                            onClick={handleToggleGroundMode}
-                            disabled={isChunkLoading}
-                            className={`text-[10px] px-3 py-1.5 rounded text-white font-bold shadow-md transition-all ${isChunkLoading ? 'bg-amber-600 animate-pulse' : (isGroundMode ? 'bg-emerald-600 ring-2 ring-emerald-400' : 'bg-slate-700 hover:bg-slate-600')} disabled:opacity-50`}
+                            onClick={() => setIsLeftOpen(!isLeftOpen)}
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all border ${
+                                isLeftOpen 
+                                ? 'bg-blue-600 border-blue-500 text-white shadow-lg' 
+                                : 'bg-white border-slate-200 text-slate-500 hover:text-blue-700 hover:border-blue-300'
+                            }`}
+                            title="Explorador de Modelos"
                         >
-                            <i className={`fa-solid ${isChunkLoading ? 'fa-spinner fa-spin' : (isGroundMode ? 'fa-person-walking' : 'fa-street-view')} mr-2`}></i>
-                            {isChunkLoading ? 'CARGANDO CACHÉ...' : (isGroundMode ? 'CAMINANTE: ON' : 'IR A SUELO')}
+                            <i className={`fas ${isLeftOpen ? 'fa-folder-open' : 'fa-folder'}`}></i>
                         </button>
+                    </div>
+
+                    <div className="flex flex-col">
+                        <h1 className="text-sm font-black text-slate-800 tracking-tighter uppercase leading-none">
+                            Geoportal <span className="text-blue-700">3D</span> Core
+                        </h1>
+                        <p className="text-[9px] font-bold text-blue-900/40 uppercase tracking-[0.2em] mt-1.5 flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse"></span>
+                            Visualizador LandXML v3.0
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    {/* Status badge Premium */}
+                    {statusMessage && (
+                        <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-white border border-blue-100 rounded shadow-sm">
+                            <i className="fas fa-sync fa-spin text-[10px] text-blue-600"></i>
+                            <span className="text-[9px] font-black text-blue-900 uppercase tracking-widest">{statusMessage}</span>
+                        </div>
                     )}
-                    <button onClick={handleToggleFullscreen} className="text-[10px] bg-blue-600 px-3 py-1.5 rounded text-white font-bold hover:bg-blue-500 shadow-md">
-                        {isFullscreen ? 'SALIR DE PANTALLA COMPLETA' : 'PANTALLA COMPLETA'}
-                    </button>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={toggleFullScreen}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-500 hover:text-blue-600 rounded-md border border-slate-200 transition-all text-[10px] font-bold uppercase tracking-wider"
+                        >
+                            <i className={`fas ${document.fullscreenElement ? 'fa-compress' : 'fa-expand'}`}></i>
+                            <span className="hidden sm:inline">Pantalla Completa</span>
+                        </button>
+                        
+                        <div className="w-[1px] h-4 bg-slate-200 mx-1"></div>
+
+                        <button
+                            onClick={() => setIsRightOpen(!isRightOpen)}
+                            className={`w-8 h-8 flex items-center justify-center transition-all rounded-md border ${
+                                isRightOpen 
+                                ? 'bg-blue-600 border-blue-500 text-white shadow-md' 
+                                : 'bg-white border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200'
+                            }`}
+                            title="Configuración Visual"
+                        >
+                            <i className="fas fa-cog"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex flex-1 overflow-hidden relative">
-                <aside className="w-64 border-r border-slate-800 flex flex-col p-4 bg-slate-900/60 shrink-0">
-                    <div onClick={handleUploadClick} className="border-2 border-dashed border-slate-700 p-4 text-center rounded-xl cursor-pointer hover:border-blue-400 bg-slate-800/20 group transition-all">
-                        <i className={`fa-solid ${isUploading ? 'fa-spinner fa-spin text-blue-400' : 'fa-upload text-slate-500 group-hover:text-blue-400'} text-xl mb-1`}></i>
-                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">{isUploading ? 'Procesando...' : 'Subir LandXML / IFC'}</div>
-                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".xml,.ifc" />
+            {/* 2. BODY AREA (SIDEBARS + MAP) */}
+            <div className="flex-1 flex w-full h-[calc(100%-3.5rem)] overflow-hidden relative">
+
+                {/* A. SIDEBAR IZQUIERDO */}
+                {isLeftOpen && (
+                    <aside className="absolute left-0 top-0 w-72 border-r border-white/5 bg-slate-950/40 backdrop-blur-3xl flex flex-col z-40 shrink-0 shadow-[20px_0_40px_rgba(0,0,0,0.5)] h-full animate-in slide-in-from-left-full duration-500 ease-out">
+                    <div className="p-4 border-b border-slate-800/50">
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".xml,.zip,.ifc" />
+                        <button onClick={() => fileInputRef.current.click()} className="w-full bg-blue-600/10 hover:bg-blue-600 border border-blue-500/30 text-blue-400 hover:text-white py-4 rounded-xl transition-all flex flex-col items-center gap-1 group">
+                            <i className="fa-solid fa-cloud-arrow-up text-xl group-hover:scale-110 transition-transform"></i>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Importar LandXML</span>
+                        </button>
                     </div>
 
-                    <div className="mt-8 flex-1 overflow-y-auto space-y-2 pr-1 custom-scroll">
-                        <h4 className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-3 border-b border-slate-800 pb-1 italic">Modelos Activos</h4>
-                        {modelos.map(mod => (
-                            <div key={mod.id} onClick={() => setSelectedModelo(mod)}
-                                className={`p-3 rounded-lg border cursor-pointer transition-all ${selectedModelo?.id === mod.id ? 'border-blue-500 bg-blue-900/10' : 'border-slate-800 bg-slate-900/50 hover:border-slate-600'}`}>
-                                <div className="text-white text-[11px] font-bold truncate mb-1">{mod.nombre_archivo}</div>
-                                <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase">
-                                    <span>{mod.tipo}</span>
-                                    <span>{formatBytes(mod.tamano_bytes)}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </aside>
-
-                <main className="flex-1 relative bg-black shadow-inner overflow-hidden">
-                    <div ref={containerRef} className="w-full h-full" />
-
-                    {/* PANTALLA DE CARGA DE CHUNK */}
-                    {isChunkLoading && (
-                        <div className="absolute inset-0 bg-slate-900/95 z-50 flex flex-col items-center justify-center transition-all">
-                            <div className="relative flex items-center justify-center w-24 h-24 mb-6">
-                                <div className="absolute w-full h-full rounded-full border-[3px] border-slate-700"></div>
-                                <div className="absolute w-full h-full rounded-full border-[3px] border-t-emerald-400 border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
-                                <i className="fa-solid fa-mountain text-3xl text-emerald-400 animate-pulse"></i>
-                            </div>
-                            <h2 className="text-emerald-400 font-bold tracking-widest uppercase text-xl mb-2 drop-shadow-md">
-                                Materializando Chunk
-                            </h2>
-                            <p className="text-slate-400 text-[11px] font-mono uppercase tracking-widest bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700/50">
-                                Almacenando terreno en Caché (0-Lag)...
-                            </p>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                        <div className="px-2 mb-2">
+                            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Modelos Disponibles</h4>
                         </div>
-                    )}
-
-                    <div className="absolute top-4 left-4 z-20">
-                        <div className="bg-slate-900/90 p-2 rounded border border-slate-800 text-[9px] font-mono text-emerald-400 uppercase tracking-tighter shadow-xl">
-                            &gt; Visor Engine: Stable_Vanilla_3D_v5
-                        </div>
-                    </div>
-
-                    {/* Botón para deslizar/colapsar el panel derecho */}
-                    <button
-                        onClick={() => setIsRightOpen(!isRightOpen)}
-                        className={`absolute top-1/2 -translate-y-1/2 right-0 z-30 bg-slate-900/80 border border-slate-700 p-1.5 rounded-l-lg text-slate-300 hover:text-white hover:bg-blue-600 transition-all shadow-2xl ${isRightOpen ? 'mr-0' : 'mr-0'}`}
-                        title={isRightOpen ? "Contraer Panel" : "Expandir Panel"}
-                    >
-                        <i className={`fa-solid ${isRightOpen ? 'fa-angle-right' : 'fa-angle-left'} text-sm`}></i>
-                    </button>
-                </main>
-
-                <aside className={`border-l border-slate-800 bg-slate-900/60 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden shadow-2xl ${isRightOpen ? 'w-72 opacity-100' : 'w-0 opacity-0 pointer-events-none border-none'}`}>
-                    <div className="w-72 p-6 flex flex-col h-full scroll-hidden overflow-y-auto">
-                        <h3 className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
-                            <i className="fa-solid fa-layer-group text-slate-200"></i> Herramientas de Capa
-                        </h3>
-                        <div className="space-y-4">
-                            <div className="p-4 bg-slate-800/40 rounded border border-slate-800 shadow-inner">
-                                <div className="text-[10px] text-slate-500 mb-2 font-bold uppercase tracking-widest">Estilo Geográfico</div>
-                                <button className={`w-full text-left p-2.5 rounded text-[10px] font-bold transition bg-blue-600 text-white shadow-lg mb-2`}>
-                                    <i className="fa-solid fa-earth-americas mr-2 text-blue-200"></i> MAPA BASE (ESTÁNDAR)
-                                </button>
-                                <div className={`flex items-center gap-2 px-1 mb-4 ${isTerrainLoaded ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                    <i className={`fa-solid ${isTerrainLoaded ? 'fa-mountain-sun' : 'fa-exclamation-triangle'} text-[10px]`}></i>
-                                    <span className="text-[9px] font-extrabold uppercase tracking-tight">
-                                        {isTerrainLoaded ? 'Relieve 3D: Activo' : 'Relieve: No disponible'}
-                                    </span>
-                                </div>
-
-                                {selectedModelo && (
-                                    <div className="mt-4 mb-4">
-                                        <div className="text-[10px] text-slate-400 mb-2 font-bold uppercase tracking-widest italic border-b border-slate-700/50 pb-1">Visualización del Modelo</div>
-                                        <div className="flex flex-col gap-2 bg-slate-900/40 rounded-lg p-1.5 border border-slate-800 shadow-inner">
-                                            <button 
-                                                onClick={() => setMapStyle('hipso')}
-                                                className={`flex items-center gap-3 px-3 py-2.5 rounded text-[10px] font-bold transition-all border ${mapStyle === 'hipso' ? 'bg-emerald-600/90 border-emerald-400 text-white shadow-lg' : 'bg-slate-800/40 border-slate-700/50 text-slate-400 hover:text-emerald-400 hover:bg-slate-800'}`}>
-                                                <i className="fa-solid fa-temperature-three-quarters text-[16px] w-5 text-center"></i>
-                                                HIPSOMÉTRICO
-                                            </button>
-                                            <button 
-                                                onClick={() => setMapStyle('estratos')}
-                                                className={`flex items-center gap-3 px-3 py-2.5 rounded text-[10px] font-bold transition-all border ${mapStyle === 'estratos' ? 'bg-[#9B7653] border border-[#D2B48C] text-white shadow-lg' : 'bg-slate-800/40 border-slate-700/50 text-slate-400 hover:text-[#D2B48C] hover:bg-slate-800'}`}>
-                                                <i className="fa-solid fa-layer-group text-[16px] w-5 text-center"></i>
-                                                ESTRATIGRÁFICO
-                                            </button>
-                                            <button 
-                                                onClick={() => setMapStyle('malla')}
-                                                className={`flex items-center gap-3 px-3 py-2.5 rounded text-[10px] font-bold transition-all border ${mapStyle === 'malla' ? 'bg-red-800/80 border-red-500 text-white shadow-lg' : 'bg-slate-800/40 border-slate-700/50 text-slate-400 hover:text-red-400 hover:bg-slate-800'}`}>
-                                                <i className="fa-brands fa-unity text-[16px] w-5 text-center"></i>
-                                                MALLA (X-RAY)
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {selectedModelo && mapStyle === 'estratos' && (
-                                    <div className="mt-4 mb-4 animate-fadeIn">
-                                        <div className="flex items-center justify-between border-b border-slate-700/50 pb-1 mb-2">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">Estratigrafía Identificada</div>
-                                            
-                                            {/* BOTÓN MASTER PARA REVELAR ESTRATOS (Solo activo en opacidad 0%) */}
-                                            <button 
-                                                onClick={() => {
-                                                    if (mapOpacity === 0) {
-                                                        const newVal = !showEstratosLayer;
-                                                        setShowEstratosLayer(newVal);
-                                                        if (!newVal) setSelectedEstrato(null); // Resetear selección si se apaga
-                                                    }
-                                                }}
-                                                disabled={mapOpacity > 0}
-                                                className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wider transition-all shadow-md flex items-center gap-1 ${mapOpacity > 0 ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-transparent' : (showEstratosLayer ? 'bg-emerald-600 text-white border border-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-[#2A3441] text-blue-400 border border-blue-500/50 hover:bg-[#344256]')}`}
-                                                title={mapOpacity > 0 ? 'Baja la Opacidad del Suelo al 0% para explorar el subsuelo' : 'Alternar visibilidad del corte estratigráfico'}
-                                            >
-                                                <i className={`fa-solid ${showEstratosLayer ? 'fa-eye' : 'fa-eye-slash'}`}></i>
-                                                {showEstratosLayer ? 'MOSTRANDO' : 'OCULTO'}
-                                            </button>
-                                        </div>
-
-                                        <div className={`flex flex-col gap-2 transition-all ${(!showEstratosLayer || mapOpacity > 0) ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
-                                            {selectedBorehole ? (
-                                                <>
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <span className="text-[9px] text-blue-300 font-bold uppercase tracking-widest">{selectedBorehole.nombre}</span>
-                                                        <button 
-                                                            onClick={() => setSelectedBorehole(null)}
-                                                            className="text-[8px] text-slate-500 hover:text-white uppercase font-bold"
-                                                        >
-                                                            <i className="fa-solid fa-arrow-left mr-1"></i> Volver
-                                                        </button>
-                                                    </div>
-                                                    {selectedBorehole.estratos_perfil?.map((est, idx) => (
-                                                        <div 
-                                                            key={est.id || idx}
-                                                            className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all border ${selectedEstrato === idx ? 'bg-slate-700/80 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-900/40 border-slate-700/50 hover:bg-slate-800'}`}
-                                                            onClick={() => setSelectedEstrato(selectedEstrato === idx ? null : idx)}
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-5 h-5 rounded shadow-sm border border-black/30" style={{backgroundColor: est.nlp_color_hex || '#858585'}}></div>
-                                                                <div className="flex flex-col">
-                                                                    <span className={`text-[10px] font-bold ${selectedEstrato === idx ? 'text-white' : 'text-slate-300'} truncate w-32`}>{est.nombre || est.nlp_clasificacion_sucs || 'Sin Nombre'}</span>
-                                                                    <span className="text-[9px] text-slate-500 font-mono">{est.profundidad_inicial}m - {est.profundidad_final}m</span>
-                                                                </div>
-                                                            </div>
-                                                            {selectedEstrato === idx && <i className="fa-solid fa-eye text-emerald-400 text-xs"></i>}
-                                                        </div>
-                                                    ))}
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {isFetchingBoreholes ? (
-                                                        <div className="py-4 text-center">
-                                                            <i className="fa-solid fa-spinner fa-spin text-blue-400 text-lg mb-2"></i>
-                                                            <div className="text-[9px] text-slate-500 uppercase font-bold">Consultando DB...</div>
-                                                        </div>
-                                                    ) : subProgresivas.length > 0 ? (
-                                                        <div className="space-y-1 max-h-64 overflow-y-auto custom-scroll pr-1">
-                                                            {subProgresivas.map(bh => (
-                                                                <div 
-                                                                    key={bh.id} 
-                                                                    onClick={() => setSelectedBorehole(bh)}
-                                                                    className="flex items-center justify-between p-2 rounded bg-slate-800/40 border border-slate-700/50 hover:border-blue-500/50 hover:bg-slate-800 cursor-pointer transition-all group"
-                                                                >
-                                                                    <div className="flex items-center gap-2">
-                                                                        <i className="fa-solid fa-bore-hole text-slate-500 group-hover:text-blue-400 text-xs"></i>
-                                                                        <span className="text-[10px] text-slate-300 font-bold group-hover:text-white">{bh.nombre}</span>
-                                                                    </div>
-                                                                    <div className="text-[8px] text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
-                                                                        {bh.estratos_perfil?.length || 0} CAPAS
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="py-2 text-center text-[9px] text-slate-500 italic uppercase">
-                                                            No hay sondajes asociados
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="mt-4">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-[9px] text-slate-400 font-bold uppercase italic">Opacidad de Suelo</span>
-                                        <span className="text-[10px] text-blue-400 font-mono">{(mapOpacity * 100).toFixed(0)}%</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="1"
-                                        step="0.05"
-                                        value={mapOpacity}
-                                        onChange={(e) => setMapOpacity(parseFloat(e.target.value))}
-                                        className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all shadow-inner"
-                                    />
-                                    <div className="flex justify-between mt-1 px-1">
-                                        <span className="text-[8px] text-slate-600 font-bold">X-RAY</span>
-                                        <span className="text-[8px] text-slate-600 font-bold">SÓLIDO</span>
-                                    </div>
-                                </div>
+                        {modelos.length === 0 ? (
+                            <div className="text-center py-10 px-4">
+                                <i className="fa-solid fa-folder-open text-slate-700 text-3xl mb-3"></i>
+                                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Sin modelos cargados</p>
                             </div>
-
-                            {selectedModelo && (
-                                <div className="space-y-4 animate-fadeIn">
-                                    {/* Sección de Ubicación Técnica */}
-                                    <div className="p-4 bg-slate-800/60 rounded border border-blue-500/30 shadow-lg">
-                                        <h4 className="text-[10px] text-blue-400 uppercase font-extrabold tracking-widest mb-4 border-b border-blue-900/50 pb-2 flex items-center gap-2">
-                                            <i className="fa-solid fa-location-dot"></i> Datos de Ubicación
-                                        </h4>
-
-                                        <div className="space-y-4">
-                                            <div>
-                                                <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">Nombre del Modelo</div>
-                                                <div className="text-[12px] text-white font-bold truncate">{selectedModelo.nombre_archivo}</div>
-                                            </div>
-                                            |
-                                            <div className="grid grid-cols-1 gap-3">
-                                                <div className="bg-slate-900/50 p-2 rounded">
-                                                    <div className="text-[9px] text-slate-500 uppercase font-bold mb-1 italic">Coordenadas y Altitud (Relieve)</div>
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="text-[10px] text-slate-400">ESTE (X):</span>
-                                                        <span className="text-[12px] text-emerald-400 font-mono font-bold">
-                                                            {displayCoords?.este?.toLocaleString('en-US', { minimumFractionDigits: 3 }) || '---'} m
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="text-[10px] text-slate-400">NORTE (Y):</span>
-                                                        <span className="text-[12px] text-emerald-400 font-mono font-bold">
-                                                            {displayCoords?.norte?.toLocaleString('en-US', { minimumFractionDigits: 3 }) || '---'} m
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center bg-blue-900/10 rounded px-1">
-                                                        <span className="text-[10px] text-blue-300">COTA Z:</span>
-                                                        <span className="text-[12px] text-white font-mono font-bold">
-                                                            {displayCoords?.elevacion?.toFixed(2) || '---'} msnm
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="bg-slate-900/50 p-2 rounded">
-                                                    <div className="text-[9px] text-slate-500 uppercase font-bold mb-1 italic">Geográficas (WGS84)</div>
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="text-[10px] text-slate-400">LAT:</span>
-                                                        <span className="text-[11px] text-blue-300 font-mono">
-                                                            {selectedModelo.metadata?.centro_utm?.lat?.toFixed(6) || '---'}°
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] text-slate-400">LON:</span>
-                                                        <span className="text-[11px] text-blue-300 font-mono">
-                                                            {selectedModelo.metadata?.centro_utm?.lon?.toFixed(6) || '---'}°
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                        ) : (
+                            modelos.map(m => (
+                                <div
+                                    key={m.id}
+                                    onClick={() => setSelectedModelo(m)}
+                                    className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedModelo?.id === m.id
+                                            ? 'bg-blue-600 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.2)]'
+                                            : 'bg-slate-800/40 border-slate-800 hover:border-slate-600'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <i className="fa-solid fa-cube text-blue-400 text-[10px]"></i>
+                                        <h4 className="text-[10px] font-bold text-white truncate flex-1 leading-tight">{m.nombre_archivo}</h4>
                                     </div>
-
-                                    {/* Sección de Propiedades del Modelo */}
-                                    <div className="p-4 bg-slate-800/40 rounded border border-slate-700">
-                                        <h4 className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mb-3 border-b border-slate-800 pb-1 italic">Ficha Técnica</h4>
-                                        <div className="space-y-2 text-[11px]">
-                                            <div className="flex justify-between">
-                                                <span className="text-slate-500 uppercase">Superficies TIN:</span>
-                                                <span className="text-white font-mono">{selectedModelo.metadata?.cantidad_superficies || 0}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-slate-500 uppercase">Puntos Control:</span>
-                                                <span className="text-white font-mono text-blue-400">{selectedModelo.metadata?.cantidad_puntos_control || 0}</span>
-                                            </div>
-                                            <div className="flex justify-between pt-2 border-t border-slate-800 mt-2">
-                                                <span className="text-slate-500 uppercase">Tipo:</span>
-                                                <span className="text-blue-400 font-bold">{selectedModelo.tipo}</span>
-                                            </div>
-                                        </div>
-
-                                        <button onClick={() => handleDelete(selectedModelo.id)} className="w-full bg-red-900/10 border border-red-900/30 text-red-500 text-[10px] font-bold py-2 rounded hover:bg-red-600 hover:text-white transition-all uppercase mt-6 tracking-widest shadow-md">
-                                            <i className="fa-solid fa-trash-can mr-2"></i> ELIMINAR MODELO
+                                    <div className="flex items-center justify-between">
+                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${selectedModelo?.id === m.id ? 'bg-blue-400 text-blue-950' : 'bg-slate-800 text-slate-500'
+                                            }`}>OBJ</span>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
+                                            className="text-slate-600 hover:text-red-400 p-1 transition-colors"
+                                        >
+                                            <i className="fa-solid fa-trash-can text-[10px]"></i>
                                         </button>
                                     </div>
                                 </div>
-                            )}
-                        </div>
+                            ))
+                        )}
                     </div>
                 </aside>
+                )}
+
+                {/* B. ÁREA CENTRAL (MAPA) */}
+                <div className="flex-1 relative bg-black overflow-hidden h-full">
+                    <div ref={containerRef} className="w-full h-full" />
+
+                    {/* Botones de Estilo de Capa Flotantes */}
+                    <div className={`absolute top-6 transition-all duration-300 flex flex-col gap-3 z-30 ${isRightOpen ? 'right-[344px]' : 'right-6'}`}>
+                        {['hipso', 'malla', 'estratos'].map(style => (
+                            <button
+                                key={style}
+                                onClick={() => setMapStyle(style)}
+                                className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-2xl border transition-all duration-300 ${mapStyle === style
+                                        ? 'bg-blue-600 border-blue-400 text-white translate-x-[-4px] shadow-blue-600/40'
+                                        : 'bg-slate-900/80 backdrop-blur-md border-slate-700 text-slate-500 hover:text-white'
+                                    }`}
+                                title={style.toUpperCase()}
+                            >
+                                <i className={`fa-solid ${style === 'hipso' ? 'fa-layer-group' : style === 'malla' ? 'fa-border-all' : 'fa-mountain'}`}></i>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Botón Flotante para Centrar Tramo */}
+                    <button
+                        onClick={centerMap}
+                        className={`absolute bottom-6 transition-all duration-300 w-12 h-12 rounded-xl flex items-center justify-center shadow-xl border z-30 ${isRightOpen ? 'right-[344px]' : 'right-6'} ${
+                            mapStyle === 'hipso' 
+                            ? 'bg-blue-600 border-blue-400 text-white' 
+                            : 'bg-slate-900/80 backdrop-blur-md border-slate-700 text-slate-400 hover:text-white'
+                        }`}
+                        title="Centrar en el Proyecto"
+                    >
+                        <i className="fas fa-crosshairs text-xl"></i>
+                    </button>
+
+                    {/* Overlay de Carga Portal */}
+                    {(isGlobalLoading || isUploading) && createPortal(
+                        <div className="bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-8 z-[99999] fixed inset-0">
+                            <div className="w-96 text-center space-y-8 p-12 rounded-[2rem] bg-slate-900/50 border border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] backdrop-blur-2xl">
+                                <div className="relative inline-flex items-center justify-center">
+                                    <svg className="w-32 h-32 transform -rotate-90">
+                                        <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-800" />
+                                        <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="4" fill="transparent"
+                                            strokeDasharray={364.4}
+                                            strokeDashoffset={364.4 - (364.4 * (isUploading ? uploadProgress : 100)) / 100}
+                                            className="text-blue-500 transition-all duration-500 ease-out" strokeLinecap="round"
+                                        />
+                                    </svg>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <i className={`fa-solid ${isUploading ? 'fa-cloud-arrow-up text-3xl animate-bounce' : 'fa-satellite-dish text-4xl fa-beat-fade'} text-blue-400`}></i>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <h3 className="text-white text-base font-black uppercase tracking-[0.3em]">{isUploading ? 'Subiendo Datos...' : 'Procesando Malla...'}</h3>
+                                    {isUploading && (
+                                        <div className="space-y-4 pt-4 px-2">
+                                            <div className="flex justify-between items-end mb-2">
+                                                <span className="text-blue-400 font-mono text-3xl font-black">{uploadProgress}%</span>
+                                            </div>
+                                            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden p-[2px]">
+                                                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+                </div>
+
+                {/* C. PANEL DERECHO (OPCIONES) */}
+                {isRightOpen && (
+                    <aside className="absolute right-0 top-0 w-80 border-l border-white/5 bg-slate-950/40 backdrop-blur-3xl flex flex-col z-40 shrink-0 h-full animate-in slide-in-from-right-full duration-500 ease-out shadow-[-20px_0_40px_rgba(0,0,0,0.5)]">
+                        <div className="p-6 border-b border-slate-800 bg-slate-950/20">
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Opciones Visuales</h3>
+                        </div>
+                        <div className="p-6 space-y-8 overflow-y-auto custom-scrollbar">
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Terreno Natural</label>
+                                    <span className="text-blue-400 font-mono text-xs font-bold">{Math.round(mapOpacity * 100)}%</span>
+                                </div>
+                                <input type="range" min="0" max="1" step="0.01" value={mapOpacity} onChange={(e) => setMapOpacity(parseFloat(e.target.value))} className="w-full h-1 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" />
+                            </div>
+
+                            <div className={`p-5 rounded-2xl border transition-all duration-500 ${mapOpacity < 0.1 ? 'bg-blue-600/5 border-blue-500/20 shadow-inner' : 'bg-slate-800/10 border-slate-800 opacity-60'}`}>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${mapOpacity < 0.1 ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-600'}`}>
+                                            <i className="fa-solid fa-microscope text-sm"></i>
+                                        </div>
+                                        <span className="text-[10px] font-black text-white uppercase tracking-tighter">Capas Geológicas</span>
+                                    </div>
+                                    <div className="relative inline-flex items-center cursor-pointer scale-90">
+                                        <input type="checkbox" checked={showEstratosLayer} onChange={(e) => setShowEstratosLayer(e.target.checked)} className="sr-only peer" disabled={mapOpacity > 0.1} />
+                                        <div className="w-10 h-5 bg-slate-700 peer-checked:bg-blue-600 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5 shadow-inner"></div>
+                                    </div>
+                                </div>
+                                {showEstratosLayer && mapOpacity < 0.1 ? (
+                                    <div className="space-y-6 pt-4 border-t border-blue-500/10 active:animate-in fade-in zoom-in-95 duration-300">
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Vertical Exaggeration</label>
+                                                <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">{zExag}x</span>
+                                            </div>
+                                            <input type="range" min="1" max="50" step="1" value={zExag} onChange={(e) => setZExag(parseFloat(e.target.value))} className="w-full h-1 bg-slate-900 rounded-full appearance-none accent-blue-400 cursor-pointer" />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-[9px] text-slate-600 italic font-medium leading-relaxed">Baja la opacidad al 0% para habilitar el visor de geología.</p>
+                                )}
+                            </div>
+
+                            {/* NUEVA SECCIÓN: LISTA DE CALICATAS */}
+                            <div className="space-y-4 pt-6 border-t border-slate-800">
+                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Exploración de Calicatas</h4>
+                                <div className="space-y-2 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+                                    {((soilData?.progresivas || []).filter(p => p.estratos && p.estratos.length > 0)).length === 0 ? (
+                                        <div className="p-10 text-center opacity-40">
+                                            <i className="fa-solid fa-location-dot text-2xl mb-2"></i>
+                                            <p className="text-[9px] font-bold uppercase tracking-tighter leading-none">No hay puntos con estratos</p>
+                                        </div>
+                                    ) : (
+                                        soilData.progresivas
+                                            .filter(p => p.estratos && p.estratos.length > 0)
+                                            .sort((a, b) => a.nombre.localeCompare(b.nombre))
+                                            .map(p => {
+                                                const hasCoords = p.coordenada_este && p.coordenada_norte;
+                                                const hasData = p.estratos && p.estratos.length > 0;
+                                                const isDisabled = !hasCoords || !hasData;
+
+                                                return (
+                                                    <div
+                                                        key={p.id}
+                                                        onClick={() => !isDisabled && flyToProgressive(p)}
+                                                        className={`group p-3 rounded-xl border transition-all flex items-center justify-between ${isDisabled
+                                                                ? 'bg-slate-900/40 border-slate-800/50 opacity-40 cursor-not-allowed'
+                                                                : 'bg-slate-800/30 border-slate-800 hover:border-blue-500/50 hover:bg-blue-600/5 cursor-pointer shadow-sm'
+                                                            }`}
+                                                        title={isDisabled ? "Este punto no tiene coordenadas o estratos registrados" : "Volar a esta ubicación"}
+                                                    >
+                                                        <div className="flex items-center gap-2 overflow-hidden">
+                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isDisabled ? 'bg-slate-600' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                                                                }`}></div>
+                                                            <div className="flex flex-col overflow-hidden">
+                                                                <span className={`text-[10px] font-bold transition-colors uppercase tracking-tight truncate ${isDisabled ? 'text-slate-500' : 'text-slate-300 group-hover:text-white'
+                                                                    }`}>{p.nombre}</span>
+                                                                {isDisabled && (
+                                                                    <span className="text-[7px] font-black text-rose-500 uppercase tracking-widest mt-0.5">
+                                                                        {!hasCoords ? 'Sin Coordenadas' : 'Sin Estratos'}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {!isDisabled && (
+                                                            <i className="fa-solid fa-location-crosshairs text-[10px] text-slate-600 group-hover:text-blue-400 transition-colors"></i>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                )}
             </div>
         </div>
     );
-
-    return dashboardContent;
 }

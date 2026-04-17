@@ -128,9 +128,20 @@ const getKmlContentById = async (kmlTrazadoId) => {
     }
 };
 
+const deleteKmlTrazado = async (kmlTrazadoId) => {
+    try {
+        await db.query(`DELETE FROM kml_trazados WHERE id = $1`, [kmlTrazadoId]);
+        return true;
+    } catch (err) {
+        console.error('Error en kmlService.deleteKmlTrazado:', err.message, err.stack);
+        throw new KmlServiceError('Error al eliminar KML de la base de datos.', 500);
+    }
+};
+
 module.exports = {
     createKmlTrazado,
     getKmlTrazadoById,
     getKmlContentById, // NEW: Export the new function
+    deleteKmlTrazado,  // Export deletion function
     KmlServiceError // Export custom error for easier handling in controllers
 };

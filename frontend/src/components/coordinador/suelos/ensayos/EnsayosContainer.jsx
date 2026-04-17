@@ -9,23 +9,27 @@ const EnsayosContainer = () => {
     const location = useLocation();
     const [lastTramoId, setLastTramoId] = useState(null);
 
+    // Determinar la ruta base dinámicamente según si estamos en la consola unificada o standalone
+    const basePath = location.pathname.includes('/recoleccion-datos/gestor-ensayos')
+        ? '/coordinador/recoleccion-datos/gestor-ensayos'
+        : '/coordinador/suelos/ensayos';
+
     return (
         <div className="ensayos-container">
-            <div className="ensayos-navigation">
+            <nav className="nav-level-2" style={{ marginBottom: '0.5rem', borderBottom: '1px solid #eee' }}>
                 <Link 
-                    to={lastTramoId ? `/coordinador/suelos/ensayos/tramos/${lastTramoId}` : "/coordinador/suelos/ensayos/tramos"}
-                    className={`nav-link ${location.pathname.includes('/tramos') ? 'active' : ''}`}
+                    to={lastTramoId ? `${basePath}/tramos/${lastTramoId}` : `${basePath}/tramos`}
+                    className={`nav-level-2-item ${location.pathname.includes('/tramos') ? 'active' : ''}`}
                 >
-                    <i className="fas fa-road"></i> Ensayos por Tramo
+                    <i className="fas fa-road" style={{ marginRight: '8px' }}></i> Ensayos por Tramo
                 </Link>
                 <Link 
-                    to="/coordinador/suelos/ensayos/canteras" 
-                    className={`nav-link ${location.pathname.includes('/canteras') ? 'active' : ''}`}
+                    to={`${basePath}/canteras`} 
+                    className={`nav-level-2-item ${location.pathname.includes('/canteras') ? 'active' : ''}`}
                 >
-                    <i className="fas fa-mountain"></i> Ensayos por Cantera
+                    <i className="fas fa-mountain" style={{ marginRight: '8px' }}></i> Ensayos por Cantera
                 </Link>
-                {/* Add more links here in the future */}
-            </div>
+            </nav>
             <div className="ensayos-content">
                 <Routes>
                     <Route path="tramos" element={<VistaGeneralEnsayos setLastTramoId={setLastTramoId} />} />

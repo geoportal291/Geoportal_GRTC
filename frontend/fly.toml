@@ -3,10 +3,12 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'geoportal-frontend-123'
+app = 'geoportal-frontend-1'
 primary_region = 'gru'
 
 [build]
+  [build.args]
+    REACT_APP_API_BASE = "https://geoportal-backend-1.fly.dev"
 
 [http_service]
   internal_port = 80

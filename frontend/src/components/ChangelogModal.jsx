@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../data/contexts/AuthContext'; // Importar useAuth
-
-const API_BASE_URL = process.env.REACT_APP_API_BASE || 'https://backend-nameless-log-55.fly.dev';
+import { API_BASE_URL } from '../api/config';
 
 const ChangelogModal = () => {
   const [showModal, setShowModal] = useState(false);
@@ -80,4 +79,3 @@ const ChangelogModal = () => {
 };
 
 export default ChangelogModal;
-

@@ -288,7 +288,7 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
                 let fullProject = projectData;
                 if (projectData && projectData.id) {
                     try {
-                        const projRes = await axios.get(`${API_URL}/proyectos/${projectData.id}`, { headers });
+                        const projRes = await axios.get(`${API_URL}/api/proyectos/${projectData.id}`, { headers });
                         fullProject = projRes.data;
                     } catch (e) {
                         console.error("Could not fetch full project details, using fallback", e);
@@ -479,7 +479,7 @@ const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
             const headers = { Authorization: `Bearer ${token}` };
 
             // Logic matching V1 but adapted for V2 "completion" workflow
-            await axios.put(`${API_URL}/proyectos/${formData.id}`, {
+            await axios.put(`${API_URL}/api/proyectos/${formData.id}`, {
                 projectData: projectDataPayload,
                 progresivaData,
                 calibrationData: identifiedTramos.length > 0 ? calibrationData : null

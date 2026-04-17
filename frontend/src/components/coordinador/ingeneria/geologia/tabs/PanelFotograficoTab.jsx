@@ -52,8 +52,8 @@ const Lightbox = ({ foto, onClose, onPrev, onNext }) => {
             ><i className="fas fa-times"></i></button>
 
             {/* Navigación - Ajustados para evitar navbar */}
-            <button 
-                onClick={(e) => { e.stopPropagation(); onPrev(); }} 
+            <button
+                onClick={(e) => { e.stopPropagation(); onPrev(); }}
                 style={{
                     position: 'fixed', left: '280px', top: '50%', transform: 'translateY(-50%)',
                     background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white',
@@ -65,8 +65,8 @@ const Lightbox = ({ foto, onClose, onPrev, onNext }) => {
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)'; e.currentTarget.style.transform = 'translateY(-50%) scale(1)'; }}
             ><i className="fas fa-chevron-left"></i></button>
 
-            <button 
-                onClick={(e) => { e.stopPropagation(); onNext(); }} 
+            <button
+                onClick={(e) => { e.stopPropagation(); onNext(); }}
                 style={{
                     position: 'fixed', right: '40px', top: '50%', transform: 'translateY(-50%)',
                     background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white',
@@ -205,6 +205,10 @@ const PanelFotograficoTab = ({ projectData }) => {
     const [search, setSearch] = useState('');
     const [isMapExpanded, setIsMapExpanded] = useState(false);
 
+    // Paginación
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 36;
+
     const fetchFotos = useCallback(async () => {
         if (!projectId) return;
         setLoading(true);
@@ -219,6 +223,10 @@ const PanelFotograficoTab = ({ projectData }) => {
     }, [projectId]);
 
     useEffect(() => { fetchFotos(); }, [fetchFotos]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, viewMode]);
 
     const handleUploadKmz = async (e) => {
         const file = e.target.files[0];
@@ -238,7 +246,7 @@ const PanelFotograficoTab = ({ projectData }) => {
             const res = await axiosInstance.post(
                 `/api/proyectos/${projectId}/panel-fotografico/upload-kmz`,
                 formData,
-                { 
+                {
                     headers: { 'Content-Type': 'multipart/form-data' },
                     onUploadProgress: (progressEvent) => {
                         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -271,7 +279,7 @@ const PanelFotograficoTab = ({ projectData }) => {
                     alertify.error('Error al limpiar el panel.');
                 }
             },
-            () => {}
+            () => { }
         );
     };
 
@@ -284,6 +292,9 @@ const PanelFotograficoTab = ({ projectData }) => {
             (f.descripcion || '').toLowerCase().includes(q)
         );
     });
+
+    const totalPages = Math.ceil(fotosFiltradas.length / ITEMS_PER_PAGE);
+    const fotosPaginadas = fotosFiltradas.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
     // Lightbox navegación
     const fotosConImagen = fotosFiltradas.filter(f => f.image_url);
@@ -299,9 +310,9 @@ const PanelFotograficoTab = ({ projectData }) => {
     const grupos = useMemo(() => {
         const groups = [];
         const fotosConCoords = fotosFiltradas.filter(f => f.lat && f.lng);
-        
+
         // Radio de agrupamiento: 0.00018 grados (~20 metros)
-        const DIST_THRESHOLD = 0.00018; 
+        const DIST_THRESHOLD = 0.00018;
 
         fotosConCoords.forEach(foto => {
             let found = false;
@@ -354,13 +365,93 @@ const PanelFotograficoTab = ({ projectData }) => {
             color: white !important;
             background: transparent !important;
         }
+        .visorimagenes_geoolgia_1_carousel {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .visorimagenes_geoolgia_1_carousel img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .carousel-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.4);
+            color: white;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            transition: all 0.2s;
+            font-size: 10px;
+        }
+        .carousel-arrow:hover {
+            background: rgba(30, 58, 138, 0.9);
+        }
+        .carousel-arrow.left { left: 8px; }
+        .carousel-arrow.right { right: 8px; }
+        .carousel-counter {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
     `;
 
+    // Mini Componente Interno para el Carrusel del Popup
+    const PhotoCarousel = ({ photos, onOpenLightbox }) => {
+        const [currentIndex, setCurrentIndex] = React.useState(0);
+        
+        if (!photos || photos.length === 0) return null;
+        
+        const next = (e) => {
+            e.stopPropagation();
+            setCurrentIndex((prev) => (prev + 1) % photos.length);
+        };
+        const prev = (e) => {
+            e.stopPropagation();
+            setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length);
+        };
+
+        const currentPhoto = photos[currentIndex];
+
+        return (
+            <div className="visorimagenes_geoolgia_1_carousel" onClick={() => onOpenLightbox(currentPhoto)}>
+                <img src={currentPhoto.image_url} alt="Carousel" />
+                {photos.length > 1 && (
+                    <>
+                        <button className="carousel-arrow left" onClick={prev}><i className="fas fa-chevron-left"></i></button>
+                        <button className="carousel-arrow right" onClick={next}><i className="fas fa-chevron-right"></i></button>
+                    </>
+                )}
+                <div className="carousel-counter">{currentIndex + 1} / {photos.length}</div>
+            </div>
+        );
+    };
+
     return (
-        <div className="visorimagenes_geoolgia_1_main_wrapper" style={{ padding: '24px', fontFamily: "'Inter', sans-serif" }}>
+        <div className="visorimagenes_geoolgia_1_main_wrapper geol-custom-scrollbar" style={{ padding: '15px 15px 24px 15px', fontFamily: "'Inter', sans-serif", height: 'calc(100vh - 145px)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
             <style>{customPopupStyles}</style>
             {/* HEADER */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <i className="fas fa-camera" style={{ fontSize: '22px', color: '#3b82f6' }}></i>
                     <div>
@@ -397,9 +488,9 @@ const PanelFotograficoTab = ({ projectData }) => {
                     </button>
 
                     <div style={{ background: '#f1f5f9', p: '2px', borderRadius: '10px', display: 'flex' }}>
-                        <button 
+                        <button
                             onClick={() => setViewMode('gallery')}
-                            style={{ 
+                            style={{
                                 padding: '8px 14px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
                                 background: viewMode === 'gallery' ? 'white' : 'transparent',
                                 color: viewMode === 'gallery' ? '#1e293b' : '#64748b',
@@ -408,9 +499,9 @@ const PanelFotograficoTab = ({ projectData }) => {
                         >
                             <i className="fas fa-th"></i> Galería
                         </button>
-                        <button 
+                        <button
                             onClick={() => setViewMode('map')}
-                            style={{ 
+                            style={{
                                 padding: '8px 14px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
                                 background: viewMode === 'map' ? 'white' : 'transparent',
                                 color: viewMode === 'map' ? '#1e293b' : '#64748b',
@@ -446,19 +537,19 @@ const PanelFotograficoTab = ({ projectData }) => {
                         <span style={{ color: '#3b82f6' }}>{uploadProgress}%</span>
                     </div>
                     <div style={{ width: '100%', height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div 
-                            style={{ 
-                                width: `${uploadProgress}%`, 
-                                height: '100%', 
+                        <div
+                            style={{
+                                width: `${uploadProgress}%`,
+                                height: '100%',
                                 background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
                                 transition: 'width 0.3s ease-out',
                                 boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)'
-                            }} 
+                            }}
                         />
                     </div>
                     <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: '#64748b', fontStyle: 'italic' }}>
-                        {uploadProgress === 100 
-                            ? 'Esto puede tardar unos segundos dependiendo del número de imágenes...' 
+                        {uploadProgress === 100
+                            ? 'Esto puede tardar unos segundos dependiendo del número de imágenes...'
                             : 'No cierres esta pestaña hasta completar el proceso'}
                     </p>
                 </div>
@@ -531,71 +622,105 @@ const PanelFotograficoTab = ({ projectData }) => {
                     {!search && <span style={{ fontSize: '13px' }}>Haz clic en "Subir KMZ" para cargar las fotos del proyecto</span>}
                 </div>
             ) : viewMode === 'map' ? (
-                <div className="geoltab-layout" style={{ display: 'block', height: 'calc(100vh - 180px)', marginTop: '10px' }}>
-                    <div className="geoltab-map-panel" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                        <div className="geoltab-map-header">
+                <div className="geoltab-layout" style={{ display: 'block', marginTop: '10px', overflow: 'visible' }}>
+                    <div className="geoltab-map-panel" style={{ width: '100%', height: '950px', display: 'flex', flexDirection: 'column' }}>
+                        <div className="geoltab-map-header" style={{ flexShrink: 0 }}>
                             <span className="geoltab-map-label">MAPA DE ANÁLISIS FOTOGRÁFICO</span>
                         </div>
-                        
-                        <div className="geoltab-map-container" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-                            <GeologiaGeoite 
-                                tabName="panel_fotografico" 
+
+                        <div className="geoltab-map-container" style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                            <GeologiaGeoite
+                                tabName="panel_fotografico"
                                 projectId={projectData?.id_proyecto || projectData?.id}
                                 height="100%"
                             >
                                 {grupos.map((grupo) => (
-                                    <Marker 
-                                        key={grupo.id} 
-                                        position={[grupo.lat, grupo.lng]} 
+                                    <Marker
+                                        key={grupo.id}
+                                        position={[grupo.lat, grupo.lng]}
                                         icon={cameraIcon(grupo.photos.length)}
                                         eventHandlers={{
-                                            popupopen: (e) => {
-                                                const map = e.target._map;
+                                            click: (e) => {
+                                                const marker = e.target;
+                                                const map = marker._map;
                                                 const currentZoom = map.getZoom();
-                                                const targetZoom = Math.max(currentZoom + 2, 16);
-                                                // Corregido: Usar e.target.getLatLng() para evitar undefined error
-                                                map.setView(e.target.getLatLng(), targetZoom, { animate: true });
+                                                const targetZoom = Math.max(currentZoom + 2, 17);
+
+                                                // Proyectar coordenadas a píxeles para el nivel de zoom objetivo
+                                                const px = map.project(marker.getLatLng(), targetZoom);
+                                                // Restar a Y mueve el centro hacia arriba, bajando el marcador visualmente
+                                                px.y -= 220;
+                                                const offsetLatLng = map.unproject(px, targetZoom);
+
+                                                // Zoom progresivo y apertura persistente con offset
+                                                map.setView(offsetLatLng, targetZoom, { animate: true });
+                                                setTimeout(() => {
+                                                    marker.openPopup();
+                                                }, 350);
                                             }
                                         }}
                                     >
-                                        <Popup maxWidth={280} minWidth={260}>
-                                            <div className="visorimagenes_geoolgia_1_container" style={{ overflowY: 'auto', overflowX: 'hidden', maxHeight: '420px', scrollbarWidth: 'thin', background: '#f8fafc' }}>
-                                                {/* Header Formal */}
-                                                <div className="visorimagenes_geoolgia_1_header" style={{ backgroundColor: '#1e3a8a', padding: '14px 16px', margin: '0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <i className="fas fa-camera-retro" style={{ fontSize: '14px', color: '#ffffff' }}></i>
-                                                    <span className="visorimagenes_geoolgia_1_header_text" style={{ fontSize: '11px', letterSpacing: '0.6px', textTransform: 'uppercase' }}>
-                                                        {grupo.photos.length === 1 ? 'Foto Georeferenciada' : `${grupo.photos.length} Fotos Registradas`}
-                                                    </span>
+                                        <Popup maxWidth={300} minWidth={280} autoPan={false}>
+                                            <div className="visorimagenes_geoolgia_1_container" style={{ overflow: 'hidden', background: '#ffffff', borderRadius: '8px' }}>
+                                                {/* Header Compacto tipo Atributos */}
+                                                <div className="visorimagenes_geoolgia_1_header" style={{ backgroundColor: '#1e3a8a', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <i className="fas fa-camera" style={{ fontSize: '14px', color: '#ffffff' }}></i>
+                                                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#ffffff', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                                            Punto Fotográfico
+                                                        </span>
+                                                    </div>
                                                 </div>
 
-                                                <div className="visorimagenes_geoolgia_1_grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
-                                                    {grupo.photos.map((foto, fIdx) => (
-                                                        <div 
-                                                            key={fIdx} 
-                                                            className="visorimagenes_geoolgia_1_card" 
-                                                            style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', background: '#ffffff', cursor: 'pointer', transition: 'all 0.3s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }} 
-                                                            onClick={() => openLightbox(foto)}
-                                                        >
-                                                            <div style={{ width: '100%', aspectRatio: '16/9', overflow: 'hidden', background: '#000', position: 'relative' }}>
-                                                                <img src={foto.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} alt="Captura" />
-                                                                <div style={{ position: 'absolute', top: '8px', left: '8px', background: 'rgba(30,58,138,0.85)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 600 }}>#{fIdx + 1}</div>
-                                                            </div>
-                                                            <div style={{ padding: '10px 14px' }}>
-                                                                <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: '6px', lineHeight: '1.4' }}>{foto.nombre || 'EVIDENCIA'}</span>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                                        <i className="far fa-calendar-alt" style={{ fontSize: '10px', color: '#94a3b8' }}></i>
-                                                                        <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 600 }}>
-                                                                            {foto.uploaded_at ? new Date(foto.uploaded_at).toLocaleDateString() : 'SN'}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#2563eb', fontWeight: 700, fontSize: '10px' }}>
-                                                                        VER <i className="fas fa-chevron-right" style={{ fontSize: '8px' }}></i>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                <div className="visorimagenes_geoolgia_1_content" style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    {/* Carrusel */}
+                                                    <PhotoCarousel photos={grupo.photos} onOpenLightbox={openLightbox} />
+
+                                                    {/* Atributos / Info */}
+                                                    <div style={{ padding: '14px' }}>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '4px', fontSize: '11px', color: '#64748b' }}>
+                                                            <span style={{ fontWeight: 600, color: '#94a3b8' }}>NOMBRE:</span>
+                                                            <span style={{ fontWeight: 700, color: '#334155' }}>{grupo.photos[0]?.nombre || 'Sin nombre'}</span>
+                                                            
+                                                            <span style={{ fontWeight: 600, color: '#94a3b8' }}>FECHA:</span>
+                                                            <span style={{ fontWeight: 700, color: '#334155' }}>
+                                                                {grupo.photos[0]?.uploaded_at ? new Date(grupo.photos[0].uploaded_at).toLocaleDateString() : 'N/A'}
+                                                            </span>
+
+                                                            <span style={{ fontWeight: 600, color: '#94a3b8' }}>FOTOS:</span>
+                                                            <span style={{ fontWeight: 700, color: '#334155' }}>{grupo.photos.length} registradas</span>
                                                         </div>
-                                                    ))}
+
+                                                        {/* Botón Acción Principal */}
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setViewMode('gallery');
+                                                                setSearch(grupo.photos[0]?.nombre || '');
+                                                            }}
+                                                            style={{
+                                                                width: '100%',
+                                                                marginTop: '16px',
+                                                                padding: '10px',
+                                                                backgroundColor: '#1e3a8a',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '6px',
+                                                                fontSize: '11px',
+                                                                fontWeight: 700,
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '8px',
+                                                                transition: 'background 0.2s'
+                                                            }}
+                                                            onMouseOver={(e) => e.target.style.backgroundColor = '#1e40af'}
+                                                            onMouseOut={(e) => e.target.style.backgroundColor = '#1e3a8a'}
+                                                        >
+                                                            VER GALERÍA COMPLETA <i className="fas fa-arrow-right" style={{ fontSize: '9px' }}></i>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </Popup>
@@ -608,14 +733,15 @@ const PanelFotograficoTab = ({ projectData }) => {
                 </div>
             ) : (
                 <div style={{
-                    maxHeight: 'calc(100vh - 280px)',
+                    flex: 1,
+                    minHeight: 0,
                     overflowY: 'auto',
                     paddingRight: '8px',
                     scrollbarWidth: 'thin',
                     scrollbarColor: '#cbd5e1 #f8fafc'
                 }}>
                     <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px' }}>
-                        Mostrando {fotosFiltradas.length} de {fotos.length} fotos · Click en una foto para verla en detalle
+                        Mostrando {fotosPaginadas.length} fotos en página {currentPage} de {totalPages} (Total: {fotosFiltradas.length} fotos) · Haz clic en una foto para verla en detalle
                     </p>
                     <div style={{
                         display: 'grid',
@@ -623,7 +749,7 @@ const PanelFotograficoTab = ({ projectData }) => {
                         gap: '16px',
                         paddingBottom: '24px'
                     }}>
-                        {fotosFiltradas.map((foto) => (
+                        {fotosPaginadas.map((foto) => (
                             <FotoCard
                                 key={foto.id}
                                 foto={foto}
@@ -631,6 +757,37 @@ const PanelFotograficoTab = ({ projectData }) => {
                             />
                         ))}
                     </div>
+
+                    {/* PAGINACIÓN CONTROLES */}
+                    {totalPages > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', paddingBottom: '24px', paddingTop: '10px' }}>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                style={{
+                                    padding: '8px 14px', borderRadius: '8px', border: '1px solid #cbd5e1',
+                                    background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                                    color: currentPage === 1 ? '#94a3b8' : '#1e293b', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                }}
+                            >
+                                <i className="fas fa-chevron-left"></i> Anterior
+                            </button>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                                Página {currentPage} de {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                style={{
+                                    padding: '8px 14px', borderRadius: '8px', border: '1px solid #cbd5e1',
+                                    background: currentPage === totalPages ? '#f8fafc' : 'white', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                                    color: currentPage === totalPages ? '#94a3b8' : '#1e293b', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                }}
+                            >
+                                Siguiente <i className="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 

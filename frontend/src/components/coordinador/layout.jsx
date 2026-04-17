@@ -48,7 +48,7 @@ export default function Layout({ children, setPageTitle }) {
     '/ingenieria/inventario-vial',
     '/coordinador/dashboardprincipal',
     '/ingenieria/geologia'
-  ].includes(location.pathname);
+  ].includes(location.pathname) || location.pathname.startsWith('/coordinador/recoleccion-datos');
 
 
   return (

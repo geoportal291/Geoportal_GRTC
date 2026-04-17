@@ -44,15 +44,16 @@ const createModelo3D = async (modeloData) => {
         tamano_bytes,
         subido_por,
         metadata,
-        estado
+        estado,
+        es_tramo_completo
     } = modeloData;
 
     try {
         const result = await db.query(`
             INSERT INTO modelos_3d (
-                proyecto_id, tramo_id, nombre_archivo, tipo, url_archivo, tamano_bytes, subido_por, metadata, estado
+                proyecto_id, tramo_id, nombre_archivo, tipo, url_archivo, tamano_bytes, subido_por, metadata, estado, es_tramo_completo
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
         `, [
             proyecto_id || null,
@@ -63,7 +64,8 @@ const createModelo3D = async (modeloData) => {
             tamano_bytes || null,
             subido_por || null,
             metadata || null,
-            estado || 'COMPLETADO'
+            estado || 'COMPLETADO',
+            es_tramo_completo || false
         ]);
         return result.rows[0];
     } catch (err) {

@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
+import { API_BASE_URL } from './api/config';
 
-const URL = process.env.REACT_APP_API_BASE || 'https://geoportal-backend-123.fly.dev';
+const URL = API_BASE_URL;
 
 export const socket = io(URL, {
     autoConnect: false,

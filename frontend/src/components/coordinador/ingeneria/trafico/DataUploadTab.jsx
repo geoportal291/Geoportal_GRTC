@@ -10,6 +10,7 @@ import 'alertifyjs/build/css/alertify.min.css';
 import 'alertifyjs/build/css/themes/default.min.css';
 import { CSSTransition } from 'react-transition-group';
 import './EstacionControlTab.css';
+import { API_BASE_URL } from '../../../../api/config';
 
 // Componente para manejar la vista del mapa
 const MapViewController = ({ setView, view }) => {
@@ -508,7 +509,7 @@ const DataUploadTab = ({
         onClose={closeUploadModal}
         entityId={stationIdToUpload}
         onUploadSuccess={handleUploadSuccess}
-        uploadUrl="https://backend-nameless-log-553.fly.dev/api/trafico/conteovehicular/upload-image"
+        uploadUrl={`${API_BASE_URL}/api/trafico/conteovehicular/upload-image`}
         entityIdName="stationId"
       />
       <ImageFileExplorerModal

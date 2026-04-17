@@ -47,10 +47,10 @@ const NuevoUsuarioModal = ({ isOpen, onClose, onUserCreated, onUserUpdated, edit
       try {
         const token = JSON.parse(localStorage.getItem('user')).token;
         const [rolesRes, especialidadesRes] = await Promise.all([
-          axiosInstance.get('/roles', {
+          axiosInstance.get('/api/roles', {
             headers: { Authorization: `Bearer ${token}` }
           }),
-          axiosInstance.get('/especialidades', {
+          axiosInstance.get('/api/especialidades', {
             headers: { Authorization: `Bearer ${token}` }
           })
         ]);
@@ -110,7 +110,7 @@ const NuevoUsuarioModal = ({ isOpen, onClose, onUserCreated, onUserUpdated, edit
     if (dni.length === 8) {
       try {
         const token = JSON.parse(localStorage.getItem('user')).token;
-        const response = await axiosInstance.get(`/usuarios/dni/${dni}`, {
+        const response = await axiosInstance.get(`/api/usuarios/dni/${dni}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (response.data) {
@@ -211,7 +211,7 @@ const NuevoUsuarioModal = ({ isOpen, onClose, onUserCreated, onUserUpdated, edit
             tramo: formData.tramo,
             usuario: formData.dni,
           };
-          const response = await axiosInstance.put(`/usuarios/${editingUser.dni}`, dataToSend, {
+          const response = await axiosInstance.put(`/api/usuarios/${editingUser.dni}`, dataToSend, {
             headers: {
               Authorization: `Bearer ${JSON.parse(localStorage.getItem('user')).token}`
             }
@@ -223,7 +223,7 @@ const NuevoUsuarioModal = ({ isOpen, onClose, onUserCreated, onUserUpdated, edit
             alertify.error('Error al actualizar usuario: ' + (response.data.mensaje || 'Error desconocido'));
           }
         } else {
-          const response = await axiosInstance.post('/usuarios', formData, {
+          const response = await axiosInstance.post('/api/usuarios', formData, {
             headers: {
               Authorization: `Bearer ${JSON.parse(localStorage.getItem('user')).token}`
             }

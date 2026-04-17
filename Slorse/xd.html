@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Propuesta Dashboard Analítico de Ensayos - Geoportal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #54a0ca;
+            --primary-dark: #347fa7;
+            --secondary: #0056b3;
+            --bg-body: #f4f7f6;
+            --white: #ffffff;
+            --border: #e0e0e0;
+            --text-main: #333333;
+            --text-muted: #6c757d;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --row-hover: #f1f8ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: var(--white);
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            border-bottom: 2px solid var(--border);
+            z-index: 100;
+        }
+
+        .project-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .project-badge {
+            background: var(--secondary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        /* Dashboard Layout */
+        .dashboard-main {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        /* Analytics Sidebar/Panel */
+        .analytics-panel {
+            width: 350px;
+            background: var(--white);
+            border-right: 1px solid var(--border);
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .panel-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--secondary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+            width: 100%;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+        }
+
+        .stat-card small {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--secondary);
+        }
+
+        /* List Area */
+        .list-area {
+            flex-grow: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            background: var(--bg-body);
+        }
+
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .list-header h2 {
+            font-size: 1.5rem;
+            color: var(--text-main);
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--secondary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #004494;
+        }
+
+        .btn-outline {
+            background: white;
+            border-color: var(--border);
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover {
+            background: #f8f9fa;
+        }
+
+        /* Compact Table */
+        .data-table-container {
+            background: var(--white);
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        .data-table thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .data-table th {
+            padding: 12px 16px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        .data-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: background 0.1s;
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--row-hover);
+            cursor: pointer;
+        }
+
+        .data-table td {
+            padding: 10px 16px;
+            vertical-align: middle;
+        }
+
+        .assay-code {
+            font-weight: 700;
+            color: var(--secondary);
+        }
+
+        .status-pill {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .status-comp {
+            background: #e6ffed;
+            color: var(--success);
+        }
+
+        .status-pend {
+            background: #fff9db;
+            color: #856404;
+        }
+
+        .type-badge {
+            background: #e7f3f9;
+            color: var(--primary-dark);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        /* Search & Filter Bar */
+        .filter-bar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            background: white;
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .search-input {
+            flex-grow: 1;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top-bar">
+        <div class="project-info">
+            <span style="font-weight: 800; color: var(--secondary); font-size: 1.2rem;">GEOPORTAL</span>
+            <div style="height: 20px; width: 1px; background: var(--border);"></div>
+            <span class="project-badge">TRAMO: QUELLOUNO</span>
+            <span style="color: var(--text-muted); font-size: 0.9rem;">Gestor de Suelos</span>
+        </div>
+        <div class="actions">
+            <button class="btn btn-outline"><i class="fas fa-arrow-left"></i> Volver</button>
+        </div>
+    </div>
+
+    <div class="dashboard-main">
+        <!-- Analytics Panel -->
+        <aside class="analytics-panel">
+            <div>
+                <div class="panel-title"><i class="fas fa-chart-pie"></i> Estado de Avance</div>
+                <div class="chart-container">
+                    <canvas id="progressChart"></canvas>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <small>EFICIENCIA DE CARGA</small>
+                <div class="value">94.2%</div>
+                <div style="height: 4px; background: #eee; width: 100%; border-radius: 2px; margin-top: 8px;">
+                    <div style="height: 100%; background: var(--success); width: 94%; border-radius: 2px;"></div>
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-title"><i class="fas fa-chart-bar"></i> Ensayos por Tipo</div>
+                <div class="chart-container">
+                    <canvas id="typeChart"></canvas>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <small>PRÓXIMO HITO</small>
+                <div style="font-weight: 600; margin-top: 5px;">Cierre de Granulometría</div>
+                <div style="color: var(--text-muted); font-size: 0.8rem;">Faltan 4 ensayos</div>
+            </div>
+        </aside>
+
+        <!-- List Area -->
+        <main class="list-area">
+            <div class="list-header">
+                <h2>Explorador de Ensayos</h2>
+                <div class="actions">
+                    <button class="btn btn-primary"><i class="fas fa-file-import"></i> Importar Excel</button>
+                    <button class="btn btn-outline" style="color: var(--success);"><i class="fas fa-file-excel"></i>
+                        Exportar</button>
+                </div>
+            </div>
+
+            <div class="filter-bar">
+                <input type="text" class="search-input" placeholder="Buscar por código, progresiva o calicata...">
+                <select class="btn btn-outline">
+                    <option>Todos los Tipos</option>
+                    <option>Granulometría</option>
+                    <option>Límites</option>
+                    <option>CBR</option>
+                </select>
+                <button class="btn btn-outline"><i class="fas fa-filter"></i> Filtros</button>
+            </div>
+
+            <div class="data-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Tipo de Ensayo</th>
+                            <th>Progresiva</th>
+                            <th>Estrato / Calicata</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="assay-code">G-001</td>
+                            <td><span class="type-badge">Granulometría</span></td>
+                            <td>Km 01+500</td>
+                            <td>E-1 (C-04)</td>
+                            <td>12/10/2024</td>
+                            <td><span class="status-pill status-comp">Completado</span></td>
+                            <td><button class="btn btn-outline" style="padding: 4px 8px; font-size:0.7rem;">Ver</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="assay-code">G-002</td>
+                            <td><span class="type-badge">Granulometría</span></td>
+                            <td>Km 01+500</td>
+                            <td>E-2 (C-04)</td>
+                            <td>12/10/2024</td>
+                            <td><span class="status-pill status-comp">Completado</span></td>
+                            <td><button class="btn btn-outline" style="padding: 4px 8px; font-size:0.7rem;">Ver</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="assay-code">L-014</td>
+                            <td><span class="type-badge">Límites</span></td>
+                            <td>Km 02+100</td>
+                            <td>E-1 (C-06)</td>
+                            <td>14/10/2024</td>
+                            <td><span class="status-pill status-pend">Pendiente</span></td>
+                            <td><button class="btn btn-outline"
+                                    style="padding: 4px 8px; font-size:0.7rem;">Cargar</button></td>
+                        </tr>
+                        <tr>
+                            <td class="assay-code">C-005</td>
+                            <td><span class="type-badge">CBR</span></td>
+                            <td>Km 05+400</td>
+                            <td>E-1 (C-20)</td>
+                            <td>15/10/2024</td>
+                            <td><span class="status-pill status-comp">Completado</span></td>
+                            <td><button class="btn btn-outline" style="padding: 4px 8px; font-size:0.7rem;">Ver</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="assay-code">G-003</td>
+                            <td><span class="type-badge">Granulometría</span></td>
+                            <td>Km 08+200</td>
+                            <td>E-1 (C-32)</td>
+                            <td>16/10/2024</td>
+                            <td><span class="status-pill status-comp">Completado</span></td>
+                            <td><button class="btn btn-outline" style="padding: 4px 8px; font-size:0.7rem;">Ver</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div
+                    style="padding: 1rem; text-align: center; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--text-muted);">
+                    Mostrando 5 de 156 ensayos encontrados
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Progress Chart
+        const ctxProgress = document.getElementById('progressChart').getContext('2d');
+        new Chart(ctxProgress, {
+            type: 'doughnut',
+            data: {
+                labels: ['Completos', 'Pendientes', 'Error'],
+                datasets: [{
+                    data: [86, 10, 4],
+                    backgroundColor: ['#28a745', '#ffc107', '#dc3545'],
+                    borderWidth: 0,
+                    cutout: '70%'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
+                }
+            }
+        });
+
+        // Type Chart
+        const ctxType = document.getElementById('typeChart').getContext('2d');
+        new Chart(ctxType, {
+            type: 'bar',
+            data: {
+                labels: ['Gran.', 'Lím.', 'CBR', 'Hum.', 'Proct.'],
+                datasets: [{
+                    label: 'Ensayos',
+                    data: [42, 35, 12, 28, 15],
+                    backgroundColor: '#54a0ca',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { display: false }, ticks: { font: { size: 9 } } },
+                    x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    </script>
+</body>
+
+</html>

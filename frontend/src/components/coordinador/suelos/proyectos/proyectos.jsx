@@ -303,7 +303,7 @@ export default function SGVProjectsManager() {
   const fetchUsers = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/usuarios`, { headers });
+      const res = await axios.get(`${API_URL}/api/usuarios`, { headers });
       const formattedUsers = res.data.map(user => ({
         id: user.id,
         nombre: `${user.nombre} ${user.ap_paterno} ${user.ap_materno}`.trim(),
@@ -326,7 +326,7 @@ export default function SGVProjectsManager() {
     if (!selectedProjectId) return;
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/proyectos/${selectedProjectId}/assignments`, { headers });
+      const res = await axios.get(`${API_URL}/api/proyectos/${selectedProjectId}/assignments`, { headers });
       const assignedUsers = res.data.map(assignment => assignment.usuario_id);
       const permissionsMap = {};
       res.data.forEach(assignment => {
@@ -345,7 +345,7 @@ export default function SGVProjectsManager() {
     if (!selectedProjectId) return;
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/proyectos/${selectedProjectId}/history`, { headers });
+      const res = await axios.get(`${API_URL}/api/proyectos/${selectedProjectId}/history`, { headers });
       // Assuming the backend returns an array of history records
       setHistorial(prev => ({ ...prev, [selectedProjectId]: res.data }));
     } catch (error) {
@@ -507,10 +507,10 @@ export default function SGVProjectsManager() {
         };
 
         if (isEditing) {
-            await axios.put(`${API_URL}/proyectos/${formData.id}`, { projectData, progresivaData }, { headers });
+            await axios.put(`${API_URL}/api/proyectos/${formData.id}`, { projectData, progresivaData }, { headers });
             alertify.success("Proyecto actualizado correctamente.");
         } else {
-            await axios.post(`${API_URL}/proyectos/create-full`, { projectData, progresivaData }, { headers });
+            await axios.post(`${API_URL}/api/proyectos/create-full`, { projectData, progresivaData }, { headers });
             alertify.success("Proyecto y Tramo guardados correctamente.");
         }
 
@@ -592,7 +592,7 @@ export default function SGVProjectsManager() {
         async () => {
             try {
                 const headers = getAuthHeaders();
-                await axios.delete(`${API_URL}/proyectos/${proyectoId}`, { headers });
+                await axios.delete(`${API_URL}/api/proyectos/${proyectoId}`, { headers });
                 fetchProyectos(); // Refetch the list
                 alertify.success("Proyecto eliminado correctamente");
             } catch (error) {
@@ -611,7 +611,7 @@ export default function SGVProjectsManager() {
     try {
       const headers = getAuthHeaders();
       // Make API call to assign user to project
-      await axios.post(`${API_URL}/proyectos/${selectedProjectId}/assignUser`, { userId, rolProyecto: 'view' }, { headers });
+      await axios.post(`${API_URL}/api/proyectos/${selectedProjectId}/assignUser`, { userId, rolProyecto: 'view' }, { headers });
       
       // Update local state after successful API call
       setAssignments((prev) => {
@@ -633,7 +633,7 @@ export default function SGVProjectsManager() {
     try {
       const headers = getAuthHeaders();
       // Make API call to remove user from project
-      await axios.delete(`${API_URL}/proyectos/${selectedProjectId}/removeUser/${userId}`, { headers });
+      await axios.delete(`${API_URL}/api/proyectos/${selectedProjectId}/removeUser/${userId}`, { headers });
 
       // Update local state after successful API call
       setAssignments((prev) => ({ ...prev, [selectedProjectId]: (prev[selectedProjectId] || []).filter((u) => u !== userId) }));

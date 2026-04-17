@@ -31,7 +31,7 @@ import NewYearCountdown from './components/eventos/NewYearCountdown.jsx'; // NUE
 // Coordinado
 import Proyectos from './components/coordinador/suelos/proyectosv2/ProyectosV2';
 import GestorDeTramosActual from './components/coordinador/suelos/gestion_tramos/GestorDeTramosActual';
-import RecoleccionDeDatosContainer from './components/coordinador/suelos/ui/RecoleccionDeDatosContainer';
+import SuelosIndex from './components/coordinador/suelos/SuelosIndex';
 import Progresivas from './components/coordinador/suelos/gestion_tramos/Progresivas';
 import EnsayosSuelos from './components/coordinador/suelos/ensayos/ensayos';
 import DetalleEnsayo from './components/coordinador/suelos/ensayos/DetalleEnsayo'; // NUEVO                                
@@ -140,6 +140,11 @@ function AppContent() {
             return;
         }
         logAuditEvent('PAGE_VIEW', { path: location.pathname });
+
+        // Limpiar la selección de vista de Mecánica de Suelos si navegamos fuera de ese módulo
+        if (!location.pathname.startsWith('/coordinador/recoleccion-datos')) {
+            sessionStorage.removeItem('suelosViewMode');
+        }
     }, [location.pathname]);
 
     const handleCloseInitialViz = () => {
@@ -173,7 +178,7 @@ function AppContent() {
                 <Route path="/eventos/amigo-secreto/gestionar" element={<RutaPrivada><Layout><GestionarParticipantes /></Layout></RutaPrivada>} />
                 <Route path="/gestionar-participantes" element={<RutaPrivada><Layout><GestionarParticipantes /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/proyectos" element={<RutaPrivada><Layout><Proyectos /></Layout></RutaPrivada>} />
-                <Route path="/coordinador/recoleccion-datos/*" element={<RutaPrivada><Layout><RecoleccionDeDatosContainer /></Layout></RutaPrivada>} />
+                <Route path="/coordinador/recoleccion-datos/*" element={<RutaPrivada><Layout><SuelosIndex /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/suelos/ensayos/*" element={<RutaPrivada><Layout><EnsayosContainer /></Layout></RutaPrivada>} />
 
 

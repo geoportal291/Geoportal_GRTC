@@ -42,7 +42,7 @@ const AdminProjectsView = () => {
             const headers = { Authorization: `Bearer ${token}` };
 
             // Users
-            const userRes = await axios.get(`${API_URL}/usuarios`, { headers });
+            const userRes = await axios.get(`${API_URL}/api/usuarios`, { headers });
             // Formatting similar to proyectos.jsx
             const formattedUsers = userRes.data.map(u => ({
                 id: u.id,
@@ -101,7 +101,7 @@ const AdminProjectsView = () => {
             };
 
             // Create Shell
-            const res = await axios.post(`${API_URL}/proyectos/create-full`, {
+            const res = await axios.post(`${API_URL}/api/proyectos/create-full`, {
                 projectData,
                 progresivaData: { parentProgresiva, generatedChildren: [] }
             }, { headers });
@@ -110,7 +110,7 @@ const AdminProjectsView = () => {
 
             // If coordinator selected, assign them
             if (formData.coordinator_id && newProjectId) {
-                await axios.post(`${API_URL}/proyectos/${newProjectId}/assignUser`, {
+                await axios.post(`${API_URL}/api/proyectos/${newProjectId}/assignUser`, {
                     userId: formData.coordinator_id,
                     rolProyecto: 'admin' // Make them admin of the project? or 'edit'? 'admin' gives full control.
                 }, { headers });
@@ -130,7 +130,7 @@ const AdminProjectsView = () => {
         alertify.confirm('Confirmar Eliminación', '¿Está seguro?', async () => {
             try {
                 const headers = { Authorization: `Bearer ${token}` };
-                await axios.delete(`${API_URL}/proyectos/${id}`, { headers });
+                await axios.delete(`${API_URL}/api/proyectos/${id}`, { headers });
                 alertify.success("Proyecto eliminado.");
                 fetchProjects();
             } catch (error) {

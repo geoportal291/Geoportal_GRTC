@@ -1,269 +1,310 @@
-.leaflet-bar.vertical-controls {
+/* ESTILO PREMIUM PARA BARRA DE HERRAMIENTAS */
+.vertical-controls-premium {
     display: flex;
     flex-direction: column;
-    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
-    border-radius: 4px;
-    background-color: white;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    width: 44px;
 }
 
-.vertical-controls .leaflet-control-custom-button {
+.leaflet-control-custom-button-premium {
+    width: 44px;
+    height: 44px;
+    background: transparent;
     border: none;
-    border-bottom: 1px solid #ddd;
-    border-radius: 0;
-    margin: 0;
-    width: 32px;
-    height: 32px;
-    line-height: 32px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0;
+    position: relative;
 }
 
-.vertical-controls .leaflet-control-custom-button:first-child {
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-}
-
-.vertical-controls .leaflet-control-custom-button:last-child {
-    border-bottom-left-radius: 4px;
-    border-bottom-right-radius: 4px;
+.leaflet-control-custom-button-premium:last-child {
     border-bottom: none;
 }
 
-/* ESTILO PARA EL BOTÓN DE CENTRAR FLOTANTE */
-.leaflet-control-center-button {
-    background-color: #1364dd; /* Azul vibrante */
-    color: white !important;
-    border: none;
-    border-radius: 50%;
-    width: 44px;
-    height: 44px;
-    font-size: 1.3em;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    padding: 0;
-    outline: none;
-    z-index: 1001;
-}
-
-.leaflet-control-center-button:hover {
-    background-color: #0b4fb8;
-    transform: translateY(-2px) scale(1.1);
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.45);
-}
-
-.leaflet-control-center-button:active {
-    transform: translateY(0) scale(1);
-}
-
-.leaflet-control-center-button i {
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-
-/* Estilos para el componente Modal */
-.map-modal {
-    position: absolute;
-    top: 50px;
-    left: 50px;
-    width: 200px !important; /* Further reduced width */
-    background-color: white;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    z-index: 1002; /* Asegurarse de que esté por encima de otros controles de leaflet */
-    box-shadow: 0 3px 15px rgba(0,0,0,0.25);
-    display: flex;
-    flex-direction: column;
-    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
-    transform: scale(1);
-    opacity: 1;
-    max-width: 90vw;
-    position: absolute !important;
-    left: 50px !important;
-    right: auto !important;
-}
-.map-modal,
-.map-modal-content,
-.draw-modal-content-inner {
-    width: 300px !important; /* o el ancho que quieras */
-    max-width: 90vw; /* para evitar desbordes en pantallas pequeñas */
-    box-sizing: border-box;
-}
-
-.map-modal-header {
-    padding: 10px 15px;
-    background-color: #f1f1f1;
-    border-bottom: 1px solid #ddd;
-    cursor: move;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-}
-
-.map-modal-header span {
-    font-weight: 600;
-    font-size: 1.1em;
-    color: #333;
-}
-
-.map-modal-close-btn {
-    background: none;
-    border: none;
-    font-size: 1.8em;
-    font-weight: 300;
-    color: #666;
-    cursor: pointer;
-    padding: 0 5px;
-    line-height: 1;
-    transition: color 0.2s ease;
-}
-
-.map-modal-close-btn:hover {
+.leaflet-control-custom-button-premium:hover {
+    background-color: #f8fafc;
     color: #000;
 }
 
-.map-modal-content {
-    padding: 15px 20px;
-    max-height: 50vh; /* User already adjusted this, keeping it as is */
-    overflow-y: auto;
-    overflow-x: hidden; /* ADDED: Prevent horizontal scrolling/overflow */
-    background-color: #fff;
-    border-bottom-left-radius: 8px;
-    border-bottom-right-radius: 8px;
+.leaflet-control-custom-button-premium.active-tool {
+    background: #eff6ff;
+    color: #2563eb;
 }
 
-/* Ensure all direct children of modal content can shrink */
-.measure-modal-content-inner,
-.draw-modal-content-inner,
-.download-modal-content-inner {
-    min-width: 0; /* Ensure these containers can shrink */
-    width: 100%; /* Ensure they try to fill parent */
+.leaflet-control-custom-button-premium.active-tool::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 25%;
+    height: 50%;
+    width: 3px;
+    background: #2563eb;
+    border-radius: 4px 0 0 4px;
+}
+
+.leaflet-control-custom-button-premium.save-btn {
+    color: #10b981;
+}
+
+.leaflet-control-custom-button-premium.delete-btn {
+    color: #ef4444;
+}
+
+/* POPOVER STYLES (EL EFECTO DE BURBUJA) */
+.popover-container-premium {
+    position: relative;
+    pointer-events: none;
+}
+
+.map-popover-premium {
+    pointer-events: auto;
+    width: 350px !important;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2) !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    animation: popPopover 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popPopover {
+    from {
+        opacity: 0;
+        transform: translateX(-10px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+.map-popover-premium::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 15px;
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-right: 8px solid var(--popover-color);
+    z-index: 10;
+}
+
+.popover-header {
+    height: 42px;
+    background-color: var(--popover-color);
+    padding: 0 15px !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.popover-header span {
+    font-size: 0.9rem !important;
+    font-weight: 700 !important;
+    color: white !important;
+}
+
+.popover-close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem !important;
+    color: white !important;
+    cursor: pointer;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.popover-close-btn:hover {
+    opacity: 1;
+}
+
+.popover-content {
+    padding: 20px !important;
+    background: white;
+}
+
+/* TRACKING TOOLS GRID */
+.tools-grid-three {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.modal-tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 5px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    gap: 8px;
+}
+
+.modal-tool-btn i {
+    font-size: 1.2rem;
+    color: #64748b;
+}
+
+.modal-tool-btn span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+.modal-tool-btn:hover {
+    background: #f1f5f9;
+    transform: translateY(-2px);
+}
+
+.modal-tool-btn.active {
+    background: #eff6ff;
+    border-color: #3b82f6;
+}
+
+.modal-tool-btn.active i,
+.modal-tool-btn.active span {
+    color: #2563eb;
+}
+
+/* INSTRUCTION BOX */
+.instruction-box {
+    background: #f9fafb;
+    border: 1px dashed #e5e7eb;
+    padding: 15px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-bottom: 20px;
+    border-radius: 8px;
+}
+
+/* LOCATE SECTION */
+.locate-section label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 10px;
+}
+
+.locate-input-group {
+    display: flex;
+    gap: 8px;
+}
+
+.locate-input-group input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.locate-go-btn {
+    padding: 0 15px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* FORM ELEMENTS */
+.modal-form-group {
+    margin-bottom: 15px;
+}
+
+.modal-form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 5px;
+}
+
+.modal-form-group select,
+.modal-form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.9rem;
     box-sizing: border-box;
 }
 
-/* Styles for measurement tools */
-.measure-point-icon {
-    color: red;
-    font-size: 1.5em;
-    font-weight: bold;
-    text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
-}
-
-.measure-label {
-    background-color: rgba(255, 255, 255, 0.8);
-    border: 1px solid #ccc;
-    padding: 2px 5px;
-    border-radius: 3px;
-    font-size: 0.8em;
-    white-space: nowrap;
-}
-
-.leaflet-control-custom-button.active {
-    background-color: #e0e0e0; /* Highlight active button */
-}
-
-.measure-modal-content-inner .button-group {
-    display: flex;
-    gap: 5px; /* Space between buttons */
-    margin-bottom: 10px;
-}
-
-.measure-modal-content-inner .distance-display {
-    padding: 8px;
-    background-color: #f9f9f9;
-    border: 1px solid #eee;
-    border-radius: 4px;
-    font-size: 0.9em;
-    color: #555;
-}
-
-/* Styles for drawing tools */
-.draw-modal-content-inner .input-group {
-    margin-bottom: 10px;
-    display: flex;
-    flex-direction: column;
-}
-
-.draw-modal-content-inner .input-group label {
-    margin-bottom: 5px;
-    font-weight: 500;
-    color: #555;
-    white-space: nowrap; /* ADDED: Prevent label text from wrapping */
-    overflow: hidden; /* ADDED */
-    text-overflow: ellipsis; /* ADDED */
-}
-
-.draw-modal-content-inner .input-group input[type="text"],
-.draw-modal-content-inner .input-group select {
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 0.9em;
-    width: 100%; /* Ensure inputs fill available width */
-    box-sizing: border-box; /* Include padding and border in the element's total width */
-    min-width: 0; /* Allow inputs to shrink */
-    white-space: nowrap; /* ADDED: Prevent text wrapping in select options */
-    overflow: hidden; /* ADDED */
-    text-overflow: ellipsis; /* ADDED */
-}
-
-/* Container for GMS inputs and other coordinate input groups */
-#degreesInputs,
-#decimalInputs,
-#utmCoordInputs {
-    display: flex;
-    flex-direction: column; /* Changed to column to stack label and inputs */
-    gap: 5px; /* Space between input groups */
-}
-
-/* Individual input groups within coordinate containers */
-#degreesInputs > .input-group,
-#decimalInputs > .input-group,
-#utmCoordInputs > .input-group {
-    flex: 1 1 100%; /* Make each label+input pair take full width in column flex */
-    flex-direction: row; /* Make label and input side-by-side */
-    align-items: center;
-    gap: 5px;
-}
-
-#degreesInputs > .input-group label,
-#decimalInputs > .input-group label,
-#utmCoordInputs > .input-group label {
-    flex-shrink: 0; /* Prevent label from shrinking */
-    width: auto; /* Allow label to take its natural width */
-}
-
-#degreesInputs > .input-group input[type="text"] {
-    flex-grow: 1; /* Allow input to take remaining space */
-    width: auto; /* Override 100% for flex behavior */
-}
-
-.draw-modal-content-inner .input-group .gms-input {
-    flex: 1 1 0; /* Allow to grow/shrink equally */
-    min-width: 0; /* Ensure it can shrink */
-    box-sizing: border-box; /* Include padding and border in the element's total width */
-}
-
-.draw-modal-content-inner .button-group {
+.modal-form-row {
     display: flex;
     gap: 10px;
-    margin-top: 15px;
 }
 
-.draw-modal-content-inner .button-group button {
-    padding: 10px 15px;
-    background-color: #007bff;
+.modal-form-group.half {
+    flex: 1;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.btn-draw {
+    flex: 1;
+    background: #0284c7;
     color: white;
+    padding: 12px;
     border: none;
-    border-radius: 5px;
+    border-radius: 8px;
+    font-weight: 700;
     cursor: pointer;
-    font-size: 1em;
-    transition: background-color 0.2s ease;
 }
 
-.draw-modal-content-inner .button-group button:hover {
-    background-color: #0056b3;
+.btn-clear {
+    flex: 1;
+    background: #64748b;
+    color: white;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* EXPORT */
+.btn-export {
+    width: 100%;
+    padding: 14px;
+    background: #fdfdfd;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: #1f2937;
+    cursor: pointer;
+    gap: 10px;
+    margin-bottom: 10px;
 }

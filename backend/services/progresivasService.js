@@ -9,6 +9,95 @@ const { put, del } = require('@vercel/blob');
 const AdmZip = require('adm-zip');
 const { DOMParser } = require('xmldom');
 const path = require('path');
+const turf = require('@turf/turf');
+const { kml } = require('@tmcw/togeojson');
+const utm = require('utm');
+
+// --- HELPERS PARA INTERPOLACIÓN DE COORDENADAS ---
+const parseToMeters = (val) => {
+    if (typeof val === 'number') return val;
+    if (!val) return null;
+    let s = String(val).trim().toUpperCase().replace(',', '.');
+    // If it contains a hyphen, use only the part after the last hyphen (to ignore parent prefixes like 5676-0100)
+    if (s.includes('-')) {
+        s = s.split('-').pop();
+    }
+    const kmMatch = s.match(/(\d+)\+(\d+(\.\d+)?)/);
+    if (kmMatch) {
+        return parseFloat(kmMatch[1]) * 1000 + parseFloat(kmMatch[2]);
+    }
+    const clean = s.replace(/[^0-9.]/g, '');
+    if (!clean) return null;
+    const num = parseFloat(clean);
+    return isNaN(num) ? null : num;
+};
+
+const getKmlTrackData = async (kmlTrazadoId) => {
+    if (!kmlTrazadoId) return null;
+    const kmlText = await kmlService.getKmlContentById(kmlTrazadoId);
+    if (!kmlText) return null;
+    try {
+        const kmlDoc = new DOMParser().parseFromString(kmlText, 'text/xml');
+        const geojson = kml(kmlDoc);
+        let track = null;
+        let maxLen = 0;
+        let points = new Map();
+
+        if (geojson.features) {
+            for (const feature of geojson.features) {
+                if (feature.geometry.type === 'Point' && feature.properties && feature.properties.name) {
+                    const m = parseToMeters(feature.properties.name);
+                    if (m !== null) points.set(m, feature.geometry.coordinates);
+                } else if (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') {
+                    const len = turf.length(feature, { units: 'meters' });
+                    if (len > maxLen) {
+                        maxLen = len;
+                        track = feature;
+                    }
+                }
+            }
+        }
+        return { track, points };
+    } catch (e) {
+        console.error('[progresivasService] getKmlTrackData error:', e);
+        return null;
+    }
+};
+
+const interpolateUsingTrack = (trackData, targetMeters, startMeters, utmZoneRaw = null) => {
+    if (!trackData) return null;
+    if (targetMeters === null || isNaN(targetMeters)) return null;
+
+    let coords = trackData.points.get(targetMeters);
+    if (!coords && trackData.track) {
+        const distance = Math.max(0, targetMeters - (startMeters || 0));
+        try {
+            const point = turf.along(trackData.track, distance, { units: 'meters' });
+            coords = point.geometry.coordinates;
+        } catch (err) {
+            console.warn('[interpolateUsingTrack] Turf error:', err.message);
+        }
+    }
+
+    if (coords) {
+        const [lon, lat] = coords;
+        try {
+            let zNum;
+            if (utmZoneRaw && typeof utmZoneRaw === 'string') {
+                zNum = parseInt(utmZoneRaw.replace(/[A-Za-z]/g, ''));
+            }
+            const result = utm.fromLatLon(lat, lon, zNum);
+            return {
+                este: result.easting,
+                norte: result.northing
+            };
+        } catch (e) {
+            console.warn('[interpolateUsingTrack] UTM conversion error:', e);
+        }
+    }
+    return null;
+};
+// --- FIN DE HELPERS ---
 
 const asegurarColumnas = async (client) => {
     try {
@@ -20,7 +109,8 @@ const asegurarColumnas = async (client) => {
         `);
         await client.query(`
             ALTER TABLE progresivas
-            ADD COLUMN IF NOT EXISTS fecha_ejecucion DATE
+            ADD COLUMN IF NOT EXISTS fecha_ejecucion DATE,
+            ADD COLUMN IF NOT EXISTS elevacion DOUBLE PRECISION DEFAULT 0
         `);
         // Update check constraint to include 'aprobado' and handle typos in 'revisión'
         await client.query(`
@@ -90,8 +180,24 @@ const importarConEnsayos = async ({ parentProgresiva, generatedChildren, estrato
         ]);
         const parentId = parentResult.rows[0].id;
 
+        // Auto-fill coordinates if we have a KML
+        const kmlTrackData = await getKmlTrackData(parentProgresiva.kml_trazado_id);
+        const startMeters = parseToMeters(progresiva_inicial_parent);
+
         for (const prog of generatedChildren) {
             const uniqueSubProgresivaCodigo = `${parentId}-${prog.codigo}`;
+            
+            let ce = prog.coordenada_este;
+            let cn = prog.coordenada_norte;
+            
+            if ((ce === null || ce === undefined || ce === '') && kmlTrackData) {
+                const interp = interpolateUsingTrack(kmlTrackData, parseToMeters(prog.codigo), startMeters, prog.linea || linea);
+                if (interp) {
+                    ce = interp.este;
+                    cn = interp.norte;
+                }
+            }
+
             const childResult = await client.query(`
                 INSERT INTO progresivas
                 (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, lado, fecha_ejecucion)
@@ -99,7 +205,7 @@ const importarConEnsayos = async ({ parentProgresiva, generatedChildren, estrato
                 RETURNING id
             `, [
                 proyecto_id, parentId, uniqueSubProgresivaCodigo, prog.nombre, prog.descripcion, Number(prog.codigo), Number(prog.codigo),
-                prog.estado || 'pendiente', prog.coordenada_este, prog.coordenada_norte, prog.linea, prog.lado, prog.fecha_ejecucion || null
+                prog.estado || 'pendiente', ce, cn, prog.linea, prog.lado, prog.fecha_ejecucion || null
             ]);
             const childId = childResult.rows[0].id;
 
@@ -250,8 +356,27 @@ const createBulkProgresivas = async (parentProgresiva, generatedChildren) => {
         const parentResult = await client.query(parentInsertQuery, parentInsertParams);
         const parentId = parentResult.rows[0].id;
 
+        // Auto-fill coordinates
+        const kmlTrackData = await getKmlTrackData(kml_trazado_id || parentProgresiva.kml_trazado_id);
+        const startMeters = parseToMeters(progresiva_inicial_parent);
+
         for (const prog of generatedChildren) {
             const uniqueSubProgresivaCodigo = `${parentId}-${prog.codigo}`;
+            
+            let ce = prog.coordenada_este;
+            let cn = prog.coordenada_norte;
+            
+            if ((ce === null || ce === undefined || ce === '') && kmlTrackData) {
+                const interp = interpolateUsingTrack(kmlTrackData, parseToMeters(prog.codigo), startMeters, prog.linea || linea);
+                if (interp) {
+                    ce = interp.este;
+                    cn = interp.norte;
+                }
+            }
+
+            const p_ini = Number(prog.codigo.split('-')[1]) || Number(prog.codigo);
+            const p_fin = p_ini;
+
             await client.query(`
                 INSERT INTO progresivas
                 (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, fecha_ejecucion)
@@ -262,11 +387,11 @@ const createBulkProgresivas = async (parentProgresiva, generatedChildren) => {
                 uniqueSubProgresivaCodigo,
                 prog.nombre,
                 prog.descripcion,
-                Number(prog.codigo.split('-')[1]), // prog.progresiva_inicial
-                Number(prog.codigo.split('-')[1]), // prog.progresiva_final
+                p_ini,
+                p_fin,
                 prog.estado || 'pendiente',
-                prog.coordenada_este,
-                prog.coordenada_norte,
+                ce,
+                cn,
                 prog.linea,
                 prog.fecha_ejecucion || null
             ]);
@@ -799,6 +924,7 @@ const updateProgresiva = async (id, progresivaData) => {
             nombre, descripcion, estado, coordenada_este, coordenada_norte, linea, longitud_total,
             tipo_via, intervalo_manual, proyecto_id, finalKmlTrazadoId, finalKmlPuntosId, finalCodigo, id
         ]);
+        console.log(`[DEBUG updateProgresiva] Parent Update Success - ID: ${id}, RowCount: ${updateResult.rowCount}`);
 
 
         // 1. Obtener progresivas hijas existentes
@@ -814,6 +940,11 @@ const updateProgresiva = async (id, progresivaData) => {
         const existingChildren = existingChildrenResult.rows;
         const existingChildrenMap = new Map(existingChildren.map(child => [child.id, child]));
 
+        // Auto-fill coordinates
+        const kmlTrackData = await getKmlTrackData(finalKmlTrazadoId);
+        const startRes = await client.query('SELECT progresiva_inicial FROM progresivas WHERE id = $1', [id]);
+        const startMeters = startRes.rows[0] ? Number(startRes.rows[0].progresiva_inicial) : 0;
+
         // 2. Crear mapa de children generados y sincronizar SOLO SI se proporcionan
         const childrenToKeepIds = new Set();
         if (generatedChildren !== undefined && Array.isArray(generatedChildren)) {
@@ -828,6 +959,19 @@ const updateProgresiva = async (id, progresivaData) => {
             const childId = prog.id;
             const isExistingChild = existingChildrenMap.has(childId);
             let currentChildDbId;
+
+            let ce = prog.coordenada_este;
+            let cn = prog.coordenada_norte;
+            console.log(`[DEBUG updateProgresiva] Child ${prog.id || prog.codigo} - IN Coords: (${ce}, ${cn})`);
+            
+            if ((ce === null || ce === undefined || ce === '') && kmlTrackData) {
+                const interp = interpolateUsingTrack(kmlTrackData, parseToMeters(prog.codigo || prog.progresiva_inicial), startMeters, prog.linea || linea);
+                if (interp) {
+                    ce = interp.este;
+                    cn = interp.norte;
+                    console.log(`[DEBUG updateProgresiva] Child ${prog.id || prog.codigo} - INTERPOLATED Coords: (${ce}, ${cn})`);
+                }
+            }
 
             if (isExistingChild) {
                 await client.query(`
@@ -849,8 +993,8 @@ const updateProgresiva = async (id, progresivaData) => {
                     prog.progresiva_inicial,
                     prog.progresiva_final,
                     prog.estado || 'pendiente',
-                    prog.coordenada_este,
-                    prog.coordenada_norte,
+                    ce,
+                    cn,
                     prog.linea,
                     prog.lado,
                     childId
@@ -873,8 +1017,8 @@ const updateProgresiva = async (id, progresivaData) => {
                     prog.progresiva_inicial,
                     prog.progresiva_final,
                     prog.estado || 'pendiente',
-                    prog.coordenada_este,
-                    prog.coordenada_norte,
+                    ce,
+                    cn,
                     prog.linea,
                     prog.lado
                 ]);
@@ -1312,6 +1456,7 @@ const uploadKmlToProgresiva = async (progresivaId, file, userId, type = 'trazado
              RETURNING id, kml_trazado_id, kml_puntos_id;`;
 
         const result = await client.query(query, [newKmlTrazadoId, progresivaId]);
+        console.log(`[DEBUG] Associated KML ${newKmlTrazadoId} with Progresiva ${progresivaId}. Type column: ${columnToUpdate}. Rows updated: ${result.rowCount}`);
 
         if (result.rows.length === 0) {
             const error = new Error('Progresiva no encontrada para actualizar el KML.');
@@ -1327,8 +1472,9 @@ const uploadKmlToProgresiva = async (progresivaId, file, userId, type = 'trazado
             progresiva: {
                 id: result.rows[0].id,
                 kml_trazado_id: result.rows[0].kml_trazado_id,
-                kml_filename: kmlTrazado.kml_filename, // Include filename for frontend feedback
-                kml_uploaded_at: kmlTrazado.kml_uploaded_at // Include timestamp for frontend feedback
+                kml_puntos_id: result.rows[0].kml_puntos_id,
+                kml_filename: kmlTrazado.kml_filename,
+                kml_uploaded_at: kmlTrazado.kml_uploaded_at
             }
         };
 
@@ -1413,12 +1559,27 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
 
         // 3. Insert new children, strata, and assays
         const selectedEstratosSet = new Set(estratosSeleccionados || []);
+        
+        // Auto-fill coordinates
+        const kmlTrackData = await getKmlTrackData(finalKmlTrazadoId);
+        const startMeters = parseToMeters(progresiva_inicial_parent);
 
         for (const prog of generatedChildren) {
             const uniqueSubProgresivaCodigo = `${progresivaId}-${prog.codigo}`;
             const lineaIntChild = prog.linea ? parseInt(prog.linea, 10) : null;
             if (prog.linea && isNaN(lineaIntChild)) {
                 throw new Error(`El valor de linea para la progresiva hija '${prog.codigo}' no es un número válido.`);
+            }
+
+            let ce = prog.coordenada_este;
+            let cn = prog.coordenada_norte;
+            
+            if ((ce === null || ce === undefined || ce === '') && kmlTrackData) {
+                const interp = interpolateUsingTrack(kmlTrackData, parseToMeters(prog.codigo), startMeters, prog.linea || linea);
+                if (interp) {
+                    ce = interp.este;
+                    cn = interp.norte;
+                }
             }
 
             const childResult = await client.query(`
@@ -1428,7 +1589,7 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
                 RETURNING id
             `, [
                 parentProgresiva.proyecto_id, progresivaId, uniqueSubProgresivaCodigo, prog.nombre, prog.descripcion, parseInt(prog.codigo, 10), parseInt(prog.codigo, 10),
-                prog.estado || 'pendiente', prog.coordenada_este, prog.coordenada_norte, lineaIntChild, prog.lado, prog.fecha_ejecucion || null
+                prog.estado || 'pendiente', ce, cn, lineaIntChild, prog.lado, prog.fecha_ejecucion || null
             ]);
             const childId = childResult.rows[0].id;
 
@@ -1737,6 +1898,10 @@ const createProgresiva = async (data) => {
         if (isNaN(p_val)) p_val = 0;
     }
 
+    console.log(`[DEBUG createProgresiva] Data received:`, JSON.stringify({
+        proyecto_id, parent_id, codigo, finalCodigo, p_val, ce: coordenada_este, cn: coordenada_norte
+    }));
+
     const query = `
         INSERT INTO progresivas
         (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, lado)
@@ -1765,11 +1930,87 @@ const createProgresiva = async (data) => {
         lado || 'C'
     ];
 
-    const result = await db.query(query, params);
-    return result.rows[0];
+    try {
+        const result = await db.query(query, params);
+        console.log(`[DEBUG createProgresiva] Success - ID: ${result.rows[0].id}, Code: ${result.rows[0].codigo}, Count: ${result.rowCount}`);
+        return result.rows[0];
+    } catch (dbErr) {
+        console.error(`[DEBUG createProgresiva] DB Error for Code ${finalCodigo}:`, dbErr.message);
+        throw dbErr;
+    }
+};
+
+const getDatos3DSuelosByProyecto = async (proyectoId) => {
+    let client;
+    try {
+        client = await db.connect();
+        await asegurarColumnas(client);
+
+        // 1. Obtener todos los tramos (padres) para sacar los tracks KML
+        const tramosResult = await db.query(`
+            SELECT id, kml_trazado_id, nombre 
+            FROM progresivas 
+            WHERE proyecto_id = $1 AND parent_id IS NULL
+        `, [proyectoId]);
+
+        const tracks = [];
+        for (const tramo of tramosResult.rows) {
+            if (tramo.kml_trazado_id) {
+                const trackData = await kmlService.getKmlContentById(tramo.kml_trazado_id);
+                if (trackData) {
+                    tracks.push({
+                        tramo_id: tramo.id,
+                        nombre: tramo.nombre,
+                        kml_content: trackData
+                    });
+                }
+            }
+        }
+
+        // 2. Obtener todas las progresivas del proyecto
+        const progresivasResult = await db.query(`
+            SELECT 
+                p.id, p.parent_id, p.nombre, p.codigo, 
+                p.coordenada_este, p.coordenada_norte, p.elevacion, p.linea, p.lado
+            FROM progresivas p
+            WHERE p.proyecto_id = $1
+        `, [proyectoId]);
+
+        console.log(`[DEBUG 3D] Proyecto ${proyectoId}: Encontradas ${progresivasResult.rows.length} progresivas totales.`);
+        
+        const progresivaIds = progresivasResult.rows.map(p => p.id);
+        
+        let estratos = [];
+        if (progresivaIds.length > 0) {
+            const estratosResult = await db.query(`
+                SELECT 
+                    id, parent_id as progresiva_id, nombre, descripcion,
+                    cota_inicial, cota_final, orden, nlp_color_hex
+                FROM estratos
+                WHERE parent_type = 'progresiva' AND parent_id = ANY($1::int[])
+                ORDER BY parent_id, orden ASC
+            `, [progresivaIds]);
+            estratos = estratosResult.rows;
+        }
+
+        // 3. Mapear estratos a progresivas
+        const data = progresivasResult.rows.map(p => ({
+            ...p,
+            estratos: estratos.filter(e => e.progresiva_id === p.id)
+        }));
+
+        console.log(`[DEBUG 3D] Proyecto ${proyectoId}: Enviando ${tracks.length} trazados y ${data.length} progresivas procesadas.`);
+        return { tracks, progresivas: data };
+    } catch (err) {
+        console.error('Error en getDatos3DSuelosByProyecto:', err);
+        throw err;
+    } finally {
+        if (client) client.release();
+    }
 };
 
 module.exports = {
+    getDatos3DSuelosByProyecto, // NUEVO EXPORTE
     createProgresiva, // NEW EXPORT
 
     importarConEnsayos, // Añadir la nueva función

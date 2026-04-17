@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import GeologiaInternal from './GeologiaInternal';
 import GeologiaExternal from './GeologiaExternal';
@@ -61,32 +62,30 @@ const ViewSelectionModal = ({ onSelect }) => {
 
 const Geologia = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [viewMode, setViewMode] = useState(null); // 'internal', 'external', or null
+    const [isEvaluador, setIsEvaluador] = useState(false);
 
     useEffect(() => {
         if (user) {
-            const role = user.role?.toUpperCase() || '';
+            const role = user.rol_nombre?.toUpperCase() || user.role?.toUpperCase() || '';
             const specialtyId = parseInt(user.codigo_esp, 10);
+            const roleId = parseInt(user.rol_id, 10);
 
-            if (role === 'ADMIN') {
-                setViewMode(null); // Admin chooses
-            } else if (role === 'COORDINADOR PROYECTO' || specialtyId === 5) { // Assuming 5 is Geology specialty ID? Checking logic...
-                // If we want to force internal for certain roles like in Vialds
-                // For now, let's stick to the Vialds pattern but maybe keep selection for Admin
-                // If you want a specific logic for Geology specialists, update here.
-                // Assuming defaults for now:
-                setViewMode(null);
-            } else {
-                setViewMode('external'); // Others go straight to external? Or gives choice?
-                // Vialds logic:
-                // if (role === 'ADMIN') setShowSelection(true);
-                // else if (role === 'COORDINADOR PROYECTO' || specialtyId === 5) setViewMode('internal');
-                // else setViewMode('external');
-
-                // Let's replicate Vialds logic exactly for consistency, assuming specialty 5 is relevant or we remove that check
-                // For safety, let's default to selection for ADMIN and maybe Coordinators, and external for others.
-                // Or simply always show selection for now to be safe until verified.
-                setViewMode(null);
+            // Regla 1 (MÁS ESPECÍFICA): Evaluadores (Rol 6) van directo a la vista externa.
+            if (roleId === 6) {
+                setIsEvaluador(true);
+                setViewMode('external');
+            }
+            // Regla 2: Administradores y Especialistas en Geología (esp 2) eligen vista.
+            else if (role === 'ADMIN' || specialtyId === 2) {
+                setIsEvaluador(false);
+                setViewMode(null); // Muestra el modal de selección
+            }
+            // Por defecto para cualquier otro usuario, vista externa.
+            else {
+                setIsEvaluador(false);
+                setViewMode('external');
             }
         }
     }, [user]);
@@ -95,12 +94,23 @@ const Geologia = () => {
         setViewMode(mode);
     };
 
+    // El comportamiento del botón "Volver" depende del rol:
+    // - Evaluadores: vuelven al dashboard principal (no deben ver el selector)
+    // - Otros: vuelven al selector de vistas
+    const handleBack = () => {
+        if (isEvaluador) {
+            navigate('/coordinador/dashboardprincipal');
+        } else {
+            setViewMode(null);
+        }
+    };
+
     if (viewMode === 'internal') {
         return <GeologiaInternal />;
     }
 
     if (viewMode === 'external') {
-        return <GeologiaExternal />;
+        return <GeologiaExternal onBack={handleBack} />;
     }
 
     return <ViewSelectionModal onSelect={handleViewSelect} />;

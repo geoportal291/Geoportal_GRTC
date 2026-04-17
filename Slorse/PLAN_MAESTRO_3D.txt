@@ -1,0 +1,57 @@
+================================================================================
+          PLAN MAESTRO ACTUALIZADO: GEOPORTAL 3D, BIM Y MODO DIORAMA
+================================================================================
+
+Este documento contiene la planificación oficial para el desarrollo del entorno 3D
+del Geoportal, estructurada en 5 fases críticas.
+
+--------------------------------------------------------------------------------
+FASES DEL PROYECTO
+--------------------------------------------------------------------------------
+
+1. VISUALIZACIÓN BASE (ESTADO: COMPLETADO ✅)
+   - Visualización de progresivas y estratos en el mapa 3D (Cesium JS).
+   - Representación de estratos mediante columnas/cilindros 3D gráficos dinámicos.
+   - Visualización del trazado KML del tramo con inyección de tessellate automática.
+   - Refinamiento Visual: Marcadores cian neón y etiquetas flotantes Km XX+XXX.
+   - Cámara Cenital Inteligente: FlyTo automático a 1200m con vista 90°.
+   - Robustez: Sincronización de ciclos de vida del visor y prevención de duplicados.
+
+2. INFRAESTRUCTURA DE ARCHIVOS PESADOS (ESTADO: PENDIENTE - SEMANA PRÓXIMA)
+   - Soporte para importación de archivos de gran tamaño (0MB a 500MB).
+   - Implementación en servidor físico (pendiente de hardware).
+
+3. MODO DIORAMA Y RECORTE DE ENTORNO (ESTADO: PENDIENTE)
+   - Recorte dinámico del modelo topológico (radio de 100m a la redonda).
+   - Activación mediante selección de progresiva en el panel derecho.
+   - Vista automática en Primera Persona (First Person View).
+   - Entorno Restringido: Implementación de "Caja Técnica" con techo, piso y 
+     paredes físicas que impiden la salida de la cámara del área de interés.
+   - Renderizado del entorno exterior como fondo planetario (Skybox/Cesium).
+   - Cálculo basado en coordenadas exactas de la progresiva para recorte cuadrado.
+
+4. INTEGRACIÓN BIM/IFC GEORREFERENCIADO (ESTADO: PENDIENTE)
+   - Visor de modelos arquitectónicos y estructuras (puentes, cimientos, etc.).
+   - Librería: @thatopen/components (IFC.js).
+   - Control de capas técnicas: Visibilidad individual de muros, tuberías, 
+     tornillería, columnas, etc.
+   - Backend: Node.js para servir .frag/.ifc + Python (IfcOpenShell) para 
+     extracción de metadata y geolocalización (Lat/Lon).
+   - Panel lateral con árbol de capas dinámico (Checkboxes).
+   - Integración con el entorno Diorama (Paso 3) para visualización inmersiva.
+
+5. ORTOFOTOS DE ALTA RESOLUCIÓN (DRON) (ESTADO: PENDIENTE)
+   - Importación de imágenes capturadas por drones.
+   - Reemplazo/Superposición de texturas satelitales por datos reales y actuales.
+   - Alineación geográfica con las progresivas y proyectos de ingeniería.
+
+--------------------------------------------------------------------------------
+REQUERIMIENTOS TÉCNICOS IFC (PARA IMPLEMENTACIÓN)
+--------------------------------------------------------------------------------
+- Frontend: Three.js + IFC.js para fragmentación y pickeado de objetos.
+- Backend: Pipeline de extracción de SRID y metadata constructiva.
+- UI: Panel de control de categorías de construcción.
+
+================================================================================
+Documento actualizado al día: 09 de Abril, 2026.
+================================================================================

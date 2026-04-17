@@ -38,8 +38,30 @@
 
 .ensayos-content {
     flex-grow: 1;
-    padding: 20px;
+    padding: 10px 20px 20px 20px; /* Compactamos el espacio superior */
     overflow-y: auto;
+}
+
+/* --- Scrollbar Estilizada Premium (Global para el Módulo) --- */
+.ensayos-container *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.ensayos-container *::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ensayos-container *::-webkit-scrollbar-thumb {
+    background: #bdc3c7;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background-clip: content-box;
+}
+
+.ensayos-container *::-webkit-scrollbar-thumb:hover {
+    background: #95a5a6;
+    background-clip: content-box;
 }
 
 .ensayos-placeholder {

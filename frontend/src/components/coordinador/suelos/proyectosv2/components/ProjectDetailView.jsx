@@ -21,7 +21,7 @@ const ProjectDetailView = ({ project, onRefresh }) => {
     const fetchAssignments = async () => {
         try {
             const headers = { Authorization: `Bearer ${token}` };
-            const res = await axios.get(`${API_URL}/proyectos/${project.id}/assignments`, { headers });
+            const res = await axios.get(`${API_URL}/api/proyectos/${project.id}/assignments`, { headers });
             setAssignments(res.data);
         } catch (error) {
             console.error("Error fetching assignments", error);
@@ -32,7 +32,7 @@ const ProjectDetailView = ({ project, onRefresh }) => {
         if (!isAdmin) return;
         try {
             const headers = { Authorization: `Bearer ${token}` };
-            const res = await axios.get(`${API_URL}/usuarios`, { headers });
+            const res = await axios.get(`${API_URL}/api/usuarios`, { headers });
             const formattedUsers = res.data.map(u => ({
                 id: u.id,
                 nombre: `${u.nombre} ${u.ap_paterno} ${u.ap_materno}`.trim(),

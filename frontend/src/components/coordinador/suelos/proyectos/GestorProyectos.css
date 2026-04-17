@@ -113,13 +113,13 @@
 
 /* Right Panel */
 .panel-header {
-    padding: 20px 25px;
-    background-color: var(--header-background); /* Using the new variable */
-    color: #fff; /* texto en blanco */
+    padding: 12px 25px; /* Más compacto */
+    background: linear-gradient(to bottom, #ffffff, #f8fafc); /* Gradiente suave */
+    color: #1e293b; /* Texto pizarra oscuro */
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--light-gray);
+    border-bottom: 2px solid #e2e8f0;
     gap: 20px;
 }
 
@@ -404,11 +404,13 @@
    ========================================================================== */
 
 .unified-navigation-panel {
-    background-color: #fff;
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    padding: 15px 25px;
-    margin-bottom: 20px;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0 20px;
+    margin-bottom: 0px; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    z-index: 100;
+    flex-shrink: 0;
 }
 
 .nav-separator {
@@ -424,15 +426,16 @@
 }
 
 .nav-level-1-item {
-    padding: 8px 4px;
-    margin: 0 12px;
-    font-size: 1.1rem;
-    font-weight: 500;
-    color: var(--gray);
+    padding: 12px 0;
+    margin: 0 15px;
+    font-size: 0.85rem; /* Más compacto */
+    font-weight: 600;
+    color: #64748b;
     cursor: pointer;
-    border-radius: 0;
     border-bottom: 3px solid transparent;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .nav-level-1-item:hover {
@@ -442,9 +445,8 @@
 
 .nav-level-1-item.active {
     background-color: transparent;
-    color: var(--primary);
-    font-weight: 600;
-    border-bottom: 3px solid var(--primary);
+    color: #2563eb;
+    border-bottom: 3px solid #2563eb;
 }
 
 /* Nivel 2 (Sub-gestores) */
@@ -454,15 +456,14 @@
 }
 
 .nav-level-2-item {
-    padding: 10px 4px;
-    margin: 0 11px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: var(--secondary);
+    padding: 8px 12px;
+    margin: 0 4px;
+    font-size: 0.75rem; /* Estilo Inventario Vial */
+    font-weight: 600;
+    color: #475569;
     cursor: pointer;
-    border-radius: 0;
-    border-bottom: 2px solid transparent;
-    transition: all 0.3s ease;
+    border-radius: 6px;
+    transition: all 0.2s ease;
 }
 
 .nav-level-2-item:hover {
@@ -471,10 +472,8 @@
 }
 
 .nav-level-2-item.active {
-    background-color: transparent;
-    color: var(--primary);
-    font-weight: 600;
-    border-bottom: 2px solid var(--primary);
+    background-color: #eff6ff;
+    color: #1d4ed8;
 }
 
 /* ==========================================================================
@@ -485,8 +484,43 @@
     background-color: #ffffff;
     border-radius: var(--radius, 8px);
     box-shadow: var(--shadow, 0 4px 6px rgba(0,0,0,0.1));
-    padding: 25px;
-    margin-top: 0; /* The parent container already has margin */
+    padding: 20px;
+    margin-top: 0;
+    flex: 1;
+    overflow-y: auto; /* Permitir scroll en Dashboard y Datos de Suelos */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Modifier para 3D Full Screen */
+.content-card-3d {
+    padding: 0 !important;
+    background: #020617 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden !important; /* El 3D NO debe tener scroll externo */
+}
+
+/* Modifier para Ensayos (Evita doble scroll) */
+.content-card-no-scroll {
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+.gestor-proyectos-container-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background-color: #f1f5f9;
+    overflow: hidden;
+    position: relative;
+    padding-top: 66px; /* Espacio para compensar la header fija del sitio */
+    box-sizing: border-box;
 }
 
 /* Virtual Table Styles */

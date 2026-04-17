@@ -75,6 +75,23 @@ export default function Navbar({ onToggle, isCollapsed }) {
   const isActiveLink = (path) => currentPath.startsWith(path);
 
   const isNavItemVisible = (linkKey) => {
+    const isAdmin = user?.rol_nombre === 'ADMIN';
+    const isEvaluatorGeology = (user?.rol_id === 6 || user?.rol_id === '6') && (user?.codigo_esp === 2 || user?.codigo_esp === '2');
+
+    // Si es ADMIN, generalmente respetamos la visibilidad configurada o permitimos todo.
+    // Si es Evaluador de Geología, solo permitimos lo que pidió el usuario.
+    if (isEvaluatorGeology) {
+      const allowedKeys = [
+        '/coordinador/dashboardprincipal', 
+        'ingenieria_basica', 
+        '/ingenieria/geologia',
+        'cerrar_sesion',
+        '/perfil',
+        '/coordinador/cordinadords'
+      ];
+      return allowedKeys.includes(linkKey);
+    }
+
     return navbarVisibility[linkKey] === true;
   };
 
@@ -90,6 +107,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
       if (isActiveLink('/coordinador/recoleccion-datos')) return 'Mecánica de Suelos';
     }
     if (menu === 'configuracion') {
+      if (isActiveLink('/coordinador/proyectos')) return 'Configuración de Proyecto';
       if (isActiveLink('/coordinador/Progresivas')) return 'Gestión de Tramos';
       if (isActiveLink('/coordinador/config/frmusuarios2')) return 'Usuarios';
       if (isActiveLink('/coordinador/config/PermisosManagement')) return 'Permisos';
@@ -310,6 +328,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
           {/* CONFIGURACIÓN */}
           {isNavItemVisible('configuracion') && (
             <li className={`has-submenu ${openMenu.configuracion ? 'open' : ''} ${[
+              '/coordinador/proyectos',
               '/coordinador/Progresivas',
               '/coordinador/config/frmusuarios2',
               '/coordinador/config/PermisosManagement',
@@ -335,6 +354,11 @@ export default function Navbar({ onToggle, isCollapsed }) {
                 )}
               </div>
               <ul className={`submenu ${openMenu.configuracion && !isCollapsed ? 'show' : ''}`}>
+                <li className={isActiveLink('/coordinador/proyectos') ? 'active' : ''}>
+                  <Link to="/coordinador/proyectos">
+                    <i className="fas fa-folder-open"></i><span>Configuración de Proyecto</span>
+                  </Link>
+                </li>
                 <li className={isActiveLink('/coordinador/Progresivas') ? 'active' : ''}>
                   <Link to="/coordinador/Progresivas">
                     <i className="fas fa-route"></i><span>Gestión de Tramos</span>

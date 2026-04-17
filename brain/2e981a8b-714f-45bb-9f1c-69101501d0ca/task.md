@@ -11,3 +11,8 @@
 - [x] Conectar en `GeologiaInternal.jsx`
 - [x] Verificar funcionamiento con el KMZ de 1476 fotos (Optimizado y Estilizado)
 - [x] Paridad total con UI Geoite (Encabezado, Sidebar de herramientas, Layout expandible)
+- [x] **Refinamiento UI/UX:**
+    - [x] Zoom y Popup instantáneo (primer clic) con apertura diferida
+    - [x] Texto de popup en Blanco Puro (`!important`)
+    - [x] Soporte para capas sin nombre ('Otros') en Geomorfología
+    - [x] Lightbox accesible (botones separados del navbar)

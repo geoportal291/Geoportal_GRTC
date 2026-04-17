@@ -9,6 +9,7 @@ async function createTable() {
                 tab_name VARCHAR(50) NOT NULL,
                 file_url TEXT NOT NULL,
                 file_name VARCHAR(255) NOT NULL,
+                drive_url TEXT,
                 uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (proyecto_id, tab_name)
             );

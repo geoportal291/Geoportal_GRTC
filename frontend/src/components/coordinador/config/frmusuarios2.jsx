@@ -21,7 +21,7 @@ function GestionUsuarios() {
 const fetchUsers = useCallback(async () => {
         setLoading(true);
        try {
-       const response = await axiosInstance.get('/usuarios', {
+       const response = await axiosInstance.get('/api/usuarios', {
         headers: {
           Authorization: `Bearer ${JSON.parse(localStorage.getItem('user')).token}`
         }
@@ -82,7 +82,7 @@ const fetchUsers = useCallback(async () => {
     alertify.confirm('Eliminar Usuario', '¿Estás seguro de que quieres eliminar este usuario?', 
       async function(){
         try {
-          await axiosInstance.delete(`/usuarios/${dni}`, {
+          await axiosInstance.delete(`/api/usuarios/${dni}`, {
             headers: {
               Authorization: `Bearer ${JSON.parse(localStorage.getItem('user')).token}`
             }
@@ -329,7 +329,7 @@ function InformacionUsuarios() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const response = await axiosInstance.get('/usuarios', {
+      const response = await axiosInstance.get('/api/usuarios', {
         headers: {
           Authorization: `Bearer ${JSON.parse(localStorage.getItem('user')).token}`
         }

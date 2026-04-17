@@ -19,6 +19,8 @@ const AdmZip = require('adm-zip');
 const { XMLParser } = require('fast-xml-parser');
 const axios = require('axios');
 const { put, del } = require('@vercel/blob');
+const { kml } = require('@tmcw/togeojson');
+const { DOMParser } = require('xmldom');
 const tokml = require('tokml');
 const archiver = require('archiver');
 const FormData = require('form-data'); // Import FormData
@@ -64,7 +66,7 @@ const emailService = require('./services/emailService');
 const whitelist = [
     'http://localhost:3000',
     'https://geoportalbetav3.fly.dev',
-    'https://backendgeoportal.fly.dev'
+    'https://geoportal-frontend-1.fly.dev'
 ];
 
 const corsOptions = {
@@ -141,23 +143,45 @@ const authenticateToken = async (req, res, next) => {
             `, [decoded.id]);
 
             if (userResult.rows.length === 0) {
-                return res.sendStatus(403); // User from token not found
+                return res.sendStatus(403);
             }
 
             const user = userResult.rows[0];
             const permissions = await usuariosService.getUserPermissions(user.id, user.rol_id);
 
-            user.permissions = permissions; // Adjuntar permisos al objeto de usuario
-            req.user = user; // Adjuntar el objeto de usuario completo (con permisos) a la solicitud
+            user.permissions = permissions;
+            req.user = user;
 
             next();
         } catch (err) {
             console.error("Error en middleware de autenticación:", err);
-            return res.sendStatus(403); // Invalid token
+            return res.sendStatus(403);
         }
     } else {
         res.sendStatus(401);
     }
+};
+
+// Middleware de autorización específico para Geología
+const authorizeGeologyManage = async (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'No autenticado' });
+    
+    // Convertir a número por seguridad
+    const roleId = parseInt(req.user.rol_id, 10);
+    const specialtyId = parseInt(req.user.codigo_esp, 10);
+    const roleName = req.user.rol_nombre;
+
+    const isAdmin = roleName === 'ADMIN';
+    // Especialista en Geología (Código 2)
+    const isSpecialistGeology = specialtyId === 2;
+    // Evaluador (Rol 6) con especialidad en Geología (Código 2)
+    const isEvaluatorGeology = roleId === 6 && specialtyId === 2;
+
+    if (isAdmin || isSpecialistGeology || isEvaluatorGeology) {
+        return next();
+    }
+
+    return res.status(403).json({ error: 'Acceso denegado: No tiene permisos de gestión en el módulo de Geología' });
 };
 
 // Middleware de autorización para ADMIN y COORDINADOR PROYECTO
@@ -524,7 +548,7 @@ app.post('/login', async (req, res) => {
                             emailMasked: userEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3')
                         });
                     } else {
-                        // Fallback si falla el correo? O permitir entrar? Por seguridad mejor fallar.
+                        // Fallback si falla el correo? Or permitir entrar? Por seguridad mejor fallar.
                         res.status(500).json({ status: 'error', mensaje: 'Error al enviar código de verificación.' });
                     }
                 } else {
@@ -676,15 +700,47 @@ app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (
             console.log("Iniciando envío a Python Worker...");
             console.log("Archivo recibido por Multer:", req.file ? req.file.originalname : "Ninguno");
 
+            let fileBuffer = req.file.buffer;
+            let fileName = req.file.originalname;
+            let ext = fileName.split('.').pop().toUpperCase();
+
+            // Lógica de descompresión ZIP
+            if (ext === 'ZIP') {
+                console.log("[DEBUG 3D] Detectado archivo comprimido ZIP, intentando extraer...");
+                try {
+                    const zip = new AdmZip(req.file.buffer);
+                    const zipEntries = zip.getEntries();
+                    
+                    // Buscamos el primer archivo .xml o .ifc dentro del ZIP
+                    const targetEntry = zipEntries.find(entry => 
+                        !entry.isDirectory && (
+                        entry.name.toUpperCase().endsWith('.XML') || 
+                        entry.name.toUpperCase().endsWith('.IFC')
+                      )
+                    );
+
+                    if (!targetEntry) {
+                        throw new Error('El archivo ZIP no contiene ningún archivo .xml o .ifc válido.');
+                    }
+
+                    console.log(`[DEBUG 3D] Archivo extraído con éxito: ${targetEntry.name} (${targetEntry.header.size} bytes)`);
+                    fileBuffer = targetEntry.getData();
+                    fileName = targetEntry.name;
+                    ext = fileName.split('.').pop().toUpperCase();
+                } catch (zipErr) {
+                    console.error("Error descomprimiendo ZIP:", zipErr);
+                    throw new Error('No se pudo leer el archivo ZIP. Asegúrate de que no esté dañado.');
+                }
+            }
+
             const formData = new FormData();
-            formData.append('file', req.file.buffer, {
-                filename: req.file.originalname,
-                contentType: req.file.mimetype,
+            formData.append('file', fileBuffer, {
+                filename: fileName,
+                contentType: ext === 'XML' ? 'text/xml' : 'application/octet-stream',
             });
 
             let pythonResponse;
-            const ext = req.file.originalname.split('.').pop().toUpperCase();
-            console.log("Extensión detectada:", ext);
+            console.log("Extensión procesada:", ext);
 
             if (ext === 'XML') { // LandXML
                 console.log("Enviando a http://127.0.0.1:8000/3d/analizar-landxml");
@@ -704,20 +760,27 @@ app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (
                     superficies: metadataPython?.cantidad_superficies
                 }, null, 2));
 
-                // Guardar OBJ en Vercel Blob
+                // Guardar OBJ en Vercel Blob (SOLO SI NO ES TRAMO MAESTRO)
+                const isTramoMaestro = req.body.es_tramo_completo === 'true' || req.body.es_tramo_completo === true;
+
                 if (metadataPython && metadataPython.obj_content) {
-                    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9.\\-_]/g, '_').replace(/\\.xml$/i, '');
-                    const objFilename = `modelos3d/${req.body.proyecto_id || 'general'}/${Date.now()}_${safeName}.obj`;
+                    if (isTramoMaestro) {
+                        console.log("[DEBUG 3D] Tramo Maestro: Saltando subida de malla OBJ para ahorrar espacio.");
+                        urlArchivoFinal = 'STREAMING_LOCAL_SIN_MALLA';
+                        delete metadataPython.obj_content;
+                    } else {
+                        // MIGRACIÓN A DB: Guardar directamente en la base de datos (PostgreSQL)
+                        // para evitar límites de Vercel Blob (1GB)
+                        console.log(`[DEBUG 3D] Malla detectada (${metadataPython.obj_content.length} bytes). Guardando en BASE DE DATOS.`);
+                        
+                        // Límite de seguridad: 10MB para no saturar la DB
+                        if (metadataPython.obj_content.length > 10 * 1024 * 1024) {
+                            throw new Error('El modelo excede el límite de 10MB para almacenamiento en DB.');
+                        }
 
-                    // Asegurarnos de que importText (obj_content) se suba como un archivo
-                    const blob = await put(objFilename, metadataPython.obj_content, {
-                        access: 'public',
-                        token: process.env.BLOB_READ_WRITE_TOKEN,
-                        contentType: 'text/plain'
-                    });
-
-                    urlArchivoFinal = blob.url;
-                    delete metadataPython.obj_content; // Importante: limpiar esto para no saturar JSON y Base de Datos
+                        urlArchivoFinal = 'DB_EMBEDDED_OBJ';
+                        // El contenido se queda en metadataPython.obj_content y se guardará vía JSONB
+                    }
                 }
             } else if (ext === 'IFC') {
                 console.log("Enviando a http://127.0.0.1:8000/3d/analizar-ifc");
@@ -751,7 +814,8 @@ app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (
             tamano_bytes: req.file.size,
             subido_por: req.user.id,
             metadata: metadataPython,
-            estado: estadoCalculo
+            estado: estadoCalculo,
+            es_tramo_completo: req.body.es_tramo_completo === 'true' || req.body.es_tramo_completo === true
         };
 
         const result = await modelos3DService.createModelo3D(modeloData);
@@ -769,6 +833,17 @@ app.delete('/api/modelos-3d/:id', authenticateToken, async (req, res) => {
         res.json({ message: 'Modelo 3D eliminado exitosamente', data: result });
     } catch (err) {
         res.status(500).json({ status: 'error', error: err.message });
+    }
+});
+
+app.get('/api/3d/datos-suelos/:proyectoId', authenticateToken, async (req, res) => {
+    try {
+        const { proyectoId } = req.params;
+        const data = await progresivasService.getDatos3DSuelosByProyecto(proyectoId);
+        res.json(data);
+    } catch (err) {
+        console.error("Error al obtener datos 3D de suelos:", err);
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -838,66 +913,91 @@ app.post('/api/proyectos/:id/panel-fotografico/upload-kmz', authenticateToken, a
             }
         });
 
-        // 5. Preparar tareas de procesamiento (Subida paralela a Vercel Blob)
-        const processingTasks = placemarks.map(async (pm) => {
-            const nombre = pm.name ? String(pm.name).trim() : null;
-            const descripcion = pm.description ? String(pm.description).replace(/<[^>]+>/g, '').trim() : null;
+        // 5. Preparar tareas de procesamiento (Subida paralela controlada a Vercel Blob)
+        console.log(`[Panel Fotográfico] Procesando ${placemarks.length} elementos en lotes...`);
+        const results = [];
+        const CONCURRENCY_LIMIT = 15; // Lote de peticiones concurrentes a Vercel Blob
 
-            let lat = null, lng = null;
-            const coords = pm?.Point?.coordinates;
-            if (coords) {
-                const parts = String(coords).trim().split(',');
-                if (parts.length >= 2) {
-                    lng = parseFloat(parts[0]);
-                    lat = parseFloat(parts[1]);
+        for (let i = 0; i < placemarks.length; i += CONCURRENCY_LIMIT) {
+            const chunk = placemarks.slice(i, i + CONCURRENCY_LIMIT);
+            const chunkResults = await Promise.all(chunk.map(async (pm) => {
+                const nombre = pm.name ? String(pm.name).trim() : null;
+                const descripcion = pm.description ? String(pm.description).replace(/<[^>]+>/g, '').trim() : null;
+
+                let lat = null, lng = null;
+                const coords = pm?.Point?.coordinates;
+                if (coords) {
+                    const parts = String(coords).trim().split(',');
+                    if (parts.length >= 2) {
+                        const parsedLng = parseFloat(parts[0]);
+                        const parsedLat = parseFloat(parts[1]);
+                        if (!isNaN(parsedLng) && !isNaN(parsedLat)) {
+                            lng = parsedLng;
+                            lat = parsedLat;
+                        }
+                    }
                 }
-            }
 
-            let imageBuffer = null, imageFilename = null;
-            const descRaw = pm.description ? String(pm.description) : '';
-            const imgMatch = descRaw.match(/src=["']([^"']+\.(jpe?g|png|gif|webp|bmp))["']/i);
-            if (imgMatch) {
-                const refPath = imgMatch[1];
-                const refBasename = refPath.split('/').pop();
-                imageBuffer = imageMap[refPath] || imageMap[refBasename] || null;
-                imageFilename = refBasename;
-            }
-
-            if (!imageBuffer && nombre) {
-                const matchKey = Object.keys(imageMap).find(k =>
-                    k.toLowerCase().includes(nombre.toLowerCase().replace(/\s+/g, '_')) ||
-                    k.toLowerCase().includes(nombre.toLowerCase().replace(/\s+/g, ''))
-                );
-                if (matchKey) {
-                    imageBuffer = imageMap[matchKey];
-                    imageFilename = matchKey.split('/').pop();
+                let imageBuffer = null, imageFilename = null;
+                const descRaw = pm.description ? String(pm.description) : '';
+                const imgMatch = descRaw.match(/src=["']([^"']+\.(jpe?g|png|gif|webp|bmp))["']/i);
+                if (imgMatch) {
+                    const refPath = imgMatch[1];
+                    const refBasename = refPath.split('/').pop();
+                    imageBuffer = imageMap[refPath] || imageMap[refBasename] || null;
+                    imageFilename = refBasename;
                 }
-            }
 
-            let imageUrl = null;
-            if (imageBuffer) {
-                try {
-                    const safeFilename = (imageFilename || `foto_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9-._]/g, '_');
-                    const blobPath = `geologia-fotos/${proyectoId}/${Date.now()}_${safeFilename}`;
-                    const blobOptions = { access: 'public', contentType: 'image/jpeg' };
-                    if (blobToken) blobOptions.token = blobToken;
-
-                    const ext = safeFilename.split('.').pop().toLowerCase();
-                    const mimeTypes = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
-                    if (mimeTypes[ext]) blobOptions.contentType = mimeTypes[ext];
-
-                    const blob = await put(blobPath, imageBuffer, blobOptions);
-                    imageUrl = blob.url;
-                } catch (putErr) {
-                    console.error(`[Panel Fotográfico] Error subiendo imagen:`, putErr.message);
+                if (!imageBuffer && nombre) {
+                    const matchKey = Object.keys(imageMap).find(k =>
+                        k.toLowerCase().includes(nombre.toLowerCase().replace(/\s+/g, '_')) ||
+                        k.toLowerCase().includes(nombre.toLowerCase().replace(/\s+/g, ''))
+                    );
+                    if (matchKey) {
+                        imageBuffer = imageMap[matchKey];
+                        imageFilename = matchKey.split('/').pop();
+                    }
                 }
-            }
-            return { nombre, descripcion, lat, lng, imageUrl, original_filename: imageFilename };
-        });
 
-        console.log(`[Panel Fotográfico] Procesando ${placemarks.length} elementos...`);
-        const results = await Promise.all(processingTasks);
-        const validResults = results.filter(r => r.imageUrl || (r.lat !== null && r.lng !== null));
+                let imageUrl = null;
+                if (imageBuffer) {
+                    try {
+                        const safeFilename = (imageFilename || `foto_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9-._]/g, '_');
+                        const blobPath = `geologia-fotos/${proyectoId}/${Date.now()}_${safeFilename}`;
+                        const blobOptions = { access: 'public', contentType: 'image/jpeg' };
+
+                        // Limpiar el token de posibles comillas o espacios accidentales
+                        const cleanToken = (blobToken || '').replace(/['"]/g, '').trim();
+                        if (cleanToken) blobOptions.token = cleanToken;
+
+                        const ext = safeFilename.split('.').pop().toLowerCase();
+                        const mimeTypes = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
+                        if (mimeTypes[ext]) blobOptions.contentType = mimeTypes[ext];
+
+                        console.log(`[Panel Fotográfico] Subiendo a Vercel Blob: ${blobPath}...`);
+                        const blob = await put(blobPath, imageBuffer, blobOptions);
+                        imageUrl = blob.url;
+                    } catch (putErr) {
+                        console.error(`[Panel Fotográfico] ERROR CRÍTICO VERCEL BLOB (${imageFilename}):`, putErr.message);
+                        if (putErr.response) console.error(`[Panel Fotográfico] Detalle error Vercel:`, putErr.response.data);
+                    }
+                } else {
+                    console.warn(`[Panel Fotográfico] No se encontró buffer de imagen para ${nombre || 'elemento sin nombre'} (${imageFilename})`);
+                }
+                return { nombre, descripcion, lat, lng, imageUrl, original_filename: imageFilename };
+            }));
+            results.push(...chunkResults);
+        }
+
+        // Solo incluimos registros que tengan URL de imagen si es requisito de la tabla, 
+        // o al menos que tengan coordenadas. 
+        // Si image_url es NOT NULL en la DB, debemos filtrar los que no tienen imageUrl para evitar el 500 error.
+        const validResults = results.filter(r => r.imageUrl);
+
+        if (validResults.length === 0 && results.length > 0) {
+            console.error("[Panel Fotográfico] No se pudo subir ninguna imagen de las encontradas en el KMZ.");
+            throw new Error("No se pudo subir ninguna imagen a Vercel Blob. Verifique sus tokens de acceso.");
+        }
 
         // 6. Inserción en BD
         const client = await db.connect();
@@ -916,6 +1016,28 @@ app.post('/api/proyectos/:id/panel-fotografico/upload-kmz', authenticateToken, a
             }
             await client.query('COMMIT');
             console.log(`[Panel Fotográfico] OK: ${fotosInsertadas.length} fotos guardadas.`);
+
+            // 7. Extraer GeoJSON del KML para mostrar la capa base en el mapa (opcional)
+            try {
+                const kmlDom = new DOMParser().parseFromString(kmlText, 'text/xml');
+                const geojson = kml(kmlDom);
+
+                if (geojson && geojson.features && geojson.features.length > 0) {
+                    console.log(`[Panel Fotográfico] Guardando capa GeoJSON extraída del KMZ (${geojson.features.length} elementos)...`);
+                    await db.query(`
+                        INSERT INTO geologia_capas (proyecto_id, tab_name, geojson_data, file_name)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT (proyecto_id, tab_name) 
+                        DO UPDATE SET 
+                            geojson_data = EXCLUDED.geojson_data,
+                            file_name = EXCLUDED.file_name,
+                            uploaded_at = CURRENT_TIMESTAMP
+                    `, [proyectoId, 'panel_fotografico', JSON.stringify(geojson), req.file.originalname]);
+                }
+            } catch (layerErr) {
+                console.error('[Panel Fotográfico] Error al extraer capa GeoJSON del KMZ:', layerErr.message);
+            }
+
             res.json({ status: 'ok', count: fotosInsertadas.length, fotos: fotosInsertadas });
         } catch (dbErr) {
             await client.query('ROLLBACK');
@@ -1415,7 +1537,7 @@ app.delete('/api/hitos-kilometricos/:id', authenticateToken, hitosKilometricosSe
 app.put('/api/hitos-kilometricos/:id', authenticateToken, hitosKilometricosService.updateHito);
 
 // --------------------- ROLES ---------------------
-app.get('/roles', async (req, res) => {
+app.get('/api/roles', async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM roles');
         res.json(result.rows);
@@ -1426,7 +1548,7 @@ app.get('/roles', async (req, res) => {
 });
 
 // --------------------- ESPECIALIDADES ---------------------
-app.get('/especialidades', async (req, res) => {
+app.get('/api/especialidades', async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM especialidades');
         res.json(result.rows);
@@ -1437,7 +1559,7 @@ app.get('/especialidades', async (req, res) => {
 });
 
 // --------------------- USUARIOS ---------------------
-app.post('/usuarios', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
+app.post('/api/usuarios', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
     try {
         const result = await usuariosService.createUser(req.body);
         res.status(201).json({ status: 'ok', mensaje: 'Usuario creado correctamente', userId: result.userId });
@@ -1454,7 +1576,7 @@ app.post('/usuarios', authenticateToken, authorizePermission('usuarios', 'edicio
     }
 });
 
-app.get('/usuarios', authenticateToken, authorizePermission('usuarios', 'lectura'), async (req, res) => {
+app.get('/api/usuarios', authenticateToken, authorizePermission('usuarios', 'lectura'), async (req, res) => {
     try {
         const result = await db.query(`
             SELECT u.*, r.nombre AS rol_nombre, e.nombre AS especialidad_nombre
@@ -1469,7 +1591,30 @@ app.get('/usuarios', authenticateToken, authorizePermission('usuarios', 'lectura
     }
 });
 
-app.get('/usuarios/:id', authenticateToken, authorizePermission('usuarios', 'lectura'), async (req, res) => {
+// Buscar usuario por DNI (para autocompletado en el modal)
+app.get('/api/usuarios/dni/:dni', authenticateToken, async (req, res) => {
+    const { dni } = req.params;
+    try {
+        const result = await db.query(
+            `SELECT u.*, r.nombre AS rol_nombre, e.nombre AS especialidad_nombre
+             FROM usuariost u
+             LEFT JOIN roles r ON u.rol_id = r.id
+             LEFT JOIN especialidades e ON u.codigo_esp = e.codigo_esp
+             WHERE u.dni = $1 LIMIT 1`,
+            [dni]
+        );
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            res.status(404).json({ status: 'error', mensaje: 'Usuario no encontrado' });
+        }
+    } catch (err) {
+        console.error('Error al obtener usuario por DNI:', err);
+        res.status(500).json({ status: 'error', mensaje: 'Error al obtener usuario por DNI' });
+    }
+});
+
+app.get('/api/usuarios/:id', authenticateToken, authorizePermission('usuarios', 'lectura'), async (req, res) => {
     const { id } = req.params;
     try {
         const user = await usuariosService.getUserById(id);
@@ -1495,7 +1640,7 @@ app.get('/api/usuarios/por-proyecto', authenticateToken, authorizeAdminOrCoordin
     }
 });
 
-app.delete('/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
+app.delete('/api/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
     const { dni } = req.params;
     try {
         const result = await usuariosService.deleteUser(dni);
@@ -1516,7 +1661,7 @@ app.delete('/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 
     }
 });
 
-app.put('/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
+app.put('/api/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
     const { dni } = req.params;
     const {
         tramo, usuario, password, nombre, ap_paterno,
@@ -3039,7 +3184,7 @@ app.get('/debug/usuariost', async (req, res) => {
 
 // --------------------- PROYECTOS ---------------------
 // Listar proyectos con detalle (incluyendo los nuevos campos)
-app.get('/proyectos/detallado', authenticateToken, async (req, res) => {
+app.get('/api/proyectos/detallado', authenticateToken, async (req, res) => {
     try {
         const proyectos = await proyectosService.getDetailedProyectos();
         res.json(proyectos);
@@ -3069,7 +3214,7 @@ app.get('/api/proyectos/assigned-detailed', authenticateToken, async (req, res) 
 });
 
 // Lista simple (sin cambios, si se mantiene)
-app.get('/proyectos', authenticateToken, async (req, res) => {
+app.get('/api/proyectos', authenticateToken, async (req, res) => {
     try {
         const proyectos = await proyectosService.getSimpleProyectos();
         res.json(proyectos);
@@ -3080,7 +3225,7 @@ app.get('/proyectos', authenticateToken, async (req, res) => {
 });
 
 // Obtener un proyecto por ID
-app.get('/proyectos/:id', authenticateToken, async (req, res) => {
+app.get('/api/proyectos/:id', authenticateToken, async (req, res) => {
     try {
         const proyecto = await proyectosService.getProyectoById(req.params.id);
         if (!proyecto) {
@@ -3094,7 +3239,7 @@ app.get('/proyectos/:id', authenticateToken, async (req, res) => {
 });
 
 // Crear un proyecto completo con su tramo inicial y progresivas en una sola transacción
-app.post('/proyectos/create-full', authenticateToken, async (req, res) => {
+app.post('/api/proyectos/create-full', authenticateToken, async (req, res) => {
     const { projectData, progresivaData } = req.body;
     const actorId = req.user.id; // Obtener el ID del usuario autenticado
 
@@ -3121,7 +3266,7 @@ app.get('/api/proyectos/:id/estadisticas', authenticateToken, async (req, res) =
     }
 });
 
-app.put('/proyectos/:id', authenticateToken, async (req, res) => {
+app.put('/api/proyectos/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { projectData, progresivaData, calibrationData } = req.body;
     try {
@@ -3134,7 +3279,7 @@ app.put('/proyectos/:id', authenticateToken, async (req, res) => {
 });
 
 // Eliminar un proyecto existente
-app.delete('/proyectos/:id', authenticateToken, async (req, res) => {
+app.delete('/api/proyectos/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const rowCount = await proyectosService.deleteProyecto(id);
@@ -3162,7 +3307,8 @@ app.get('/api/proyectos/:proyectoId/tramos', authenticateToken, async (req, res)
 });
 
 // Rutas para la asignación de usuarios a proyectos
-app.post('/proyectos/:projectId/assignUser', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
+// API: Asignar un usuario a un proyecto
+app.post('/api/proyectos/:projectId/assignUser', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
     try {
         const { projectId } = req.params;
         const { userId, rolProyecto } = req.body;
@@ -3175,11 +3321,13 @@ app.post('/proyectos/:projectId/assignUser', authenticateToken, authorizeAdminOr
     }
 });
 
-app.delete('/proyectos/:projectId/removeUser/:userId', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
+// API: Eliminar usuario de un proyecto
+app.delete('/api/proyectos/:projectId/removeUser/:userId', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
     try {
         const { projectId, userId } = req.params;
         const actorId = req.user.id; // Obtener el ID del usuario autenticado
-        const result = await proyectosService.removeUserFromProjectDb(parseInt(projectId), parseInt(userId), rolProyecto, actorId);
+        // El servicio espera (projectId, userId, actorId). Se eliminó rolProyecto que no estaba definido.
+        const result = await proyectosService.removeUserFromProjectDb(parseInt(projectId), parseInt(userId), actorId);
         if (result) {
             res.status(200).json({ message: 'Usuario desasignado del proyecto correctamente.' });
         } else {
@@ -3191,7 +3339,8 @@ app.delete('/proyectos/:projectId/removeUser/:userId', authenticateToken, author
     }
 });
 
-app.get('/proyectos/:projectId/assignments', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
+// API: Obtener miembros del equipo de un proyecto
+app.get('/api/proyectos/:projectId/assignments', authenticateToken, async (req, res) => {
     try {
         const { projectId } = req.params;
         const assignments = await proyectosService.getProjectAssignments(parseInt(projectId));
@@ -3202,7 +3351,8 @@ app.get('/proyectos/:projectId/assignments', authenticateToken, authorizeAdminOr
     }
 });
 
-app.get('/proyectos/:projectId/history', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
+// API: Obtener el historial de un proyecto
+app.get('/api/proyectos/:projectId/history', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
     try {
         const { projectId } = req.params;
         const history = await proyectosService.getProjectHistory(parseInt(projectId));
@@ -3248,7 +3398,7 @@ app.get('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
         if (section) {
             // First try the new section-aware table
             result = await db.query('SELECT kml_url FROM proyectos_secciones_kml WHERE id_proyecto = $1 AND seccion = $2', [id, section]);
-            
+
             // Fallback for 'invvial' section if not found in the new table
             if (result.rows.length === 0 && section === 'invvial') {
                 result = await db.query('SELECT kml_url FROM invvial WHERE id_proyecto = $1', [id]);
@@ -3261,7 +3411,8 @@ app.get('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
         if (result.rows.length > 0) {
             res.json({ url: result.rows[0].kml_url });
         } else {
-            res.status(404).json({ error: 'No KML found for this project/section.' });
+            // Return 200 with null instead of 404 to avoid console errors in the map component
+            res.json({ url: null });
         }
     } catch (error) {
         console.error(`Error getting KML for project ${id}:`, error);
@@ -3285,7 +3436,7 @@ app.post('/api/proyectos/:projectId/kml', authenticateToken, authorizePermission
             'INSERT INTO proyectos_secciones_kml (id_proyecto, seccion, kml_url) VALUES ($1, $2, $3) ON CONFLICT (id_proyecto, seccion) DO UPDATE SET kml_url = $3 RETURNING *',
             [projectId, targetSection, url]
         );
-        
+
         // 2. Sync with legacy invvial table if section is invvial
         if (targetSection === 'invvial') {
             await db.query(
@@ -3293,7 +3444,7 @@ app.post('/api/proyectos/:projectId/kml', authenticateToken, authorizePermission
                 [projectId, url]
             );
         }
-        
+
         res.status(201).json(result.rows[0]);
     } catch (error) {
         console.error(`Error saving KML for project ${projectId} section ${section}:`, error);
@@ -3374,7 +3525,7 @@ app.delete('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
 
         if (getUrlResult.rows.length > 0) {
             const { kml_url } = getUrlResult.rows[0];
-            
+
             // Delete from Vercel Blob storage if exists
             if (kml_url) {
                 try {
@@ -3388,7 +3539,7 @@ app.delete('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
             if (targetSection === 'invvial') {
                 await db.query('DELETE FROM invvial WHERE id_proyecto = $1', [id]);
             }
-            
+
             await db.query('DELETE FROM proyectos_secciones_kml WHERE id_proyecto = $1 AND seccion = $2', [id, targetSection]);
 
             res.status(204).send(); // Success, no content
@@ -3413,7 +3564,7 @@ app.post('/proyectos/import', authenticateToken, upload.single('file'), async (r
 });
 
 // Endpoint para exportar proyectos a Excel (marcador de posición)
-app.get('/proyectos/export', authenticateToken, async (req, res) => {
+app.get('/api/proyectos/export', authenticateToken, async (req, res) => {
     try {
         const result = await proyectosService.exportProyectos();
         res.status(200).json(result);
@@ -3575,9 +3726,9 @@ app.post('/api/canteras', authenticateToken, async (req, res) => {
         console.log('DEBUG: /api/canteras - Recibido req.body:', JSON.stringify(canteraData, null, 2));
         const nuevaCantera = await canterasService.createCantera(canteraData, userId);
         res.status(201).json(nuevaCantera);
-    } catch (err) {
-        console.error('Error al crear cantera en index.js:', err.stack); // Loguear el stack completo
-        res.status(500).json({ error: 'Error al crear la cantera', details: err.message });
+    } catch (error) {
+        console.error('Error al crear cantera en index.js:', error.stack); // Loguear el stack completo
+        res.status(500).json({ error: 'Error al crear la cantera', details: error.message });
     }
 });
 
@@ -3740,21 +3891,24 @@ app.get('/api/kml-trazados/:id/content', authenticateToken, async (req, res) => 
     }
 });
 
-// NEW: Endpoint to delete KML from a progresiva
 // NEW: Endpoint to upload KML file for a specific Progresiva (Tramo)
 app.post('/api/progresivas/:id/upload-kml', authenticateToken, upload.single('kmlFile'), async (req, res) => {
     const { id } = req.params;
+    const { type } = req.body; // Extract type (trazado or puntos)
     const userId = req.user.id;
+
+    console.log(`[DEBUG] POST /api/progresivas/${id}/upload-kml - Type: ${type}, File: ${req.file?.originalname}`);
 
     if (!req.file) {
         return res.status(400).json({ error: 'No se proporcionó ningún archivo KML/KMZ.' });
     }
 
     try {
-        const result = await progresivasService.uploadKmlToProgresiva(id, req.file, userId);
+        const result = await progresivasService.uploadKmlToProgresiva(id, req.file, userId, type);
+        console.log(`[DEBUG] upload-kml success for ID ${id}`);
         res.status(201).json(result);
     } catch (error) {
-        console.error(`Error al subir KML para la progresiva ${id}:`, error);
+        console.error(`[DEBUG] Error al subir KML para la progresiva ${id}:`, error);
         res.status(500).json({ error: error.message || 'Error interno del servidor al subir KML.' });
     }
 });
@@ -3862,27 +4016,7 @@ app.put('/api/progresivas/importar-con-ensayos/:overwriteProgresivaId', authenti
     }
 });
 
-// NEW: Endpoint to upload a KML file for a progresiva
-app.post('/api/progresivas/:progresivaId/upload-kml', authenticateToken, upload.single('kmlFile'), async (req, res) => {
-    const { progresivaId } = req.params;
-    const { file } = req; // Multer places the file here
-    const userId = req.user.id; // Get authenticated user ID
-    try {
-        if (!file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo KML.' });
-        }
-        // Call the service function to handle KML processing and saving
-        const result = await progresivasService.uploadKmlToProgresiva(progresivaId, file, userId); // Pass userId
-        res.status(200).json(result);
-    } catch (error) {
-        console.error(`Error al subir KML para la progresiva ${progresivaId}:`, error);
-        // Custom error handling for service-level errors
-        if (error.isCustomError) { // Assuming custom errors have an 'isCustomError' flag
-            return res.status(error.statusCode || 400).json({ error: error.message });
-        }
-        res.status(500).json({ error: 'Error interno del servidor al subir KML a la progresiva.' });
-    }
-});
+
 
 // NEW: Endpoint to get KML content by kml_trazado_id
 app.get('/api/kml-trazados/:id/content', authenticateToken, async (req, res) => {
@@ -4686,7 +4820,7 @@ app.post('/api/trafico/exportar-shapefile', authenticateToken, async (req, res) 
     try {
         const uniqueExportId = Date.now();
         const shpWrite = require('@mapbox/shp-write');
-        
+
         // zip() maneja múltiples tipos de geometrías y los separa en carpetas automáticamente
         const zipBuffer = await shpWrite.zip({
             type: 'FeatureCollection',
@@ -4703,7 +4837,7 @@ app.post('/api/trafico/exportar-shapefile', authenticateToken, async (req, res) 
         // Configurar la respuesta para la descarga
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="geoportal_shapefiles_${uniqueExportId}.zip"`);
-        
+
         // Enviar el Buffer directamente (shpWrite.zip resuelve con un ArrayBuffer)
         res.send(Buffer.from(zipBuffer));
         console.log('INFO: Archivo Shapefile (ZIP) generado y enviado correctamente.');
@@ -5558,7 +5692,7 @@ app.delete('/api/interferencias/project/:projectId', authenticateToken, async (r
     }
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 5000;
 
 
 
@@ -5665,22 +5799,37 @@ app.get('/api/proyectos/assigned-detailed', authenticateToken, async (req, res) 
 // ==========================================
 
 // --- GEOLOGÍA CAPAS (KML/KMZ/Shapefiles RAR/ZIP) ---
-app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeAdminOrCoordinator, upload.single('archivo'), async (req, res) => {
+const ensureGeologiaCapasDriveUrlColumn = async () => {
+    await db.query('ALTER TABLE geologia_capas ADD COLUMN IF NOT EXISTS drive_url TEXT;');
+};
+
+app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeGeologyManage, upload.single('archivo'), async (req, res) => {
     try {
+        await ensureGeologiaCapasDriveUrlColumn();
         const proyectoId = parseInt(req.params.id);
         const tabName = req.body.tabName;
         const file = req.file;
 
         if (!file || !tabName) return res.status(400).json({ status: 'error', message: 'Faltan datos' });
 
+        console.log(`📂 [Geología] Iniciando subida para pID: ${proyectoId}, Tab: ${tabName}, Archivo: ${file.originalname} (${file.size} bytes)`);
+
         const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
         const filename = `geologia/${proyectoId}/${tabName}/${Date.now()}_${cleanFilename}`;
 
         // Upload original file to Vercel Blob
-        const blob = await put(filename, file.buffer, {
-            access: 'public',
-            token: process.env.BLOB_READ_WRITE_TOKEN_GEOLOGIA || process.env.BLOB_READ_WRITE_TOKEN
-        });
+        let blob;
+        try {
+            console.log(`☁️ [Geología] Intentando subir a Vercel Blob...`);
+            blob = await put(filename, file.buffer, {
+                access: 'public',
+                token: process.env.BLOB_READ_WRITE_TOKEN_GEOLOGIA || process.env.BLOB_READ_WRITE_TOKEN
+            });
+            console.log(`✅ [Geología] Subido a Vercel Blob: ${blob.url}`);
+        } catch (blobErr) {
+            console.error('❌ [Geología] Error al subir a Vercel Blob:', blobErr);
+            throw new Error(`Falla en Vercel Blob: ${blobErr.message}`);
+        }
 
         let geojsonData = null;
         const ext = path.extname(file.originalname).toLowerCase();
@@ -5688,7 +5837,7 @@ app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeAdminO
         // If it's a RAR or ZIP (shapefile archive), send to Python worker for conversion
         if (ext === '.rar' || ext === '.zip') {
             try {
-                console.log(`📦 Enviando archivo ${ext} al Python worker para conversión de shapefiles...`);
+                console.log(`📦 [Geología] Enviando archivo ${ext} al Python worker...`);
                 const FormData = require('form-data');
                 const formData = new FormData();
                 formData.append('file', file.buffer, { filename: file.originalname });
@@ -5697,22 +5846,24 @@ app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeAdminO
                     headers: formData.getHeaders(),
                     maxContentLength: Infinity,
                     maxBodyLength: Infinity,
-                    timeout: 120000 // 2 min timeout
+                    timeout: 300000 // 5 min timeout
                 });
 
                 if (pythonRes.data && pythonRes.data.status === 'ok' && pythonRes.data.geojson) {
                     geojsonData = pythonRes.data.geojson;
-                    console.log(`✅ Shapefiles convertidos: ${pythonRes.data.layers_found.join(', ')} (${pythonRes.data.total_features} features)`);
+                    console.log(`✅ [Geología] Python worker convirtió exitosamente el ${ext}.`);
                 } else {
-                    return res.status(500).json({ status: 'error', message: 'Error en respuesta Python Worker: ' + JSON.stringify(pythonRes.data) });
+                    console.error('❌ [Geología] Mala respuesta del Python worker:', pythonRes.data);
+                    throw new Error(`Respuesta de Python inválida: ${JSON.stringify(pythonRes.data)}`);
                 }
             } catch (pyErr) {
-                console.error('❌ Error al convertir shapefiles con Python worker:', pyErr.message);
+                console.error('❌ [Geología] Error en el Python worker:', pyErr.message);
                 const pyErrMsg = pyErr.response ? JSON.stringify(pyErr.response.data) : pyErr.message;
-                return res.status(500).json({ status: 'error', message: 'Error Python Worker: ' + pyErrMsg });
+                throw new Error(`Worker Python falló: ${pyErrMsg}`);
             }
         } else if (ext === '.kml' || ext === '.kmz') {
             try {
+                console.log(`📍 [Geología] Procesando archivo ${ext} localmente...`);
                 const { kml } = require('@tmcw/togeojson');
                 const DOMParser = require('xmldom').DOMParser;
                 let kmlText = '';
@@ -5722,8 +5873,7 @@ app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeAdminO
                     const zip = new AdmZip(file.buffer);
                     const zipEntries = zip.getEntries();
                     const kmlEntry = zipEntries.find(entry => entry.entryName.toLowerCase().endsWith('.kml'));
-                    if (!kmlEntry) throw new Error('No se encontró ningún archivo .kml dentro del .kmz');
-                    // asText() extracts the buffer content to utf8 string
+                    if (!kmlEntry) throw new Error('No se encontró ningún .kml en el .kmz');
                     kmlText = zip.readAsText(kmlEntry);
                 } else {
                     kmlText = file.buffer.toString('utf-8');
@@ -5734,24 +5884,22 @@ app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeAdminO
                 geojsonData = kml(doc);
                 geojsonData = injectFoldersToGeoJSON(kmlText, geojsonData);
 
-                // Asegurarse que el Gestor de Capas del Frontend (GeologiaLayerManager) 
-                // pueda agruparlo usando la propiedad _layer_name
                 if (geojsonData && geojsonData.features) {
                     let defaultLayerName = cleanFilename.replace('.kmz', '').replace('.kml', '').replace(/^[0-9]+_/, '');
                     geojsonData.features.forEach(f => {
                         if (!f.properties) f.properties = {};
-                        // Usar el folder originario que inyectamos, si no usar el tipo/nombre del archivo
                         f.properties._layer_name = f.properties.folder || f.properties.type || defaultLayerName;
                     });
                 }
-                console.log(`✅ Archivo KML/KMZ transformado: ${geojsonData?.features?.length || 0} features (Folders reestablecidos).`);
+                console.log(`✅ [Geología] KML/KMZ procesado localmente.`);
             } catch (kmlErr) {
-                console.error('❌ Error al convertir KML/KMZ:', kmlErr);
-                return res.status(500).json({ status: 'error', message: 'Error procesando archivo KML/KMZ: ' + kmlErr.message });
+                console.error('❌ [Geología] Error procesando KML/KMZ:', kmlErr);
+                throw new Error(`Procesamiento local falló: ${kmlErr.message}`);
             }
         }
 
         // Save to database (with geojson_data if available)
+        console.log(`💾 [Geología] Intentando guardar en DB...`);
         const query = `
             INSERT INTO geologia_capas (proyecto_id, tab_name, file_url, file_name, geojson_data)
             VALUES ($1, $2, $3, $4, $5)
@@ -5760,11 +5908,11 @@ app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeAdminO
                 geojson_data = EXCLUDED.geojson_data, uploaded_at = CURRENT_TIMESTAMP
             RETURNING *;
         `;
-        const result = await db.query(query, [proyectoId, tabName, blob.url, file.originalname, geojsonData ? JSON.stringify(geojsonData) : null]);
-        console.log(`💾 DB Insert / Update result: ID = ${result.rows[0]?.id}, has_geojson = ${!!result.rows[0]?.geojson_data}`);
-        res.status(200).json({ status: 'success', data: result.rows[0] });
+        const dbResult = await db.query(query, [proyectoId, tabName, blob.url, file.originalname, geojsonData ? JSON.stringify(geojsonData) : null]);
+        console.log(`✅ [Geología] Guardado exitosamente en ID: ${dbResult.rows[0]?.id}`);
+        res.status(200).json({ status: 'success', data: dbResult.rows[0] });
     } catch (err) {
-        console.error('❌ Error en POST /geologia-capas:', err);
+        console.error('❌ [Geología] Error Final:', err.message);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -5775,12 +5923,13 @@ app.get('/api/proyectos/:id/geologia-capas/:tabName', authenticateToken, async (
         const { tabName } = req.params;
         console.log(`🔍[GET] geologia - capas: Buscando proyectoId = ${proyectoId}, tabName = ${tabName} `);
 
-        const query = 'SELECT id, proyecto_id, tab_name, file_url, file_name, uploaded_at, geojson_data FROM geologia_capas WHERE proyecto_id = $1 AND tab_name = $2;';
+        await ensureGeologiaCapasDriveUrlColumn();
+        const query = 'SELECT id, proyecto_id, tab_name, file_url, file_name, uploaded_at, geojson_data, drive_url FROM geologia_capas WHERE proyecto_id = $1 AND tab_name = $2;';
         const result = await db.query(query, [proyectoId, tabName]);
 
         if (result.rows.length === 0) {
             console.warn(`⚠️[GET] geologia - capas: No se encontró registro para pID = ${proyectoId}, tab = ${tabName} `);
-            return res.status(404).json({ status: 'error', message: 'No hay capa guardada' });
+            return res.status(200).json({ status: 'success', data: null });
         }
 
         console.log(`✅[GET] geologia - capas: Encontrado ID = ${result.rows[0].id}, has_geojson = ${!!result.rows[0].geojson_data} `);
@@ -5797,7 +5946,8 @@ app.get('/api/proyectos/:id/geologia-capas', authenticateToken, async (req, res)
         const proyectoId = parseInt(req.params.id);
         console.log(`🔍[GET] Todas las geologia - capas: Buscando proyectoId = ${proyectoId}`);
 
-        const query = 'SELECT id, proyecto_id, tab_name, file_url, file_name, uploaded_at, geojson_data FROM geologia_capas WHERE proyecto_id = $1;';
+        await ensureGeologiaCapasDriveUrlColumn();
+        const query = 'SELECT id, proyecto_id, tab_name, file_url, file_name, uploaded_at, geojson_data, drive_url FROM geologia_capas WHERE proyecto_id = $1;';
         const result = await db.query(query, [proyectoId]);
 
         res.status(200).json({ status: 'success', data: result.rows });
@@ -5808,7 +5958,7 @@ app.get('/api/proyectos/:id/geologia-capas', authenticateToken, async (req, res)
 });
 
 // NUEVA RUTA: Eliminar capa (DELETE)
-app.delete('/api/proyectos/:id/geologia-capas/:tabName', authenticateToken, async (req, res) => {
+app.delete('/api/proyectos/:id/geologia-capas/:tabName', authenticateToken, authorizeGeologyManage, async (req, res) => {
     try {
         const query = 'DELETE FROM geologia_capas WHERE proyecto_id = $1 AND tab_name = $2 RETURNING id;';
         const result = await db.query(query, [req.params.id, req.params.tabName]);
@@ -5824,7 +5974,73 @@ app.delete('/api/proyectos/:id/geologia-capas/:tabName', authenticateToken, asyn
     }
 });
 
+// NUEVA RUTA: Renombrar capa (PATCH)
+app.patch('/api/proyectos/:id/geologia-capas/:tabName/rename', authenticateToken, authorizeGeologyManage, async (req, res) => {
+    try {
+        await ensureGeologiaCapasDriveUrlColumn();
+        const { id, tabName } = req.params;
+        const { newName } = req.body;
+
+        if (!newName) return res.status(400).json({ status: 'error', message: 'Falta el nuevo nombre' });
+
+        const query = 'UPDATE geologia_capas SET file_name = $1 WHERE proyecto_id = $2 AND tab_name = $3 RETURNING *;';
+        const result = await db.query(query, [newName, id, tabName]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ status: 'error', message: 'Capa no encontrada para renombrar' });
+        }
+
+        res.status(200).json({ status: 'success', data: result.rows[0] });
+    } catch (err) {
+        console.error('Error al renombrar capa:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
 // --- GEOLOGÍA MUESTRAS (CRUD) ---
+app.patch('/api/proyectos/:id/geologia-capas/:tabName/drive-link', authenticateToken, authorizeGeologyManage, async (req, res) => {
+    try {
+        await ensureGeologiaCapasDriveUrlColumn();
+        const { id, tabName } = req.params;
+        const rawDriveUrl = typeof req.body?.driveUrl === 'string' ? req.body.driveUrl.trim() : '';
+        const driveUrl = rawDriveUrl || null;
+
+        console.log(`📂 [Backend] Guardado inteligente de Drive Link para pID: ${id}, Tab: ${tabName}`);
+
+        // 1. Siempre asegurar/actualizar el registro base para este Tab Name exacto
+        const upsertQuery = `
+            INSERT INTO geologia_capas (proyecto_id, tab_name, drive_url, file_name, file_url)
+            VALUES ($1, $2, $3, 'CARPETA CONFIGURADA', '')
+            ON CONFLICT (proyecto_id, tab_name) DO UPDATE
+            SET drive_url = EXCLUDED.drive_url
+            RETURNING *;
+        `;
+        
+        let result;
+        try {
+            result = await db.query(upsertQuery, [id, tabName, driveUrl]);
+        } catch (dbErr) {
+            console.error('Error en UPSERT drive-link:', dbErr);
+            throw dbErr;
+        }
+
+        // 2. Propagar el link a cualquier variante que ya exista o se cree (ej: "GRUPO - SECCIÓN A")
+        try {
+            await db.query(
+                "UPDATE geologia_capas SET drive_url = $1 WHERE proyecto_id = $2 AND tab_name LIKE $3 || '%'",
+                [driveUrl, id, tabName]
+            );
+        } catch (propagateErr) {
+            console.warn(`Error propagando link para ${tabName}:`, propagateErr.message);
+        }
+
+        res.status(200).json({ status: 'success', data: result.rows[0] });
+    } catch (err) {
+        console.error('Error al actualizar carpeta de capa:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
 app.get('/api/proyectos/:id/geologia-muestras', authenticateToken, async (req, res) => {
     try {
         const query = 'SELECT * FROM geologia_muestras WHERE proyecto_id = $1 ORDER BY id DESC;';
@@ -5835,7 +6051,7 @@ app.get('/api/proyectos/:id/geologia-muestras', authenticateToken, async (req, r
     }
 });
 
-app.post('/api/proyectos/:id/geologia-muestras', authenticateToken, upload.single('archivo'), async (req, res) => {
+app.post('/api/proyectos/:id/geologia-muestras', authenticateToken, authorizeGeologyManage, upload.single('archivo'), async (req, res) => {
     try {
         const proyectoId = req.params.id;
         const { codigo, tipo_roca, progresiva, coordenada_este, coordenada_norte, latitud, longitud, formacion_litologica, descripcion } = req.body;
@@ -5863,7 +6079,7 @@ app.post('/api/proyectos/:id/geologia-muestras', authenticateToken, upload.singl
     }
 });
 
-app.delete('/api/proyectos/:id/geologia-muestras/:muestraId', authenticateToken, async (req, res) => {
+app.delete('/api/proyectos/:id/geologia-muestras/:muestraId', authenticateToken, authorizeGeologyManage, async (req, res) => {
     try {
         const query = 'DELETE FROM geologia_muestras WHERE id = $1 AND proyecto_id = $2 RETURNING *;';
         const result = await db.query(query, [req.params.muestraId, req.params.id]);
@@ -5894,9 +6110,9 @@ app.post('/api/proyectos/:id/clasificacion-materiales', authenticateToken, async
     try {
         const proyectoId = req.params.id;
         const { prog_inicio, prog_fin, descripcion_geotecnica, simbolo, tramo_m,
-                pct_roca_fija, pct_roca_suelta, pct_material_suelto, corte_talud,
-                long_roca_fija, long_roca_suelta, long_material_suelto, porcentaje,
-                grupo_formacion, descripcion_detallada } = req.body;
+            pct_roca_fija, pct_roca_suelta, pct_material_suelto, corte_talud,
+            long_roca_fija, long_roca_suelta, long_material_suelto, porcentaje,
+            grupo_formacion, descripcion_detallada } = req.body;
 
         const query = `
             INSERT INTO clasificacion_materiales
@@ -5907,11 +6123,11 @@ app.post('/api/proyectos/:id/clasificacion-materiales', authenticateToken, async
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *;
         `;
         const values = [proyectoId, prog_inicio, prog_fin, descripcion_geotecnica, simbolo,
-                        tramo_m || null, pct_roca_fija || null, pct_roca_suelta || null,
-                        pct_material_suelto || null, corte_talud,
-                        long_roca_fija || null, long_roca_suelta || null,
-                        long_material_suelto || null, porcentaje || null,
-                        grupo_formacion, descripcion_detallada];
+            tramo_m || null, pct_roca_fija || null, pct_roca_suelta || null,
+            pct_material_suelto || null, corte_talud,
+            long_roca_fija || null, long_roca_suelta || null,
+            long_material_suelto || null, porcentaje || null,
+            grupo_formacion, descripcion_detallada];
         const result = await db.query(query, values);
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -5930,7 +6146,7 @@ app.post('/api/proyectos/:id/clasificacion-materiales/upload-excel', authenticat
         const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        
+
         // Use raw array mode to handle complex headers with logos/merged cells
         const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
@@ -5980,7 +6196,7 @@ app.post('/api/proyectos/:id/clasificacion-materiales/upload-excel', authenticat
         // Vamos a fusionar el texto de las 3 filas anteriores a los datos para armar un encabezado compuesto.
         const headerCells = [];
         const numCols = allRows[headerRowIdx].length;
-        
+
         for (let col = 0; col < numCols; col++) {
             let combinedHeader = '';
             // Miramos hasta 2 filas más arriba (si existen)
@@ -5991,7 +6207,7 @@ app.post('/api/proyectos/:id/clasificacion-materiales/upload-excel', authenticat
             }
             headerCells.push(normalizeText(combinedHeader));
         }
-        
+
         console.log(`[ClasMat] Normalized Header cells:`, headerCells);
 
         // Find column indices by fuzzy matching
@@ -6014,7 +6230,7 @@ app.post('/api/proyectos/:id/clasificacion-materiales/upload-excel', authenticat
 
         // --- TEMPORAL PARA DEBUGGING, BORRAR LUEGO ---
         require('fs').writeFileSync(
-            require('path').join(__dirname, '..', 'debug-headers.json'), 
+            require('path').join(__dirname, '..', 'debug-headers.json'),
             JSON.stringify({ headerCells, colIndices }, null, 2)
         );
         // ---------------------------------------------
@@ -6041,7 +6257,7 @@ app.post('/api/proyectos/:id/clasificacion-materiales/upload-excel', authenticat
         colIndices.porcentaje = findColIdx(['PORCENTAJE']);
         colIndices.grupo_formacion = findColIdx(['UNID. LITOLOGICA', 'UNID LITOLOGICA', 'UNIDAD LITOLOGICA', 'LITOLOGIA', 'GRUPO', 'FORMACION LITOLOGICA', 'FORMACION']);
         colIndices.descripcion_detallada = -1;
-        
+
         // Last column is usually "Descripcion Geotecnica" (detailed) — find the LAST column with DESC
         for (let i = headerCells.length - 1; i >= 0; i--) {
             if ((headerCells[i].includes('DESCRIPCION') || headerCells[i].includes('DETALLE') || headerCells[i].includes('DESC. DETALLADA')) && i !== colIndices.descripcion_geotecnica) {

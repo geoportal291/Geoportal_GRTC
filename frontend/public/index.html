@@ -1,46 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="./imgs/icolo.jpg" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Web site created using create-react-app"
-    />
-    <link rel="apple-touch-icon" href="./imgs/icolo.jpg" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>SISTEMA DE TRAMITE DOCUMENTARIO</title>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-    <div id="overlay-root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" href="./imgs/icolo.jpg" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+    integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Web site created using create-react-app" />
+  <link rel="apple-touch-icon" href="./imgs/icolo.jpg" />
+  <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+  <!-- INYECCIÓN DIRECTA DE CESIUM PARA ESTABILIDAD -->
+  <link rel="stylesheet" href="/cesium/Widgets/widgets.css">
+  <script src="/cesium/Cesium.js"></script>
+  <title>Geoportal GRTC</title>
+</head>
 
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
-  </body>
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+
+  <!-- SVG Patterns Geológicos Globales (Refined for Legend) -->
+  <svg style="width:0;height:0;position:absolute;" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- Fm. Ananea: Fondo Crema + Líneas Horizontales Marrones -->
+      <pattern id="geol-pattern-ananea" patternUnits="userSpaceOnUse" width="10" height="8">
+        <rect width="10" height="8" fill="#fce4b3" />
+        <path d="M 0,2 L 10,2 M 0,6 L 10,6" stroke="#8b4513" stroke-width="1.2" />
+      </pattern>
+
+      <!-- Fm San gaban: Fondo Amarillo muy claro + Líneas Horizontales Discontinuas -->
+      <pattern id="geol-pattern-sangaban" patternUnits="userSpaceOnUse" width="12" height="8">
+        <rect width="12" height="8" fill="#fffbe6" />
+        <path d="M 0,4 L 12,4" stroke="#d4af37" stroke-width="1" stroke-dasharray="3,3" />
+      </pattern>
+
+      <!-- Dique de Diorita: Fondo Rosado + Punteado irregular (Triángulos rojos pequeños) -->
+      <pattern id="geol-pattern-diorite" patternUnits="userSpaceOnUse" width="14" height="14">
+        <rect width="14" height="14" fill="#f7a7a3" />
+        <path d="M 2,3 L 4,5 L 2,5 Z M 10,10 L 12,12 L 10,12 Z M 7,2 L 8,4 L 6,4 Z" fill="#800000" opacity="0.6" />
+      </pattern>
+
+      <!-- Deposito Coluvial: Fondo Gris + Blobs/Puntos oscuros gruesos -->
+      <pattern id="geol-pattern-coluvial" patternUnits="userSpaceOnUse" width="16" height="16">
+        <rect width="16" height="16" fill="#a8a8a8" />
+        <circle cx="4" cy="4" r="2" fill="#4a4a4a" opacity="0.7" />
+        <circle cx="12" cy="12" r="1.5" fill="#333333" opacity="0.6" />
+        <path d="M 8,4 Q 10,6 8,8" stroke="#333" fill="none" />
+      </pattern>
+
+      <!-- Deposito Aluvio-Coluvial: Fondo Gris Claro + Punteado variado -->
+      <pattern id="geol-pattern-aluvio" patternUnits="userSpaceOnUse" width="14" height="14">
+        <rect width="14" height="14" fill="#d3d3d3" />
+        <circle cx="3" cy="3" r="1" fill="#666" />
+        <circle cx="10" cy="5" r="1.5" fill="#555" opacity="0.5" />
+        <circle cx="6" cy="11" r="1" stroke="#444" fill="none" />
+      </pattern>
+
+      <!-- Deposito Eluvio-Coluvial: Fondo Blanco/Gris muy claro + Círculos abiertos -->
+      <pattern id="geol-pattern-eluvio" patternUnits="userSpaceOnUse" width="12" height="12">
+        <rect width="12" height="12" fill="#f0f0f0" />
+        <circle cx="4" cy="4" r="1.8" stroke="#999" fill="none" stroke-width="0.8" />
+        <circle cx="9" cy="9" r="1" stroke="#777" fill="none" />
+      </pattern>
+
+      <!-- Deposito Eluvial: Fondo Amarillo + Punteado fino -->
+      <pattern id="geol-pattern-eluvial-dep" patternUnits="userSpaceOnUse" width="10" height="10">
+        <rect width="10" height="10" fill="#ffff00" />
+        <circle cx="2" cy="2" r="0.8" fill="#8b4513" />
+        <circle cx="7" cy="5" r="0.6" fill="#8b4513" />
+        <circle cx="4" cy="8" r="0.7" fill="#8b4513" />
+      </pattern>
+    </defs>
+  </svg>
+
+  <div id="root"></div>
+  <div id="overlay-root"></div>
+</body>
+
 </html>

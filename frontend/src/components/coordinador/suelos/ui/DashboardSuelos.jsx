@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Doughnut, Bar } from 'react-chartjs-2';
+import { Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -13,68 +13,45 @@ import {
 import axiosInstance from '../../../../api/axios';
 import { useNavigate } from 'react-router-dom';
 import alertify from 'alertifyjs';
+import ReactDOM from 'react-dom';
 import SuelosMap from '../mapa/SuelosMap';
-import 'leaflet/dist/leaflet.css'; // Asegurar estilos de Leaflet
+import 'leaflet/dist/leaflet.css';
 import './DashboardSuelos.css';
-import useProgresivasData from '../../../../hooks/useProgresivasData'; // <--- IMPORT CRÍTICO
-import ProgresivaImageGalleryModal from '../gestion_tramos/ProgresivaImageGalleryModal'; // Importar Modal de Galería
+import useProgresivasData from '../../../../hooks/useProgresivasData';
+import ProgresivaImageGalleryModal from '../gestion_tramos/ProgresivaImageGalleryModal';
+import { toLatLon } from 'utm';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
-// Helper para parsear "1+200" a 1200
-const parseToMeters = (val) => {
-  if (typeof val === 'number') return val;
-  if (!val) return null;
-  const s = String(val).trim().toUpperCase().replace(',', '.');
-  const kmMatch = s.match(/(\d+)\+(\d+(\.\d+)?)/);
-  if (kmMatch) {
-    return parseFloat(kmMatch[1]) * 1000 + parseFloat(kmMatch[2]);
-  }
-  const clean = s.replace(/[^0-9.]/g, '');
-  if (!clean) return null;
-  const num = parseFloat(clean);
-  return isNaN(num) ? null : num;
+const parseToMeters = (m) => {
+  if (typeof m === 'number') return m;
+  if (!m) return 0;
+  const s = String(m).trim().toUpperCase();
+  const match = s.match(/(\d+)\+(\d+(\.\d+)?)/);
+  if (match) return parseInt(match[1]) * 1000 + parseFloat(match[2]);
+  return parseFloat(s.replace(/[^0-9.]/g, '')) || 0;
 };
 
-const formatMeters = (m) => {
-  if (typeof m !== 'number') return '0+000';
-  const km = Math.floor(m / 1000);
-  const meters = Math.round(m % 1000);
-  return `${km}+${String(meters).padStart(3, '0')}`;
-};
-
-export default function DashboardSuelos() {
+export default function DashboardSuelos({ isExternalView, onBackToSelection }) {
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const progresivasOptions = useMemo(() => ({ includeChildren: true }), []);
   const { progresivas: hookProgresivas, loading: hookLoading } = useProgresivasData(progresivasOptions);
 
   const [progresivas, setProgresivas] = useState([]);
-  const [kmlTrazadoIdsStricto, setKmlTrazadoIdsStricto] = useState([]); // NEW STATE
-  const [kmlPuntosIdsPermisivo, setKmlPuntosIdsPermisivo] = useState([]); // NEW STATE
+  const [canterasMapData, setCanterasMapData] = useState([]);
   const [recentAssays, setRecentAssays] = useState([]);
   const [avgCanteraDistance, setAvgCanteraDistance] = useState('0.0');
-  const navigate = useNavigate();
-
-
-  // Estados KPIs (Mock)
-  const [avanceStats, setAvanceStats] = useState({ val: 0, total: 100 });
-  const [canterasMapData, setCanterasMapData] = useState([]); // NUEVO: Estado para canteras
-  const [viewingGallery, setViewingGallery] = useState(false); // Estado para la galería
-
-  // Stats helpers
-  const getTotalAssays = () => {
-    return ensayosStatusData.datasets[0].data.reduce((a, b) => a + b, 0);
-  }
-
-  const getStatusCount = (index) => {
-    return ensayosStatusData.datasets[0].data[index] || 0;
-  }
-
-  const getStatusPercent = (index) => {
-    const total = getTotalAssays();
-    return total > 0 ? Math.round((getStatusCount(index) / total) * 100) : 0;
-  }
+  const [avanceStats, setAvanceStats] = useState({ val: 0, lastProg: '---' });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [selectedMapItem, setSelectedMapItem] = useState(null);
+  const [sidebarView, setSidebarView] = useState('list');
+  const [mapCenterTo, setMapCenterTo] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [viewingGallery, setViewingGallery] = useState(false);
+  const [trazadoIds, setTrazadoIds] = useState([]);
 
   const [ensayosStatusData, setEnsayosStatusData] = useState({
     labels: ['Pendiente', 'En revisión', 'Rechazado', 'Aprobado', 'Completado'],
@@ -86,621 +63,395 @@ export default function DashboardSuelos() {
     }]
   });
 
-  // --- 1. Sincronizar datos del Hook con el Dashboard ---
-  // --- 1. Sincronizar datos del Hook con el Dashboard ---
   useEffect(() => {
     if (!hookLoading) {
-
       const syncData = async () => {
         let allData = [...hookProgresivas];
         let allCanteras = [];
-
-        // WORKAROUND: Si el backend no devuelve los hijos (por problema de proyecto_id null o filtros),
-        // los buscamos manualmente para cada tramo padre encontrado.
         const parents = hookProgresivas.filter(p => !p.parent_id);
+
+        // Extraer kml_trazado_id de los tramos padres
+        const kmlIds = parents.map(p => p.kml_trazado_id).filter(Boolean);
+        setTrazadoIds(kmlIds);
 
         if (parents.length > 0) {
           try {
             const childrenPromises = parents.map(p =>
               axiosInstance.get(`/api/progresivas/${p.id}/children/all`)
-                .then(res => Array.isArray(res.data) ? res.data : [])
-                .catch(err => {
-                  console.warn(`Error cargando hijos para tramo ${p.id}`, err);
-                  return [];
-                })
+                .then(res => res.data || [])
+                .catch(() => [])
             );
-
             const childrenArrays = await Promise.all(childrenPromises);
             const allChildren = childrenArrays.flat();
+            const ids = new Set(allData.map(p => p.id));
+            allData = [...allData, ...allChildren.filter(c => !ids.has(c.id))];
 
-            // Evitar duplicados (por si el hook SÍ trajo algunos)
-            const currentIds = new Set(allData.map(p => p.id));
-            const newChildren = allChildren.filter(c => !currentIds.has(c.id));
-
-            if (newChildren.length > 0) {
-              allData = [...allData, ...newChildren];
-            }
-          } catch (err) {
-            console.error("Error en workaround de hijos:", err);
-          }
-
-          // NUEVO: Traer Canteras para los Tramos Visibles
-          try {
-            const parentIds = parents.map(p => p.id);
-            const canterasPromises = parentIds.map(tramoId =>
-              axiosInstance.get(`/api/tramos/${tramoId}/canteras`)
-                .then(res => {
-                  return res.data || [];
-                })
-                .catch(err => {
-                  console.warn(`Error cargando canteras para tramo ${tramoId}`, err);
-                  return [];
-                })
+            const canterasPromises = parents.map(p =>
+              axiosInstance.get(`/api/tramos/${p.id}/canteras`)
+                .then(res => res.data || [])
+                .catch(() => [])
             );
-
             const canterasArrays = await Promise.all(canterasPromises);
             allCanteras = canterasArrays.flat();
             setCanterasMapData(allCanteras);
-
-          } catch (err) {
-            console.error("Error general cargando canteras para el mapa", err);
-          }
+          } catch (e) { console.error(e); }
         }
 
-        // --- AGREGACIÓN DE ENSAYOS & CÁLCULOS DE ESTADÍSTICAS ---
         const allEnsayos = [];
-
-        // 1. Ensayos de Progresivas
-        allData.forEach(prog => {
-          if (prog.estratos_perfil && Array.isArray(prog.estratos_perfil)) {
-            prog.estratos_perfil.forEach(estrato => {
-              if (estrato.ensayos && Array.isArray(estrato.ensayos)) {
-                estrato.ensayos.forEach(ensayo => {
-                  allEnsayos.push({
-                    ...ensayo,
-                    sourceType: 'Tramo',
-                    sourceName: prog.nombre, // 0+000
-                    distance: null // Tramos don't usually have a 'source' distance field in this context
-                  });
-                });
-              }
-            });
-          }
-        });
-
-        // 2. Ensayos de Canteras
-        allCanteras.forEach(cantera => {
-          // Check if cantera has estratos/ensayos attached. 
-          // canterasService.getCanterasByTramoId attaches them!
-          if (cantera.estratos && Array.isArray(cantera.estratos)) {
-            cantera.estratos.forEach(estrato => {
-              if (estrato.ensayos && Array.isArray(estrato.ensayos)) {
-                estrato.ensayos.forEach(ensayo => {
-                  allEnsayos.push({
-                    ...ensayo,
-                    sourceType: 'Cantera',
-                    sourceName: cantera.nombre,
-                    distance: cantera.desplazamiento_km
-                  });
-                });
-              }
-            });
-          }
-        });
-
-        // 3. Calcular Stats de Estado
-        const statusCounts = {
-          pendiente: 0,
-          en_revision: 0,
-          rechazado: 0,
-          aprobado: 0,
-          completado: 0,
-          total: 0
-        };
-
-        allEnsayos.forEach(ensayo => {
-          statusCounts.total++;
-          const status = (ensayo.estado || 'pendiente').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
-
-          if (status.includes('aprobado')) statusCounts.aprobado++;
-          else if (status.includes('pendiente')) statusCounts.pendiente++;
-          else if (status.includes('rechazado')) statusCounts.rechazado++;
-          else if (status.includes('revision')) statusCounts.en_revision++;
-          else if (status.includes('completado')) statusCounts.completado++;
-          else statusCounts.pendiente++; // Default fallback
-        });
-
-        // Actualizar datos del gráfico de Estado
-        setEnsayosStatusData({
-          labels: ['Pendiente', 'En revisión', 'Rechazado', 'Aprobado', 'Completado'],
-          datasets: [{
-            data: [
-              statusCounts.pendiente,
-              statusCounts.en_revision,
-              statusCounts.rechazado,
-              statusCounts.aprobado,
-              statusCounts.completado
-            ],
-            backgroundColor: ['#9ca3af', '#f59e0b', '#ef4444', '#10b981', '#3b82f6'],
-            borderWidth: 0,
-            hoverOffset: 4
-          }]
-        });
-
-        // 4. Calcular KPIs
-        // A) Avance del Tramo (Progresivas Terminadas VS Total Activas)
-        // Filtrar solo las sub-progresivas (hijas) que son los puntos reales de avance
-        const subProgresivas = allData.filter(p => p.parent_id);
-
-        let aprobadasCount = 0;
-        let totalActiveCount = 0;
-
-        subProgresivas.forEach(p => {
-          const estado = (p.estado || 'pendiente').toLowerCase();
-          // Considerar solo las que NO están inactivas (plomas)
-          if (estado !== 'inactivo') {
-            totalActiveCount++;
-            if (estado === 'aprobado' || estado === 'completado') {
-              aprobadasCount++;
-            }
-          }
-        });
-
-        const avancePorcentaje = totalActiveCount > 0 ? Math.round((aprobadasCount / totalActiveCount) * 100) : 0;
-
-        // B) Distancia Promedio (Canteras)
-        let totalDist = 0;
-        let countDist = 0;
-        allCanteras.forEach(c => {
-          const d = parseFloat(c.desplazamiento_km);
-          if (!isNaN(d)) {
-            totalDist += d;
-            countDist++;
-          }
-        });
-        const avgDistance = countDist > 0 ? (totalDist / countDist).toFixed(1) : '0.0';
-
-        // Update KPI States
-        setAvanceStats({
-          val: avancePorcentaje,
-          total: 100,
-          lastProg: `${aprobadasCount}/${totalActiveCount} Progresivas`
-        });
-
-        // Save computed data for other components
-        // (We can assume canterasMapData is already set above)
-        // Store recent assays for Notifications Panel
-        const sortedEnsayos = [...allEnsayos].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 10);
-        // We'll use a hack to store this in a state derived from this effect if needed, 
-        // but for now let's just use a ref or simplified state if we want to render the list.
-        // Actually, let's add a state for notifications!
-        setRecentAssays(sortedEnsayos); // Need to define this state!
-
-        // UPDATE PROGRESIVAS MAP DATA
-        // Procesamos KMLs de los padres (tramos)
-        const trazadoIdsSet = new Set();
-        const puntosIdsSet = new Set();
-
-        if (Array.isArray(allData)) {
-          allData.forEach(p => {
-            if (p.kml_trazado_id) puntosIdsSet.add(p.kml_trazado_id);
-            if (p.trazado_kml_id) puntosIdsSet.add(p.trazado_kml_id);
-            if (p.kml_puntos_id) puntosIdsSet.add(p.kml_puntos_id);
+        allData.forEach(p => {
+          p.estratos_perfil?.forEach(est => {
+            est.ensayos?.forEach(ens => allEnsayos.push({ ...ens, sourceType: 'Tramo', sourceName: p.nombre }));
           });
-        }
-        trazadoIdsSet.clear();
+        });
+        allCanteras.forEach(c => {
+          c.estratos?.forEach(est => {
+            est.ensayos?.forEach(ens => allEnsayos.push({ ...ens, sourceType: 'Cantera', sourceName: c.nombre }));
+          });
+        });
 
-        if (puntosIdsSet.has(27) && !trazadoIdsSet.has(25)) {
-          trazadoIdsSet.add(25);
-        }
+        const counts = { pendiente: 0, revision: 0, rechazado: 0, aprobado: 0, completado: 0 };
+        allEnsayos.forEach(ens => {
+          const st = (ens.estado || 'pendiente').toLowerCase();
+          if (st.includes('aprobado')) counts.aprobado++;
+          else if (st.includes('rechazado')) counts.rechazado++;
+          else if (st.includes('revision')) counts.revision++;
+          else if (st.includes('completado')) counts.completado++;
+          else counts.pendiente++;
+        });
 
-        setKmlTrazadoIdsStricto(Array.from(trazadoIdsSet));
-        setKmlPuntosIdsPermisivo(Array.from(puntosIdsSet));
+        setEnsayosStatusData(prev => ({
+          ...prev,
+          datasets: [{ ...prev.datasets[0], data: [counts.pendiente, counts.revision, counts.rechazado, counts.aprobado, counts.completado] }]
+        }));
+
+        const sub = allData.filter(p => p.parent_id);
+        const ok = sub.filter(p => ['aprobado', 'completado'].includes(p.estado?.toLowerCase())).length;
+        setAvanceStats({ val: sub.length > 0 ? Math.round((ok / sub.length) * 100) : 0, lastProg: `${ok}/${sub.length} Progresivas` });
+
+        const dist = allCanteras.reduce((acc, c) => acc + (parseFloat(c.desplazamiento_km) || 0), 0);
+        setAvgCanteraDistance(allCanteras.length > 0 ? (dist / allCanteras.length).toFixed(1) : '0.0');
+
+        setRecentAssays([...allEnsayos].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 10));
         setProgresivas(allData);
         setLoading(false);
-        setAvgCanteraDistance(avgDistance); // Need state
-
       };
-
       syncData();
     }
   }, [hookProgresivas, hookLoading]);
 
-  // --- CONFIG GRÁFICOS ---
-  const mainChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '75%',
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: true }
-    }
-  };
-
-  const miniChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '70%',
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: false },
-      datalabels: { display: false }
-    },
-    events: []
-  };
-
-  const avanceChartData = {
-    labels: ['Ejecutado', 'Pendiente'],
-    datasets: [{
-      data: [avanceStats.val, 100 - avanceStats.val],
-      backgroundColor: ['#10b981', '#e2e8f0'],
-      borderWidth: 0
-    }]
-  };
-
-  const handleGoToEnsayosGeneral = () => {
-    navigate('/coordinador/suelos/ensayos/tramos');
-  };
-
-  const [selectedMapItem, setSelectedMapItem] = useState(null);
-
-  const handleMapClick = useCallback((eventData) => {
-    if (eventData && eventData.type === 'progresiva') {
-      setSelectedMapItem(eventData);
+  const handleMapClick = useCallback((e) => {
+    if (e?.type === 'progresiva') {
+      setSelectedMapItem(e);
+      setSidebarView('details');
+      const p = e.data;
+      if (p.coordenada_este && p.coordenada_norte) {
+        try {
+          const z = p.linea || '18L';
+          const pos = toLatLon(parseFloat(p.coordenada_este), parseFloat(p.coordenada_norte), parseInt(z), z.replace(/[0-9]/g, '') || 'L');
+          setMapCenterTo({ lat: pos.latitude, lng: pos.longitude, zoom: 18 });
+        } catch { }
+      }
     }
   }, []);
 
-  const navigateToGestor = (viewMode) => {
-    if (!selectedMapItem?.data?.id) return;
-
-    // Determine the Tramo ID (Parent). 
-    // If parent_id exists, it's a child; use parent_id.
-    // If no parent_id, it is likely the Tramo itself; use its own id.
-    const parentId = selectedMapItem.data.progresiva_padre_id || selectedMapItem.data.tramo_id || selectedMapItem.data.parent_id;
-    const tramoIdToOpen = parentId || selectedMapItem.data.id;
-
-    navigate('/coordinador/recoleccion-datos/gestor-tramos', {
-      state: {
-        activeProgresivaId: selectedMapItem.data.id, // Determine logic: if clicking parent, scroll to parent? Or just open?
-        openTramoId: tramoIdToOpen,
-        initialViewMode: viewMode
-      }
-    });
+  const handleSelectFromList = (p) => {
+    setSelectedMapItem({ type: 'progresiva', data: p });
+    setSidebarView('details');
+    if (p.coordenada_este && p.coordenada_norte) {
+      try {
+        const z = p.linea || '18L';
+        const pos = toLatLon(parseFloat(p.coordenada_este), parseFloat(p.coordenada_norte), parseInt(z), z.replace(/[0-9]/g, '') || 'L');
+        setMapCenterTo({ lat: pos.latitude, lng: pos.longitude, zoom: 18 });
+      } catch { }
+    }
   };
 
-  return (
-    <main className="dashboard-premium-container">
+  const filtered = progresivas.filter(p => p.parent_id).filter(p => {
+    if (filterType === 'data') return p.estratos_perfil?.length > 0;
+    return !searchTerm || p.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+  }).sort((a, b) => parseToMeters(a.nombre) - parseToMeters(b.nombre));
 
-      {/* SECCIÓN 1: MAPA */}
-      <div>
-        <div className="map-header-container">
-          <i className="fas fa-globe-americas text-primary"></i>
-          Mapa General del Proyecto
-        </div>
-        <section className="map-section-premium" style={{ display: 'flex', overflow: 'visible', height: '600px', position: 'relative', paddingRight: '15px' }}> {/* Flex Container with padding to prevent clipping */}
+  if (loading && !hookLoading) return <div className="loading-screen">Cargando...</div>;
 
-          {/* MAPA (Flex Item 1) */}
-          <div style={{ flex: 1, position: 'relative', height: '100%', minWidth: 0 }}>
-            <SuelosMap
-              kmlTrazadoIds={null} // Disable legacy
-              trazadoIds={kmlTrazadoIdsStricto} // NEW PROP STRICT
-              puntosIds={kmlPuntosIdsPermisivo} // NEW PROP PERMISSIVE
-              progresivasData={progresivas}
-              onMapClick={handleMapClick}
-              defaultZone={progresivas.find(p => p.linea)?.linea || '18L'}
-              style={{ height: '100%', width: '100%' }}
-              canterasData={canterasMapData} // Pass quarries to map
-              layerContext="dashboard"
-            />
-
-            {(loading || hookLoading) && (
-              <div className="map-placeholder-premium" style={{ position: 'absolute', top: 0, left: 0, zIndex: 2000, width: '100%', height: '100%', background: 'rgba(255,255,255,0.8)' }}>
-                <i className="fas fa-spinner fa-spin me-2"></i> Cargando geodatos...
-              </div>
-            )}
-          </div>
-
-          {/* SIDEBAR DOCKED (Flex Item 2) */}
-          <div
-            style={{
-              width: selectedMapItem ? '400px' : '0px',
-              marginLeft: selectedMapItem ? '20px' : '0px', // Separación del mapa
-              // marginRight prop removed as parent padding handles it consistently
-              borderRadius: '1rem', // Bordes redondeados
-              position: 'relative',
-              height: '100%',
-              top: 0,
-              backgroundColor: '#ffffff',
-              border: '2px solid #000000', // Black Border requested by user
-              transition: 'width 0.3s ease-in-out, margin-left 0.3s ease-in-out',
-              overflow: 'hidden',
-              flexShrink: 0,
-              boxShadow: '-4px 0 6px -1px rgba(0, 0, 0, 0.05)',
-              zIndex: 1000,
-              boxSizing: 'border-box'
-            }}
-          >
-            {/* Contenido protegido por width > 0 visualmente, pero react renderiza si selectedMapItem existe */}
-            {selectedMapItem && selectedMapItem.data && (
-              <div style={{ width: '100%', height: '100%', padding: '1.5rem', overflowY: 'auto', boxSizing: 'border-box' }}>
-                <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-                  <h3 style={{ margin: 0, color: '#1e293b', fontSize: '1.25rem' }}>{selectedMapItem.data.nombre || selectedMapItem.kmlData?.name || 'Progresiva'}</h3>
-                  <button onClick={() => setSelectedMapItem(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.2rem' }}>
-                    <i className="fas fa-times"></i>
-                  </button>
-                </div>
-
-                <div className="sidebar-content-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <span className="sidebar-label" style={{ color: '#64748b', fontWeight: 500 }}>Progresiva</span>
-                  <span className="sidebar-value" style={{ color: '#0f172a', fontWeight: 600 }}>{selectedMapItem.data.nombre}</span>
-                </div>
-                <div className="sidebar-content-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <span className="sidebar-label" style={{ color: '#64748b', fontWeight: 500 }}>Lado</span>
-                  <span className="sidebar-value" style={{ color: '#0f172a', fontWeight: 600 }}>
-                    {(() => {
-                      const lado = selectedMapItem.data.lado;
-                      if (!lado) return 'Eje';
-                      const map = { 'I': 'IZQUIERDA', 'D': 'DERECHA', 'C': 'CENTRO' };
-                      return map[lado] || lado;
-                    })()}
-                  </span>
-                </div>
-                <div className="sidebar-content-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <span className="sidebar-label" style={{ color: '#64748b', fontWeight: 500 }}>Estado</span>
-                  <span className="sidebar-value" style={{ textTransform: 'capitalize', color: selectedMapItem.data.estado === 'completado' ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
-                    {selectedMapItem.data.estado || '---'}
-                  </span>
-                </div>
-
-                <div style={{ borderTop: '1px dashed #cbd5e1', margin: '1rem 0' }}></div>
-                <div className="sidebar-content-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                  <span className="sidebar-label" style={{ color: '#64748b', fontWeight: 500 }}>Descripción:</span>
-                  <span className="sidebar-value" style={{ color: '#334155', fontWeight: 500, fontSize: '1rem' }}>{selectedMapItem.data.descripcion || 'Sin descripción adicional.'}</span>
-                </div>
-                <div className="sidebar-content-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <span className="sidebar-label" style={{ color: '#64748b', fontWeight: 500 }}>Coord. Este</span>
-                  <span className="sidebar-value" style={{ color: '#334155', fontFamily: 'monospace' }}>{selectedMapItem.data.coordenada_este || selectedMapItem.data.este || '---'}</span>
-                </div>
-                <div className="sidebar-content-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <span className="sidebar-label" style={{ color: '#64748b', fontWeight: 500 }}>Coord. Norte</span>
-                  <span className="sidebar-value" style={{ color: '#334155', fontFamily: 'monospace' }}>{selectedMapItem.data.coordenada_norte || selectedMapItem.data.norte || '---'}</span>
-                </div>
-
-                <div className="sidebar-content-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                  <span className="sidebar-label" style={{ color: '#64748b', fontWeight: 500 }}>Estratos Reg.</span>
-                  <span className="sidebar-value" style={{ color: '#3b82f6', fontWeight: 700, fontSize: '1.1rem' }}>{selectedMapItem.data.estratos_perfil?.length || 0}</span>
-                </div>
-
-
-                <div className="sidebar-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <button
-                    className="sidebar-btn primary"
-                    onClick={() => navigateToGestor('estratos')}
-                    style={{
-                      backgroundColor: '#2563eb',
-                      color: 'white',
-                      border: 'none',
-                      padding: '0.75rem 1.5rem',
-                      borderRadius: '0.5rem',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      fontWeight: 600,
-                      width: '100%',
-                      justifyContent: 'center',
-                      boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
-                    }}
-                  >
-                    <i className="fas fa-layer-group"></i>
-                    <span>Ver Detalle y Estratos</span>
-                  </button>
-                  <button
-                    className="sidebar-btn secondary"
-                    onClick={() => setViewingGallery(true)}
-                    style={{
-                      marginTop: '0.75rem',
-                      backgroundColor: '#ffffff',
-                      color: '#334155',
-                      border: '1px solid #cbd5e1',
-                      padding: '0.75rem 1.5rem',
-                      borderRadius: '0.5rem',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      fontWeight: 600,
-                      width: '100%',
-                      justifyContent: 'center',
-                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                    }}
-                  >
-                    <i className="fas fa-images"></i>
-                    <span>Ver Galería</span>
-                  </button>
-                </div>
-
-
-              </div>
-            )}
-          </div>
-
-        </section>
-      </div>
-
-      {/* SECCIÓN 2: KPIs */}
-      <section className="kpi-grid-premium">
-
-        {/* KPI 1: Avance (con Gráfico) */}
-        {/* KPI 1: Avance (con Gráfico) */}
-        <div className="kpi-card-premium green">
-          <div className="kpi-info">
-            <h3>Avance del Tramo</h3>
-            <p className="value">{avanceStats.val}%</p>
-            <p className="sub-text">Ult: {avanceStats.lastProg || '---'}</p>
-          </div>
-          <div className="kpi-viz" style={{ position: 'relative' }}>
-            <Doughnut data={avanceChartData} options={miniChartOptions} />
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              fontSize: '1rem', // Aumentado significativamente
-              fontWeight: '800',
-              color: '#000000ff',
-              textAlign: 'center',
-              lineHeight: '1',
-              width: '100%',
-              pointerEvents: 'none'
-            }}>
-              {avanceStats.val}%
-            </div>
-          </div>
-        </div>
-
-        {/* KPI 2: Canteras */}
-        < div className="kpi-card-premium orange" >
-          <div className="kpi-info">
-            <h3>Canteras Identificadas</h3>
-            <p className="value">{canterasMapData.length}</p>
-            <p className="sub-text">Total registradas</p>
-          </div>
-          <div className="kpi-viz">
-            <i className="fas fa-cubes kpi-icon canteras"></i>
-          </div>
-        </div >
-
-        {/* KPI 3: Agua */}
-        < div className="kpi-card-premium blue" >
-          <div className="kpi-info">
-            <h3>Agua - Abastecimiento</h3>
-            <p className="value">--</p>
-            <p className="sub-text">Datos no disponibles</p>
-          </div>
-          <div className="kpi-viz">
-            <i className="fas fa-tint kpi-icon agua"></i>
-          </div>
-        </div >
-
-        {/* KPI 4: Distancia */}
-        < div className="kpi-card-premium indigo" >
-          <div className="kpi-info">
-            <h3>Distancia Promedio</h3>
-            <p className="value">{avgCanteraDistance} km</p>
-            <p className="sub-text">Cantera a Frente</p>
-          </div>
-          <div className="kpi-viz">
-            <i className="fas fa-route kpi-icon route"></i>
-          </div>
-        </div >
-      </section >
-
-      {/* SECCIÓN 3: PANELES INFERIORES */}
-      < section className="bottom-section-premium" >
-
-        {/* PANEL IZQUIERDO: ESTADÍSTICAS ENSAYOS (Clickable) */}
-        < aside
-          className="chart-panel-premium"
-          onClick={handleGoToEnsayosGeneral}
-          title="Haga clic para ver el detalle general de ensayos"
-        >
-          <div className="chart-panel-header">
-            <h3>Estado de Ensayos</h3>
-          </div>
-
-          <div className="chart-wrapper-premium">
-            <Doughnut data={ensayosStatusData} options={mainChartOptions} />
-            <div className="chart-center-text">
-              <div className="total-num">{getTotalAssays()}</div>
-              <div className="total-label">Ensayos</div>
-            </div>
-          </div>
-
-          <div className="chart-legend-premium">
-            <div className="legend-item">
-              <span><span className="legend-color" style={{ background: '#9ca3af' }}></span>Pendiente</span>
-              <strong>{getStatusCount(0)} ({getStatusPercent(0)}%)</strong>
-            </div>
-            <div className="legend-item">
-              <span><span className="legend-color" style={{ background: '#f59e0b' }}></span>En revisión</span>
-              <strong>{getStatusCount(1)} ({getStatusPercent(1)}%)</strong>
-            </div>
-            <div className="legend-item">
-              <span><span className="legend-color" style={{ background: '#ef4444' }}></span>Rechazado</span>
-              <strong>{getStatusCount(2)} ({getStatusPercent(2)}%)</strong>
-            </div>
-            <div className="legend-item">
-              <span><span className="legend-color" style={{ background: '#10b981' }}></span>Aprobado</span>
-              <strong>{getStatusCount(3)} ({getStatusPercent(3)}%)</strong>
-            </div>
-            <div className="legend-item">
-              <span><span className="legend-color" style={{ background: '#3b82f6' }}></span>Completado</span>
-              <strong>{getStatusCount(4)} ({getStatusPercent(4)}%)</strong>
-            </div>
-          </div>
-        </aside >
-
-        {/* PANEL DERECHO: LISTA DE CRONOLOGÍA (Dynamic) */}
-        < main className="list-panel-premium" >
-          <div className="panel-header-premium">
-            <h2>
-              <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>
-                <i className="fas fa-clipboard-check"></i>
-              </span>
-              Notificaciones Recientes
-            </h2>
+  const content = (
+    <main className="dashboard-premium-container" style={isExternalView ? { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', padding: 0, margin: 0, overflow: 'hidden', zIndex: 9999999, background: '#0f172a' } : {}}>
+      <section className="map-section-premium" style={isExternalView ? { height: '100%', borderRadius: 0, border: 'none' } : {}}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          {isExternalView && onBackToSelection && (
             <button
-              onClick={() => handleGoToEnsayosGeneral()}
-              style={{ border: 'none', background: 'transparent', color: '#2563eb', fontWeight: '600', cursor: 'pointer' }}
+              onClick={onBackToSelection}
+              className="btn-ghost-dark"
+              style={{
+                position: 'absolute', bottom: '25px', left: '20px', zIndex: 1000,
+                backgroundColor: 'rgba(15, 23, 42, 0.9)', color: 'white', padding: '10px 20px',
+                border: '1px solid #334155', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+                fontWeight: '600'
+              }}
             >
-              Ver todo
+              <i className="fas fa-arrow-left"></i> Salir / Volver
             </button>
-          </div>
+          )}
 
-          <div className="cards-list-premium">
-            {recentAssays.length === 0 ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>
-                No hay ensayos recientes registrados.
+          <button
+            onClick={() => setMapCenterTo('reset')}
+            title="Centrar mapa general"
+            style={{
+              position: 'absolute', bottom: '30px', right: '20px', zIndex: 1000,
+              width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: '#ffffff', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '50%',
+              boxShadow: '0 4px 10px rgba(0,0,0,0.15)', cursor: 'pointer', transition: 'all 0.2s ease',
+              fontSize: '1.2rem'
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#2563eb'; e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 6px 15px rgba(0,0,0,0.2)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; e.currentTarget.style.color = '#475569'; e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 10px rgba(0,0,0,0.15)'; }}
+          >
+            <i className="fas fa-compress-arrows-alt"></i>
+          </button>
+
+          <SuelosMap
+            onMapClick={handleMapClick}
+            progresivasData={sidebarView === 'details' && selectedMapItem?.data ? [selectedMapItem.data] : progresivas}
+            trazadoIds={trazadoIds}
+            defaultZone={progresivas.find(p => p.linea)?.linea || '18L'}
+            canterasData={canterasMapData}
+            centerTo={mapCenterTo}
+            layerContext={isExternalView ? "dashboard" : "dashboard"}
+          />
+
+          {isExternalView && (
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className={`external-sidebar-toggle-btn ${isSidebarOpen ? 'open' : 'closed'}`}
+              title={isSidebarOpen ? "Ocultar panel" : "Mostrar panel"}
+            >
+              <i className={`fas fa-chevron-${isSidebarOpen ? 'right' : 'left'}`}></i>
+            </button>
+          )}
+
+        </div>
+
+        <aside className={`sidebar-premium custom-scrollbar ${isExternalView ? 'external-mode' : ''} ${!isSidebarOpen && isExternalView ? 'collapsed' : ''}`} style={{ width: '400px', display: 'flex', flexDirection: 'column' }}>
+          {sidebarView === 'list' ? (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }} className="custom-scrollbar">
+              <div className="sidebar-header-ultra">
+                <h3 className="sidebar-title-ultra">
+                  <i className="fas fa-compass gradient-icon me-2" style={{ marginRight: '8px' }}></i> Exploración
+                </h3>
               </div>
-            ) : (
-              recentAssays.map((ensayo, idx) => {
-                const statusClass = (ensayo.estado || 'pendiente').toLowerCase().includes('aprobado') ? 'approved' :
-                  (ensayo.estado || 'pendiente').toLowerCase().includes('rechazado') ? 'rejected' : 'pending';
-                const fechaStr = new Date(ensayo.fecha).toLocaleDateString();
 
-                return (
-                  <div className="resource-card-premium" key={idx}>
-                    <div className="resource-icon-box" style={{
-                      background: statusClass === 'approved' ? '#ecfdf5' : statusClass === 'rejected' ? '#fff1f2' : '#fef3c7',
-                      color: statusClass === 'approved' ? '#059669' : statusClass === 'rejected' ? '#be123c' : '#d97706'
-                    }}>
-                      <i className="fas fa-vial"></i>
+              <div className="segmented-control-ultra">
+                <button onClick={() => setFilterType('all')} className={`seg-btn ${filterType === 'all' ? 'active' : ''}`}>Todas</button>
+                <button onClick={() => setFilterType('data')} className={`seg-btn ${filterType === 'data' ? 'active' : ''}`}>Con Datos</button>
+              </div>
+
+              <div className="search-wrapper-ultra">
+                <i className="fas fa-search search-icon"></i>
+                <input type="text" placeholder="Buscar progresiva, tramo..." value={searchTerm} onChange={ev => setSearchTerm(ev.target.value)} className="search-input-ultra" />
+              </div>
+
+              <div className="prog-list-container">
+                {filtered.map(p => (
+                  <div key={p.id} onClick={() => handleSelectFromList(p)} className="sidebar-prog-card-ultra">
+                    <div className="card-header-flex">
+                      <span className="prog-name">{p.nombre}</span>
+                      <span className={`status-badge-glow ${(!p.estratos_perfil || p.estratos_perfil.length === 0) ? 'sin-datos' : (p.estado || 'pendiente').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}`}>
+                        <span className="glow-dot"></span>
+                        {(!p.estratos_perfil || p.estratos_perfil.length === 0) ? 'SIN DATOS' : (p.estado || 'PENDIENTE').toUpperCase()}
+                      </span>
                     </div>
-                    <div className="resource-info">
-                      <span className="resource-name">{ensayo.nombre_ensayo}</span>
-                      <div className="resource-meta">
-                        <span><i className="fas fa-map-marker-alt me-1"></i> {ensayo.sourceType}: {ensayo.sourceName}</span>
-                        <span className="distance-tag"><i className="far fa-calendar-alt me-1"></i> {fechaStr}</span>
+                    <div className="card-meta-row">
+                      <div className="meta-badge">
+                        <div className="icon-box-blue"><i className="fas fa-layer-group"></i></div>
+                        <span>{p.estratos_perfil?.length || 0} Estratos</span>
+                      </div>
+                      <div className="meta-badge">
+                        <div className="icon-box-gray"><i className="fas fa-map-pin"></i></div>
+                        <span>Lado {p.lado?.charAt(0).toUpperCase() || 'E'}</span>
                       </div>
                     </div>
-                    <span className={`badge-premium ${statusClass}`}>{ensayo.estado || 'Pendiente'}</span>
                   </div>
-                );
-              })
-            )}
+                ))}
+                {filtered.length === 0 && (
+                  <div className="empty-state">No se encontraron progresivas.</div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="sidebar-detail-ultra custom-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
+              <div className="detail-header-ultra">
+                <button onClick={() => { setSidebarView('list'); setSelectedMapItem(null); setMapCenterTo('reset'); }} className="icon-btn-glass"><i className="fas fa-chevron-left"></i></button>
+                <h3 className="detail-title-ultra">
+                  <span className="text-gradient">{selectedMapItem.data.nombre}</span>
+                </h3>
+                <button onClick={() => { setSidebarView('list'); setSelectedMapItem(null); setMapCenterTo('reset'); }} className="icon-btn-fade"><i className="fas fa-times"></i></button>
+              </div>
 
-          </div>
-        </main >
-      </section >
+              <div className="status-banner-ultra">
+                <div className={`status-glow-chip ${(!selectedMapItem.data.estratos_perfil || selectedMapItem.data.estratos_perfil.length === 0) ? 'sin-datos' : (selectedMapItem.data.estado || 'pendiente').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}`}>
+                  <div className="pulse-dot"></div>
+                  {(!selectedMapItem.data.estratos_perfil || selectedMapItem.data.estratos_perfil.length === 0) ? 'SIN DATOS' : (selectedMapItem.data.estado || 'PENDIENTE').toUpperCase()}
+                </div>
+              </div>
 
-      {viewingGallery && selectedMapItem && selectedMapItem.data && (
-        <ProgresivaImageGalleryModal
-          isOpen={viewingGallery}
-          onClose={() => setViewingGallery(false)}
-          progresiva={selectedMapItem.data}
-        />
+              <div className="detail-meta-grid">
+                <div className="meta-card">
+                  <div className="icon-wrap map-color"><i className="fas fa-map-signs"></i></div>
+                  <div className="meta-content">
+                    <span className="label">Lado</span>
+                    <span className="value">{selectedMapItem.data.lado || 'EJE'}</span>
+                  </div>
+                </div>
+                <div className="meta-card">
+                  <div className="icon-wrap layers-color"><i className="fas fa-layer-group"></i></div>
+                  <div className="meta-content">
+                    <span className="label">Estratos</span>
+                    <span className="value">{selectedMapItem.data.estratos_perfil?.length || 0} Reg.</span>
+                  </div>
+                </div>
+
+                <div className="meta-card full-width coords-card">
+                  <div className="coord-block">
+                    <span className="label text-blue-muted">ESTE (X)</span>
+                    <span className="value text-mono text-dark">{selectedMapItem.data.coordenada_este || '-'}</span>
+                  </div>
+                  <div className="coord-divider"></div>
+                  <div className="coord-block">
+                    <span className="label text-purple-muted">NORTE (Y)</span>
+                    <span className="value text-mono text-dark">{selectedMapItem.data.coordenada_norte || '-'}</span>
+                  </div>
+                </div>
+
+                <div className="meta-card full-width">
+                  <div className="icon-wrap text-color"><i className="fas fa-align-left"></i></div>
+                  <div className="meta-content">
+                    <span className="label">Descripción</span>
+                    <span className="value">{selectedMapItem.data.descripcion || 'Sin descripción adicional'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="strata-timeline-wrapper">
+                <h4 className="strata-title-mini"><i className="fas fa-stream"></i> Perfil Estratigráfico</h4>
+                <div className="strata-timeline">
+                  {selectedMapItem.data.estratos_perfil?.length > 0 ? (
+                    selectedMapItem.data.estratos_perfil.map((est, i) => (
+                      <div key={i} className="strata-node">
+                        <div className="strata-color-bar" style={{ backgroundColor: est.nlp_color_hex || '#cbd5e1' }}></div>
+                        <div className="strata-info">
+                          <span className="strata-depth">m - {est.profundidad_final}m</span>
+                          <span className="strata-name">{est.nombre_estrato || est.descripcion}</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="empty-strata">No hay estratos registrados</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="action-buttons-ultra">
+                {!isExternalView && (
+                  <button onClick={() => navigate('/coordinador/recoleccion-datos/gestor-tramos', { state: { activeProgresivaId: selectedMapItem.data.id, openTramoId: selectedMapItem.data.parent_id || selectedMapItem.data.progresiva_padre_id || selectedMapItem.data.id, initialViewMode: 'estratos' } })} className="btn-marvel">
+                    <i className="fas fa-chart-area"></i> Ver Estudio y Estratos
+                  </button>
+                )}
+                <button onClick={() => setViewingGallery(true)} className="btn-ghost-dark">
+                  <i className="fas fa-images"></i> Ver Galería
+                </button>
+              </div>
+            </div>
+          )}
+        </aside>
+      </section>
+
+      {!isExternalView && (
+        <>
+          <section className="kpi-grid-premium">
+            <div className="kpi-card green"><h3>Avance</h3><p className="value">{avanceStats.val}%</p><p className="sub">{avanceStats.lastProg}</p></div>
+            <div className="kpi-card orange"><h3>Canteras</h3><p className="value">{canterasMapData.length}</p><p className="sub">Fuentes de material</p></div>
+            <div className="kpi-card blue"><h3>Agua</h3><p className="value">--</p><p className="sub">Sin datos</p></div>
+            <div className="kpi-card indigo"><h3>Distancia</h3><p className="value">{avgCanteraDistance} km</p><p className="sub">Promedio a obra</p></div>
+          </section>
+
+          <section className="bottom-section-premium">
+            <div>
+              <div className="map-header-container">
+                <i className="fas fa-chart-pie text-primary me-2"></i> Estado de Ensayos
+              </div>
+              <div className="chart-panel">
+                <div className="chart-content-wrapper">
+                  <div className="chart-container-inner" style={{ height: '220px', position: 'relative', flex: 1 }}>
+                    <Doughnut data={ensayosStatusData} options={{ maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } }} />
+                    <div className="chart-overlay-text" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                      <div style={{ fontSize: '2.5rem', fontWeight: '900' }}>{ensayosStatusData.datasets[0].data.reduce((a, b) => a + b, 0)}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>Ensayos</div>
+                    </div>
+                  </div>
+
+                  <div className="chart-legend custom-scrollbar">
+                    {ensayosStatusData.labels.map((label, i) => {
+                      const val = ensayosStatusData.datasets[0].data[i];
+                      const total = ensayosStatusData.datasets[0].data.reduce((a, b) => a + b, 0);
+                      const perc = total > 0 ? Math.round((val / total) * 100) : 0;
+                      return (
+                        <div key={label} className="legend-item">
+                          <div className="legend-label">
+                            <span className="dot" style={{ backgroundColor: ensayosStatusData.datasets[0].backgroundColor[i] }}></span>
+                            <span className="name">{label}</span>
+                          </div>
+                          <div className="legend-value">
+                            <span className="count">{val}</span>
+                            <span className="perc">({perc}%)</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="map-header-container justify-content-between w-100">
+                <div><i className="fas fa-history text-primary me-2"></i> Notificaciones Recientes</div>
+                <a href="#" onClick={(e) => { e.preventDefault(); navigate('/coordinador/recoleccion-datos/gestor-tramos'); }} className="ver-todo-link">Ver todo</a>
+              </div>
+              <div className="list-panel">
+                <div className="notif-list custom-scrollbar">
+                  {recentAssays.map((ens, i) => (
+                    <div key={i} className="notif-card-premium">
+                      <div className="notif-icon-vial">
+                        <i className="fas fa-vial"></i>
+                      </div>
+                      <div className="notif-body">
+                        <div className="notif-title-row">
+                          <span className="notif-name">{ens.nombre_ensayo || 'Ensayo'}</span>
+                          <span className={`notif-status-pill ${ens.estado?.toLowerCase() || 'pendiente'}`}>
+                            {ens.estado?.toUpperCase() || 'PENDIENTE'}
+                          </span>
+                        </div>
+                        <div className="notif-meta-row">
+                          <span><i className="fas fa-map-marker-alt"></i> Tramo: {ens.sourceName}</span>
+                          {ens.fecha && (
+                            <span><i className="fas fa-calendar-alt"></i> {new Date(ens.fecha).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {recentAssays.length === 0 && (
+                    <div className="empty-state">No hay actividad reciente</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
       )}
-    </main >
+
+      {viewingGallery && selectedMapItem?.data && <ProgresivaImageGalleryModal isOpen={viewingGallery} onClose={() => setViewingGallery(false)} progresiva={selectedMapItem.data} />}
+    </main>
   );
+
+  return isExternalView ? ReactDOM.createPortal(content, document.body) : content;
 }

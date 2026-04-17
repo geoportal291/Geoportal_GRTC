@@ -22,7 +22,7 @@ const AssignModal = ({ isOpen, onClose, project, allUsers = [] }) => {
         if (!project) return;
         try {
             const headers = { Authorization: `Bearer ${token}` };
-            const res = await axios.get(`${API_URL}/proyectos/${project.id}/assignments`, { headers });
+            const res = await axios.get(`${API_URL}/api/proyectos/${project.id}/assignments`, { headers });
             // API returns array of assignments. We need the user IDs.
             const userIds = res.data.map(a => a.usuario_id);
             setAssignedUsers(userIds);
@@ -43,7 +43,7 @@ const AssignModal = ({ isOpen, onClose, project, allUsers = [] }) => {
     const handleAssign = async (userId) => {
         try {
             const headers = { Authorization: `Bearer ${token}` };
-            await axios.post(`${API_URL}/proyectos/${project.id}/assignUser`, { userId, rolProyecto: 'view' }, { headers });
+            await axios.post(`${API_URL}/api/proyectos/${project.id}/assignUser`, { userId, rolProyecto: 'view' }, { headers });
             setAssignedUsers(prev => [...prev, userId]);
             alertify.success('Usuario asignado.');
         } catch (error) {
@@ -55,7 +55,7 @@ const AssignModal = ({ isOpen, onClose, project, allUsers = [] }) => {
     const handleRemove = async (userId) => {
         try {
             const headers = { Authorization: `Bearer ${token}` };
-            await axios.delete(`${API_URL}/proyectos/${project.id}/removeUser/${userId}`, { headers });
+            await axios.delete(`${API_URL}/api/proyectos/${project.id}/removeUser/${userId}`, { headers });
             setAssignedUsers(prev => prev.filter(id => id !== userId));
             alertify.success('Usuario desasignado.');
         } catch (error) {

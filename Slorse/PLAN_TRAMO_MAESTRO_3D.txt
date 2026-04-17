@@ -1,0 +1,66 @@
+================================================================================
+          PLAN DE IMPLEMENTACIÓN: MOTOR 3D TRAMOS MAESTROS (PROYECTO QUELLOUNO)
+================================================================================
+
+Este documento detalla la estrategia para evolucionar el visor 3D actual, permitiendo
+soportar archivos LandXML de gran tamaño (+400MB) y conectarlos con la geología 
+real almacenada en la base de datos (Km 0+000 a 33+000).
+
+--------------------------------------------------------------------------------
+FASE 1: CIMENTACIÓN DE DATOS (BACKEND)
+--------------------------------------------------------------------------------
+- [ ] Base de Datos (PostgreSQL):
+    - Añadir columna 'es_tramo_completo' (boolean) a la tabla 'modelos_3d'.
+    - Esta bandera indicará al visor si debe usar el motor "Streaming" o el "Local".
+- [ ] Python Worker (Analizador):
+    - Implementar 'lxml.etree.iterparse' para leer LandXML de 441MB sin saltar el OOM.
+    - Asegurar la extracción del 'Alignment' (Eje de Carretera) para poder ubicar 
+      las progresivas (Km) en coordenadas UTM exactas.
+
+--------------------------------------------------------------------------------
+FASE 2: EXPERIENCIA DE CARGA (FRONTEND UX)
+--------------------------------------------------------------------------------
+- [ ] Flujo de Importación Bifurcado:
+    - Al subir un archivo (.xml / .ifc), disparar un modal de selección.
+    - "Parte Pequeña": El flujo actual que el usuario considera perfecto.
+    - "Tramo Maestro": Nuevo flujo que activa el motor de alto rendimiento.
+- [ ] Asociación Proyecto/Tramo:
+    - Vincular el modelo 3D directamente con el tramo (Quellouno) para arrastrar
+      automáticamente los datos de progresivas existentes.
+
+--------------------------------------------------------------------------------
+FASE 3: NUEVO MOTOR DE "RENDERIZADO LONGITUDINAL"
+--------------------------------------------------------------------------------
+- [ ] Visualización Eficiente (El "Muro de Estratos"):
+    - Implementar el renderizado de una superficie vertical (Clipping Wall) que 
+      recorra el eje de la carretera.
+    - Esta pared no será genérica (como la actual), sino que se alimentará de 
+      los puntos (Vértices) reales definidos en la base de datos.
+- [ ] Motor de Mapeo Progresiva-UTM (Eje):
+    - Función que tome el Km 33+000 de la BD y encuentre su posición X,Y,Z en el
+      modelo 3D del tramo completo para "clavar" el sondaje virtual.
+
+--------------------------------------------------------------------------------
+FASE 4: INTEGRACIÓN QUELLOUNO (DATOS KM 0 - 33)
+--------------------------------------------------------------------------------
+- [ ] Sincronización Masiva:
+    - Al cargar el tramo de Quellouno, el visor traerá todos los estratos guardados.
+    - Dibujar la "Pared Geológica" del km 0 al 33.
+    - Las capas del "pastal geológico" se deformarán dinámicamente según la 
+      profundidad real reportada en los ensayos de cada progresiva.
+
+--------------------------------------------------------------------------------
+FASE 5: OPTIMIZACIÓN Y PERFORMANCE
+--------------------------------------------------------------------------------
+- [ ] Streaming Dinámico (Opción a Futuro):
+    - Si el archivo de 441MB es demasiado denso para la GPU, aplicar subdivisión 
+      por cuadrantes.
+- [ ] Toggle de Visualización:
+    - Permitir alternar entre "Relieve Satelital" y "Sección Geotécnica" para que 
+      el ingeniero pueda inspeccionar fallas en el km 33 bajo tierra.
+
+================================================================================
+Responsable: Antigravity AI
+Estado Actual: Planificación Completa
+Próximo Paso: Modificación de la Tabla 'modelos_3d' e Interfaz de Carga (Modal).
+================================================================================

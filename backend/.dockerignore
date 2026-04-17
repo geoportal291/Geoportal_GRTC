@@ -1,32 +1,42 @@
-# Ignorar directorios de módulos de Node.js
-node_modules/
-npm-debug.log
-yarn-error.log
-.pnpm-store/
+# Bloqueo total de carpetas pesadas
+**/node_modules/**
+**/venv/**
+**/.venv/**
+**/env/**
+**/Env/**
+**/Lib/**
+**/Scripts/**
+**/Include/**
+**/__pycache__/**
 
-# Ignorar archivos de configuración local y de entorno
-#.env
-#.env.*
-.vscode/
-.DS_Store
-*.log
+# Bloqueo por extensión (Binarios de Windows que pesan mucho)
+**/*.dll
+**/*.lib
+**/*.exe
+**/*.pdb
+**/*.node
+**/*.obj
 
-# Ignorar directorios de control de versiones
+# Datos y Multimedia
+**/uploads/**
+**/images/**
+**/storage/**
+**/backups/**
+**/*.zip
+**/*.rar
+**/*.7z
+**/*.mp4
+**/*.mov
+
+# Archivos SIG / Pesados
+**/*.shp
+**/*.dbf
+**/*.shx
+**/*.prj
+**/*.kml
+**/*.tif
+**/*.tiff
+**/*.xlsx
+**/*.csv
+
 .git/
-.gitignore
-
-# Ignorar archivos de compilación o temporales
-build/
-dist/
-tmp/
-temp/
-
-# Ignorar archivos de prueba o documentación si no son necesarios en la imagen final
-test/
-tests/
-docs/
-*.md
-*.txt
-
-# Ignorar archivos de caché de Fly.io
-.fly/

@@ -360,6 +360,11 @@ export default function GestorDeTramosActual() {
 
     const handleSelectTramo = useCallback(async (tramo, page = 1) => {
         setTramoSeleccionado(tramo);
+        // Guardar en sessionStorage para que otros módulos (como Ensayos) sepan qué tramo estamos viendo
+        if (tramo && tramo.id) {
+            sessionStorage.setItem('lastSelectedTramoId', tramo.id);
+        }
+        
         setActiveTab('progresivas');
         setExpandedProgresivas({});
         setExpandedEstratos({}); // Clear expanded estratos too
@@ -855,13 +860,6 @@ export default function GestorDeTramosActual() {
                         <>
                             <div className="panel-header">
                                 <h2><i className="fas fa-map-marker-alt"></i> {tramoSeleccionado.nombre}</h2>
-                                <button
-                                    type="button"
-                                    className="btn btn-primary btn-sm ml-3"
-                                    onClick={() => navigate(`/coordinador/suelos/ensayos/tramos/${tramoSeleccionado.id}`)}
-                                >
-                                    <i className="fas fa-flask"></i> Ver Ensayos del Tramo
-                                </button>
                                 <div className="search-container">
                                     <input
                                         type="text"

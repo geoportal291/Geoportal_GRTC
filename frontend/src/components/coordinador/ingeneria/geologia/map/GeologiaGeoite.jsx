@@ -17,8 +17,489 @@ import axiosInstance from '../../../../../api/axios';
 import { saveAs } from 'file-saver';
 
 
+// legendColor = color sólido para mostrar en la leyenda (los patrones SVG no funcionan en CSS background de div)
+// fill = referencia al patrón SVG para el relleno de polígonos en el mapa Leaflet
+const UNIDAD_GEO_STYLES = {
+    'Fm. Ananea':            { fill: 'url(#geol-pattern-ananea)',        color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
+    'Fm San gaban':          { fill: 'url(#geol-pattern-sangaban)',       color: '#d4af37', legendColor: '#fffbe6', legendStroke: '#d4af37', legendPattern: 'sangaban' },
+    'Dique de Diorita':      { fill: 'url(#geol-pattern-diorite)',        color: '#8b0000', legendColor: '#f7a7a3', legendStroke: '#8b0000', legendPattern: 'diorite' },
+    'Deposito Coluvial':     { fill: 'url(#geol-pattern-coluvial)',       color: '#4a4a4a', legendColor: '#a8a8a8', legendStroke: '#333333', legendPattern: 'coluvial' },
+    'Deposito Aluvio-Coluvial': { fill: 'url(#geol-pattern-aluvio)',     color: '#666666', legendColor: '#d3d3d3', legendStroke: '#555555', legendPattern: 'aluvio' },
+    'Deposito Eluvio-Coluvial': { fill: 'url(#geol-pattern-eluvio)',     color: '#999999', legendColor: '#f0f0f0', legendStroke: '#999999', legendPattern: 'eluvio' },
+    'Deposito. Eluvial':     { fill: 'url(#geol-pattern-eluvial-dep)',   color: '#8b4513', legendColor: '#ffff00', legendStroke: '#8b4513', legendPattern: 'eluvial-dep' },
+    // Fallbacks
+    'Fm. Sandia':   { fill: 'url(#geol-pattern-ananea)', color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
+    'Dep. Morrenico': { fill: 'url(#geol-pattern-eluvio)', color: '#999999', legendColor: '#f0f0f0', legendStroke: '#999999', legendPattern: 'eluvio' },
+    'Cuaternario':  { fill: '#ffff00', color: '#cccc00', legendColor: '#ffff00', legendStroke: '#cccc00' },
+    'Ambo':         { fill: '#6b8e23', color: '#556b2f', legendColor: '#6b8e23', legendStroke: '#556b2f' },
+    'Tarma':        { fill: '#4682b4', color: '#27408b', legendColor: '#4682b4', legendStroke: '#27408b' },
+    'Copacabana':   { fill: '#00ced1', color: '#008b8b', legendColor: '#00ced1', legendStroke: '#008b8b' },
+    'Mitu':         { fill: '#cd5c5c', color: '#8b3a3a', legendColor: '#cd5c5c', legendStroke: '#8b3a3a' }
+};
+
+const UNIDAD_GEOMORFO_STYLES = {
+    'Colinas': { fill: 'url(#lp-colinas)', color: '#b59368', legendColor: '#e0cba8', legendStroke: '#8b4513', legendPattern: 'colinas' },
+    'Laderas': { fill: 'url(#lp-laderas)', color: '#f7b959', legendColor: '#fcdb83', legendStroke: '#a07020', legendPattern: 'laderas' },
+    'Montaña En Roca Metamorfica': { fill: 'url(#lp-montram)', color: '#f99e69', legendColor: '#fcad81', legendStroke: '#000', legendPattern: 'montram' },
+    'Quebrada Disectada': { fill: 'url(#lp-quebrada)', color: '#b9f7de', legendColor: '#c5f5e3', legendStroke: '#000', legendPattern: 'quebrada' },
+    'Vertiente Coluvial': { fill: 'url(#lp-vert-col)', color: '#cccccc', legendColor: '#dbdbdb', legendStroke: '#000', legendPattern: 'vert-col' }
+};
+
+// Genera el HTML del swatch SVG para la leyenda (funciona con patrones inline)
+const LEGEND_PATTERN_DEFS = `
+    <defs>
+        <pattern id="lp-ananea" patternUnits="userSpaceOnUse" width="10" height="8">
+            <rect width="10" height="8" fill="#fce4b3"/>
+            <path d="M 0,2 L 10,2 M 0,6 L 10,6" stroke="#8b4513" stroke-width="1.2"/>
+        </pattern>
+        <pattern id="lp-sangaban" patternUnits="userSpaceOnUse" width="12" height="8">
+            <rect width="12" height="8" fill="#fffbe6"/>
+            <path d="M 0,4 L 12,4" stroke="#d4af37" stroke-width="1" stroke-dasharray="3,3"/>
+        </pattern>
+        <pattern id="lp-diorite" patternUnits="userSpaceOnUse" width="14" height="14">
+            <rect width="14" height="14" fill="#f7a7a3"/>
+            <path d="M 2,3 L 4,5 L 2,5 Z M 10,10 L 12,12 L 10,12 Z M 7,2 L 8,4 L 6,4 Z" fill="#800000" opacity="0.6"/>
+        </pattern>
+        <pattern id="lp-coluvial" patternUnits="userSpaceOnUse" width="16" height="16">
+            <rect width="16" height="16" fill="#a8a8a8"/>
+            <circle cx="4" cy="4" r="2" fill="#4a4a4a" opacity="0.7"/>
+            <circle cx="12" cy="12" r="1.5" fill="#333333" opacity="0.6"/>
+        </pattern>
+        <pattern id="lp-aluvio" patternUnits="userSpaceOnUse" width="14" height="14">
+            <rect width="14" height="14" fill="#d3d3d3"/>
+            <circle cx="3" cy="3" r="1" fill="#666"/>
+            <circle cx="10" cy="5" r="1.5" fill="#555" opacity="0.5"/>
+            <circle cx="6" cy="11" r="1" stroke="#444" fill="none"/>
+        </pattern>
+        <pattern id="lp-eluvio" patternUnits="userSpaceOnUse" width="12" height="12">
+            <rect width="12" height="12" fill="#f0f0f0"/>
+            <circle cx="4" cy="4" r="1.8" stroke="#999" fill="none" stroke-width="0.8"/>
+            <circle cx="9" cy="9" r="1" stroke="#777" fill="none"/>
+        </pattern>
+        <pattern id="lp-eluvial-dep" patternUnits="userSpaceOnUse" width="10" height="10">
+            <rect width="10" height="10" fill="#ffff00"/>
+            <circle cx="2" cy="2" r="0.8" fill="#8b4513"/>
+            <circle cx="7" cy="5" r="0.6" fill="#8b4513"/>
+            <circle cx="4" cy="8" r="0.7" fill="#8b4513"/>
+        </pattern>
+        <pattern id="lp-colinas" patternUnits="userSpaceOnUse" width="10" height="10">
+            <rect width="10" height="10" fill="#e0cba8"/>
+            <rect x="2" y="2" width="2" height="2" fill="#8b4513" opacity="0.6"/>
+            <rect x="7" y="6" width="2" height="2" fill="#8b4513" opacity="0.6"/>
+        </pattern>
+        <pattern id="lp-laderas" patternUnits="userSpaceOnUse" width="10" height="10">
+            <rect width="10" height="10" fill="#fcdb83"/>
+            <rect x="3" y="3" width="2" height="2" fill="#a07020" opacity="0.6"/>
+            <rect x="8" y="7" width="2" height="2" fill="#a07020" opacity="0.6"/>
+        </pattern>
+        <pattern id="lp-montram" patternUnits="userSpaceOnUse" width="8" height="8">
+            <rect width="8" height="8" fill="#fcad81"/>
+            <circle cx="2" cy="2" r="1" fill="#000"/>
+            <circle cx="6" cy="6" r="1.2" fill="#000"/>
+        </pattern>
+        <pattern id="lp-quebrada" patternUnits="userSpaceOnUse" width="10" height="10">
+            <rect width="10" height="10" fill="#c5f5e3"/>
+            <circle cx="3" cy="3" r="1.5" stroke="#000" fill="none" stroke-width="0.8"/>
+            <circle cx="8" cy="8" r="1" fill="#000"/>
+        </pattern>
+        <pattern id="lp-vert-col" patternUnits="userSpaceOnUse" width="10" height="10">
+            <rect width="10" height="10" fill="#dbdbdb"/>
+            <path d="M2,3 L4,2 L6,3 Z" fill="#000"/>
+            <circle cx="8" cy="7" r="1" fill="#000"/>
+        </pattern>
+    </defs>
+`;
+
+const getLegendSwatch = (style, width = 34, height = 20) => {
+    const patternId = style.legendPattern ? `lp-${style.legendPattern}` : null;
+    const fillRef = patternId ? `url(#${patternId})` : style.legendColor;
+    return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        ${patternId ? LEGEND_PATTERN_DEFS : ''}
+        <rect width="${width}" height="${height}" fill="${fillRef}" stroke="${style.legendStroke || style.color}" stroke-width="1.5" rx="3"/>
+    </svg>`;
+};
+
+const normalizeLegendName = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const GEODINAMICA_EVENT_STYLES = [
+    { name: 'Asentamiento De Suelo', color: '#ffd27a' },
+    { name: 'Caida De Rocas', color: '#b7ff1a' },
+    { name: 'Caida De Rocas Y Deslizamiento(Riesgo Alto)', color: '#76ff03' },
+    { name: 'Caida De Rocas y Deslizamientos', color: '#fff21f' },
+    { name: 'Deslizamiento De Suelo (Regular Magnitud)', color: '#72d9ff' },
+    { name: 'Deslizamiento De Talud', color: '#ffb21a' },
+    { name: 'Deslizamiento de menor magnitud', color: '#de86eb' },
+    { name: 'Socavacion De La Plataforma', color: '#a85f5f' },
+    { name: 'Socavacion Y Riesgo De Deslizamiento', color: '#bdbdbd' },
+    { name: 'Talud En Roca Muy Fracturado', color: '#2f80ff' }
+];
+
+const getGeodinamicaEventStyle = (name) => {
+    const normalizedName = normalizeLegendName(name);
+    return GEODINAMICA_EVENT_STYLES.find(item => normalizeLegendName(item.name) === normalizedName) || null;
+};
+
+const getGeodinamicaLegendItems = (geojsonData) => {
+    const features = Array.isArray(geojsonData?.features) ? geojsonData.features : [];
+    const detected = new Set();
+
+    features.forEach((feature) => {
+        const props = feature?.properties || {};
+        const eventName = props.NAME || props.Name || props.name || props.NOMBRE || props.Nombre || props.nombre;
+        const matched = getGeodinamicaEventStyle(eventName);
+        if (matched) detected.add(matched.name);
+    });
+
+    const items = GEODINAMICA_EVENT_STYLES.filter(item => detected.has(item.name));
+    return items.length > 0 ? items : GEODINAMICA_EVENT_STYLES;
+};
+
+const getGeodinamicaLegendSvg = (color) => `
+    <svg width="22" height="22" viewBox="0 0 24 24">
+        <polygon points="12,2 20.5,7 20.5,17 12,22 3.5,17 3.5,7" fill="${color}" stroke="#333" stroke-width="1.5"/>
+        <circle cx="12" cy="12" r="2.3" fill="#111"/>
+    </svg>
+`;
+
+const PANEL_PHOTO_MATCH_RADIUS_METERS = 30;
+
+const normalizePanelPhoto = (photo) => {
+    if (!photo) return null;
+
+    const lat = parseFloat(photo.lat ?? photo.latitude ?? photo.latitud);
+    const lng = parseFloat(photo.lng ?? photo.lon ?? photo.longitud ?? photo.longitude);
+    const imageUrl = photo.image_url || photo.url || photo.imagen_url || photo.imagen;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !imageUrl) {
+        return null;
+    }
+
+    return {
+        ...photo,
+        lat,
+        lng,
+        image_url: imageUrl,
+        nombre: photo.nombre || photo.name || 'Foto de campo',
+        descripcion: photo.descripcion || photo.description || ''
+    };
+};
+
+const haversineDistanceMeters = (lat1, lng1, lat2, lng2) => {
+    const toRad = (deg) => deg * Math.PI / 180;
+    const earthRadiusMeters = 6371000;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadiusMeters * c;
+};
+
+const getNearbyPanelPhotos = (pointLat, pointLng, photos, radiusMeters = PANEL_PHOTO_MATCH_RADIUS_METERS) => {
+    if (!Number.isFinite(pointLat) || !Number.isFinite(pointLng) || !Array.isArray(photos)) {
+        return [];
+    }
+
+    return photos
+        .map((photo) => {
+            const normalized = normalizePanelPhoto(photo);
+            if (!normalized) return null;
+            const distanceMeters = haversineDistanceMeters(pointLat, pointLng, normalized.lat, normalized.lng);
+            return distanceMeters <= radiusMeters ? { ...normalized, distanceMeters } : null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.distanceMeters - b.distanceMeters);
+};
+
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const buildGeodinamicaPopupHtml = (eventName, nearbyPhotos) => {
+    const safeName = escapeHtml(eventName || 'Evento Geodinamico');
+
+    if (!nearbyPhotos.length) {
+        return `
+            <div style="font-family:'Inter',sans-serif; padding:14px 16px; min-width:260px; max-width:320px;">
+                <div style="margin:0 0 10px 0; color:#1e40af; font-size:14px; font-weight:800; border-bottom:2px solid #3b82f6; padding-bottom:6px; text-transform:uppercase; padding-right:24px;">
+                    Eventos Geodinamicos
+                </div>
+                <div style="font-size:14px; font-weight:700; color:#0f172a; line-height:1.35; margin-bottom:10px;">
+                    ${safeName}
+                </div>
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; color:#64748b; font-size:12px;">
+                    Sin fotos cercanas en el panel fotografico dentro de ${PANEL_PHOTO_MATCH_RADIUS_METERS} m.
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div style="font-family:'Inter',sans-serif; padding:14px 16px; min-width:280px; max-width:360px;">
+            <div style="margin:0 0 10px 0; color:#1e40af; font-size:14px; font-weight:800; border-bottom:2px solid #3b82f6; padding-bottom:6px; text-transform:uppercase; padding-right:24px;">
+                Eventos Geodinamicos
+            </div>
+            <div style="font-size:14px; font-weight:700; color:#0f172a; line-height:1.35; margin-bottom:12px;">
+                ${safeName}
+            </div>
+            <div style="font-size:11px; color:#64748b; font-weight:700; margin-bottom:8px; text-transform:uppercase;">
+                Fotos cercanas (${nearbyPhotos.length})
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; max-height:245px; overflow-y:auto; padding-right:2px;">
+                ${nearbyPhotos.map((photo) => `
+                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+                        <img
+                            src="${escapeHtml(photo.image_url)}"
+                            alt="${escapeHtml(photo.nombre)}"
+                            style="display:block; width:100%; height:82px; object-fit:cover; background:#e2e8f0;"
+                        />
+                        <div style="padding:7px 8px;">
+                            <div style="font-size:11px; font-weight:700; color:#0f172a; line-height:1.2; margin-bottom:4px; max-height:28px; overflow:hidden;">
+                                ${escapeHtml(photo.nombre)}
+                            </div>
+                            <div style="font-size:10px; color:#64748b; font-weight:600;">
+                                ${Math.round(photo.distanceMeters)} m
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+};
+
+const CANTERAS_MATERIAL_STYLES = [
+    { name: 'Cantera De Rocas Igneo', fillColor: '#ffbf3c', color: '#9a6500', icon: 'igneo' },
+    { name: 'Cantera De Rocas Igneo-Metamorfico', fillColor: '#e7c7da', color: '#7b5b6d', icon: 'igneo-metamorfico' },
+    { name: 'Cantera De Rocas Igneo-Alterado', fillColor: '#ff8c42', color: '#9a3f00', icon: 'igneo-alterado' },
+    { name: 'Cantera De Arcilla de Alta Plasticidad', fillColor: '#e6b6b6', color: '#8d6363', icon: 'arcilla' },
+    { name: 'Cantera Chahuares - Talud', fillColor: '#e8c8b8', color: '#8c6d5b', icon: 'talud' },
+    { name: 'Cantera Chahuares - Cantera Fluvial', fillColor: '#c8ebf8', color: '#5f8090', icon: 'fluvial' }
+];
+
+const getCanterasMaterialConfig = (materialName) => {
+    const category = getCanterasMaterialCategory(materialName);
+    return CANTERAS_MATERIAL_STYLES.find((item) => item.name === category) || CANTERAS_MATERIAL_STYLES[0];
+};
+
+const getCanterasMaterialCategory = (materialName) => {
+    const normalized = normalizeLegendName(materialName);
+
+    if (!normalized) {
+        return 'Cantera De Rocas Igneo';
+    }
+
+    if (normalized.includes('arcilla') && normalized.includes('alta plasticidad')) {
+        return 'Cantera De Arcilla de Alta Plasticidad';
+    }
+
+    if (normalized.includes('chahuares') && normalized.includes('fluvial')) {
+        return 'Cantera Chahuares - Cantera Fluvial';
+    }
+
+    if (normalized.includes('chahuares') && normalized.includes('talud')) {
+        return 'Cantera Chahuares - Talud';
+    }
+
+    if (normalized.includes('alterado')) {
+        return 'Cantera De Rocas Igneo-Alterado';
+    }
+
+    if (normalized === 'cantera de rocas igneo' || normalized.endsWith('rocas igneo')) {
+        return 'Cantera De Rocas Igneo';
+    }
+
+    if (
+        normalized.includes('igneo-metamorfico') ||
+        normalized.includes('igneo metamorfico') ||
+        normalized.includes('metamorfico')
+    ) {
+        return 'Cantera De Rocas Igneo-Metamorfico';
+    }
+
+    return String(materialName).trim();
+};
+
+const getCanterasLegendItems = (geojsonData) => {
+    const features = Array.isArray(geojsonData?.features) ? geojsonData.features : [];
+    const detected = new Set();
+
+    features.forEach((feature) => {
+        const props = feature?.properties || {};
+        const material = props['MAT CANTER'] || props.MAT_CANTER || props.mat_canter || props.MATERIAL || props.material;
+        if (material) detected.add(getCanterasMaterialCategory(material));
+    });
+
+    const orderedDetected = CANTERAS_MATERIAL_STYLES
+        .map((item) => item.name)
+        .filter((name) => detected.has(name));
+
+    return orderedDetected.length > 0
+        ? orderedDetected
+        : CANTERAS_MATERIAL_STYLES.map((item) => item.name);
+};
+
+const getCanterasMaterialSvg = (materialName) => {
+    const config = getCanterasMaterialConfig(materialName);
+    const normalized = normalizeLegendName(config.name);
+
+    if (normalized === 'cantera de rocas igneo') {
+        return `
+            <svg width="34" height="22" viewBox="0 0 34 22">
+                <rect x="1.5" y="4" width="31" height="16" rx="2.5" fill="${config.fillColor}" stroke="${config.color}" stroke-width="1.5"/>
+                <line x1="12" y1="4" x2="12" y2="11" stroke="#444" stroke-width="1.5"/>
+                <line x1="17" y1="4" x2="17" y2="11" stroke="#444" stroke-width="1.5"/>
+                <line x1="22" y1="4" x2="22" y2="11" stroke="#444" stroke-width="1.5"/>
+            </svg>
+        `;
+    }
+
+    if (normalized.includes('igneo-metamorfico') || normalized.includes('igneo metamorfico')) {
+        return `
+            <svg width="34" height="22" viewBox="0 0 34 22">
+                <rect x="1.5" y="4" width="31" height="16" rx="2.5" fill="${config.fillColor}" stroke="${config.color}" stroke-width="1.5"/>
+                <line x1="8" y1="4" x2="8" y2="11" stroke="#444" stroke-width="1.5"/>
+                <line x1="26" y1="4" x2="26" y2="11" stroke="#444" stroke-width="1.5"/>
+            </svg>
+        `;
+    }
+
+    if (normalized.includes('igneo-alterado') || normalized.includes('igneo alterado')) {
+        return `
+            <svg width="34" height="22" viewBox="0 0 34 22">
+                <rect x="1.5" y="4" width="31" height="16" rx="2.5" fill="${config.fillColor}" stroke="${config.color}" stroke-width="1.5"/>
+                <line x1="12" y1="4" x2="12" y2="11" stroke="#444" stroke-width="1.5"/>
+                <line x1="17" y1="4" x2="17" y2="11" stroke="#444" stroke-width="1.5"/>
+                <line x1="22" y1="4" x2="22" y2="11" stroke="#444" stroke-width="1.5"/>
+            </svg>
+        `;
+    }
+
+    if (normalized.includes('arcilla de alta plasticidad')) {
+        return `
+            <svg width="34" height="22" viewBox="0 0 34 22">
+                <rect x="1.5" y="4" width="31" height="16" rx="2.5" fill="${config.fillColor}" stroke="${config.color}" stroke-width="1.5"/>
+                <line x1="6" y1="12" x2="17" y2="12" stroke="#444" stroke-width="1.5"/>
+                <line x1="17" y1="8" x2="28" y2="8" stroke="#444" stroke-width="1.5"/>
+            </svg>
+        `;
+    }
+
+    if (normalized.includes('chahuares') && normalized.includes('talud')) {
+        return `
+            <svg width="34" height="22" viewBox="0 0 34 22">
+                <rect x="1.5" y="4" width="31" height="16" rx="2.5" fill="${config.fillColor}" stroke="${config.color}" stroke-width="1.5"/>
+                <circle cx="8" cy="9" r="2" fill="none" stroke="#666" stroke-width="1.2"/>
+                <circle cx="15" cy="14" r="2.2" fill="none" stroke="#666" stroke-width="1.2"/>
+                <circle cx="23" cy="8" r="1.8" fill="none" stroke="#666" stroke-width="1.2"/>
+                <circle cx="28" cy="14" r="2" fill="none" stroke="#666" stroke-width="1.2"/>
+            </svg>
+        `;
+    }
+
+    if (normalized.includes('chahuares') && normalized.includes('fluvial')) {
+        return `
+            <svg width="34" height="22" viewBox="0 0 34 22">
+                <rect x="1.5" y="4" width="31" height="16" rx="2.5" fill="${config.fillColor}" stroke="${config.color}" stroke-width="1.5"/>
+                <circle cx="7" cy="15" r="2.4" fill="none" stroke="#666" stroke-width="1.1"/>
+                <circle cx="13" cy="8" r="1.9" fill="none" stroke="#666" stroke-width="1.1"/>
+                <circle cx="22" cy="15" r="2.2" fill="none" stroke="#666" stroke-width="1.1"/>
+                <circle cx="27" cy="8" r="2" fill="none" stroke="#666" stroke-width="1.1"/>
+            </svg>
+        `;
+    }
+
+    return `
+        <svg width="34" height="22" viewBox="0 0 34 22">
+            <rect x="1.5" y="4" width="31" height="16" rx="2.5" fill="${config.fillColor}" stroke="${config.color}" stroke-width="1.5"/>
+        </svg>
+    `;
+};
+
+const getCanterasMaterialStyle = (materialName) => {
+    const config = getCanterasMaterialConfig(materialName);
+    const normalized = normalizeLegendName(config.name);
+
+    if (normalized === 'cantera de rocas igneo') {
+        return {
+            color: config.color,
+            weight: 3,
+            opacity: 1,
+            fillColor: config.fillColor,
+            fillOpacity: 0.85
+        };
+    }
+
+    if (normalized.includes('igneo-metamorfico') || normalized.includes('igneo metamorfico')) {
+        return {
+            color: config.color,
+            weight: 3,
+            opacity: 1,
+            fillColor: config.fillColor,
+            fillOpacity: 0.85
+        };
+    }
+
+    if (normalized.includes('igneo-alterado') || normalized.includes('igneo alterado')) {
+        return {
+            color: config.color,
+            weight: 3,
+            opacity: 1,
+            fillColor: config.fillColor,
+            fillOpacity: 0.85
+        };
+    }
+
+    if (normalized.includes('arcilla de alta plasticidad')) {
+        return {
+            color: config.color,
+            weight: 3,
+            opacity: 1,
+            fillColor: config.fillColor,
+            fillOpacity: 0.85
+        };
+    }
+
+    if (normalized.includes('chahuares') && normalized.includes('talud')) {
+        return {
+            color: config.color,
+            weight: 3,
+            opacity: 1,
+            fillColor: config.fillColor,
+            fillOpacity: 0.85
+        };
+    }
+
+    if (normalized.includes('chahuares') && normalized.includes('fluvial')) {
+        return {
+            color: config.color,
+            weight: 3,
+            opacity: 1,
+            fillColor: config.fillColor,
+            fillOpacity: 0.85
+        };
+    }
+
+    return {
+        color: config.color,
+        weight: 3,
+        opacity: 1,
+        fillColor: config.fillColor,
+        fillOpacity: 0.85
+    };
+};
+
 // Este componente encapsula TODA la lógica imperativa para no causar re-renders.
-const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, initialRoute, onTramoSelect, highlightedTramoId, mapData, onElementoClick, onRouteLoaded, onShowDetails, graphicsImages, activeLayersFilter, focusedFeature }) => {
+const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojsonData, initialRoute, onTramoSelect, highlightedTramoId, mapData, onElementoClick, onRouteLoaded, onShowDetails, graphicsImages, activeLayersFilter, focusedFeature }) => {
     const map = useMap();
     const geoJsonLayerRef = React.useRef(null);
     const poiLayerRef = React.useRef(new L.FeatureGroup());
@@ -29,6 +510,7 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
     const calibrationDataRef = useRef(null); // NEW: Ref to avoid stale closures
     const [activePopup, setActivePopup] = useState(null);
     const [enlargedImage, setEnlargedImage] = useState(null); // State for lightbox preview
+    const [panelPhotos, setPanelPhotos] = useState([]);
     const [showCities, setShowCities] = useState(true); // Toggle state for cities
     const showCitiesRef = useRef(true); // NEW: Ref to avoid stale closures in listeners
     showCitiesRef.current = showCities; // Always sync with state
@@ -52,6 +534,46 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
         return div;
     }, []);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        const propPhotos = Array.isArray(graphicsImages)
+            ? graphicsImages.map(normalizePanelPhoto).filter(Boolean)
+            : [];
+
+        if (propPhotos.length > 0) {
+            setPanelPhotos(propPhotos);
+            return undefined;
+        }
+
+        if (!projectId) {
+            setPanelPhotos([]);
+            return undefined;
+        }
+
+        const fetchPanelPhotos = async () => {
+            try {
+                const response = await axiosInstance.get(`/api/proyectos/${projectId}/panel-fotografico`);
+                if (cancelled) return;
+                const fetchedPhotos = Array.isArray(response.data?.fotos)
+                    ? response.data.fotos.map(normalizePanelPhoto).filter(Boolean)
+                    : [];
+                setPanelPhotos(fetchedPhotos);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error('[GeologiaGeoite] Error cargando fotos cercanas del panel fotográfico:', error);
+                    setPanelPhotos([]);
+                }
+            }
+        };
+
+        fetchPanelPhotos();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [projectId, graphicsImages]);
+
     // NEW: ResizeObserver para manejar correctamente el redimensionamiento del layout (Focus Mode)
     useEffect(() => {
         if (!map) return;
@@ -67,6 +589,7 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
     const [visibleLayers, setVisibleLayers] = useState({}); // { 'nombre_capa': true/false }
     const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
     const shpLayersGroupRef = useRef(new L.LayerGroup());
+    const leafletLayerMapRef = useRef(new Map()); // Lookup rápido por _geol_id
 
     // Sincronizar capas disponibles cuando cambian los datos GeoJSON
     useEffect(() => {
@@ -83,7 +606,8 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
         const layers = new Set();
         if (data.features) {
             data.features.forEach(f => {
-                if (f.properties?._layer_name) layers.add(f.properties._layer_name);
+                const layerName = f.properties?._layer_name || 'Otros';
+                layers.add(layerName);
             });
         }
         const layerList = Array.from(layers);
@@ -96,26 +620,130 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
     }, [geologiaGeojsonData]);
 
     const prevGeoJsonDataStrRef = useRef(null);
+    const userNavigatingRef = useRef(false); // Flag: bloquea autofit mientras el usuario navega por selecciones
+    const userNavTimeoutRef = useRef(null);
     // --- RE-RENDERIZAR CAPAS CUANDO CAMBIA VISIBILIDAD ---
+    const handleHighlightLayer = (layer) => {
+        if (!layer || !map) return;
+
+        // Marcar que el usuario está navegando activamente — bloquea el autofit por 3s
+        if (userNavTimeoutRef.current) clearTimeout(userNavTimeoutRef.current);
+        userNavigatingRef.current = true;
+        userNavTimeoutRef.current = setTimeout(() => {
+            userNavigatingRef.current = false;
+        }, 3000);
+
+        try {
+            // 1. Centrar mapa y Zoom
+            const bounds = layer.getBounds ? layer.getBounds() : L.latLngBounds([layer.getLatLng()]);
+            if (bounds.isValid()) {
+                if (layer.getLatLng) {
+                    // Para puntos: desplazamos el centro hacia el norte para que el punto
+                    // quede en la parte baja del viewport y el popup (que abre hacia arriba)
+                    // tenga espacio suficiente para mostrarse completo
+                    const center = bounds.getCenter();
+                    const offsetLat = center.lat + 0.0015; // Centro ~160m al norte → punto queda abajo
+                    map.setView([offsetLat, center.lng], 17, { animate: true });
+                } else {
+                    map.fitBounds(bounds, { padding: [80, 130, 80, 80], maxZoom: 17, animate: true });
+                }
+            }
+
+            // 2. Abrir Popup (explícito para evitar que se pierda)
+            setTimeout(() => {
+                if (layer.openPopup) layer.openPopup();
+            }, 300);
+
+            // 3. Efecto visual de resaltado (flash dorado)
+            const originalStyle = layer.options.style ? layer.options.style(layer.feature) : null;
+            
+            if (layer.setStyle) {
+                // Para Polígonos y Líneas
+                layer.setStyle({ color: '#fbbf24', weight: 8, opacity: 1, fillOpacity: 0.8 });
+                setTimeout(() => {
+                    if (layer.setStyle) {
+                        // Restauramos solo si el estilo original existe o es válido
+                        layer.setStyle(originalStyle || { weight: 3, opacity: 0.8 });
+                    }
+                }, 2500);
+            } else if (layer.getElement) {
+                // Para Marcadores (Puntos)
+                const el = layer.getElement();
+                if (el) {
+                    const originalTransition = el.style.transition;
+                    el.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                    el.style.transform = `${el.style.transform} scale(1.8)`;
+                    el.style.filter = 'drop-shadow(0 0 10px rgba(251, 191, 36, 0.8))';
+                    setTimeout(() => {
+                        if (el.style) {
+                            el.style.transform = el.style.transform.replace(' scale(1.8)', '');
+                            el.style.filter = '';
+                            el.style.transition = originalTransition;
+                        }
+                    }, 2500);
+                }
+            }
+        } catch (error) {
+            console.error("[GeologiaGeoite] Error highlighting layer:", error);
+        }
+    };
+
     useEffect(() => {
         if (!map || !geologiaGeojsonData) return;
 
         shpLayersGroupRef.current.clearLayers();
-        if (!geologiaKmlLayerRef.current.hasLayer(shpLayersGroupRef.current)) {
-            geologiaKmlLayerRef.current.addLayer(shpLayersGroupRef.current);
-        }
+        leafletLayerMapRef.current.clear(); // Limpiar el índice de capas sincronizado
+        // shpLayersGroupRef ahora se agrega directamente al mapa en la inicialización
+        // para evitar que se borre cuando se limpia geologiaKmlLayerRef.current
 
         let data = geologiaGeojsonData;
         if (typeof data === 'string') {
             try { data = JSON.parse(data); } catch (e) { return; }
         }
 
+
+
         const getLayerStyle = (f) => {
             const props = f?.properties || {};
             const nativeColor = props.stroke || props.fill || null;
-            const layerName = (props._layer_name || '').toLowerCase();
+            const layerName = (props._layer_name || 'otros').toLowerCase();
+            const isGeotecniaCanteras = tabName?.toLowerCase().includes('geotecnia_canteras');
+            const canteraMaterial = props['MAT CANTER'] || props.MAT_CANTER || props.mat_canter || props.MATERIAL || props.material;
 
-            // 1. Si el KMZ ya trae su propio color (polígonos dibujados por el usuario, líneas con estilo), lo respetamos
+            if (isGeotecniaCanteras && canteraMaterial) {
+                return getCanterasMaterialStyle(canteraMaterial);
+            }
+
+            // 1. Verificar si tiene la propiedad UNIDAD GEO y mapear usando nuestro diccionario de estilos
+            const unidadGeo = props['Unidad_geo'] || props['UNIDAD GEO'] || props['unidad geo'] || props['Unidad'] || props['UNIDAD'] || props['unidad'];
+            if (unidadGeo) {
+                const unidadStr = String(unidadGeo).toLowerCase().trim();
+                const unitKey = Object.keys(UNIDAD_GEO_STYLES).find(k => unidadStr.includes(k.toLowerCase()));
+                if (unitKey) {
+                    const style = UNIDAD_GEO_STYLES[unitKey];
+                    return {
+                        color: style.color,
+                        weight: 2,
+                        opacity: 0.9,
+                        fillColor: style.fill,
+                        fillOpacity: 0.85
+                    };
+                }
+
+                const geomorfoKey = Object.keys(UNIDAD_GEOMORFO_STYLES).find(k => unidadStr.includes(k.toLowerCase()));
+                if (geomorfoKey) {
+                    const style = UNIDAD_GEOMORFO_STYLES[geomorfoKey];
+                    return {
+                        color: style.color,
+                        weight: 2,
+                        opacity: 0.9,
+                        fillColor: style.fill,
+                        fillOpacity: 0.85
+                    };
+                }
+            }
+
+            // 2. Si el KMZ ya trae su propio color (polígonos dibujados por el usuario, líneas con estilo), lo respetamos
             if (nativeColor) {
                 return {
                     color: nativeColor,
@@ -126,7 +754,7 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
                 };
             }
 
-            // 2. Si no trae color (Puntos sueltos sin estilo GE o fallas por defecto sin estilo GE)
+            // 3. Si no trae color (Puntos sueltos sin estilo GE o fallas por defecto sin estilo GE)
             if (layerName.includes('falla') || layerName.includes('fault') || layerName.includes('estructur') || layerName.includes('lineam')) {
                 return { color: '#8B0000', weight: 4, opacity: 0.9, dashArray: '8, 4' };
             }
@@ -138,15 +766,48 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
 
         const layerList = Object.keys(visibleLayers).filter(name => visibleLayers[name]);
 
+        // Inyectar IDs para vinculación con el dashboard
+        if (data && data.features) {
+            data.features.forEach((f, idx) => {
+                if (!f._geol_id) f._geol_id = `geol_${idx}`;
+            });
+        }
+
         if (layerList.length > 0) {
-            let filteredFeatures = data.features.filter(f => visibleLayers[f.properties?._layer_name]);
+            let filteredFeatures = data.features.filter(f => {
+                const layerName = f.properties?._layer_name || 'Otros';
+                return visibleLayers[layerName];
+            });
 
             // Apply dashboard activeLayersFilter if provided
             if (activeLayersFilter && activeLayersFilter.length > 0) {
+                const normalize = (str) => {
+                    if (!str) return "";
+                    return String(str)
+                        .normalize("NFD")
+                        .replace(/[\u0300-\u036f]/g, "") // Quitar acentos
+                        .replace(/[^a-zA-Z0-9\s]/g, ' ') // Solo alfanuméricos y espacios
+                        .replace(/\s+/g, ' ')            // Colapsar espacios
+                        .toUpperCase()
+                        .trim();
+                };
+
+                const upperActiveFilters = activeLayersFilter.map(f => normalize(f));
+                
                 filteredFeatures = filteredFeatures.filter(f => {
-                    const layerName = (f.properties?._layer_name || 'Otros').replace(/_/g, ' ');
-                    return activeLayersFilter.includes(layerName);
+                    const rawName = f.properties?._layer_name || 'Otros';
+                    const rawTab = f.properties?._layer_tab || '';
+                    
+                    const normName = normalize(rawName);
+                    const normTab = normalize(rawTab);
+                    
+                    // Match si el nombre del filtro está contenido en el nombre de la capa o viceversa
+                    return upperActiveFilters.some(filter => 
+                        normName.includes(filter) || filter.includes(normName) ||
+                        normTab.includes(filter) || filter.includes(normTab)
+                    );
                 });
+                console.log(`[Geoite] FILTRADO -> Antes: ${data.features.length} | Después: ${filteredFeatures.length} | Filtros:`, upperActiveFilters);
             }
 
             const filteredData = {
@@ -174,6 +835,12 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
 
                     const markerColor = props['marker-color'] || props.fill || props.stroke || null;
                     const layerName = (props._layer_name || '').toLowerCase();
+                    const isGeodinamicaExterna = tabName?.toLowerCase().includes('geodinamicaexterna');
+                    const isGeotecniaCanteras = tabName?.toLowerCase().includes('geotecnia_canteras');
+                    const eventName = props.NAME || props.Name || props.name || props.NOMBRE || props.Nombre || props.nombre;
+                    const canteraMaterial = props['MAT CANTER'] || props.MAT_CANTER || props.mat_canter || props.MATERIAL || props.material;
+                    const geodinamicaStyle = isGeodinamicaExterna ? getGeodinamicaEventStyle(eventName) : null;
+                    const canterasStyle = isGeotecniaCanteras && canteraMaterial ? getCanterasMaterialStyle(canteraMaterial) : null;
 
                     if (!markerColor && (layerName.includes('rumbo') || layerName.includes('buz'))) {
                         return L.marker(latlng, {
@@ -191,6 +858,38 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
                                 iconAnchor: [8, 7]
                             }),
                             zIndexOffset: 1000
+                        });
+                    }
+
+                    if (geodinamicaStyle) {
+                        return L.marker(latlng, {
+                            icon: L.divIcon({
+                                className: 'shp-point-geodinamica',
+                                html: getGeodinamicaLegendSvg(geodinamicaStyle.color),
+                                iconSize: [22, 22],
+                                iconAnchor: [11, 11]
+                            }),
+                            zIndexOffset: 1100
+                        });
+                    }
+
+                    if (canterasStyle) {
+                        return L.marker(latlng, {
+                            icon: L.divIcon({
+                                className: 'shp-point-cantera',
+                                html: `
+                                    <div style="
+                                        width: 18px; height: 18px;
+                                        background-color: ${canterasStyle.fillColor};
+                                        border: 2px solid ${canterasStyle.color};
+                                        border-radius: 4px;
+                                        box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 2px 5px rgba(0,0,0,0.35);
+                                    "></div>
+                                `,
+                                iconSize: [18, 18],
+                                iconAnchor: [9, 9]
+                            }),
+                            zIndexOffset: 1100
                         });
                     }
 
@@ -226,13 +925,55 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
                     });
                 },
                 onEachFeature: (feature, layer) => {
+                    // Vincular ID para búsqueda desde dashboard y registrar en el índice
+                    layer._geol_id = feature._geol_id;
+                    if (feature._geol_id) {
+                        leafletLayerMapRef.current.set(feature._geol_id, layer);
+                    }
+
+                    // NUEVO: Zoom y Resaltado al hacer clic directo en el mapa
+                    layer.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        handleHighlightLayer(layer);
+                    });
+
                     if (feature.properties) {
                         const props = feature.properties;
                         const layerName = (props._layer_name || 'Capa').replace(/_/g, ' ');
+                        const isGeodinamicaExterna = tabName?.toLowerCase().includes('geodinamicaexterna');
+                        const eventName = props.NAME || props.Name || props.name || props.NOMBRE || props.Nombre || props.nombre;
+                        const featureCoordinates = feature.geometry?.type === 'Point'
+                            ? feature.geometry.coordinates
+                            : null;
 
-                        let html = `<div style="font-family:'Inter',sans-serif; padding:14px 16px 12px 16px; max-height:350px; overflow-y:auto; overflow-x:hidden;" class="geol-custom-scrollbar">
+                        if (isGeodinamicaExterna && Array.isArray(featureCoordinates) && featureCoordinates.length >= 2) {
+                            const pointLng = parseFloat(featureCoordinates[0]);
+                            const pointLat = parseFloat(featureCoordinates[1]);
+                            const nearbyPhotos = getNearbyPanelPhotos(pointLat, pointLng, panelPhotos);
+                            const geodinamicaPopupHtml = buildGeodinamicaPopupHtml(eventName, nearbyPhotos);
+
+                            layer.bindPopup(geodinamicaPopupHtml, {
+                                className: 'geolpopup-main-container',
+                                maxWidth: 380,
+                                minWidth: 280,
+                                autoPan: false
+                            });
+
+                            if (eventName) {
+                                layer.bindTooltip(`<b>${escapeHtml(eventName)}</b>`, {
+                                    permanent: true,
+                                    direction: 'right',
+                                    className: 'geol-kmz-tooltip-label',
+                                    offset: [14, 0]
+                                });
+                            }
+
+                            return;
+                        }
+
+                        let html = `<div style="font-family:'Inter',sans-serif; padding:14px 16px 12px 16px; max-height:350px; overflow-y:auto; overflow-x:hidden;" class="geolpopup-scrollbar-content">
                             <h4 style="margin:0 0 12px 0; color:#1e40af; font-size:14px; font-weight:700; border-bottom:2px solid #3b82f6; padding-bottom:6px; text-transform:uppercase; padding-right:24px;">${layerName}</h4>
-                            <div style="background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0; display:flex; flex-direction:column; padding:0 10px;">`;
+                            <div style="background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0; padding:0 10px;" class="geolpopup-inner-wrapper">`;
 
                         // Campos técnicos a omitir en el popup visual
                         const excludedKeys = [
@@ -251,17 +992,26 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
                         if (propEntries.length === 0) {
                             html += `<div style="font-size:12px;color:#6b7280;font-style:italic;padding:10px 0;">Sin datos adicionales</div>`;
                         } else {
+                            html += `<table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+                                <tbody>`;
+                            
                             propEntries.forEach(([k, v], index) => {
                                 const label = k.replace(/_/g, ' ').toUpperCase();
                                 const isLast = index === propEntries.length - 1;
-                                html += `<div style="display:flex; justify-content:space-between; align-items:flex-start; padding: 6px 0; border-bottom:${isLast ? 'none' : '1px solid #e2e8f0'};">
-                                    <span style="font-weight:700; color:#64748b; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-right: 12px; min-width: 80px;">${label}</span>
-                                    <span style="color:#0f172a; font-size:12px; word-break:break-word; font-weight:500; text-align:right;">${v}</span>
-                                </div>`;
+                                html += `<tr style="border-bottom:${isLast ? 'none' : '1px solid #f1f5f9'};">
+                                    <td style="padding: 8px 0; vertical-align:top; width:90px; overflow:hidden;">
+                                        <div style="font-weight:700; color:#64748b; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; line-height:1.2; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;" title="${label}">${label}</div>
+                                    </td>
+                                    <td style="padding: 8px 0 8px 8px; vertical-align:top; text-align:right;">
+                                        <div style="color:#0f172a; font-size:12px; word-break:break-word; font-weight:500; line-height:1.3;">${v}</div>
+                                    </td>
+                                </tr>`;
                             });
+                            
+                            html += `</tbody></table>`;
                         }
                         html += '</div></div>';
-                        layer.bindPopup(html, { className: 'geolint-custom-popup', maxWidth: 300, minWidth: 260 });
+                        layer.bindPopup(html, { className: 'geolpopup-main-container', maxWidth: 300, minWidth: 260, autoPan: false });
 
                         const hasRealName = props.name && String(props.name).trim().length > 0;
                         const isPoint = feature.geometry && feature.geometry.type === 'Point';
@@ -298,37 +1048,58 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
             });
             shpLayersGroupRef.current.addLayer(geojsonLayer);
 
-            // Auto-focus if it's the first time we load this specific data
+            // Auto-focus inteligente: solo si los datos cambian sustancialmente (nueva capa/pestaña)
             try {
+                // Identificador único para el conjunto de datos (tab + total features)
+                // Esto evita que actualizaciones menores o re-renders por selección disparen el fitBounds general
+                const dataId = `${geologiaGeojsonData.features?.length || 0}_${activeLayersFilter?.length || 0}`;
                 const currentDataStr = JSON.stringify(geologiaGeojsonData);
+                
                 if (prevGeoJsonDataStrRef.current !== currentDataStr) {
                     prevGeoJsonDataStrRef.current = currentDataStr;
-                    const bounds = geojsonLayer.getBounds();
-                    if (bounds.isValid()) {
-                        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                    
+                    // Solo hacemos fitBounds si el usuario NO está navegando activamente
+                    // y si NO hay un elemento siendo enfocado activamente
+                    if (!focusedFeature && !userNavigatingRef.current) {
+                        const bounds = geojsonLayer.getBounds();
+                        if (bounds.isValid()) {
+                            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+                        }
+                    } else {
+                        // Si hay focusedFeature, marcamos que ya hemos "visto" estos datos
+                        // para que no dispare fitBounds si se limpia focusedFeature después
                     }
                 }
             } catch (e) {
                 console.error("[GeologiaGeoite] auto-fit error:", e);
             }
         }
-    }, [map, geologiaGeojsonData, visibleLayers, activeLayersFilter]);
+    }, [map, geologiaGeojsonData, visibleLayers, activeLayersFilter, panelPhotos, tabName]);
 
-    // --- CENTRAR MAPA EN FEATURE SELECCIONADO DESDE DASHBOARD ---
+    // --- CENTRAR Y RESALTAR ELEMENTO SELECCIONADO DESDE DASHBOARD ---
     useEffect(() => {
         if (!map || !focusedFeature) return;
-        try {
-            const tempLayer = L.geoJSON(focusedFeature);
-            const bounds = tempLayer.getBounds();
-            if (bounds.isValid()) {
-                if (focusedFeature.geometry && focusedFeature.geometry.type === 'Point') {
-                    map.setView(bounds.getCenter(), 16, { animate: true });
-                } else {
-                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
+
+        // Lookup directo por ID (O(1), elimina el bug de selección consecutiva)
+        const geolId = focusedFeature._geol_id;
+        let targetLayer = geolId ? leafletLayerMapRef.current.get(geolId) : null;
+
+        // Fallback: búsqueda por OBJECTID si no se encontró por ID
+        if (!targetLayer && focusedFeature.properties?.OBJECTID !== undefined) {
+            shpLayersGroupRef.current.eachLayer(mainGroup => {
+                if (mainGroup.eachLayer) {
+                    mainGroup.eachLayer(layer => {
+                        if (!targetLayer && layer.feature?.properties?.OBJECTID === focusedFeature.properties.OBJECTID) {
+                            targetLayer = layer;
+                        }
+                    });
                 }
-            }
-        } catch (e) {
-            console.error("[GeologiaGeoite] Error focusing feature:", e);
+            });
+        }
+
+        if (targetLayer) {
+            map.closePopup(); // Cerrar cualquier popup previo antes de abrir el nuevo
+            handleHighlightLayer(targetLayer);
         }
     }, [map, focusedFeature]);
 
@@ -337,7 +1108,7 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
         if (!isLayerPanelOpen || availableLayers.length === 0) return null;
 
         return createPortal(
-            <div className="geotech-layer-panel-v2">
+            <div className="geotech-layer-panel-v2" id="geolmap-menu-capas-geologia">
                 <div className="geotech-layer-header">
                     <span><i className="fas fa-layer-group" style={{ color: '#3b82f6', marginRight: '8px' }}></i> Capas de Geología</span>
                     <button onClick={() => setIsLayerPanelOpen(false)} title="Cerrar"><i className="fas fa-times"></i></button>
@@ -364,7 +1135,8 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
         );
     };
 
-    // --- AGREGAR BOTÓN DE GESTOR AL MAPA ---
+    // --- AGREGAR BOTÓN DE GESTOR AL MAPA (DEPRECATED: Movido a toolbar principal) ---
+    /*
     useEffect(() => {
         if (!map || availableLayers.length === 0) return;
 
@@ -390,13 +1162,14 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
         map.addControl(toolbar);
         return () => map.removeControl(toolbar);
     }, [map, availableLayers]);
+    */
 
     // --- LOAD GEOLOGIA CAPA (Fallback KML) ---
     useEffect(() => {
         if (!map) return;
 
-        // El resto de la lógica de KML permanece igual pero solo si NO hay GeoJSON
-        if (geologiaGeojsonData) return;
+        // El resto de la lógica de KML permanece igual
+        // Ahora permitimos ver ambos simultáneamente (Base KML + GeoJSON de capas)
 
         if (!geologiaCapaUrl) {
             geologiaKmlLayerRef.current.clearLayers();
@@ -479,35 +1252,216 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
                 });
                 geologiaKmlLayerRef.current.addLayer(geojsonLayer);
 
-                // --- LEYENDA DE TRAMOS ---
+                // --- MARCADORES DE INICIO Y FIN DEL TRAZADO ---
+                // Recolectar todas las coordenadas de líneas en orden
+                const allCoords = [];
+                (geojson.features || []).forEach(f => {
+                    const geom = f.geometry;
+                    if (!geom) return;
+                    if (geom.type === 'LineString') {
+                        allCoords.push(...geom.coordinates);
+                    } else if (geom.type === 'MultiLineString') {
+                        geom.coordinates.forEach(line => allCoords.push(...line));
+                    }
+                });
+
+                if (allCoords.length >= 2) {
+                    const startCoord = allCoords[0];                    // [lng, lat]
+                    const endCoord = allCoords[allCoords.length - 1];   // [lng, lat]
+
+                    const makeRouteEndpointIcon = (type) => L.divIcon({
+                        className: '',
+                        html: `
+                            <div style="
+                                position: relative;
+                                width: 36px; height: 36px;
+                            ">
+                                <div style="
+                                    width: 36px; height: 36px;
+                                    background: ${type === 'start' ? '#16a34a' : '#dc2626'};
+                                    border-radius: 50% 50% 50% 0;
+                                    transform: rotate(-45deg);
+                                    border: 3px solid white;
+                                    box-shadow: 0 0 0 2px ${type === 'start' ? '#16a34a' : '#dc2626'}, 0 4px 14px rgba(0,0,0,0.45);
+                                    display: flex; align-items: center; justify-content: center;
+                                "></div>
+                                <div style="
+                                    position: absolute; top: 7px; left: 7px;
+                                    font-size: 14px;
+                                    transform: rotate(0deg);
+                                    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
+                                ">${type === 'start' ? '🚀' : '🏁'}</div>
+                            </div>
+                        `,
+                        iconSize: [36, 42],
+                        iconAnchor: [18, 42],
+                        popupAnchor: [0, -44]
+                    });
+
+                    // Marcador INICIO
+                    const startMarker = L.marker([startCoord[1], startCoord[0]], {
+                        icon: makeRouteEndpointIcon('start'),
+                        zIndexOffset: 5000
+                    }).bindTooltip('<b>📍 Inicio del trazado</b>', { direction: 'top', className: 'geol-kmz-tooltip-label' });
+
+                    // Marcador FIN
+                    const endMarker = L.marker([endCoord[1], endCoord[0]], {
+                        icon: makeRouteEndpointIcon('end'),
+                        zIndexOffset: 5000
+                    }).bindTooltip('<b>🏁 Fin del trazado</b>', { direction: 'top', className: 'geol-kmz-tooltip-label' });
+
+                    geologiaKmlLayerRef.current.addLayer(startMarker);
+                    geologiaKmlLayerRef.current.addLayer(endMarker);
+                }
+
+                // --- NUEVA LEYENDA TÉCNICA: UNIDADES LITOLÓGICAS LOCALES ---
                 const existingLegend = document.getElementById('geol-kml-tramos-legend');
                 if (existingLegend) existingLegend.remove();
 
-                if (tramoNames.length > 0) {
-                    const LegendControl = L.Control.extend({
-                        options: { position: 'bottomright' },
-                        onAdd: function () {
-                            const div = L.DomUtil.create('div', 'leaflet-control');
-                            div.id = 'geol-kml-tramos-legend';
-                            div.style.cssText = 'background:white;padding:10px 14px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-family:Inter,sans-serif;font-size:12px;max-width:200px;';
+                const GeologyLegend = L.Control.extend({
+                    options: { position: 'bottomright' },
+                    onAdd: function () {
+                        const div = L.DomUtil.create('div', 'leaflet-control');
+                        div.id = 'geol-kml-tramos-legend';
+                        div.style.cssText = 'background:#f1f5f9;border:3px solid #000;padding:12px 18px;font-family:Inter,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,0.3);';
+                        
+                        const isGeomorfo = tabName?.toLowerCase().includes('geomorfologia');
+                        const isEstructural = tabName?.toLowerCase().includes('estructural');
+
+                        const isGeodinamicaExterna = tabName?.toLowerCase().includes('geodinamicaexterna');
+                        const isGeotecniaCanteras = tabName?.toLowerCase().includes('geotecnia_canteras');
+
+                        if (isEstructural) {
+                            
                             div.innerHTML = `
-                                <div style="font-weight:700;color:#1e40af;margin-bottom:8px;font-size:13px;border-bottom:1px solid #e2e8f0;padding-bottom:5px;">
-                                    <i class="fas fa-road" style="margin-right:5px;"></i>Tramos
+                                <div style="font-weight:900; color:#000; font-size:15px; text-transform:uppercase; text-align:center; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:10px; letter-spacing:1px;">Simbología</div>
+                                <div style="display:flex; flex-direction:column; gap:8px;">
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 3 L22 19 L2 19 Z" fill="#ffff00" stroke="#000" stroke-width="1.5"/><circle cx="12" cy="14" r="2.5" fill="#000"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Inicio Del Tramo</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 3 L22 19 L2 19 Z" fill="#ffa500" stroke="#000" stroke-width="1.5"/><circle cx="12" cy="14" r="2.5" fill="#000"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Fin Del Tramo</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" fill="#000"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Progresivas De La Carretera Actual</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="30" height="16" viewBox="0 0 30 16"><path d="M1 10 C6 2, 10 2, 15 10 S24 18, 29 10" fill="none" stroke="#000" stroke-width="1.4"/><path d="M1 10 C6 18, 10 18, 15 10 S24 2, 29 10" fill="none" stroke="#000" stroke-width="1.4" stroke-dasharray="5 3"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Eje De La Carretera Actual</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#00c8ff" stroke="#000" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="22" stroke="#000" stroke-width="2"/><line x1="2" y1="12" x2="22" y2="12" stroke="#000" stroke-width="2"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Puentes</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="18" height="22" viewBox="0 0 18 22"><line x1="9" y1="2" x2="9" y2="20" stroke="#000" stroke-width="1.6"/><line x1="9" y1="11" x2="15" y2="11" stroke="#000" stroke-width="1.6"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Buzamientos</span>
+                                    </div>
                                 </div>
-                                ${tramoNames.map(name => `
-                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
-                                        <div style="width:24px;height:5px;background:${tramoColorMap[name]};border-radius:3px;flex-shrink:0;"></div>
-                                        <span style="color:#374151;font-size:11px;">${name}</span>
-                                    </div>`).join('')}
                             `;
-                            L.DomEvent.disableClickPropagation(div);
-                            return div;
+                        } else if (isGeodinamicaExterna) {
+                            const geodinamicaLegendItems = getGeodinamicaLegendItems(geologiaGeojsonData);
+                            div.style.cssText = 'background:#f1f5f9;border:3px solid #000;padding:10px 12px;font-family:Inter,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,0.3);max-width:360px;';
+                            div.innerHTML = `
+                                <div style="font-weight:900; color:#000; font-size:13px; text-transform:uppercase; text-align:center; border-bottom:2px solid #000; padding-bottom:6px; margin-bottom:8px; letter-spacing:0.6px;">LEYENDA</div>
+                                <div style="font-weight:700; color:#000; font-size:11px; margin-bottom:10px;">Eventos Geodinamicos</div>
+                                <div style="display:flex; flex-direction:column; gap:6px;">
+                                    ${geodinamicaLegendItems.map(({ name, color }) => `
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            ${getGeodinamicaLegendSvg(color)}
+                                            <span style="font-weight:600; color:#000; font-size:11px; line-height:1.15;">${name}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `;
+                        } else if (isGeotecniaCanteras) {
+                            const canterasMaterialItems = getCanterasLegendItems(geologiaGeojsonData);
+                            div.style.cssText = 'background:#f1f5f9;border:3px solid #000;padding:10px 12px;font-family:Inter,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,0.3);max-width:340px;';
+                            div.innerHTML = `
+                                <div style="font-weight:900; color:#000; font-size:13px; text-transform:uppercase; text-align:center; border-bottom:2px solid #000; padding-bottom:6px; margin-bottom:8px;">LEYENDA</div>
+                                <div style="font-weight:700; color:#000; font-size:11px; margin-bottom:10px;">Material De Canteras</div>
+                                <div style="display:flex; flex-direction:column; gap:6px;">
+                                    ${canterasMaterialItems.map((name) => `
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            ${getCanterasMaterialSvg(name)}
+                                            <span style="font-weight:600; color:#000; font-size:11px; line-height:1.15;">${name}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `;
+                        } else if (isGeomorfo) {
+                            div.innerHTML = `
+                                <div style="font-weight:900; color:#000; font-size:15px; text-transform:uppercase; text-align:center; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:10px; letter-spacing:1px;">LEYENDA</div>
+                                <div style="font-weight:700; color:#000; font-size:12px; margin-bottom:12px;">Unidades Geomorfológicas Locales</div>
+                                <div style="display:flex; flex-direction:column; gap:7px;">
+                                    ${Object.entries(UNIDAD_GEOMORFO_STYLES).map(([name, style]) => `
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            ${getLegendSwatch(style, 38, 22)}
+                                            <span style="font-weight:600; color:#000; font-size:12px;">${name}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `;
+                        } else if (isEstructural && false) {
+                            div.innerHTML = `
+                                <div style="font-weight:900; color:#000; font-size:15px; text-transform:uppercase; text-align:center; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:10px; letter-spacing:1px;">Simbología</div>
+                                <div style="display:flex; flex-direction:column; gap:8px;">
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 3 L22 19 L2 19 Z" fill="#ffff00" stroke="#000" stroke-width="1.5"/><circle cx="12" cy="14" r="2.5" fill="#000"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Inicio Del Tramo</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 3 L22 19 L2 19 Z" fill="#ffa500" stroke="#000" stroke-width="1.5"/><circle cx="12" cy="14" r="2.5" fill="#000"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Fin Del Tramo</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" fill="#000"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Progresivas De La Carretera Actual</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="12" viewBox="0 0 24 12"><line x1="0" y1="6" x2="24" y2="6" stroke="#000" stroke-width="4"/><line x1="0" y1="6" x2="24" y2="6" stroke="#fff" stroke-width="2" stroke-dasharray="5,5"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Eje De La Carretera Actual</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#00ced1" stroke="#000" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="22" stroke="#000" stroke-width="2"/><line x1="2" y1="12" x2="22" y2="12" stroke="#000" stroke-width="2"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Puentes</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="18" stroke="#000" stroke-width="2"/><line x1="7" y1="18" x2="17" y2="18" stroke="#000" stroke-width="2"/></svg>
+                                        <span style="font-weight:600; color:#000; font-size:12px;">Buzamientos</span>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            div.innerHTML = `
+                                <div style="font-weight:900; color:#000; font-size:15px; text-transform:uppercase; text-align:center; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:10px; letter-spacing:1px;">LEYENDA</div>
+                                <div style="font-weight:700; color:#000; font-size:12px; margin-bottom:12px;">Unidades Litológicas Locales</div>
+                                <div style="display:flex; flex-direction:column; gap:7px;">
+                                    ${Object.entries(UNIDAD_GEO_STYLES).filter(([key]) => !['Fm. Sandia', 'Dep. Morrenico', 'Cuaternario', 'Ambo', 'Tarma', 'Copacabana', 'Mitu'].includes(key)).map(([name, style]) => `
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            ${getLegendSwatch(style, 38, 22)}
+                                            <span style="font-weight:600; color:#000; font-size:12px;">${name}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `;
                         }
-                    });
-                    new LegendControl().addTo(map);
+                        L.DomEvent.disableClickPropagation(div);
+                        return div;
+                    }
+                });
+
+                if (map && map._loaded && map._controlCorners) {
+                    new GeologyLegend().addTo(map);
                 }
 
-                map.fitBounds(geojsonLayer.getBounds(), { padding: [50, 50] });
+                const bounds = geojsonLayer.getBounds();
+                if (map && map._loaded && bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
             } catch (err) {
                 console.error('Error cargando capa geologica:', err);
             }
@@ -528,6 +1482,7 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
         const drawnItems = new L.FeatureGroup().addTo(map);
         poiLayerRef.current.addTo(map);
         geologiaKmlLayerRef.current.addTo(map); // Añadir POIs estáticos al mapa
+        shpLayersGroupRef.current.addTo(map); // Añadir grupo de Capas GeoJSON al mapa (independiente)
         // citiesLayerRef managed by zoom logic (citiesLayerRef is defined at top level)
         mapDataLayerRef.current.addTo(map); // Añadir el FeatureGroup de alcantarillas al mapa
 
@@ -1648,6 +2603,7 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
                 <button class="geolmap-tool-btn" data-menu="geolmap-menu-dibujo"><i class="fas fa-pencil-alt" style="color: #e67e22;"></i></button>
                 <button class="geolmap-tool-btn" data-menu="geolmap-menu-kml-carga"><i class="fas fa-upload" style="color: #6c5ce7;"></i></button>
                 <button class="geolmap-tool-btn" data-menu="geolmap-menu-kml-descarga"><i class="fas fa-download" style="color: #6c5ce7;"></i></button>
+                <button class="geolmap-tool-btn" id="geolmap-btn-capas-geologia" title="Capas de Geología"><i class="fas fa-layer-group" style="color: #3b82f6;"></i></button>
                 <button class="geolmap-tool-btn" data-menu="geolmap-menu-calibrar"><i class="fas fa-cog"></i></button>
             </div>
             <div class="geolmap-tool-group">
@@ -1726,6 +2682,32 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
         toolbarContainer.querySelectorAll('.geolmap-tool-btn[data-menu]').forEach(btn => {
             btn.onclick = () => toggleMenu(btn.dataset.menu, btn);
         });
+
+        const capasGeolBtn = toolbarContainer.querySelector('#geolmap-btn-capas-geologia');
+        if (capasGeolBtn) {
+            capasGeolBtn.onclick = () => {
+                const isVisible = isLayerPanelOpen;
+                closeAll();
+                if (!isVisible) {
+                    setIsLayerPanelOpen(true);
+                    capasGeolBtn.classList.add('active');
+                    
+                    // Posicionamiento dinámico similar a toggleMenu
+                    setTimeout(() => {
+                        const menu = document.getElementById('geolmap-menu-capas-geologia');
+                        if (menu) {
+                            const rect = capasGeolBtn.getBoundingClientRect();
+                            menu.style.display = 'block';
+                            menu.style.left = (rect.right + 15) + 'px';
+                            menu.style.top = rect.top + 'px';
+                            menu.style.setProperty('--arrow-top', '15px');
+                        }
+                    }, 50);
+                } else {
+                    setIsLayerPanelOpen(false);
+                }
+            };
+        }
 
         const calibrateButton = toolbarContainer.querySelector('[data-menu="geolmap-menu-calibrar"]');
 
@@ -3165,10 +4147,47 @@ const MapLogic = ({ projectId, section, geologiaCapaUrl, geologiaGeojsonData, in
                 } catch (e) { /* ignore bounds errors */ }
             }
             console.log(`[ClasMat] ${placed}/${mapData.data.length} marcadores de materiales colocados en el mapa`);
+            
+            // --- LEYENDA DE MATERIALES ---
+            const existingMatLegend = document.getElementById('geol-mat-legend');
+            if (existingMatLegend) existingMatLegend.remove();
+
+            if (placed > 0) {
+                const MatLegendControl = L.Control.extend({
+                    options: { position: 'bottomleft' },
+                    onAdd: function () {
+                        const div = L.DomUtil.create('div', 'leaflet-control');
+                        div.id = 'geol-mat-legend';
+                        div.style.cssText = 'background:white;padding:10px 14px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-family:Inter,sans-serif;font-size:11px;';
+                        div.innerHTML = `
+                            <div style="font-weight:700;color:#1e40af;margin-bottom:8px;font-size:12px;border-bottom:1px solid #e2e8f0;padding-bottom:5px;">
+                                <i class="fas fa-layer-group" style="margin-right:5px;"></i>Leyenda Materiales
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                                <div style="width:12px;height:12px;background:#1e293b;border:1px solid white;border-radius:50%;flex-shrink:0;"></div>
+                                <span style="color:#374151;">Roca Fija (RF)</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                                <div style="width:12px;height:12px;background:#3b82f6;border:1px solid white;border-radius:50%;flex-shrink:0;"></div>
+                                <span style="color:#374151;">Roca Suelta (RS)</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                                <div style="width:12px;height:12px;background:#f59e0b;border:1px solid white;border-radius:50%;flex-shrink:0;"></div>
+                                <span style="color:#374151;">Mat. Suelto (MS)</span>
+                            </div>
+                        `;
+                        L.DomEvent.disableClickPropagation(div);
+                        return div;
+                    }
+                });
+                new MatLegendControl().addTo(map);
+            }
         }, 2000); // Wait 2s for KML to load
 
         return () => {
             clearTimeout(timer);
+            const existingMatLegend = document.getElementById('geol-mat-legend');
+            if (existingMatLegend) existingMatLegend.remove();
             materialesLayer.clearLayers();
             map.removeLayer(materialesLayer);
         };
@@ -3281,23 +4300,64 @@ const GeologiaGeoite = ({ tabName, projectId, section = 'geologia', onTramoSelec
 
     useEffect(() => {
         const fetchCapa = async () => {
-            if (!projectId || !tabName) return;
+            if (!projectId) return;
             try {
-                const res = await axiosInstance.get(`/api/proyectos/${projectId}/geologia-capas/${tabName}`);
-                if (res.data?.data?.geojson_data) {
-                    setGeojsonData(res.data.data.geojson_data);
-                    // Si ya hay GeoJSON de la capa específica, no necesitamos sobreescribir con KML base
-                    // a menos que queramos ver ambos. Por ahora el GeoJSON tiene prioridad para las pestañas.
-                    if (onGeoDataLoaded) onGeoDataLoaded(res.data.data.geojson_data);
-                } else if (res.data?.data?.file_url) {
-                    setCapaAgregadaUrl(res.data.data.file_url);
-                    setGeojsonData(null);
-                    if (onGeoDataLoaded) onGeoDataLoaded(null);
+                const url = tabName 
+                    ? `/api/proyectos/${projectId}/geologia-capas/${tabName}` 
+                    : `/api/proyectos/${projectId}/geologia-capas`;
+                
+                const res = await axiosInstance.get(url);
+                // Si viene del endpoint por tabName, data es un objeto único o null.
+                // Si viene del endpoint general, data es un array.
+                const rawData = res.data?.data;
+                const layers = Array.isArray(rawData) ? rawData : (rawData ? [rawData] : []);
+
+                if (layers.length > 0) {
+                    // Fusionar todos los GeoJSON disponibles de todas las capas subidas a esta pestaña
+                    const allFeatures = [];
+                    let firstKmlUrl = null;
+
+                    layers.forEach(layer => {
+                        if (layer.geojson_data) {
+                            let gdata = layer.geojson_data;
+                            if (typeof gdata === 'string') {
+                                try { gdata = JSON.parse(gdata); } catch (e) { }
+                            }
+                            if (gdata && gdata.features) {
+                                // Asegurarnos de que cada layer conserve su identidad si no la tiene
+                                gdata.features.forEach((f, idx) => {
+                                    if (!f.properties) f.properties = {};
+                                    // Inyectar ID determinista para vinculación entre dashboard y mapa
+                                    f._geol_id = `geol_${layer.tab_name || 'raw'}_${idx}`;
+                                    if (!f.properties._layer_name) f.properties._layer_name = layer.file_name || 'Capa sin nombre';
+                                    f.properties._layer_tab = layer.tab_name || 'Otros';
+                                });
+                                allFeatures.push(...gdata.features);
+                            }
+                        }
+                        if (!firstKmlUrl && layer.file_url) firstKmlUrl = layer.file_url;
+                    });
+
+                    if (allFeatures.length > 0) {
+                        const mergedGeoJSON = { type: 'FeatureCollection', features: allFeatures };
+                        setGeojsonData(mergedGeoJSON);
+                        if (onGeoDataLoaded) onGeoDataLoaded(mergedGeoJSON);
+                    } else if (firstKmlUrl) {
+                        // Fallback por si hay archivos pero no se pudieron convertir a GeoJSON
+                        setCapaAgregadaUrl(firstKmlUrl);
+                        setGeojsonData(null);
+                        if (onGeoDataLoaded) onGeoDataLoaded(null);
+                    }
                 } else {
+                    setGeojsonData(null);
                     if (onGeoDataLoaded) onGeoDataLoaded(null);
                 }
             } catch (err) {
-                console.error("Error fetching geologia capas", err);
+                if (err.response && err.response.status === 404) {
+                    // Silencio: es normal que algunas pestañas no tengan capas GeoJSON asociadas
+                } else {
+                    console.error("Error fetching geologia capas", err);
+                }
                 setGeojsonData(null);
                 if (onGeoDataLoaded) onGeoDataLoaded(null);
             }
@@ -3310,19 +4370,38 @@ const GeologiaGeoite = ({ tabName, projectId, section = 'geologia', onTramoSelec
 
     return (
         <div className="geolmap-internal-map-container" style={{ height: height, width: '100%', minHeight: 0 }}>
-            <MapContainer center={center} zoom={6} style={{ height: '100%', width: '100%' }}>
+            <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} aria-hidden="true">
+                <g dangerouslySetInnerHTML={{ __html: LEGEND_PATTERN_DEFS }} />
+            </svg>
+            <MapContainer center={center} zoom={6} maxZoom={16} zoomControl={false} style={{ height: '100%', width: '100%' }}>
                 <LayersControl position="topright" key="layers-v2">
                     <LayersControl.BaseLayer name="Estándar">
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
+                        <TileLayer 
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' 
+                            maxNativeZoom={19}
+                            maxZoom={16}
+                        />
                     </LayersControl.BaseLayer>
                     <LayersControl.BaseLayer checked name="Topográfico">
-                        <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' />
+                        <TileLayer 
+                            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" 
+                            attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' 
+                            maxNativeZoom={17}
+                            maxZoom={16}
+                        />
                     </LayersControl.BaseLayer>
                     <LayersControl.BaseLayer name="Satélite">
-                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' />
+                        <TileLayer 
+                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+                            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' 
+                            maxNativeZoom={14}
+                            maxZoom={16}
+                        />
                     </LayersControl.BaseLayer>
                 </LayersControl>
                 <MapLogic
+                    tabName={tabName}
                     projectId={projectId}
                     section={section}
                     geologiaCapaUrl={capaAgregadaUrl}

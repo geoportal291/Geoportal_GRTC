@@ -4,10 +4,11 @@ import AdminProjectsView from './AdminProjectsView';
 import CoordinatorProjectsView from './CoordinatorProjectsView'; // Ensure this matches filename case
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import { Button } from './components/SharedComponents'; // Import Button
+import { API_BASE_URL } from '../../../../api/config';
 
 const ProyectosV2 = () => {
     const { user } = useAuth();
-    const API_URL = process.env.REACT_APP_API_BASE || '';
+    const API_URL = API_BASE_URL;
 
     const [viewMode, setViewMode] = useState(null); // 'admin', 'coordinator', 'simulation_selection'
     const [simulatedProject, setSimulatedProject] = useState(null);

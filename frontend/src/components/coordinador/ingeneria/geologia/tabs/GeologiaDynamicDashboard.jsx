@@ -159,6 +159,7 @@ const GeologiaDynamicDashboard = ({
                                     const lowerName = layer.name.toLowerCase();
                                     let layerColor = '#3b82f6'; // default blue
                                     if (lowerName.includes('falla') || lowerName.includes('peligro') || lowerName.includes('deslizamiento') || lowerName.includes('riesgo')) layerColor = '#ef4444'; // red
+                                    if (lowerName.includes('rumbo') || lowerName.includes('buz')) layerColor = '#2C3E50'; // slate for structural points
                                     if (lowerName.includes('pliegue') || lowerName.includes('agua') || lowerName.includes('ríos')) layerColor = '#0284c7'; // dark blue
                                     if (lowerName.includes('cantera') || lowerName.includes('depósito') || lowerName.includes('geomorfo')) layerColor = '#f59e0b'; // amber
                                     if (lowerName.includes('muro') || lowerName.includes('puente')) layerColor = '#8b5cf6'; // purple

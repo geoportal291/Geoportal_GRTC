@@ -6,10 +6,16 @@ import 'alertifyjs/build/css/themes/default.min.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from './data/contexts/AuthContext'; // Importar AuthProvider
-import * as Cesium from 'cesium';
+import { AuthProvider } from './data/contexts/AuthContext';
 
+// NO importar Cesium aquí - se cargará vía script tag en index.html
+// Configurar Cesium antes de renderizar la app
 window.CESIUM_BASE_URL = '/cesium/';
+
+// Polyfill para globalThis en navegadores antiguos
+if (typeof globalThis === 'undefined') {
+  window.globalThis = window;
+}
 
 const originalConsoleError = console.error;
 console.error = (...args) => {

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import axiosInstance from '../../api/axios';
+import { API_BASE_URL } from '../../api/config';
 
 const AuthContext = createContext(null);
 
@@ -21,7 +22,8 @@ export const AuthProvider = ({ children }) => {
   const [selectedProjectId, setSelectedProjectId] = useState(() => localStorage.getItem('selectedProjectId') || null);
   const [selectedProjectName, setSelectedProjectName] = useState(() => localStorage.getItem('selectedProjectName') || null);
 
-  const API_URL = process.env.REACT_APP_API_BASE || '';
+  // Usar API_BASE_URL importada de config (tiene fallback correcto a 'https://geoportal-backend-1.fly.dev')
+  const API_URL = API_BASE_URL;
 
   useEffect(() => {
     if (user) {
@@ -38,7 +40,24 @@ export const AuthProvider = ({ children }) => {
       const response = await axios.get(`${API_URL}/api/user-projects`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const projects = response.data;
+      let projects = response.data;
+
+      // Validación robusta: asegurar que projects sea un array
+      // El backend en producción puede devolver diferentes formatos
+      if (!projects) {
+        projects = [];
+      } else if (!Array.isArray(projects)) {
+        // Si es un objeto con propiedad 'projects' o 'data'
+        if (projects.projects && Array.isArray(projects.projects)) {
+          projects = projects.projects;
+        } else if (projects.data && Array.isArray(projects.data)) {
+          projects = projects.data;
+        } else {
+          // Si no es un array ni tiene formato conocido, convertir a array vacío
+          console.warn('Formato inesperado de proyectos:', projects);
+          projects = [];
+        }
+      }
 
       if (projects.length === 0) {
         setSelectedProjectId(null);
@@ -47,9 +66,9 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('selectedProjectName');
       } else if (projects.length === 1) {
         setSelectedProjectId(projects[0].proyecto_id);
-        setSelectedProjectName(projects[0].nombre_proyecto);
+        setSelectedProjectName(projects[0].nombre_proyecto || projects[0].nombre_tramo || 'Proyecto Asignado');
         localStorage.setItem('selectedProjectId', projects[0].proyecto_id);
-        localStorage.setItem('selectedProjectName', projects[0].nombre_proyecto);
+        localStorage.setItem('selectedProjectName', projects[0].nombre_proyecto || projects[0].nombre_tramo || 'Proyecto Asignado');
         setShowProjectSelectionModal(false);
       } else {
         // Multiple projects, always store the list of available projects.
@@ -58,7 +77,8 @@ export const AuthProvider = ({ children }) => {
         // Check if one was previously selected and is still valid
         const storedProjectId = localStorage.getItem('selectedProjectId');
         const storedProjectName = localStorage.getItem('selectedProjectName');
-        const previouslySelectedIsValid = projects.some(p => p.proyecto_id.toString() === storedProjectId);
+        // Protección: verificar que projects sea array antes de usar .some()
+        const previouslySelectedIsValid = Array.isArray(projects) && projects.some(p => p.proyecto_id && p.proyecto_id.toString() === storedProjectId);
 
         if (storedProjectId && previouslySelectedIsValid) {
           setSelectedProjectId(storedProjectId);

@@ -478,29 +478,59 @@ const MapLogic = ({
               statusLabel = 'Inactivo';
 
             } else {
-              // PENDIENTE: AZUL (Punto medio)
-              const blueDotIcon = L.divIcon({
-                className: '',
-                html: `<div style="
-                        width: 12px;
-                        height: 12px;
-                        background-color: #3498db;
-                        border: 2px solid white;
-                        border-radius: 50%;
-                        box-shadow: 0 0 4px rgba(0,0,0,0.3);
-                      "></div>`,
-                iconSize: [12, 12],
-                iconAnchor: [6, 6]
-              });
+              // CASO PENDIENTE / VISUAL
+              if (hasData) {
+                // PENDIENTE CON DATOS: AZUL (Punto medio resaltado con punto blanco central)
+                const blueDotIcon = L.divIcon({
+                  className: '',
+                  html: `<div style="
+                          width: 14px;
+                          height: 14px;
+                          background-color: #3498db;
+                          border: 2px solid white;
+                          border-radius: 50%;
+                          box-shadow: 0 0 6px rgba(0,0,0,0.4);
+                          position: relative;
+                        ">
+                          <div style="width: 4px; height: 4px; background-color: white; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);"></div>
+                        </div>`,
+                  iconSize: [14, 14],
+                  iconAnchor: [7, 7]
+                });
 
-              marker = L.marker([latLon.latitude, latLon.longitude], {
-                icon: blueDotIcon,
-                zIndexOffset: 800,
-                title: `${p.nombre || p.codigo} (Pendiente)`
-              });
-              statusIconHtml = hasData ? `<i class="fas fa-file-alt"></i>` : `<i class="fas fa-hourglass-start"></i>`;
-              statusClass = 'status-pending';
-              statusLabel = hasData ? 'Pendiente (Con Datos)' : 'Pendiente';
+                marker = L.marker([latLon.latitude, latLon.longitude], {
+                  icon: blueDotIcon,
+                  zIndexOffset: 800,
+                  title: `${p.nombre || p.codigo} (Pendiente con datos)`
+                });
+                statusIconHtml = `<i class="fas fa-file-alt"></i>`;
+                statusClass = 'status-pending';
+                statusLabel = 'Pendiente (Con Datos)';
+              } else {
+                // SOLO VISUAL: PLOMA (Punto pequeño)
+                const grayDotIcon = L.divIcon({
+                  className: '',
+                  html: `<div style="
+                          width: 10px;
+                          height: 10px;
+                          background-color: #95a5a6;
+                          border: 1.5px solid white;
+                          border-radius: 50%;
+                          box-shadow: 0 0 3px rgba(0,0,0,0.3);
+                        "></div>`,
+                  iconSize: [10, 10],
+                  iconAnchor: [5, 5]
+                });
+
+                marker = L.marker([latLon.latitude, latLon.longitude], {
+                  icon: grayDotIcon,
+                  zIndexOffset: 0,
+                  title: `${p.nombre || p.codigo} (Visual solamente)`
+                });
+                statusIconHtml = `<i class="fas fa-eye"></i>`;
+                statusClass = 'status-inactive';
+                statusLabel = 'Visual (Sin datos)';
+              }
             }
 
             // --- TOOLTIP PERMANENTE PROGRESIVAS ---
@@ -699,16 +729,16 @@ const MapLogic = ({
                   } else {
                     if (isTrazadoStrick) return null;
 
-                    // EXTRAER COLOR NATIVO KMZ O FALLBACK GRIS
-                    const mkColor = feature.properties['marker-color'] || feature.properties.fill || '#6c757d';
+                    // EXTRAER COLOR NATIVO KMZ O FALLBACK GRIS (Consistent with Inactive/Visual)
+                    const mkColor = feature.properties['marker-color'] || feature.properties.fill || '#95a5a6';
                     zIndex = 0;
                     const icon = L.divIcon({
                       className: 'suelos-kml-ref-point',
-                      html: `<div style="width:16px;height:16px;background-color:${mkColor};border-radius:50%;border:2px solid white;box-shadow:0 0 0 2px black, 0 3px 6px rgba(0,0,0,0.6);position:relative;">
+                      html: `<div style="width:14px;height:14px;background-color:${mkColor};border-radius:50%;border:2px solid white;box-shadow:0 0 0 1px black, 0 3px 6px rgba(0,0,0,0.6);position:relative;">
                                 <div style="width:4px;height:4px;background-color:black;border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"></div>
                              </div>`,
-                      iconSize: [20, 20],
-                      iconAnchor: [10, 10]
+                      iconSize: [14, 14],
+                      iconAnchor: [7, 7]
                     });
 
                     const popupHtml = `<div style="font-family:sans-serif;font-size:13px;color:#333;padding:5px;"><b>${feature.properties?.name || 'Punto KML'}</b><br/><span style="color:#6c757d; font-weight:bold;">Referencia KMZ Original</span></div>`;
@@ -858,15 +888,15 @@ const SuelosMap = (props) => {
         ref={mapRef}
       >
         {!showLayersControl && (
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
         )}
 
         {showLayersControl && (
           <LayersControl position="topright">
-            <LayersControl.BaseLayer checked name="Estándar">
+            <LayersControl.BaseLayer name="Estándar">
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             </LayersControl.BaseLayer>
-            <LayersControl.BaseLayer name="Satélite">
+            <LayersControl.BaseLayer checked name="Satélite">
               <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
             </LayersControl.BaseLayer>
             <LayersControl.BaseLayer name="Topográfico">
@@ -894,6 +924,9 @@ const SuelosMap = (props) => {
           activeCanterasLayerRef={activeCanterasLayerRef}
         />
 
+        {/* --- NUEVO: Capturar comandos externos de Zoom/Foco --- */}
+        <MapResizer centerTo={props.centerTo} />
+
         {/* CONTROLES MODERNOS INTEGRADOS */}
         <MapControlsWrapper 
           displayMode={props.displayMode || 'full'}
@@ -918,6 +951,37 @@ const MapControlsWrapper = ({ displayMode, displayLayersRef, measurementLayersRe
       persistentMeasurementLayers={persistentMeasurementLayersRef.current}
     />
   );
+};
+
+// Componente helper para manejar zoom desde props reactivas
+const MapResizer = ({ centerTo }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (centerTo && centerTo.lat && centerTo.lng) {
+      // Usamos flyTo para una animación cinematográfica (zoom + movimiento)
+      map.flyTo([centerTo.lat, centerTo.lng], centerTo.zoom || 16, {
+        animate: true,
+        duration: 2 // Un poco más lento para que se aprecie el movimiento
+      });
+    } else if (centerTo === 'reset') {
+       // Si es reset, intentamos ajustar con flyToBounds para un efecto suave de alejamiento
+       if (window.suelosProgresivasLayerGroup && window.suelosProgresivasLayerGroup.getLayers().length > 0) {
+         try {
+           map.flyToBounds(window.suelosProgresivasLayerGroup.getBounds(), { 
+             padding: [40, 40],
+             duration: 2.5
+           });
+         } catch(e) {
+           map.flyTo([-12.930, -72.630], 13, { duration: 2 });
+         }
+       } else {
+         map.flyTo([-12.930, -72.630], 13, { duration: 2 });
+       }
+    }
+  }, [centerTo, map]);
+
+  return null;
 };
 
 export default SuelosMap;

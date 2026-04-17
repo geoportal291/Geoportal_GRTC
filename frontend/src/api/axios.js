@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_BASE_URL } from './config';
 
 const axiosInstance = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE || 'https://backendgeoportal.fly.dev'
+  baseURL: API_BASE_URL
 });
 
 axiosInstance.interceptors.request.use(

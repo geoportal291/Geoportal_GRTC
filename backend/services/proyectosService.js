@@ -38,14 +38,30 @@ const getAssignedDetailedProyectos = async (userId) => {
                 p.nombre_tramo, p.proyecto_nom, p.solicitante, p.departamento, p.provincia,
                 p.distrito, p.localidad, p.longitud_total, p.progresiva_inicial, p.tipo_via,
                 p.intervalo_manual, p.descripcion_larga, p.create_at, p.update_at,
-                p.intervalo_manual, p.descripcion_larga, p.create_at, p.update_at,
-                p.kml_trazado_id, p.url_kml, 
+                p.kml_trazado_id, p.url_kml,
                 COALESCE(kt.kml_filename, CASE WHEN p.url_kml IS NOT NULL THEN 'Archivo KML (URL)' ELSE NULL END) as kml_filename,
                 kt.kml_uploaded_at
             FROM proyectos p
-            JOIN proyecto_usuarios pu ON p.id = pu.proyecto_id
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
-            WHERE pu.usuario_id = $1
+            WHERE
+                -- Asignación explícita en proyecto_usuarios
+                EXISTS (
+                    SELECT 1 FROM proyecto_usuarios pu
+                    WHERE pu.proyecto_id = p.id AND pu.usuario_id = $1
+                )
+                OR
+                -- Asignación implícita por tramo
+                EXISTS (
+                    SELECT 1 FROM usuariost u
+                    WHERE u.id = $1
+                      AND u.tramo IS NOT NULL
+                      AND u.tramo <> ''
+                      AND (
+                          p.nombre_tramo ILIKE '%' || TRIM(u.tramo) || '%'
+                          OR p.proyecto_nom ILIKE '%' || TRIM(u.tramo) || '%'
+                          OR REPLACE(p.nombre_tramo, ' ', '') ILIKE '%' || REPLACE(TRIM(u.tramo), ' ', '') || '%'
+                      )
+                )
             ORDER BY p.create_at DESC
         `, [userId]);
         return proyectos.rows;
@@ -726,8 +742,8 @@ const getProjectAssignments = async (projectId) => {
             JOIN roles r ON u.rol_id = r.id
             WHERE 
                 pu.proyecto_id = $1
+                OR ($2::text IS NOT NULL AND REPLACE(u.tramo, ' ', '') ILIKE '%' || REPLACE($2, ' ', '') || '%')
                 OR ($2::text IS NOT NULL AND u.tramo ILIKE '%' || $2 || '%')
-                OR ($2::text IS NOT NULL AND u.mail_cu_104 ILIKE '%' || $2 || '%')
             `,
             [projectId, nombreTramo]
         );
@@ -785,14 +801,31 @@ const getAllProjectsForAdmin = async () => {
 const getUserAssignedProjects = async (userId) => {
     try {
         const result = await db.query(`
-            SELECT
+            SELECT DISTINCT
                 p.id AS proyecto_id,
                 p.nombre_proyecto,
                 p.nombre_tramo
             FROM proyectos p
-            JOIN proyecto_usuarios pu ON p.id = pu.proyecto_id
-            WHERE pu.usuario_id = $1
-            ORDER BY p.nombre_proyecto ASC;
+            WHERE
+                -- Asignación explícita en proyecto_usuarios
+                EXISTS (
+                    SELECT 1 FROM proyecto_usuarios pu
+                    WHERE pu.proyecto_id = p.id AND pu.usuario_id = $1
+                )
+                OR
+                -- Asignación implícita por tramo
+                EXISTS (
+                    SELECT 1 FROM usuariost u
+                    WHERE u.id = $1
+                      AND u.tramo IS NOT NULL
+                      AND u.tramo <> ''
+                      AND (
+                          p.nombre_tramo ILIKE '%' || TRIM(u.tramo) || '%'
+                          OR p.proyecto_nom ILIKE '%' || TRIM(u.tramo) || '%'
+                          OR REPLACE(p.nombre_tramo, ' ', '') ILIKE '%' || REPLACE(TRIM(u.tramo), ' ', '') || '%'
+                      )
+                )
+            ORDER BY p.nombre_tramo ASC;
         `, [userId]);
         return result.rows;
     } catch (err) {

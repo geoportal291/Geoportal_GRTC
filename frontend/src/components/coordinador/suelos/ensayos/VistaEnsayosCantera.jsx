@@ -2,180 +2,294 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import alertify from 'alertifyjs';
-import './VistaGeneralEnsayos.css'; // Re-use the same CSS
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { useAuth } from '../../../../data/contexts/AuthContext';
+import ResultadosBrevesModal from './ResultadosBrevesModal';
+import './VistaGeneralEnsayos.css';
+import './ResultadosBrevesModal.css';
 
+// ========== ImportModal (Reutilizado) ==========
+const ImportModal = ({ isOpen, onClose, onImport, loading, errors }) => {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const handleFileChange = (e) => setSelectedFile(e.target.files[0]);
+  const handleImportClick = () => {
+    if (selectedFile) onImport(selectedFile);
+    else alertify.warning('Por favor, selecciona un archivo Excel.');
+  };
+  if (!isOpen) return null;
+  return (
+    <div className="import-modal-overlay">
+      <div className="import-modal-content">
+        <h2>Importar Ensayos (Canteras)</h2>
+        <input type="file" className="form-control" accept=".xlsx" onChange={handleFileChange} />
+        {loading && <div className="loading-spinner-modal"><div className="loading-spinner"></div><p>Validando...</p></div>}
+        {errors.length > 0 && (
+          <div className="import-errors">
+            {errors.map((err, i) => <div key={i}>Hoja: {err.sheet} - {err.error}</div>)}
+          </div>
+        )}
+        <div className="modal-actions">
+          <button onClick={onClose} className="btn btn-outline" disabled={loading}>Cancelar</button>
+          <button onClick={handleImportClick} className="btn btn-primary" disabled={loading}>Validar y Subir</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ========== ConfirmationModal (Reutilizado) ==========
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, summary, loading }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="import-modal-overlay">
+      <div className="import-modal-content">
+        <h2>Confirmar Importación</h2>
+        <ul>
+          <li>Crear: {summary?.ensayosParaCrear || 0}</li>
+          <li>Actualizar: {summary?.ensayosParaActualizar || 0}</li>
+        </ul>
+        <div className="modal-actions">
+          <button onClick={onClose} className="btn btn-outline">Cancelar</button>
+          <button onClick={onConfirm} className="btn btn-primary" disabled={loading}>Confirmar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ========== EnsayosFullListModal (Version Canteras) ==========
+const EnsayosFullListModal = ({ isOpen, onClose, grupo, navigate, handleShowResults }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  if (!isOpen || !grupo) return null;
+  const filteredEnsayos = grupo.ensayos.filter(ensayo => {
+    const searchStr = `${ensayo.nombre_ensayo} ${ensayo.codigo_ensayo} ${ensayo.cantera_nombre || ''} ${ensayo.progresiva_nombre || ''}`.toLowerCase();
+    return searchStr.includes(searchTerm.toLowerCase());
+  });
+  return (
+    <div className="full-list-modal-overlay" onClick={onClose}>
+      <div className="full-list-modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="full-list-modal-header">
+          <h2><i className="fas fa-list-ul" style={{ marginRight: '10px', color: '#54a0ca' }}></i> {grupo.descripcion} (Canteras)</h2>
+          <button className="btn-close-modal" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-search-bar">
+          <input type="text" className="modal-search-input" placeholder="🔍 Buscar por código, nombre o cantera..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus />
+        </div>
+        <div className="full-list-modal-body">
+          <table className="compact-table">
+            <thead>
+              <tr><th>Código / Nombre</th><th>Cantera / Ubicación</th><th>Estrato</th><th>Estado</th><th style={{ textAlign: 'center' }}>Acciones</th></tr>
+            </thead>
+            <tbody>
+              {filteredEnsayos.length > 0 ? (
+                filteredEnsayos.map((ensayo) => (
+                  <tr key={ensayo.id} onClick={() => navigate(`/coordinador/suelos/ensayos/${ensayo.id}`)} style={{ cursor: 'pointer' }}>
+                    <td className="assay-code">{ensayo.nombre_ensayo || ensayo.codigo_ensayo}</td>
+                    <td>{ensayo.cantera_nombre || ensayo.progresiva_nombre || 'N/A'}</td>
+                    <td>E: {ensayo.estrato_orden || 'N/A'}</td>
+                    <td>
+                      <span className={`status-badge-pill status-${(ensayo.estado || 'pendiente').toLowerCase().replace(' ', '-')}`}>
+                        {ensayo.estado || 'PENDIENTE'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button className="btn-results" onClick={(e) => { e.stopPropagation(); handleShowResults(e, ensayo); }} style={{ background: '#f8f9fa', border: '1px solid #ddd', padding: '5px 8px', borderRadius: '4px', cursor: 'pointer' }}>
+                        <i className="fas fa-poll-h"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (<tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>No se encontraron ensayos.</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ========== VistaEnsayosCantera ==========
 const VistaEnsayosCantera = () => {
   const navigate = useNavigate();
+  const { API_URL, getAuthHeaders } = useAuth();
+  
   const [ensayosAgrupados, setEnsayosAgrupados] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedEnsayos, setSelectedEnsayos] = useState(new Set());
+  const [modalGrupo, setModalGrupo] = useState(null);
+  const [isResultsModalOpen, setResultsModalOpen] = useState(false);
+  const [selectedAssayForResults, setSelectedAssayForResults] = useState(null);
   
-  const API_URL = process.env.REACT_APP_API_BASE || '';
-
-  const getAuthHeaders = useCallback(() => {
-    const userData = JSON.parse(localStorage.getItem('user'));
-    const token = userData?.token;
-    if (!token) {
-      alertify.error('Sesión expirada. Por favor, inicia sesión de nuevo.');
-      navigate('/login');
-      throw new Error('Token no proporcionado');
-    }
-    return { Authorization: `Bearer ${token}` };
-  }, [navigate]);
+  const [isImportModalOpen, setImportModalOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importErrors, setImportErrors] = useState([]);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [importSummary, setImportSummary] = useState(null);
+  const [fileToImport, setFileToImport] = useState(null);
 
   const fetchCanteraEnsayos = useCallback(async () => {
     try {
       setLoading(true);
       const headers = getAuthHeaders();
-
-      // 1. Fetch all assay types
-      const tiposEnsayoResponse = await axios.get(`${API_URL}/api/tipos-ensayo`, { headers });
-      const allTiposEnsayo = tiposEnsayoResponse.data;
-
-      // 2. Fetch all assays from canteras
-      const ensayosResponse = await axios.get(`${API_URL}/api/ensayos/canteras`, { headers });
-      const ensayosDeCanteras = ensayosResponse.data || [];
-
-      // Group assays by config_key or tipoEnsayoId
-      const ensayosAgrupadosPorTipo = ensayosDeCanteras.reduce((acc, ensayo) => {
-        const key = ensayo.config_key || ensayo.tipo_ensayo_id;
-        if (!acc[key]) {
-          acc[key] = {
-            ensayos: [],
-            tipoEnsayoId: ensayo.tipo_ensayo_id,
-            descripcion: ensayo.tipo_ensayo_descripcion || 'Sin tipo',
-            configKey: ensayo.config_key,
-          };
-        }
-        acc[key].ensayos.push(ensayo);
-        return acc;
-      }, {});
-
-      // Create a final grouped structure including all assay types
-      const finalEnsayosAgrupados = {};
-      allTiposEnsayo.forEach(tipo => {
+      const tiposRes = await axios.get(`${API_URL}/api/tipos-ensayo`, { headers });
+      const ensayosRes = await axios.get(`${API_URL}/api/ensayos/canteras`, { headers });
+      const allTipos = tiposRes.data;
+      const ensayosDeCanteras = ensayosRes.data || [];
+      const agrupados = allTipos.reduce((acc, tipo) => {
         const key = tipo.config_key || tipo.id;
-        finalEnsayosAgrupados[key] = {
-          ensayos: ensayosAgrupadosPorTipo[key]?.ensayos || [],
+        acc[key] = {
+          ensayos: ensayosDeCanteras.filter(e => (e.config_key || e.tipo_ensayo_id) === key),
           tipoEnsayoId: tipo.id,
           descripcion: tipo.descripcion,
           configKey: tipo.config_key,
         };
-      });
-
-      setEnsayosAgrupados(finalEnsayosAgrupados);
-    } catch (err) {
-      console.error('Error al obtener ensayos de canteras:', err);
-      alertify.error('Error al cargar los ensayos de canteras.');
-    } finally {
-      setLoading(false);
-    }
+        return acc;
+      }, {});
+      setEnsayosAgrupados(agrupados);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   }, [API_URL, getAuthHeaders]);
 
-  useEffect(() => {
-    fetchCanteraEnsayos();
-  }, [fetchCanteraEnsayos]);
+  useEffect(() => { fetchCanteraEnsayos(); }, [fetchCanteraEnsayos]);
 
-  const handleSelectEnsayo = useCallback((ensayoId) => {
-    setSelectedEnsayos(prevSelected => {
-      const newSelection = new Set(prevSelected);
-      if (newSelection.has(ensayoId)) {
-        newSelection.delete(ensayoId);
-      } else {
-        newSelection.add(ensayoId);
-      }
-      return newSelection;
-    });
-  }, []);
+  const handleShowResults = (e, ensayo) => { e.stopPropagation(); setSelectedAssayForResults(ensayo); setResultsModalOpen(true); };
 
-  const handleBulkDelete = useCallback(() => {
-    const idsToDelete = Array.from(selectedEnsayos);
-    alertify.confirm(
-        'Confirmar Eliminación Múltiple',
-        `¿Estás seguro de que quieres eliminar ${idsToDelete.length} ensayos seleccionados? Esta acción no se puede deshacer.`,
-        async () => {
-            try {
-                const headers = getAuthHeaders();
-                await axios.post(`${API_URL}/api/ensayos/bulk-delete`, { ids: idsToDelete }, { headers });
-                alertify.success(`${idsToDelete.length} ensayos eliminados correctamente.`);
-                setSelectedEnsayos(new Set());
-                fetchCanteraEnsayos();
-            } catch (err) {
-                console.error('Error en la eliminación múltiple:', err);
-                alertify.error(err.response?.data?.error || 'Error al eliminar los ensayos.');
-            }
-        },
-        () => {
-            alertify.error('Eliminación cancelada.');
-        }
-    );
-  }, [selectedEnsayos, API_URL, getAuthHeaders, fetchCanteraEnsayos]);
+  const handleImportFile = async (file) => {
+    setImporting(true);
+    setImportErrors([]);
+    try {
+      const headers = getAuthHeaders();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('isSimulation', true);
+      const res = await axios.post(`${API_URL}/api/ensayos/importar-canteras`, formData, { headers: { ...headers, 'Content-Type': 'multipart/form-data' } });
+      setImportSummary(res.data.summary);
+      setFileToImport(file);
+      setImportModalOpen(false);
+      setShowConfirmationModal(true);
+    } catch (err) { setImportErrors(err.response?.data?.errors || [{ error: 'Error de validación.' }]); }
+    finally { setImporting(false); }
+  };
 
+  const confirmImport = async () => {
+    setImporting(true);
+    try {
+      const headers = getAuthHeaders();
+      const formData = new FormData();
+      formData.append('file', fileToImport);
+      formData.append('isSimulation', false);
+      await axios.post(`${API_URL}/api/ensayos/importar-canteras`, formData, { headers: { ...headers, 'Content-Type': 'multipart/form-data' } });
+      alertify.success('Importación exitosa.');
+      setShowConfirmationModal(false);
+      fetchCanteraEnsayos();
+    } catch (err) { alertify.error('Error al importar.'); }
+    finally { setImporting(false); }
+  };
 
-  if (loading) {
-    return (
-      <div className="loading-overlay">
-        <div className="loading-spinner"></div>
-        <p>Cargando Resumen de Ensayos de Canteras...</p>
-      </div>
-    );
-  }
+  const handleExportAll = async () => {
+     try {
+       const resp = await axios.get(`${API_URL}/api/ensayos/canteras/exportar`, { headers: getAuthHeaders(), responseType: 'blob' });
+       const url = window.URL.createObjectURL(new Blob([resp.data]));
+       const link = document.createElement('a'); link.href = url; link.setAttribute('download', 'Ensayos_Canteras_Total.xlsx'); link.click();
+     } catch (err) { alertify.error('Error al exportar.'); }
+  };
+
+  if (loading) return (<div className="loading-overlay"><div className="loading-spinner"></div><p>Analizando Canteras...</p></div>);
+
+  const total = Object.values(ensayosAgrupados).reduce((a, g) => a + g.ensayos.length, 0);
+  const done = Object.values(ensayosAgrupados).reduce((a, g) => a + g.ensayos.filter(e => e.datos_formulario && Object.keys(e.datos_formulario).length > 0).length, 0);
+  const colors = ['#54a0ca', '#28a745', '#fd7e14', '#6f42c1', '#17a2b8', '#dc3545', '#6610f2', '#e83e8c'];
 
   return (
     <div className="vista-general-ensayos-container">
-      <header className="vista-general-header">
-        <h1>Resumen de Ensayos: <span className="tramo-name">Canteras</span></h1>
-        <div>
-          {selectedEnsayos.size > 0 && (
-            <button onClick={handleBulkDelete} className="btn btn-danger btn-expandable">
-              <i className="fas fa-trash-alt"></i>
-              <span className="btn-text">Eliminar ({selectedEnsayos.size})</span>
-            </button>
-          )}
-          {/* Import/Export buttons can be added later with cantera-specific endpoints */}
+      <header className="vista-general-header-premium">
+        <div className="header-title-section">
+          <i className="fas fa-microscope main-icon"></i>
+          <div className="title-text">
+            <h1>Panel de Control de Ensayos</h1>
+            <p>Monitoreo analítico: <span className="tramo-highlight">Canteras Totales</span></p>
+          </div>
+        </div>
+        <div className="header-actions">
+          <button className="btn btn-primary btn-expandable" onClick={() => setImportModalOpen(true)}>
+            <i className="fas fa-file-import"></i> <span className="btn-text">Importar Excel</span>
+          </button>
+          <button className="btn btn-success btn-expandable" onClick={handleExportAll}>
+            <i className="fas fa-file-excel"></i> <span className="btn-text">Exportar Todo</span>
+          </button>
+          <button className="btn btn-back-circle" onClick={() => navigate(-1)} title="Volver">
+            <i className="fas fa-arrow-left"></i>
+          </button>
         </div>
       </header>
 
-      <main className="ensayos-grid">
-        {Object.keys(ensayosAgrupados).length > 0 ? (
-          Object.entries(ensayosAgrupados).map(([key, grupo]) => (
-            <div className="card-ensayo-tipo" key={key}>
-              <div className="card-header">
-                <h2>{grupo.descripcion}</h2>
-                <div className="header-actions">
-                  <span className="ensayo-count-badge">{grupo.ensayos.length} Ensayos</span>
-                </div>
-              </div>
-              <div className="card-content">
-                {grupo.ensayos.length > 0 ? (
-                  grupo.ensayos.map(ensayo => (
-                    <div className={`mini-card-ensayo ${selectedEnsayos.has(ensayo.id) ? 'selected' : ''}`} key={ensayo.id}>
-                      <div className="selection-checkbox">
-                        <input 
-                          type="checkbox"
-                          checked={selectedEnsayos.has(ensayo.id)}
-                          onChange={() => handleSelectEnsayo(ensayo.id)}
-                        />
-                      </div>
-                      <div className="mini-card-title">
-                        <i className="fas fa-vial"></i>
-                        <span>{ensayo.nombre_ensayo || ensayo.codigo_ensayo}</span>
-                      </div>
-                      <div className="mini-card-actions">
-                        <button className="btn btn-primary btn-sm" onClick={() => navigate(`/coordinador/suelos/ensayos/${ensayo.id}`)}>Ver Detalles</button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="no-ensayos-message">No hay ensayos de este tipo para canteras.</p>
-                )}
+      {/* Dashboard Superior */}
+      <div className="resumen-analitico-container">
+        <div className="resumen-analitico-layout">
+          <div className="analitica-col doughnut-section">
+            <div className="analitica-card-title"><i className="fas fa-chart-pie"></i> Avance Canteras</div>
+            <div className="chart-wrapper">
+              <ResponsiveContainer width="100%" height={140}>
+                <PieChart><Pie data={[{ name: 'Hecho', value: done }, { name: 'Pend', value: total - done }]} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value"><Cell fill="#28a745" /><Cell fill="#ffc107" /></Pie><Tooltip /></PieChart>
+              </ResponsiveContainer>
+              <div className="chart-labels">
+                <div className="label-item"><span className="dot dot-success"></span> {done} Hechos</div>
+                <div className="label-item"><span className="dot dot-warning"></span> {total - done} Pend.</div>
               </div>
             </div>
-          ))
-        ) : (
-          <p>No se encontraron tipos de ensayo configurados.</p>
-        )}
+          </div>
+          <div className="analitica-col">
+            <div className="stat-card-premium"><div className="stat-header"><span className="stat-label">EFICIENCIA CANTERAS</span><i className="fas fa-mountain stat-icon"></i></div><div className="stat-value-large">{total > 0 ? ((done / total) * 100).toFixed(1) : 0}%</div><div className="progress-bar-container"><div className="progress-bar-fill" style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}></div></div></div>
+          </div>
+          <div className="analitica-col">
+             <div className="stat-card-premium milestone-card"><div className="stat-header"><span className="stat-label">PRÓXIMO HITO</span><i className="fas fa-flag-checkered stat-icon"></i></div><div className="milestone-content">{(() => { const h = Object.values(ensayosAgrupados).map(g => ({ desc: g.descripcion, p: g.ensayos.length - g.ensayos.filter(e => e.datos_formulario && Object.keys(e.datos_formulario).length > 0).length })).filter(i => i.p > 0).sort((a, b) => a.p - b.p)[0]; return h ? <><div className="milestone-name">{h.desc}</div><div className="milestone-sub">Faltan {h.p} ensayos</div></> : <div className="milestone-name">Completado</div>; })()}</div></div>
+          </div>
+        </div>
+      </div>
+
+      <main className="ensayos-grid">
+        {Object.entries(ensayosAgrupados).map(([key, grupo], index) => {
+          const accent = colors[index % colors.length];
+          return (
+            <div className="card-ensayo-tipo" key={key} style={{ '--accent-color': accent }}>
+              <div className="card-header" onClick={() => setModalGrupo(grupo)}>
+                <h2>{grupo.descripcion}</h2>
+                <div className="header-actions"><span className="ensayo-count-badge">{grupo.ensayos.length}</span><i className="fas fa-chevron-right"></i></div>
+              </div>
+              <div className="card-content">
+                {grupo.ensayos.slice(0, 5).map(ensayo => (
+                  <div className="mini-card-ensayo" key={ensayo.id} onClick={() => navigate(`/coordinador/suelos/ensayos/${ensayo.id}`)}>
+                    <div className="mini-card-horizontal-layout">
+                      <div className="mini-card-main-data">
+                        <i className="fas fa-vial" style={{ color: accent }}></i>
+                        <span className="mini-assay-code">{ensayo.nombre_ensayo || ensayo.codigo_ensayo}</span>
+                        <span className="mini-divider">|</span>
+                        <span className="mini-location"><i className="fas fa-mountain"></i> {ensayo.cantera_nombre?.substring(0, 20) || 'Cantera'}</span>
+                        <span className="mini-divider">|</span>
+                        <span className="mini-estrato">E: {ensayo.estrato_orden || 'N/A'}</span>
+                      </div>
+                      <div className="mini-card-side-data">
+                        <span className={`status-badge-pill status-${(ensayo.estado || 'pendiente').toLowerCase().replace(' ', '-')}`}>
+                          {ensayo.estado || 'PENDIENTE'}
+                        </span>
+                        <button className="btn-results-circle" onClick={(e) => { e.stopPropagation(); handleShowResults(e, ensayo); }} title="Ver Resultados">
+                          <i className="fas fa-poll-h"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {grupo.ensayos.length > 5 && <div className="preview-limit-notice" onClick={() => setModalGrupo(grupo)}>+ {grupo.ensayos.length - 5} más de {grupo.descripcion}</div>}
+              </div>
+            </div>
+          );
+        })}
       </main>
+
+      <EnsayosFullListModal isOpen={!!modalGrupo} onClose={() => setModalGrupo(null)} grupo={modalGrupo} navigate={navigate} handleShowResults={handleShowResults} />
+      <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onImport={handleImportFile} loading={importing} errors={importErrors} />
+      <ConfirmationModal isOpen={showConfirmationModal} onClose={() => setShowConfirmationModal(false)} onConfirm={confirmImport} summary={importSummary} loading={importing} />
+      {isResultsModalOpen && <ResultadosBrevesModal isOpen={isResultsModalOpen} onClose={() => setResultsModalOpen(false)} ensayo={selectedAssayForResults} />}
     </div>
   );
 };

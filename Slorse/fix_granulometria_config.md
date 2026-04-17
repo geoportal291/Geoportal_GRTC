@@ -1,4 +1,4 @@
-# Corrección de Configuración para Ensayo de Granulometría
+  # Corrección de Configuración para Ensayo de Granulometría
 
 Este archivo contiene el JSON corregido para la columna `config_calculos` del tipo de ensayo de Granulometría, junto con un comando SQL `UPDATE` que puedes usar para aplicar el cambio directamente en tu base de datos.
 

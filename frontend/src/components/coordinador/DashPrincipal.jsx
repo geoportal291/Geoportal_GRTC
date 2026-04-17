@@ -44,7 +44,7 @@ export default function DashPrincipal() {
                 axiosInstance.get(`/api/puentes/by-project/${selectedProjectId}`),
                 axiosInstance.get(`/api/muros/by-project/${selectedProjectId}`),
                 axiosInstance.get(`/api/zonas-criticas/${selectedProjectId}`),
-                axiosInstance.get(`/proyectos/${selectedProjectId}/assignments`)
+                axiosInstance.get(`/api/proyectos/${selectedProjectId}/assignments`)
             ]);
 
             const countVal = (res) => (res.status === 'fulfilled' && Array.isArray(res.value.data)) ? res.value.data.length : 0;

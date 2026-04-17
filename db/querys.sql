@@ -1141,3 +1141,46 @@ CREATE TABLE IF NOT EXISTS geologia_fotos_panel (
     original_filename TEXT,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- MODIFICACIÓN PARA PERMITIR MÚLTIPLES CAPAS GEOLÓGICAS POR PESTAÑA (25/03/2026)
+-- 1. Buscar el nombre de la restricción única:
+-- SELECT conname FROM pg_constraint WHERE conrelid = 'geologia_capas'::regclass AND contype = 'u';
+
+-- 2. Eliminar la restricción (el nombre estándar suele ser geologia_capas_proyecto_id_tab_name_key):
+ALTER TABLE geologia_capas DROP CONSTRAINT IF EXISTS geologia_capas_proyecto_id_tab_name_key;
+[ M O D U L O  
+ G E O L O G � A ]  
+ R e n o m b r a r  
+ u n a  
+ c a p a  
+ e s p e c � f i c a  
+ U s o :  
+ C a m b i a  
+ N u e v o   N o m b r e  
+ p o r  
+ e l  
+ n o m b r e  
+ d e s e a d o  
+ : p r o y e c t o _ i d  
+ p o r  
+ e l  
+ I D  
+ d e l  
+ p r o y e c t o  
+ y  
+ : t a b _ n a m e  
+ p o r  
+ e l  
+ i d e n t i f i c a d o r  
+ d e  
+ l a  
+ c a p a .  
+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
+ -- Agregar columna drive_url a la tabla geologia_capas si no existe
+ALTER TABLE geologia_capas ADD COLUMN IF NOT EXISTS drive_url TEXT;
+
+-- Ejemplo para actualizar el link de la carpeta de Geotecnia para un proyecto espec�fico
+-- Reemplazar 'LINK_AQUI' por la URL de Google Drive y :proyecto_id por el ID real
+UPDATE geologia_capas 
+SET drive_url = 'LINK_AQUI' 
+WHERE proyecto_id = :proyecto_id AND tab_name = 'GEOTECNIA';

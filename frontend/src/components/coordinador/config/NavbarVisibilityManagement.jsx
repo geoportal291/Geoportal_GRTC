@@ -39,8 +39,8 @@ const NavbarVisibilityManagement = () => {
 
         try {
             const [rolesRes, especialidadesRes, navbarOptionsRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/roles`, getAuthHeaders()),
-                axios.get(`${API_BASE_URL}/especialidades`, getAuthHeaders()), // Obtener especialidades
+                axios.get(`${API_BASE_URL}/api/roles`, getAuthHeaders()),
+                axios.get(`${API_BASE_URL}/api/especialidades`, getAuthHeaders()), // Obtener especialidades
                 axios.get(`${API_BASE_URL}/api/navbar-options`, getAuthHeaders())
             ]);
 

@@ -139,11 +139,12 @@ async def analizar_landxml(file: UploadFile = File(...)):
                     except Exception:
                         continue
 
-        # Calcular centro UTM promediando todos los vértices
+        # Calcular centro UTM y HUELLA CONVEXA promediando vértices
         total_x = 0
         total_y = 0
         total_z = 0
         vertex_count = len(all_coords)
+        convex_hull = []
 
         if vertex_count > 0:
             for vx, vy, vz in all_coords:
@@ -156,6 +157,36 @@ async def analizar_landxml(file: UploadFile = File(...)):
                 "y": total_y / vertex_count,
                 "z": total_z / vertex_count
             }
+
+            # --- EXTRAER PERÍMETRO MATEMÁTICO (CONVEX HULL) ---
+            # Para no saturar el servidor con los millones de puntos de un archivo de 400MB,
+            # tomamos un muestreo representativo para perfilar la forma geométrica exterior.
+            try:
+                step = max(1, vertex_count // 10000)
+                sample_coords = all_coords[::step]
+                pts_2d = sorted(list(set([(float(p[0]), float(p[1])) for p in sample_coords])))
+                
+                if len(pts_2d) >= 3:
+                    def cross(o, a, b):
+                        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+                    lower = []
+                    for p in pts_2d:
+                        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+                            lower.pop()
+                        lower.append(p)
+
+                    upper = []
+                    for p in reversed(pts_2d):
+                        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+                            upper.pop()
+                        upper.append(p)
+
+                    hull_2d = lower[:-1] + upper[:-1]
+                    convex_hull = [{"x": p[0], "y": p[1]} for p in hull_2d]
+            except Exception as ex:
+                print(f"Error calculando Convex Hull: {ex}")
+
         else:
             centro_utm = None
 
@@ -168,6 +199,7 @@ async def analizar_landxml(file: UploadFile = File(...)):
             "cantidad_alineamientos": alignments_count,
             "cantidad_puntos_control": points_count,
             "centro_utm": centro_utm,
+            "borde_convexo": convex_hull,  # Exportar el perímetro exacto del plano (LandXML footprint)
             "obj_content": obj_content
         }
 
