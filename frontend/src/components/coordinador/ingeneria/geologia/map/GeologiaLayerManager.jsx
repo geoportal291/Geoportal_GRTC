@@ -105,7 +105,8 @@ const GeologiaLayerManager = ({ tabName, projectData, onUploadSuccess, accept })
                     alertify.success('Archivo subido exitosamente.');
                 } catch (error) {
                     console.error('Error al subir la capa:', error);
-                    alertify.error('Error al subir el archivo.');
+                    const backendMessage = error?.response?.data?.message || error?.response?.data?.error || 'Error al subir el archivo.';
+                    alertify.error(String(backendMessage).slice(0, 120));
                     anyError = true;
                 }
             }
@@ -181,6 +182,12 @@ const GeologiaLayerManager = ({ tabName, projectData, onUploadSuccess, accept })
         }
     };
 
+    const openUploadedFile = () => {
+        if (currentLayer?.file_url) {
+            window.open(currentLayer.file_url, '_blank', 'noopener,noreferrer');
+        }
+    };
+
     return (
         <>
             <div style={{ display: 'inline-flex', gap: '10px' }}>
@@ -230,6 +237,29 @@ const GeologiaLayerManager = ({ tabName, projectData, onUploadSuccess, accept })
                     <span style={{ fontSize: '16px' }}>🗑️</span>
                     Eliminar Capa
                 </button>
+
+                {currentLayer?.file_url && (
+                    <button
+                        type="button"
+                        onClick={openUploadedFile}
+                        style={{
+                            cursor: 'pointer',
+                            backgroundColor: '#0f766e',
+                            color: 'white',
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            fontSize: '14px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            border: 'none',
+                            transition: 'background-color 0.2s',
+                        }}
+                    >
+                        <span style={{ fontSize: '16px' }}>🔗</span>
+                        Abrir Archivo
+                    </button>
+                )}
 
                 {/* Botón Carpeta de Drive — visible solo si existe un drive_url */}
                 {currentLayer?.drive_url && (
@@ -345,6 +375,14 @@ const GeologiaLayerManager = ({ tabName, projectData, onUploadSuccess, accept })
                                         <strong>Drive:</strong>{' '}
                                         <a href={currentLayer.drive_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0284c7', wordBreak: 'break-all' }}>
                                             {currentLayer.drive_url.length > 50 ? currentLayer.drive_url.substring(0, 50) + '...' : currentLayer.drive_url}
+                                        </a>
+                                    </div>
+                                )}
+                                {currentLayer.file_url && (
+                                    <div style={{ marginTop: '4px' }}>
+                                        <strong>Archivo público:</strong>{' '}
+                                        <a href={currentLayer.file_url} target="_blank" rel="noopener noreferrer" style={{ color: '#0284c7', wordBreak: 'break-all' }}>
+                                            {currentLayer.file_url.length > 60 ? currentLayer.file_url.substring(0, 60) + '...' : currentLayer.file_url}
                                         </a>
                                     </div>
                                 )}

@@ -1,5 +1,5 @@
 const db = require('../conexion');
-const { put, del } = require('@vercel/blob');
+const { uploadFileToNAS } = require('./nasStorageService');
 const fsp = require('fs').promises;
 const fs = require('fs');
 
@@ -28,7 +28,8 @@ const uploadGeologiaCapa = async (file, proyectoId, tabName, userId) => {
     }
 
     const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
-    const filename = `geologia/${proyectoId}/${tabName}/${Date.now()}_${cleanFilename}`;
+    const filename = `${Date.now()}_${cleanFilename}`;
+    const targetFolder = `geologia/${proyectoId}/${tabName}`;
 
     const client = await db.connect();
     try {
@@ -43,13 +44,8 @@ const uploadGeologiaCapa = async (file, proyectoId, tabName, userId) => {
             throw new GeologiaCapasError('El archivo no tiene contenido válido.', 400);
         }
 
-        const options = { access: 'public' };
-        if (blobToken) {
-            options.token = blobToken;
-        }
-
-        // Sube a Vercel Blob
-        const blob = await put(filename, fileBuffer, options);
+        // Sube al NAS
+        const publicUrl = await uploadFileToNAS(fileBuffer, targetFolder, filename);
 
         // Inserta o actualiza en la base de datos (UPSERT)
         const query = `
@@ -62,7 +58,7 @@ const uploadGeologiaCapa = async (file, proyectoId, tabName, userId) => {
                 uploaded_at = CURRENT_TIMESTAMP
             RETURNING *;
         `;
-        const result = await client.query(query, [proyectoId, tabName, blob.url, file.originalname]);
+        const result = await client.query(query, [proyectoId, tabName, publicUrl, file.originalname]);
 
         await client.query('COMMIT');
         return result.rows[0];

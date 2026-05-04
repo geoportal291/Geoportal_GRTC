@@ -224,6 +224,198 @@ const escapeHtml = (value) => String(value ?? '')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+const isZeroLikeInternal = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'number') return value === 0;
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return false;
+        return /^0([.,]0+)?%?$/.test(trimmed);
+    }
+    return false;
+};
+
+const shouldDisplayPropertyInternal = (key, value) => {
+    if (!key || key.startsWith('_')) return false;
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string' && !value.trim()) return false;
+    if (isZeroLikeInternal(value)) return false;
+    return true;
+};
+
+const getFirstPropertyValueInternal = (properties, keys = []) => {
+    for (const key of keys) {
+        const value = properties?.[key];
+        if (shouldDisplayPropertyInternal(key, value)) return value;
+    }
+    return '';
+};
+
+const buildInternalPopupCardHtml = (title, orderedFields = []) => {
+    const rowsHtml = orderedFields.length > 0
+        ? orderedFields.map(({ label, value }) => `
+            <tr style="border-bottom:1px solid #eef2f7;">
+                <td style="padding:12px 0; vertical-align:top; width:164px;">
+                    <div style="font-weight:800; color:#334155; font-size:13px; line-height:1.25;">
+                        ${escapeHtml(label)}:
+                    </div>
+                </td>
+                <td style="padding:12px 0 12px 10px; vertical-align:top; text-align:right;">
+                    <div style="color:#475569; font-size:13px; line-height:1.45; word-break:break-word;">
+                        ${escapeHtml(value)}
+                    </div>
+                </td>
+            </tr>
+        `).join('')
+        : `
+            <tr>
+                <td colspan="2" style="padding:12px 0; color:#64748b; font-size:12px; font-style:italic;">
+                    Sin atributos visibles para esta capa.
+                </td>
+            </tr>
+        `;
+
+    return `
+        <div style="font-family:'Inter',sans-serif; padding:14px 16px 12px 16px; max-width:440px;">
+            <div style="margin:0 0 12px 0; color:#1e40af; font-size:14px; font-weight:800; border-bottom:2px solid #3b82f6; padding-bottom:6px; text-transform:uppercase; padding-right:24px; line-height:1.35;">
+                ${escapeHtml(title)}
+            </div>
+            <div style="background:#ffffff; border-radius:12px; border:1px solid #e2e8f0; padding:0 12px;">
+                <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+};
+
+const buildInternalFeaturePopupHtml = (properties, layerMeta, popupContext = {}) => {
+    const p = properties || {};
+    const title = p.name || p.nombre || p.NAME || p.NOMBRE || layerMeta?.file_name || 'DETALLE TECNICO';
+    const normalizedTabName = (layerMeta?.tab_name || '').toLowerCase();
+    const normalizedLayerName = (layerMeta?.file_name || '').toLowerCase();
+    const normalizedTitle = String(title || '').toLowerCase();
+    const isGeologiaLocal = normalizedTabName.includes('geologia_local');
+    const isGeomorfologiaLocal = normalizedTabName.includes('geomorfologia');
+    const isClasificacionMateriales =
+        normalizedTabName.includes('clas_mater')
+        || normalizedTabName.includes('clasificacion_material')
+        || normalizedLayerName.includes('clasificacion')
+        || normalizedLayerName.includes('material')
+        || normalizedTitle.includes('clasificacion')
+        || normalizedTitle.includes('material');
+    const isGeologiaEstructural =
+        normalizedTabName.includes('estructural')
+        || normalizedLayerName.includes('estructural')
+        || normalizedTitle.includes('estructural');
+
+    if (isGeologiaLocal) {
+        const orderedFields = [
+            {
+                label: 'Unidad Geologica',
+                value: getFirstPropertyValueInternal(p, ['Unidad_geo', 'UNIDAD_GEO', 'unidad_geo', 'Unidad geo', 'UNIDAD GEO', 'unidad geo'])
+            },
+            {
+                label: 'Descripcion',
+                value: getFirstPropertyValueInternal(p, ['F___Descri', 'F__Descri', 'F_Descri', 'DESCRIPCION', 'Descripcion'])
+            },
+            {
+                label: 'Formacion',
+                value: getFirstPropertyValueInternal(p, ['Formacion', 'FORMACION', 'Formación', 'FORMACIÓN'])
+            },
+            {
+                label: 'Tipo de Material',
+                value: getFirstPropertyValueInternal(p, ['Geomecanic', 'GEOMECANIC', 'geomecanic'])
+            }
+        ].filter(({ label, value }) => shouldDisplayPropertyInternal(label, value));
+
+        return buildInternalPopupCardHtml(title, orderedFields);
+    }
+
+    if (isGeomorfologiaLocal) {
+        const orderedFields = [
+            {
+                label: 'Unidad Geologica',
+                value: getFirstPropertyValueInternal(p, ['Unidad_geo', 'UNIDAD_GEO', 'unidad_geo', 'Unidad geo', 'UNIDAD GEO', 'unidad geo'])
+            }
+        ].filter(({ label, value }) => shouldDisplayPropertyInternal(label, value));
+
+        return buildInternalPopupCardHtml(title, orderedFields);
+    }
+
+    if (isClasificacionMateriales) {
+        const orderedFields = [
+            {
+                label: 'Tipo de Material',
+                value: getFirstPropertyValueInternal(p, ['Geomecanic', 'GEOMECANIC', 'geomecanic'])
+            },
+            {
+                label: 'Descripcion',
+                value: getFirstPropertyValueInternal(p, ['F___Descri', 'F__Descri', 'F_Descri', 'DESCRIPCION', 'Descripcion'])
+            }
+        ].filter(({ label, value }) => shouldDisplayPropertyInternal(label, value));
+
+        return buildInternalPopupCardHtml(title, orderedFields);
+    }
+
+    if (isGeologiaEstructural) {
+        const geometryType = popupContext?.feature?.geometry?.type || '';
+        const isStructuralLine = geometryType === 'LineString' || geometryType === 'MultiLineString';
+        const orderedFields = isStructuralLine
+            ? [
+                {
+                    label: 'Tipo de Falla',
+                    value: getFirstPropertyValueInternal(p, ['Tipo_De_Falla', 'TIPO_DE_FALLA', 'TIPO_DE_FAL', 'TIPO_FALLA', 'tipo_de_falla', 'TIPO', 'Tipo'])
+                },
+                {
+                    label: 'Cinematica',
+                    value: getFirstPropertyValueInternal(p, ['CINEMATICA', 'CINEMATICA_', 'Cinematica', 'cinematica'])
+                },
+                {
+                    label: 'Rumbo',
+                    value: getFirstPropertyValueInternal(p, ['RUMBO', 'Rumbo', 'rumbo', 'RUMBO_'])
+                }
+            ]
+            : [
+                {
+                    label: 'Buzamiento',
+                    value: getFirstPropertyValueInternal(p, ['BUZAMIENTO', 'Buzamiento', 'buzamiento'])
+                },
+                {
+                    label: 'Azimut',
+                    value: getFirstPropertyValueInternal(p, ['AZIMUT', 'Azimut', 'azimut'])
+                },
+                {
+                    label: 'Direccion',
+                    value: getFirstPropertyValueInternal(p, ['DIRECCION_', 'DIRECCION', 'Direccion', 'direccion'])
+                },
+                {
+                    label: 'Ruta',
+                    value: getFirstPropertyValueInternal(p, ['RUTA', 'Ruta', 'ruta'])
+                },
+                {
+                    label: 'Descripcion',
+                    value: getFirstPropertyValueInternal(p, ['DESCRIPCIO', 'DESCRIPCION', 'Descripcion', 'descripcion'])
+                }
+            ];
+
+        return buildInternalPopupCardHtml(
+            title,
+            orderedFields.filter(({ label, value }) => shouldDisplayPropertyInternal(label, value))
+        );
+    }
+
+    const hiddenKeys = new Set(['name', 'nombre', 'NAME', 'NOMBRE', 'descripcion', 'description', 'descripcion_geotecnica', 'DESCRIPCION', 'DESCRIPTION']);
+    const orderedFields = Object.entries(p)
+        .filter(([key, value]) => !hiddenKeys.has(key) && shouldDisplayPropertyInternal(key, value))
+        .map(([key, value]) => ({
+            label: key.replace(/_/g, ' '),
+            value
+        }));
+
+    return buildInternalPopupCardHtml(title, orderedFields);
+};
+
 const buildGeodinamicaPopupHtml = (eventName, nearbyPhotos) => {
     const safeName = escapeHtml(eventName || 'Evento Geodinamico');
 
@@ -971,9 +1163,12 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                             return;
                         }
 
-                        let html = `<div style="font-family:'Inter',sans-serif; padding:14px 16px 12px 16px; max-height:350px; overflow-y:auto; overflow-x:hidden;" class="geolpopup-scrollbar-content">
-                            <h4 style="margin:0 0 12px 0; color:#1e40af; font-size:14px; font-weight:700; border-bottom:2px solid #3b82f6; padding-bottom:6px; text-transform:uppercase; padding-right:24px;">${layerName}</h4>
-                            <div style="background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0; padding:0 10px;" class="geolpopup-inner-wrapper">`;
+                        let html = buildInternalFeaturePopupHtml(
+                            props,
+                            { file_name: layerName, tab_name: tabName },
+                            { feature }
+                        );
+                        if (false) {
 
                         // Campos técnicos a omitir en el popup visual
                         const excludedKeys = [
@@ -1011,7 +1206,8 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                             html += `</tbody></table>`;
                         }
                         html += '</div></div>';
-                        layer.bindPopup(html, { className: 'geolpopup-main-container', maxWidth: 300, minWidth: 260, autoPan: false });
+                        }
+                        layer.bindPopup(html, { className: 'geolpopup-main-container', maxWidth: 460, minWidth: 360, autoPan: false });
 
                         const hasRealName = props.name && String(props.name).trim().length > 0;
                         const isPoint = feature.geometry && feature.geometry.type === 'Point';

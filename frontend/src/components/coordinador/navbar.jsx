@@ -17,13 +17,48 @@ export default function Navbar({ onToggle, isCollapsed }) {
     ingenieria: false,
     configuracion: false,
     eventos: false,
+    disenosIngenieria: false,
+    progresivas: false,
   });
   const [navbarVisibility, setNavbarVisibility] = useState({});
 
   useEffect(() => {
-    if (currentPath.includes('/ingenieria/')) {
-      setOpenMenu((prev) => ({ ...prev, ingenieria: true }));
-    }
+    const nextOpenMenu = {
+      ingenieria: [
+        '/ingenieria/basica',
+        '/ingenieria/topografia',
+        '/ingenieria/geologia',
+        '/ingenieria/hidrologia',
+        '/coordinador/ingenieria/trafico/trafico',
+        '/ingenieria/seguridad-vial',
+        '/ingenieria/inventario-vial',
+        '/coordinador/recoleccion-datos'
+      ].some((path) => isActiveLink(path)),
+      disenosIngenieria: [
+        '/ingenieria/disenos/drenaje',
+        '/ingenieria/disenos/estructural',
+        '/ingenieria/disenos/geometrico',
+        '/ingenieria/disenos/pavimento',
+        '/ingenieria/disenos/seguridad-vial'
+      ].some((path) => isActiveLink(path)),
+      configuracion: [
+        '/coordinador/proyectos',
+        '/coordinador/Progresivas',
+        '/coordinador/config/frmusuarios2',
+        '/coordinador/config/PermisosManagement',
+        '/coordinador/config/UserProjectAssignment',
+        '/coordinador/config/NavbarVisibility',
+        '/coordinador/config/ChangelogManagement',
+        '/coordinador/config/auditoria'
+      ].some((path) => isActiveLink(path)),
+      eventos: ['/eventos/amigo-secreto'].some((path) => isActiveLink(path)),
+      progresivas: ['/coordinador/Progresivas'].some((path) => isActiveLink(path)),
+    };
+
+    setOpenMenu((prev) => {
+      const hasAnyActiveParent = Object.values(nextOpenMenu).some(Boolean);
+      return hasAnyActiveParent ? nextOpenMenu : prev;
+    });
   }, [currentPath]);
 
   useEffect(() => {
@@ -52,10 +87,17 @@ export default function Navbar({ onToggle, isCollapsed }) {
   };
 
   const toggleSubmenu = (menu) => {
-    setOpenMenu((prev) => ({
-      ...prev,
-      [menu]: !prev[menu],
-    }));
+    setOpenMenu((prev) => {
+      const nextValue = !prev[menu];
+      return {
+        ingenieria: false,
+        configuracion: false,
+        eventos: false,
+        disenosIngenieria: false,
+        progresivas: false,
+        [menu]: nextValue,
+      };
+    });
   };
 
   const handleLogout = (e) => {
@@ -75,15 +117,13 @@ export default function Navbar({ onToggle, isCollapsed }) {
   const isActiveLink = (path) => currentPath.startsWith(path);
 
   const isNavItemVisible = (linkKey) => {
-    const isAdmin = user?.rol_nombre === 'ADMIN';
     const isEvaluatorGeology = (user?.rol_id === 6 || user?.rol_id === '6') && (user?.codigo_esp === 2 || user?.codigo_esp === '2');
 
-    // Si es ADMIN, generalmente respetamos la visibilidad configurada o permitimos todo.
     // Si es Evaluador de Geología, solo permitimos lo que pidió el usuario.
     if (isEvaluatorGeology) {
       const allowedKeys = [
-        '/coordinador/dashboardprincipal', 
-        'ingenieria_basica', 
+        '/coordinador/dashboardprincipal',
+        'ingenieria_basica',
         '/ingenieria/geologia',
         'cerrar_sesion',
         '/perfil',
@@ -106,6 +146,13 @@ export default function Navbar({ onToggle, isCollapsed }) {
       if (isActiveLink('/ingenieria/inventario-vial')) return 'Inventario Vial';
       if (isActiveLink('/coordinador/recoleccion-datos')) return 'Mecánica de Suelos';
     }
+    if (menu === 'disenosIngenieria') {
+      if (isActiveLink('/ingenieria/disenos/drenaje')) return 'Drenaje y Obras de Arte';
+      if (isActiveLink('/ingenieria/disenos/estructural')) return 'Diseño Estructural';
+      if (isActiveLink('/ingenieria/disenos/geometrico')) return 'Diseño Geométrico';
+      if (isActiveLink('/ingenieria/disenos/pavimento')) return 'Diseño de Pavimento';
+      if (isActiveLink('/ingenieria/disenos/seguridad-vial')) return 'Diseño de Seg. Vial';
+    }
     if (menu === 'configuracion') {
       if (isActiveLink('/coordinador/proyectos')) return 'Configuración de Proyecto';
       if (isActiveLink('/coordinador/Progresivas')) return 'Gestión de Tramos';
@@ -125,8 +172,13 @@ export default function Navbar({ onToggle, isCollapsed }) {
     return null;
   };
 
+  const sidebarWidth = isCollapsed ? '60px' : '275px';
+
   return (
-    <div className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+    <div
+      className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}
+      style={{ width: sidebarWidth, minWidth: sidebarWidth, maxWidth: sidebarWidth }}
+    >
       <div className="sidebar-header">
         <div className="logos">
           <img src="/imgs/LogoAmarillo.png" alt="Logo" />
@@ -236,7 +288,62 @@ export default function Navbar({ onToggle, isCollapsed }) {
             </li>
           )}
 
-          {/* EVENTOS */}
+          {/* DISEÑOS DE INGENIERÍA */}
+          {isNavItemVisible('disenos_ingenieria') && (
+            <li className={`has-submenu ${openMenu.disenosIngenieria ? 'open' : ''} ${[
+              '/ingenieria/disenos/drenaje',
+              '/ingenieria/disenos/estructural',
+              '/ingenieria/disenos/geometrico',
+              '/ingenieria/disenos/pavimento',
+              '/ingenieria/disenos/seguridad-vial',
+            ].some(path => isActiveLink(path)) ? 'active' : ''
+              }`}>
+              <div
+                className="nav-link"
+                onClick={() => toggleSubmenu('disenosIngenieria')}
+              >
+                <i className="fas fa-drafting-compass"></i>
+                <div className="nav-text">
+                  <span>Diseños de Ingeniería</span>
+                  {!isCollapsed && !openMenu.disenosIngenieria && getActiveChildTitle('disenosIngenieria') && (
+                    <span className="active-subtitle">{getActiveChildTitle('disenosIngenieria')}</span>
+                  )}
+                </div>
+                {!isCollapsed && (
+                  <div className={`submenu-arrow ${openMenu.disenosIngenieria ? 'open' : ''}`} />
+                )}
+              </div>
+              <ul className={`submenu ${openMenu.disenosIngenieria && !isCollapsed ? 'show' : ''}`}>
+                <li className={`${isActiveLink('/ingenieria/disenos/drenaje') ? 'active' : ''} submenu-item-pending`.trim()}>
+                  <Link to="/ingenieria/disenos/drenaje">
+                    <i className="fas fa-tint"></i><span>Drenaje y Obras de Arte</span>
+                  </Link>
+                </li>
+                <li className={`${isActiveLink('/ingenieria/disenos/estructural') ? 'active' : ''} submenu-item-pending`.trim()}>
+                  <Link to="/ingenieria/disenos/estructural">
+                    <i className="fas fa-sitemap"></i><span>Diseño Estructural</span>
+                  </Link>
+                </li>
+                <li className={isActiveLink('/ingenieria/disenos/geometrico') ? 'active' : ''}>
+                  <Link to="/ingenieria/disenos/geometrico">
+                    <i className="fas fa-bezier-curve"></i><span>Diseño Geométrico</span>
+                  </Link>
+                </li>
+                <li className={`${isActiveLink('/ingenieria/disenos/pavimento') ? 'active' : ''} submenu-item-pending`.trim()}>
+                  <Link to="/ingenieria/disenos/pavimento">
+                    <i className="fas fa-road"></i><span>Diseño de Pavimento</span>
+                  </Link>
+                </li>
+                <li className={`${isActiveLink('/ingenieria/disenos/seguridad-vial') ? 'active' : ''} submenu-item-pending`.trim()}>
+                  <Link to="/ingenieria/disenos/seguridad-vial">
+                    <i className="fas fa-exclamation-triangle"></i><span>Diseño de Seg. Vial</span>
+                  </Link>
+                </li>
+              </ul>
+            </li>
+          )}
+
+
           {isNavItemVisible('eventos') && (
             <li className={`has-submenu ${openMenu.eventos ? 'open' : ''} ${['/eventos/amigo-secreto'].some(path => isActiveLink(path)) ? 'active' : ''
               }`}>
@@ -267,7 +374,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
             </li>
           )}
 
-          {/* PROGRESIVAS */}
+
           {isNavItemVisible('progresivas') && (
             <li className={`has-submenu ${openMenu.progresivas ? 'open' : ''} ${['/coordinador/Progresivas'].some(path => isActiveLink(path)) ? 'active' : ''
               }`}>
@@ -325,7 +432,6 @@ export default function Navbar({ onToggle, isCollapsed }) {
             </li>
           )}
 
-          {/* CONFIGURACIÓN */}
           {isNavItemVisible('configuracion') && (
             <li className={`has-submenu ${openMenu.configuracion ? 'open' : ''} ${[
               '/coordinador/proyectos',
@@ -406,7 +512,6 @@ export default function Navbar({ onToggle, isCollapsed }) {
                     </Link>
                   </li>
                 )}
-
               </ul>
             </li>
           )}

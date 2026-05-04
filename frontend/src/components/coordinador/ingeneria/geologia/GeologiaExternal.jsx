@@ -48,21 +48,21 @@ const resolveGroupTabName = (tabName) => {
 };
 
 const UNIDAD_GEO_STYLES = {
-    'Fm. Ananea':            { fill: 'url(#geol-pattern-ananea)',       color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
-    'Fm San gaban':          { fill: 'url(#geol-pattern-sangaban)',      color: '#d4af37', legendColor: '#fffbe6', legendStroke: '#d4af37', legendPattern: 'sangaban' },
-    'Dique de Diorita':      { fill: 'url(#geol-pattern-diorite)',       color: '#8b0000', legendColor: '#f7a7a3', legendStroke: '#8b0000', legendPattern: 'diorite' },
-    'Deposito Coluvial':     { fill: 'url(#geol-pattern-coluvial)',      color: '#4a4a4a', legendColor: '#a8a8a8', legendStroke: '#333333', legendPattern: 'coluvial' },
-    'Deposito Aluvio-Coluvial': { fill: 'url(#geol-pattern-aluvio)',    color: '#666666', legendColor: '#d3d3d3', legendStroke: '#555555', legendPattern: 'aluvio' },
-    'Deposito Eluvio-Coluvial': { fill: 'url(#geol-pattern-eluvio)',    color: '#999999', legendColor: '#f0f0f0', legendStroke: '#999999', legendPattern: 'eluvio' },
-    'Deposito. Eluvial':     { fill: 'url(#geol-pattern-eluvial-dep)',  color: '#8b4513', legendColor: '#ffff00', legendStroke: '#8b4513', legendPattern: 'eluvial-dep' },
+    'Fm. Ananea': { fill: 'url(#geol-pattern-ananea)', color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
+    'Fm San gaban': { fill: 'url(#geol-pattern-sangaban)', color: '#d4af37', legendColor: '#fffbe6', legendStroke: '#d4af37', legendPattern: 'sangaban' },
+    'Dique de Diorita': { fill: 'url(#geol-pattern-diorite)', color: '#8b0000', legendColor: '#f7a7a3', legendStroke: '#8b0000', legendPattern: 'diorite' },
+    'Deposito Coluvial': { fill: 'url(#geol-pattern-coluvial)', color: '#4a4a4a', legendColor: '#a8a8a8', legendStroke: '#333333', legendPattern: 'coluvial' },
+    'Deposito Aluvio-Coluvial': { fill: 'url(#geol-pattern-aluvio)', color: '#666666', legendColor: '#d3d3d3', legendStroke: '#555555', legendPattern: 'aluvio' },
+    'Deposito Eluvio-Coluvial': { fill: 'url(#geol-pattern-eluvio)', color: '#999999', legendColor: '#f0f0f0', legendStroke: '#999999', legendPattern: 'eluvio' },
+    'Deposito. Eluvial': { fill: 'url(#geol-pattern-eluvial-dep)', color: '#8b4513', legendColor: '#ffff00', legendStroke: '#8b4513', legendPattern: 'eluvial-dep' },
     // Fallbacks
-    'Fm. Sandia':   { fill: 'url(#geol-pattern-ananea)', color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
+    'Fm. Sandia': { fill: 'url(#geol-pattern-ananea)', color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
     'Dep. Morrenico': { fill: 'url(#geol-pattern-eluvio)', color: '#999999', legendColor: '#f0f0f0', legendStroke: '#999999', legendPattern: 'eluvio' },
-    'Cuaternario':  { fill: '#ffff00', color: '#cccc00', legendColor: '#ffff00', legendStroke: '#cccc00' },
-    'Ambo':         { fill: '#6b8e23', color: '#556b2f', legendColor: '#6b8e23', legendStroke: '#556b2f' },
-    'Tarma':        { fill: '#4682b4', color: '#27408b', legendColor: '#4682b4', legendStroke: '#27408b' },
-    'Copacabana':   { fill: '#00ced1', color: '#008b8b', legendColor: '#00ced1', legendStroke: '#008b8b' },
-    'Mitu':         { fill: '#cd5c5c', color: '#8b3a3a', legendColor: '#cd5c5c', legendStroke: '#8b3a3a' }
+    'Cuaternario': { fill: '#ffff00', color: '#cccc00', legendColor: '#ffff00', legendStroke: '#cccc00' },
+    'Ambo': { fill: '#6b8e23', color: '#556b2f', legendColor: '#6b8e23', legendStroke: '#556b2f' },
+    'Tarma': { fill: '#4682b4', color: '#27408b', legendColor: '#4682b4', legendStroke: '#27408b' },
+    'Copacabana': { fill: '#00ced1', color: '#008b8b', legendColor: '#00ced1', legendStroke: '#008b8b' },
+    'Mitu': { fill: '#cd5c5c', color: '#8b3a3a', legendColor: '#cd5c5c', legendStroke: '#8b3a3a' }
 };
 
 const UNIDAD_GEOMORFO_STYLES = {
@@ -175,6 +175,20 @@ const getGeodinamicaPointIcon = (color, isSelected = false) =>
         `,
         iconSize: [isSelected ? 28 : 24, isSelected ? 28 : 24],
         iconAnchor: [isSelected ? 14 : 12, isSelected ? 14 : 12],
+        popupAnchor: [0, -12]
+    });
+
+const getEstructuralPointIcon = (rotationDeg = 0, isSelected = false) =>
+    L.divIcon({
+        className: 'geo-point-estructural',
+        html: `
+            <svg width="${isSelected ? 26 : 22}" height="${isSelected ? 30 : 26}" viewBox="0 0 18 22" style="display:block; transform: rotate(${rotationDeg}deg); filter: ${isSelected ? 'drop-shadow(0 0 8px rgba(0,229,255,0.95)) drop-shadow(0 0 2px rgba(255,255,255,1))' : 'drop-shadow(0 0 2px rgba(255,255,255,0.95)) drop-shadow(0 2px 4px rgba(0,0,0,0.45))'};">
+                <line x1="9" y1="2" x2="9" y2="20" stroke="#111111" stroke-width="1.8"/>
+                <line x1="9" y1="11" x2="15" y2="11" stroke="#111111" stroke-width="1.8"/>
+            </svg>
+        `,
+        iconSize: [isSelected ? 26 : 22, isSelected ? 30 : 26],
+        iconAnchor: [isSelected ? 13 : 11, isSelected ? 15 : 13],
         popupAnchor: [0, -12]
     });
 
@@ -306,8 +320,21 @@ const buildFeaturePopupHtml = (properties, layerMeta, popupContext = {}) => {
     );
 
     const normalizedTabName = (layerMeta?.tab_name || '').toLowerCase();
+    const normalizedLayerName = (layerMeta?.file_name || '').toLowerCase();
+    const normalizedTitle = String(title || '').toLowerCase();
     const isGeologiaLocal = normalizedTabName.includes('geologia_local');
     const isGeomorfologiaLocal = normalizedTabName.includes('geomorfologia');
+    const isClasificacionMateriales =
+        normalizedTabName.includes('clas_mater')
+        || normalizedTabName.includes('clasificacion_material')
+        || normalizedLayerName.includes('clasificacion')
+        || normalizedLayerName.includes('material')
+        || normalizedTitle.includes('clasificacion')
+        || normalizedTitle.includes('material');
+    const isGeologiaEstructural =
+        normalizedTabName.includes('estructural')
+        || normalizedLayerName.includes('estructural')
+        || normalizedTitle.includes('estructural');
     const isGeodinamicaExterna = normalizedTabName.includes('geodinamicaexterna');
     if (isGeologiaLocal) {
         const orderedFields = [
@@ -326,6 +353,37 @@ const buildFeaturePopupHtml = (properties, layerMeta, popupContext = {}) => {
             {
                 label: 'Tipo de Material',
                 value: getFirstPropertyValue(p, ['Geomecanic', 'GEOMECANIC', 'geomecanic'])
+            }
+        ].filter(({ label, value }) => shouldDisplayProperty(label, value));
+
+        const orderedRows = orderedFields.length > 0
+            ? orderedFields.map(({ label, value }) => `
+                <div class="geolocalext_popup_row_geo">
+                    <b class="geolocalext_popup_label_geo">${escapeHtml(label)}:</b>
+                    <span class="geolocalext_popup_value_geo">${escapeHtml(value)}</span>
+                </div>
+            `).join('')
+            : `<div class="geolocalext_popup_empty_geo">Sin atributos visibles para esta capa.</div>`;
+
+        return `
+            <div class="geolocalext_popup_card_geo">
+                <div class="geolocalext_popup_header_geo">${escapeHtml(title)}</div>
+                <div class="geolocalext_popup_body_geo">
+                    ${orderedRows}
+                </div>
+            </div>
+        `;
+    }
+
+    if (isClasificacionMateriales) {
+        const orderedFields = [
+            {
+                label: 'Tipo de Material',
+                value: getFirstPropertyValue(p, ['Geomecanic', 'GEOMECANIC', 'geomecanic'])
+            },
+            {
+                label: 'Descripcion',
+                value: getFirstPropertyValue(p, ['F___Descri', 'F__Descri', 'F_Descri', 'DESCRIPCION', 'Descripcion'])
             }
         ].filter(({ label, value }) => shouldDisplayProperty(label, value));
 
@@ -369,32 +427,106 @@ const buildFeaturePopupHtml = (properties, layerMeta, popupContext = {}) => {
         `;
     }
 
+    if (isGeologiaEstructural) {
+        const geometryType = popupContext?.feature?.geometry?.type || '';
+        const isStructuralLine = geometryType === 'LineString' || geometryType === 'MultiLineString';
+        const orderedFields = isStructuralLine
+            ? [
+                {
+                    label: 'Tipo de Falla',
+                    value: getFirstPropertyValue(p, [
+                        'Tipo_De_Falla',
+                        'TIPO_DE_FALLA',
+                        'TIPO_DE_FAL',
+                        'TIPO_FALLA',
+                        'tipo_de_falla',
+                        'TIPO',
+                        'Tipo'
+                    ])
+                },
+                {
+                    label: 'Cinematica',
+                    value: getFirstPropertyValue(p, [
+                        'CINEMATICA',
+                        'CINEMATICA_',
+                        'Cinematica',
+                        'cinematica'
+                    ])
+                },
+                {
+                    label: 'Rumbo',
+                    value: getFirstPropertyValue(p, ['RUMBO', 'Rumbo', 'rumbo', 'RUMBO_'])
+                }
+            ]
+            : [
+                {
+                    label: 'Buzamiento',
+                    value: getFirstPropertyValue(p, ['BUZAMIENTO', 'Buzamiento', 'buzamiento'])
+                },
+                {
+                    label: 'Azimut',
+                    value: getFirstPropertyValue(p, ['AZIMUT', 'Azimut', 'azimut'])
+                },
+                {
+                    label: 'Direccion',
+                    value: getFirstPropertyValue(p, ['DIRECCION_', 'DIRECCION', 'Direccion', 'direccion'])
+                },
+                {
+                    label: 'Ruta',
+                    value: getFirstPropertyValue(p, ['RUTA', 'Ruta', 'ruta'])
+                },
+                {
+                    label: 'Descripcion',
+                    value: getFirstPropertyValue(p, ['DESCRIPCIO', 'DESCRIPCION', 'Descripcion', 'descripcion'])
+                }
+            ];
+
+        const visibleFields = orderedFields.filter(({ label, value }) => shouldDisplayProperty(label, value));
+
+        const orderedRows = visibleFields.length > 0
+            ? visibleFields.map(({ label, value }) => `
+                <div class="geolocalext_popup_row_geo">
+                    <b class="geolocalext_popup_label_geo">${escapeHtml(label)}:</b>
+                    <span class="geolocalext_popup_value_geo">${escapeHtml(value)}</span>
+                </div>
+            `).join('')
+            : `<div class="geolocalext_popup_empty_geo">Sin atributos visibles para esta capa.</div>`;
+
+        return `
+            <div class="geolocalext_popup_card_geo">
+                <div class="geolocalext_popup_header_geo">${escapeHtml(title)}</div>
+                <div class="geolocalext_popup_body_geo">
+                    ${orderedRows}
+                </div>
+            </div>
+        `;
+    }
+
     if (isGeodinamicaExterna) {
         const nearbyPhotos = Array.isArray(popupContext.nearbyPhotos) ? popupContext.nearbyPhotos : [];
         const tipoDePeligro = getFirstPropertyValue(p, ['NAME', 'Name', 'name', 'NOMBRE', 'Nombre', 'nombre']) || title;
-        const eventosGeodinamicos = getFirstPropertyValue(p, ['folder', 'Folder', 'FOLDER']) || 'Eventos Geodinamicos';
         const photosBlock = nearbyPhotos.length > 0
             ? `
-                <div style="font-size:11px; color:#64748b; font-weight:800; margin:14px 0 10px; text-transform:uppercase;">
+                <div class="geodext_popup_gallery_title_geo">
                     Fotos Cercanas (${nearbyPhotos.length})
                 </div>
-                <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; max-height:260px; overflow-y:auto; padding-right:4px;">
+                <div class="geodext_popup_gallery_geo">
                     ${nearbyPhotos.map((photo, index) => `
                         <button
                             type="button"
                             data-geod-popup-photo-index="${index}"
-                            style="display:flex; flex-direction:column; text-align:left; background:#f8fafc; border:1px solid #dbe4f0; border-radius:12px; overflow:hidden; padding:0; cursor:pointer;"
+                            class="geodext_popup_gallery_item_geo"
                         >
                             <img
                                 src="${escapeHtml(photo.image_url)}"
                                 alt="${escapeHtml(photo.nombre)}"
-                                style="display:block; width:100%; height:96px; object-fit:cover; background:#dbe4f0;"
+                                class="geodext_popup_gallery_image_geo"
                             />
-                            <div style="padding:8px 9px;">
-                                <div style="font-size:11px; font-weight:800; color:#0f172a; line-height:1.2; margin-bottom:4px; max-height:28px; overflow:hidden;">
+                            <div class="geodext_popup_gallery_meta_geo">
+                                <div class="geodext_popup_gallery_name_geo">
                                     ${escapeHtml(photo.nombre)}
                                 </div>
-                                <div style="font-size:10px; color:#64748b; font-weight:700;">
+                                <div class="geodext_popup_gallery_distance_geo">
                                     ${Math.round(photo.distanceMeters)} m
                                 </div>
                             </div>
@@ -403,28 +535,20 @@ const buildFeaturePopupHtml = (properties, layerMeta, popupContext = {}) => {
                 </div>
             `
             : `
-                <div style="margin-top:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; color:#64748b; font-size:12px;">
+                <div class="geodext_popup_empty_geo">
                     Sin fotos cercanas en el panel fotografico dentro de ${PANEL_PHOTO_MATCH_RADIUS_METERS} m.
                 </div>
             `;
 
         return `
-            <div style="font-family:'Inter',sans-serif; padding:14px 16px; min-width:300px; max-width:390px;">
-                <div style="margin:0 0 12px 0; color:#1e40af; font-size:14px; font-weight:900; border-bottom:2px solid #3b82f6; padding-bottom:8px; text-transform:uppercase; padding-right:24px;">
+            <div class="geodext_popup_card_geo">
+                <div class="geodext_popup_headline_geo">
                     Eventos Geodinamicos
                 </div>
-                <div style="font-size:16px; font-weight:800; color:#0f172a; line-height:1.35; margin-bottom:14px;">
+                <div class="geodext_popup_title_geo">
                     ${escapeHtml(tipoDePeligro)}
                 </div>
-                <div class="geolocalext_popup_row_geo" style="padding-left:0; padding-right:0;">
-                    <b class="geolocalext_popup_label_geo">Eventos Geodinamicos:</b>
-                    <span class="geolocalext_popup_value_geo">${escapeHtml(eventosGeodinamicos)}</span>
-                </div>
-                <div class="geolocalext_popup_row_geo" style="padding-left:0; padding-right:0;">
-                    <b class="geolocalext_popup_label_geo">Tipo de Peligro:</b>
-                    <span class="geolocalext_popup_value_geo">${escapeHtml(tipoDePeligro)}</span>
-                </div>
-                ${photosBlock}
+                <div class="geodext_popup_gallery_wrap_geo">${photosBlock}</div>
             </div>
         `;
     }
@@ -466,12 +590,21 @@ const buildFeaturePopupHtml = (properties, layerMeta, popupContext = {}) => {
 
 const getFeaturePopupOptions = (layerMeta) => {
     const normalizedTabName = (layerMeta?.tab_name || '').toLowerCase();
-    const usesCompactGeologiaPopup = normalizedTabName.includes('geologia_local') || normalizedTabName.includes('geomorfologia') || normalizedTabName.includes('geodinamicaexterna');
+    const normalizedLayerName = (layerMeta?.file_name || '').toLowerCase();
+    const usesCompactGeologiaPopup =
+        normalizedTabName.includes('geologia_local')
+        || normalizedTabName.includes('geomorfologia')
+        || normalizedTabName.includes('geodinamicaexterna')
+        || normalizedTabName.includes('estructural')
+        || normalizedTabName.includes('clas_mater')
+        || normalizedTabName.includes('clasificacion_material')
+        || normalizedLayerName.includes('clasificacion')
+        || normalizedLayerName.includes('material');
     if (usesCompactGeologiaPopup) {
         return {
             maxWidth: normalizedTabName.includes('geodinamicaexterna') ? 430 : 380,
             minWidth: normalizedTabName.includes('geodinamicaexterna') ? 330 : 310,
-            className: 'geolocalext_popup_shell_geo'
+            className: normalizedTabName.includes('geodinamicaexterna') ? 'geodext_popup_shell_geo' : 'geolocalext_popup_shell_geo'
         };
     }
     return {
@@ -531,7 +664,7 @@ const PhotoCarousel = ({ photos, onSelect }) => {
             ) : (
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><i className="fas fa-image fa-3x text-slate-400"></i></div>
             )}
-            
+
             {photos.length > 1 && (
                 <>
                     <button className="carousel-btn left" onClick={prev} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.4)', color: 'white', border: 'none', borderRadius: '50%', width: '28px', height: '28px', zIndex: 10 }}><i className="fas fa-chevron-left"></i></button>
@@ -551,7 +684,7 @@ const renderGeoPoint = (f, latlng, isSelected = false) => {
     const geodinamicaStyle = isGeodinamicaLayer ? getGeodinamicaEventStyle(eventName) : null;
 
     let color = geodinamicaStyle?.color || p['marker-color'] || p.fill || p.stroke || getTabColor(tabName);
-    
+
     const unidadGeo = p['Unidad_geo'] || p['UNIDAD GEO'] || p['unidad geo'] || p['Unidad'] || p['UNIDAD'] || p['unidad'];
     if (unidadGeo) {
         const unidadStr = String(unidadGeo).toLowerCase().trim();
@@ -560,14 +693,11 @@ const renderGeoPoint = (f, latlng, isSelected = false) => {
     }
 
     const layerName = (p._layer_name || '').toLowerCase();
-    
-    if (layerName.includes('rumbo') || layerName.includes('buz') || layerName.includes('estruct')) {
+
+    if (layerName.includes('rumbo') || layerName.includes('buz') || layerName.includes('estruct') || shouldDisplayProperty('BUZAMIENTO', p.BUZAMIENTO)) {
+        const rotationDeg = parseFloat(p.AZIMUT ?? p.azimut ?? p.angle ?? 0) || 0;
         return L.marker(latlng, {
-            icon: L.divIcon({
-                className: 'geo-point-tri',
-                html: `<div style="width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-top:14px solid ${color}; filter: ${isSelected ? 'drop-shadow(0 0 8px rgba(0,229,255,0.95)) drop-shadow(0 0 2px #fff)' : 'drop-shadow(0 0 2px white) drop-shadow(0 1px 3px rgba(0,0,0,0.5))'}; transform:rotate(${p.angle || 0}deg) ${isSelected ? 'scale(1.2)' : 'scale(1)'};"></div>`,
-                iconSize: [16, 14], iconAnchor: [8, 7]
-            })
+            icon: getEstructuralPointIcon(rotationDeg, isSelected)
         });
     }
 
@@ -610,10 +740,10 @@ const MapEventsController = ({ setZoom, onMapClick, featureClickGuardRef }) => {
     return coordsInfo && (
         <div style={{ position: 'absolute', bottom: '25px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, pointerEvents: 'none', background: 'rgba(15, 23, 42, 0.85)', color: 'white', padding: '10px 18px', borderRadius: '12px', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', width: 'auto', maxWidth: '90vw' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', columnGap: '1em', fontSize: '9px', fontWeight: 600 }}>
-                <div style={{opacity:0.7}}>ESCALA ~1:{coordsInfo.scale.toLocaleString()}</div>
-                <div style={{textAlign:'right'}}>ZONA {coordsInfo.zone}</div>
+                <div style={{ opacity: 0.7 }}>ESCALA ~1:{coordsInfo.scale.toLocaleString()}</div>
+                <div style={{ textAlign: 'right' }}>ZONA {coordsInfo.zone}</div>
                 <div>E: {coordsInfo.easting} | N: {coordsInfo.northing}</div>
-                <div style={{textAlign:'right'}}>LAT: {coordsInfo.lat} | LON: {coordsInfo.lon}</div>
+                <div style={{ textAlign: 'right' }}>LAT: {coordsInfo.lat} | LON: {coordsInfo.lon}</div>
             </div>
         </div>
     );
@@ -670,7 +800,7 @@ const GeologiaExternal = ({ onBack }) => {
     const [muestras, setMuestras] = useState([]);
     const [fotos, setFotos] = useState([]);
     const [clasificacion, setClasificacion] = useState([]);
-    
+
     const [visible, setVisible] = useState({ route: true, muestras: true, fotos: false });
     const [opacities, setOpacities] = useState({}); // { 'layer-1': 1.0 }
     const [currentZoom, setCurrentZoom] = useState(6);
@@ -689,7 +819,7 @@ const GeologiaExternal = ({ onBack }) => {
     const [sectionOrder, setSectionOrder] = useState([]);
     const [draggedSection, setDraggedSection] = useState(null);
     const [dropTargetSection, setDropTargetSection] = useState(null);
-    const handleOpenDriveFolder = () => {};
+    const handleOpenDriveFolder = () => { };
 
     const openPhotoGallery = useCallback((photoList, startIndex = 0) => {
         if (typeof photoList === 'string') {
@@ -905,7 +1035,7 @@ const GeologiaExternal = ({ onBack }) => {
     // --- DETECCIÓN DE MUESTRAS (Combinar API + GeoJSON) ---
     const muestrasCalculadas = useMemo(() => {
         let mc = [...muestras];
-        
+
         // Si no hay muestras manuales o queremos potenciar la detección desde capas
         // Escaneamos todas las capas GeoJSON cargadas
         layers.forEach(l => {
@@ -916,17 +1046,17 @@ const GeologiaExternal = ({ onBack }) => {
                         const props = f.properties || {};
                         const lowerTab = (l.tab_name || '').toLowerCase();
                         const lowerName = (props.name || props.nombre || props.id || '').toString().toLowerCase();
-                        
+
                         // Patrones comunes de muestras técnicas en proyectos de ingeniería
-                        const isSamplePattern = 
-                            lowerName.startsWith('s-') || lowerName.startsWith('p-') || 
+                        const isSamplePattern =
+                            lowerName.startsWith('s-') || lowerName.startsWith('p-') ||
                             lowerName.startsWith('m-') || lowerName.startsWith('c-') ||
                             lowerName.startsWith('ma-') || lowerName.startsWith('st-') ||
                             lowerName.includes('muestra') || lowerName.includes('calicata') ||
                             lowerName.includes('sondaje') || lowerName.includes('punto');
 
-                        const isGeotechTab = 
-                            lowerTab.includes('material') || lowerTab.includes('muestr') || 
+                        const isGeotechTab =
+                            lowerTab.includes('material') || lowerTab.includes('muestr') ||
                             lowerTab.includes('calicata') || lowerTab.includes('geotec') ||
                             lowerTab.includes('investig') || lowerTab.includes('sondaje');
 
@@ -936,7 +1066,7 @@ const GeologiaExternal = ({ onBack }) => {
                         )) {
                             const code = (props.CODIGO || props.PUNTO || props.name || props.nombre || props.id || 'M-POI').toString();
                             const exists = mc.some(existing => existing.codigo === code);
-                            
+
                             if (!exists && code && code !== 'undefined') {
                                 mc.push({
                                     id: `auto-${f.id || Math.random()}`,
@@ -954,7 +1084,7 @@ const GeologiaExternal = ({ onBack }) => {
                         }
                     });
                 }
-            } catch(e) { console.warn("Error procesando capa para muestras", e); }
+            } catch (e) { console.warn("Error procesando capa para muestras", e); }
         });
         return mc;
     }, [muestras, layers]);
@@ -1093,7 +1223,7 @@ const GeologiaExternal = ({ onBack }) => {
         const groups = {};
         layers.forEach(l => {
             const t = resolveGroupTabName(l.tab_name);
-            if (!groups[t]) groups[t] = []; 
+            if (!groups[t]) groups[t] = [];
             groups[t].push(l);
         });
         return groups;
@@ -1189,14 +1319,14 @@ const GeologiaExternal = ({ onBack }) => {
 
     const toggleSec = (s) => {
         setExpanded(prev => {
-            // Caso 1: Se quiere cerrar lo que ya está abierto (toggle behavior normal)
+
             if (prev[s]) {
                 return { ...prev, [s]: false };
             }
 
-            // Caso 2: Se quiere abrir una sección técnica (comienza con 'sec-')
+
             if (s.startsWith('sec-')) {
-                // Creamos un nuevo objeto, cerrando solo las demás secciones técnicas 'sec-'
+
                 const newState = { ...prev };
                 Object.keys(newState).forEach(key => {
                     if (key.startsWith('sec-')) {
@@ -1207,10 +1337,6 @@ const GeologiaExternal = ({ onBack }) => {
                 newState[s] = true;
                 return newState;
             }
-
-            // Caso 3: Otras secciones (base, route, stats, etc.)
-            // Las abrimos manteniendo el resto de las secciones base como estén, 
-            // pero cerramos las secciones técnicas si hay alguna abierta para mejorar el foco.
             const newStateFallback = { ...prev };
             newStateFallback[s] = true;
             return newStateFallback;
@@ -1230,7 +1356,7 @@ const GeologiaExternal = ({ onBack }) => {
 
         const clean = (s) => s.toString().replace(/[+.\s-]/g, '').toLowerCase().replace(/^0+/, '');
         const searchNorm = clean(rawInput);
-        
+
         let targetPoint = null;
         // 1. Buscar en Capas GeoJSON
         const allLayers = baseKml ? [baseKml] : [];
@@ -1238,7 +1364,7 @@ const GeologiaExternal = ({ onBack }) => {
             try {
                 const gdata = typeof l.geojson_data === 'string' ? JSON.parse(l.geojson_data) : l.geojson_data;
                 if (gdata) allLayers.push(gdata);
-            } catch(e){}
+            } catch (e) { }
         });
 
         for (const geojson of allLayers) {
@@ -1250,8 +1376,8 @@ const GeologiaExternal = ({ onBack }) => {
                         if (f.geometry.type === 'Point') {
                             targetPoint = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
                         } else if (f.geometry.coordinates && f.geometry.coordinates.length > 0) {
-                            const first = f.geometry.type === 'LineString' ? f.geometry.coordinates[0] : 
-                                        f.geometry.type === 'Polygon' ? f.geometry.coordinates[0][0] : null;
+                            const first = f.geometry.type === 'LineString' ? f.geometry.coordinates[0] :
+                                f.geometry.type === 'Polygon' ? f.geometry.coordinates[0][0] : null;
                             if (first) targetPoint = [first[1], first[0]];
                         }
                         if (targetPoint) break;
@@ -1264,8 +1390,8 @@ const GeologiaExternal = ({ onBack }) => {
 
         // 2. Buscar en Muestras
         if (!targetPoint) {
-            const matchedMuestra = muestras.find(m => 
-                (m.progresiva && clean(m.progresiva).includes(searchNorm)) || 
+            const matchedMuestra = muestras.find(m =>
+                (m.progresiva && clean(m.progresiva).includes(searchNorm)) ||
                 (m.codigo && clean(m.codigo).includes(searchNorm))
             );
             if (matchedMuestra && matchedMuestra.latitud && matchedMuestra.longitud) {
@@ -1286,7 +1412,7 @@ const GeologiaExternal = ({ onBack }) => {
         const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
         const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
 
-        if(!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+        if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
             requestFullScreen.call(docEl);
             setIsFullScreen(true);
         } else {
@@ -1294,6 +1420,8 @@ const GeologiaExternal = ({ onBack }) => {
             setIsFullScreen(false);
         }
     };
+
+
 
 
 
@@ -1370,7 +1498,7 @@ const GeologiaExternal = ({ onBack }) => {
                     alertify.message('Actualizando link...');
                     await axiosInstance.patch(`/api/proyectos/${projectId}/geologia-capas/${tabName}/drive-link`, { driveUrl: value });
                     alertify.success('Link de carpeta actualizado correctamente');
-                    
+
                     // Refrescar capas
                     const layersRes = await axiosInstance.get(`/api/proyectos/${projectId}/geologia-capas`);
                     setLayers(Array.isArray(layersRes.data?.data) ? layersRes.data.data : []);
@@ -1379,8 +1507,8 @@ const GeologiaExternal = ({ onBack }) => {
                     alertify.error('Error al actualizar el link de la carpeta');
                 }
             },
-            () => {}
-        ).set('labels', {ok:'Guardar', cancel:'Cancelar'}).set('closable', false);
+            () => { }
+        ).set('labels', { ok: 'Guardar', cancel: 'Cancelar' }).set('closable', false);
     };
 
     const mapTiles = {
@@ -1417,9 +1545,9 @@ const GeologiaExternal = ({ onBack }) => {
 
         // ---- TOTALES MATERIALES ----
         const totalLong = clasificacion.reduce((s, c) => s + parseFloat(c.tramo_m || 0), 0);
-        const totalRF   = clasificacion.reduce((s, c) => s + parseFloat(c.long_roca_fija || 0), 0);
-        const totalRS   = clasificacion.reduce((s, c) => s + parseFloat(c.long_roca_suelta || 0), 0);
-        const totalMS   = clasificacion.reduce((s, c) => s + parseFloat(c.long_material_suelto || 0), 0);
+        const totalRF = clasificacion.reduce((s, c) => s + parseFloat(c.long_roca_fija || 0), 0);
+        const totalRS = clasificacion.reduce((s, c) => s + parseFloat(c.long_roca_suelta || 0), 0);
+        const totalMS = clasificacion.reduce((s, c) => s + parseFloat(c.long_material_suelto || 0), 0);
         const pctRF = totalLong > 0 ? ((totalRF / totalLong) * 100).toFixed(0) : 0;
         const pctRS = totalLong > 0 ? ((totalRS / totalLong) * 100).toFixed(0) : 0;
         const pctMS = totalLong > 0 ? ((totalMS / totalLong) * 100).toFixed(0) : 0;
@@ -1625,14 +1753,14 @@ const GeologiaExternal = ({ onBack }) => {
                         <table>
                             <thead><tr><th>CÓDIGO</th><th>PROGRESIVA</th><th>TIPO</th></tr></thead>
                             <tbody>
-                                ${muestrasCalculadas.length > 0 
-                                    ? muestrasCalculadas.map(m => `<tr>
+                                ${muestrasCalculadas.length > 0
+                ? muestrasCalculadas.map(m => `<tr>
                                         <td style="font-weight:700; color:#1e293b">${m.codigo || m.id || '-'}</td>
                                         <td style="color:#1e3a8a; font-weight:600">${m.progresiva || '-'}</td>
                                         <td><span style="font-size:9px; background:#f1f5f9; padding:2px 5px; border-radius:4px">${m.tipo_roca || '-'}</span></td>
                                     </tr>`).join('')
-                                    : '<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:20px; font-style:italic;">Sin muestras detectadas</td></tr>'
-                                }
+                : '<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:20px; font-style:italic;">Sin muestras detectadas</td></tr>'
+            }
                             </tbody>
                         </table>
                     </div>
@@ -1679,26 +1807,36 @@ const GeologiaExternal = ({ onBack }) => {
 
                     {baseKml && visible.route && <GeoJSON data={baseKml} style={{ color: "#007aff", weight: 6, opacity: 0.4, filter: 'drop-shadow(0 0 3px rgba(0,122,255,0.5))' }} />}
                     <RouteEndpointsLayer geoJson={baseKml} />
-                    
+
                     {orderedLayers.map(l => (visible[`layer-${l.id}`] && (
                         <GeoJSON
                             key={`lay-${l.id}-${opacities[`layer-${l.id}`] !== undefined ? opacities[`layer-${l.id}`] : 0.4}-${selectedFeatureTarget?.layerId === l.id ? selectedFeatureTarget.signature : 'idle'}`}
-                            data={typeof l.geojson_data === 'string' ? JSON.parse(l.geojson_data) : l.geojson_data} 
-                            style={(feature) => getLayerFeatureStyle(feature, l)} 
+                            data={typeof l.geojson_data === 'string' ? JSON.parse(l.geojson_data) : l.geojson_data}
+                            style={(feature) => getLayerFeatureStyle(feature, l)}
                             pointToLayer={(f, latlng) => {
                                 if (f.properties) {
                                     f.properties._layer_tab = l.tab_name;
                                     f.properties._layer_name = l.file_name;
                                 }
-                                const signature = getFeatureSignature(f);
-                                const isSelectedPoint = !!selectedFeatureTarget
-                                    && selectedFeatureTarget.layerId === l.id
-                                    && selectedFeatureTarget.signature === signature;
-                                return renderGeoPoint(f, latlng, isSelectedPoint);
-                            }} 
+                                return renderGeoPoint(f, latlng, false);
+                            }}
                             onEachFeature={(f, layer) => {
+                                const geometryType = f?.geometry?.type || '';
+                                const isPointGeometry = ['Point', 'MultiPoint'].includes(geometryType);
+                                const lowerTabNameGeo = String(l?.tab_name || '').toLowerCase();
+                                const lowerLayerNameGeo = String(l?.file_name || '').toLowerCase();
+                                const isStructuralLine =
+                                    (geometryType === 'LineString' || geometryType === 'MultiLineString')
+                                    && lowerTabNameGeo.includes('estructural');
+                                const isClasificacionMaterialesLayer =
+                                    lowerTabNameGeo.includes('clas_mater')
+                                    || lowerTabNameGeo.includes('clasificacion_material')
+                                    || lowerLayerNameGeo.includes('clasificacion')
+                                    || lowerLayerNameGeo.includes('material');
+                                const canUseSelectionHighlight = !isPointGeometry && !isStructuralLine && !isClasificacionMaterialesLayer;
                                 const signature = getFeatureSignature(f);
-                                const isSelectedFeature = !!selectedFeatureTarget
+                                const isSelectedFeature = canUseSelectionHighlight
+                                    && !!selectedFeatureTarget
                                     && selectedFeatureTarget.layerId === l.id
                                     && selectedFeatureTarget.signature === signature;
 
@@ -1716,9 +1854,11 @@ const GeologiaExternal = ({ onBack }) => {
                                     if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
                                     focusSingleLayer(l.id);
                                     clearSelectedFeature();
-                                    setSelectedFeatureTarget({ layerId: l.id, signature });
-                                    selectedFeatureRef.current = { layer, feature: f, layerMeta: l };
-                                    if (layer.setStyle) {
+                                    if (canUseSelectionHighlight) {
+                                        setSelectedFeatureTarget({ layerId: l.id, signature });
+                                        selectedFeatureRef.current = { layer, feature: f, layerMeta: l };
+                                    }
+                                    if (canUseSelectionHighlight && layer.setStyle) {
                                         layer.setStyle(getImmediateSelectedFeatureStyle(f, l));
                                     }
                                     if (layer.bringToFront) layer.bringToFront();
@@ -1730,7 +1870,7 @@ const GeologiaExternal = ({ onBack }) => {
                                             ? getNearbyPanelPhotos(representativeLatLng.lat, representativeLatLng.lng, fotos)
                                             : [];
                                         const popupLayer = e.target.bindPopup(
-                                            buildFeaturePopupHtml(f.properties || {}, l, { nearbyPhotos }),
+                                            buildFeaturePopupHtml(f.properties || {}, l, { nearbyPhotos, feature: f }),
                                             getFeaturePopupOptions(l)
                                         );
                                         popupLayer.openPopup();
@@ -1749,10 +1889,10 @@ const GeologiaExternal = ({ onBack }) => {
                                             }, 0);
                                         }
                                     } else {
-                                    const p = f.properties || {};
-                                    let h = `<div class="invvial-map-popup-card" style="min-width:260px;"><div class="popup-header" style="background:#1e3a8a; color:white; padding:10px; font-weight:700;">${p.name || 'DETALLE TÉCNICO'}</div><div style="padding:10px; font-size:11px; max-height:200px; overflow-y:auto;">`;
-                                    Object.entries(p).forEach(([k, v]) => { if (!k.startsWith('_')) h += `<div class="detail-row"><b>${k}:</b> <span>${v}</span></div>`; });
-                                    h += `</div></div>`; e.target.bindPopup(h).openPopup();
+                                        const p = f.properties || {};
+                                        let h = `<div class="invvial-map-popup-card" style="min-width:260px;"><div class="popup-header" style="background:#1e3a8a; color:white; padding:10px; font-weight:700;">${p.name || 'DETALLE TÉCNICO'}</div><div style="padding:10px; font-size:11px; max-height:200px; overflow-y:auto;">`;
+                                        Object.entries(p).forEach(([k, v]) => { if (!k.startsWith('_')) h += `<div class="detail-row"><b>${k}:</b> <span>${v}</span></div>`; });
+                                        h += `</div></div>`; e.target.bindPopup(h).openPopup();
                                     }
                                 });
                             }} />
@@ -1765,7 +1905,7 @@ const GeologiaExternal = ({ onBack }) => {
                                     <div className="popup-header" style={{ background: 'var(--primary-gradient)', color: 'white', padding: '10px' }}>MUESTRA: {m.codigo}</div>
                                     <div style={{ padding: '12px', fontSize: '11px' }}>
                                         <div className="detail-row"><b>TIPO:</b> <span>{m.tipo_roca}</span></div>
-                                        {m.isAuto && <div className="detail-row" style={{color:'#0369a1', fontWeight:'bold'}}><b>DETECTADA EN CAPAS DEL MAPA</b></div>}
+                                        {m.isAuto && <div className="detail-row" style={{ color: '#0369a1', fontWeight: 'bold' }}><b>DETECTADA EN CAPAS DEL MAPA</b></div>}
                                         {m.archivo_pdf_url && <a href={m.archivo_pdf_url} target="_blank" rel="noreferrer" className="pdf-link-btn" style={{ background: '#ef4444', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', borderRadius: '6px', textDecoration: 'none', marginTop: '10px' }}><i className="fa-solid fa-file-pdf"></i> PANEL FOTOGRÁFICO</a>}
                                     </div>
                                 </div>
@@ -1806,7 +1946,7 @@ const GeologiaExternal = ({ onBack }) => {
                         <span style={{ fontWeight: 800, fontSize: '14px' }}><i className="fa-solid fa-layer-group"></i> CAPAS TÉCNICAS</span>
                         <button onClick={() => setLeftOpen(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '20px', cursor: 'pointer' }}>×</button>
                     </div>
-                    
+
                     {/* LEYENDA GENERAL */}
                     <div className="ext-legend-container" style={{ padding: '15px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                         <div style={{ fontSize: '10px', fontWeight: 800, color: '#64748b', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Leyenda General</div>
@@ -1817,10 +1957,10 @@ const GeologiaExternal = ({ onBack }) => {
                                 const hasLayers = sectionLayers.length > 0;
 
                                 return (
-                                    <div key={key} 
+                                    <div key={key}
                                         onClick={() => hasLayers && toggleWholeSection(key)}
-                                        style={{ 
-                                            display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', 
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px',
                                             cursor: hasLayers ? 'pointer' : 'default',
                                             opacity: hasLayers ? (isVisible ? 1 : 0.5) : 0.3,
                                             transition: 'all 0.2s ease',
@@ -1861,7 +2001,7 @@ const GeologiaExternal = ({ onBack }) => {
                                 <div className="ext-layer-list">
                                     <label className="ext-layer-item"><input type="checkbox" checked={!!visible.route} onChange={() => toggle('route')} /> Trazo Proyecto</label>
                                     <label className="ext-layer-item"><input type="checkbox" checked={!!visible.muestras} onChange={() => toggle('muestras')} /> Muestras Técnicas</label>
-                                    <label className="ext-layer-item"><input type="checkbox" checked={!!visible.fotos} onChange={() => toggle('fotos')} /> Panel Fotográfico {currentZoom <= 12 && visible.fotos && <span style={{fontSize:9, color:'red'}}>(Acerca zoom)</span>}</label>
+                                    <label className="ext-layer-item"><input type="checkbox" checked={!!visible.fotos} onChange={() => toggle('fotos')} /> Panel Fotográfico {currentZoom <= 12 && visible.fotos && <span style={{ fontSize: 9, color: 'red' }}>(Acerca zoom)</span>}</label>
                                 </div>
                             )}
                         </div>
@@ -1931,7 +2071,7 @@ const GeologiaExternal = ({ onBack }) => {
                                             </span>
                                             <span style={{ textTransform: 'uppercase', fontWeight: 'bold', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tab}</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                                                <button 
+                                                <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         if (groupDriveUrl) window.open(groupDriveUrl, '_blank', 'noopener,noreferrer');
@@ -1942,7 +2082,7 @@ const GeologiaExternal = ({ onBack }) => {
                                                 >
                                                     <i className="fa-solid fa-folder-open" style={{ fontSize: '13px' }}></i>
                                                 </button>
-                                                <button 
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); handleEditDriveLink(tab); }}
                                                     style={{ background: 'none', border: 'none', padding: '4px', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                                                     title="Editar link de carpeta"
@@ -1984,61 +2124,61 @@ const GeologiaExternal = ({ onBack }) => {
                                                             border: activeLayerId === l.id ? '1px solid rgba(0, 122, 255, 0.2)' : '1px solid transparent'
                                                         }}
                                                     >
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={!!visible[`layer-${l.id}`]} 
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!visible[`layer-${l.id}`]}
                                                             onChange={() => toggle(`layer-${l.id}`)}
                                                             onClick={(e) => e.stopPropagation()}
                                                             style={{ cursor: 'pointer' }}
-                                                        /> 
+                                                        />
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
-                                                            <span 
+                                                            <span
                                                                 title={l.file_name}
                                                                 style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#334155', fontWeight: 500 }}
                                                             >
                                                                 {l.file_name}
                                                             </span>
                                                             {/* No mostrar folder individual ya que ahora es por grupo */}
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
-                                                                setLayerToExport(l);
-                                                            }}
-                                                            style={{ 
-                                                                background: 'none', 
-                                                                border: 'none', 
-                                                                padding: '4px', 
-                                                                color: '#007aff', 
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center'
-                                                            }}
-                                                            title="Descargar capa"
-                                                        >
-                                                            <i className="fa-solid fa-download" style={{ fontSize: '10px' }}></i>
-                                                        </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    setLayerToExport(l);
+                                                                }}
+                                                                style={{
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    padding: '4px',
+                                                                    color: '#007aff',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center'
+                                                                }}
+                                                                title="Descargar capa"
+                                                            >
+                                                                <i className="fa-solid fa-download" style={{ fontSize: '10px' }}></i>
+                                                            </button>
+                                                        </div>
                                                     </div>
+                                                    {visible[`layer-${l.id}`] && (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '22px' }}>
+                                                            <i className="fa-solid fa-circle-half-stroke" style={{ fontSize: '9px', color: '#64748b' }}></i>
+                                                            <input
+                                                                type="range" min="0" max="1" step="0.1"
+                                                                value={opacities[`layer-${l.id}`] !== undefined ? opacities[`layer-${l.id}`] : 0.4}
+                                                                onChange={(e) => setOpacity(`layer-${l.id}`, e.target.value)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                style={{ width: '100%', height: '4px', cursor: 'pointer' }}
+                                                            />
+                                                            <span style={{ fontSize: '10px', color: '#475569', fontWeight: 700, minWidth: '34px', textAlign: 'right' }}>
+                                                                {Math.round((opacities[`layer-${l.id}`] !== undefined ? opacities[`layer-${l.id}`] : 0.4) * 100)}%
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                {visible[`layer-${l.id}`] && (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '22px' }}>
-                                                        <i className="fa-solid fa-circle-half-stroke" style={{ fontSize: '9px', color: '#64748b' }}></i>
-                                                        <input 
-                                                            type="range" min="0" max="1" step="0.1" 
-                                                            value={opacities[`layer-${l.id}`] !== undefined ? opacities[`layer-${l.id}`] : 0.4} 
-                                                            onChange={(e) => setOpacity(`layer-${l.id}`, e.target.value)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            style={{ width: '100%', height: '4px', cursor: 'pointer' }}
-                                                        />
-                                                        <span style={{ fontSize: '10px', color: '#475569', fontWeight: 700, minWidth: '34px', textAlign: 'right' }}>
-                                                            {Math.round((opacities[`layer-${l.id}`] !== undefined ? opacities[`layer-${l.id}`] : 0.4) * 100)}%
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
@@ -2143,27 +2283,27 @@ const GeologiaExternal = ({ onBack }) => {
                                             <div style={{ fontWeight: 700, color: '#000', fontSize: 11, marginBottom: 8 }}>Simbología Estructural</div>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 3 L22 19 L2 19 Z" fill="#ffff00" stroke="#000" stroke-width="1.5"/><circle cx="12" cy="14" r="2.5" fill="#000"/></svg>
+                                                    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 3 L22 19 L2 19 Z" fill="#ffff00" stroke="#000" stroke-width="1.5" /><circle cx="12" cy="14" r="2.5" fill="#000" /></svg>
                                                     <span style={{ fontWeight: 600, color: '#000', fontSize: 10 }}>Inicio Del Tramo</span>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 3 L22 19 L2 19 Z" fill="#ffa500" stroke="#000" stroke-width="1.5"/><circle cx="12" cy="14" r="2.5" fill="#000"/></svg>
+                                                    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 3 L22 19 L2 19 Z" fill="#ffa500" stroke="#000" stroke-width="1.5" /><circle cx="12" cy="14" r="2.5" fill="#000" /></svg>
                                                     <span style={{ fontWeight: 600, color: '#000', fontSize: 10 }}>Fin Del Tramo</span>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" fill="#000"/></svg>
+                                                    <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" fill="#000" /></svg>
                                                     <span style={{ fontWeight: 600, color: '#000', fontSize: 10 }}>Progresivas Calzada</span>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <svg width="20" height="12" viewBox="0 0 24 12"><line x1="0" y1="6" x2="24" y2="6" stroke="#000" stroke-width="4"/><line x1="0" y1="6" x2="24" y2="6" stroke="#fff" stroke-width="2" stroke-dasharray="5,5"/></svg>
+                                                    <svg width="20" height="12" viewBox="0 0 24 12"><line x1="0" y1="6" x2="24" y2="6" stroke="#000" stroke-width="4" /><line x1="0" y1="6" x2="24" y2="6" stroke="#fff" stroke-width="2" stroke-dasharray="5,5" /></svg>
                                                     <span style={{ fontWeight: 600, color: '#000', fontSize: 10 }}>Eje de Vía</span>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#00ced1" stroke="#000" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="22" stroke="#000" stroke-width="2"/><line x1="2" y1="12" x2="22" y2="12" stroke="#000" stroke-width="2"/></svg>
+                                                    <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#00ced1" stroke="#000" stroke-width="2" /><line x1="12" y1="2" x2="12" y2="22" stroke="#000" stroke-width="2" /><line x1="2" y1="12" x2="22" y2="12" stroke="#000" stroke-width="2" /></svg>
                                                     <span style={{ fontWeight: 600, color: '#000', fontSize: 10 }}>Puentes</span>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <svg width="20" height="20" viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="18" stroke="#000" stroke-width="2"/><line x1="7" y1="18" x2="17" y2="18" stroke="#000" stroke-width="2"/></svg>
+                                                    <svg width="20" height="20" viewBox="0 0 24 24"><line x1="12" y1="4" x2="12" y2="18" stroke="#000" stroke-width="2" /><line x1="7" y1="18" x2="17" y2="18" stroke="#000" stroke-width="2" /></svg>
                                                     <span style={{ fontWeight: 600, color: '#000', fontSize: 10 }}>Buzamientos</span>
                                                 </div>
                                             </div>
@@ -2203,11 +2343,11 @@ const GeologiaExternal = ({ onBack }) => {
                 <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', pointerEvents: 'auto', display: 'flex', gap: '8px', zIndex: 110 }}>
                     <div style={{ background: 'white', borderRadius: '50px', padding: '4px 15px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <i className="fa-solid fa-magnifying-glass-location" style={{ color: '#1e3a8a', cursor: 'pointer' }} onClick={handleKmSearch}></i>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar KM (ej. 0+440)" 
-                            value={kmSearch} 
-                            onChange={(e) => setKmSearch(e.target.value)} 
+                        <input
+                            type="text"
+                            placeholder="Buscar KM (ej. 0+440)"
+                            value={kmSearch}
+                            onChange={(e) => setKmSearch(e.target.value)}
                             onKeyDown={handleKmSearchInput}
                             style={{ border: 'none', outline: 'none', fontSize: '12px', width: '150px', fontWeight: 600, color: '#1e293b' }}
                         />
@@ -2244,9 +2384,9 @@ const GeologiaExternal = ({ onBack }) => {
                                 </div>
                                 <button onClick={() => setShowTechTable(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', width: '32px', height: '32px', borderRadius: '50%', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}>×</button>
                             </div>
-                            
+
                             <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }} className="geol-custom-scrollbar">
-                                
+
                                 {/* SECCIÓN 1: CLASIFICACIÓN DE MATERIALES */}
                                 <div style={{ marginBottom: '30px' }}>
                                     <h3 style={{ fontSize: '13px', fontWeight: 800, color: '#1e3a8a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>
@@ -2376,20 +2516,57 @@ const GeologiaExternal = ({ onBack }) => {
 
                 {/* MODAL DE IMAGEN AGRANDADA */}
                 {selectedPhoto && (
-                    <div className="ext-photo-modal" 
-                        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', backdropFilter: 'blur(5px)', animation: 'fadeIn 0.3s ease', cursor: 'pointer', pointerEvents: 'auto' }} 
+                    <div className="ext-photo-modal"
+                        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', backdropFilter: 'blur(5px)', animation: 'fadeIn 0.3s ease', cursor: 'pointer', pointerEvents: 'auto' }}
                         onClick={() => setSelectedPhoto(null)}
                         tabIndex={0}
                     >
                         <button onClick={(e) => { e.stopPropagation(); setSelectedPhoto(null); }} style={{ position: 'absolute', top: '30px', right: '30px', background: 'white', border: 'none', borderRadius: '50%', width: '45px', height: '45px', fontSize: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.5)', zIndex: 10 }}>×</button>
-                        <img src={selectedPhoto} alt="Zoom" style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 10px 40px rgba(0,0,0,0.8)', border: '4px solid white', cursor: 'default' }} onClick={(e) => e.stopPropagation()} />
+                        {selectedPhoto.photos.length > 1 && (
+                            <>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedPhoto((prev) => ({ ...prev, currentIndex: (prev.currentIndex - 1 + prev.photos.length) % prev.photos.length }));
+                                    }}
+                                    style={{ position: 'absolute', left: '26px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.95)', border: 'none', borderRadius: '50%', width: '48px', height: '48px', fontSize: '22px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.35)', zIndex: 10 }}
+                                >
+                                    ‹
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedPhoto((prev) => ({ ...prev, currentIndex: (prev.currentIndex + 1) % prev.photos.length }));
+                                    }}
+                                    style={{ position: 'absolute', right: '26px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.95)', border: 'none', borderRadius: '50%', width: '48px', height: '48px', fontSize: '22px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.35)', zIndex: 10 }}
+                                >
+                                    ›
+                                </button>
+                            </>
+                        )}
+                        <div style={{ maxWidth: '95%', maxHeight: '95%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', cursor: 'default' }} onClick={(e) => e.stopPropagation()}>
+                            <img src={selectedPhoto.photos[selectedPhoto.currentIndex]?.image_url} alt={selectedPhoto.photos[selectedPhoto.currentIndex]?.nombre || 'Zoom'} style={{ maxWidth: '95vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 10px 40px rgba(0,0,0,0.8)', border: '4px solid white' }} />
+                            <div style={{ background: 'rgba(15,23,42,0.86)', color: 'white', padding: '12px 16px', borderRadius: '14px', minWidth: '280px', maxWidth: '70vw', textAlign: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}>
+                                <div style={{ fontSize: '14px', fontWeight: 800, marginBottom: '4px' }}>
+                                    {selectedPhoto.photos[selectedPhoto.currentIndex]?.nombre || 'Foto de campo'}
+                                </div>
+                                {selectedPhoto.photos[selectedPhoto.currentIndex]?.descripcion && (
+                                    <div style={{ fontSize: '12px', opacity: 0.88, marginBottom: '6px' }}>
+                                        {selectedPhoto.photos[selectedPhoto.currentIndex].descripcion}
+                                    </div>
+                                )}
+                                <div style={{ fontSize: '11px', opacity: 0.72, fontWeight: 700 }}>
+                                    {selectedPhoto.currentIndex + 1} / {selectedPhoto.photos.length}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
                 {/* MODAL DE DESCARGA */}
                 {layerToExport && (
-                    <div className="ext-photo-modal" 
-                        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', pointerEvents: 'auto', backdropFilter: 'blur(3px)' }} 
+                    <div className="ext-photo-modal"
+                        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', pointerEvents: 'auto', backdropFilter: 'blur(3px)' }}
                         onClick={() => setLayerToExport(null)}
                     >
                         <div style={{ width: '350px', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
@@ -2401,7 +2578,7 @@ const GeologiaExternal = ({ onBack }) => {
                                 <button onClick={() => setLayerToExport(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '18px', cursor: 'pointer' }}>×</button>
                             </div>
                             <div style={{ padding: '20px', textAlign: 'center' }}>
-                                <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '20px' }}>Seleccione el formato para descargar: <br/><b style={{ color: '#1e3a8a' }}>{layerToExport.file_name}</b></p>
+                                <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '20px' }}>Seleccione el formato para descargar: <br /><b style={{ color: '#1e3a8a' }}>{layerToExport.file_name}</b></p>
                                 <button onClick={handleExportLayerKML} style={{ width: '100%', background: '#f8fafc', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', fontSize: '12px', fontWeight: 700, marginBottom: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s' }} onMouseOver={(e) => e.target.style.background = '#e2e8f0'} onMouseOut={(e) => e.target.style.background = '#f8fafc'}>
                                     <i className="fa-solid fa-file-code" style={{ color: '#007aff' }}></i> Descargar como KML
                                 </button>

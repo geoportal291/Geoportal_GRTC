@@ -12,16 +12,38 @@ const CamposGenerales = ({ seccion, data, onInputChange }) => (
               <label htmlFor={fieldName} className={`form-label ${field.required ? 'required' : ''}`}>
                 {field.label}
               </label>
-              <input
-                type={field.type}
-                step={field.step || 'any'}
-                className="form-control form-control-sm"
-                id={fieldName}
-                name={fieldName}
-                value={data.general_fields?.[field.key] || ''}
-                onChange={onInputChange}
-                required={field.required}
-              />
+              {(field.input_config?.control === 'select' || (field.input_config?.options || []).length > 0) ? (
+                <select
+                  className="form-control form-control-sm"
+                  id={fieldName}
+                  name={fieldName}
+                  value={data.general_fields?.[field.key] || ''}
+                  onChange={onInputChange}
+                  required={field.required}
+                >
+                  <option value="">{field.input_config?.placeholder || 'Seleccione'}</option>
+                  {(field.input_config?.options || []).map((option) => {
+                    const optionValue = typeof option === 'object' ? option.value : option;
+                    const optionLabel = typeof option === 'object' ? option.label : option;
+                    return (
+                      <option key={`${fieldName}-${optionValue}`} value={optionValue}>
+                        {optionLabel}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <input
+                  type={field.type}
+                  step={field.step || 'any'}
+                  className="form-control form-control-sm"
+                  id={fieldName}
+                  name={fieldName}
+                  value={data.general_fields?.[field.key] || ''}
+                  onChange={onInputChange}
+                  required={field.required}
+                />
+              )}
             </div>
           </div>
         );

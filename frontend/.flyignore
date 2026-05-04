@@ -1,2 +1,16 @@
 node_modules
 .git
+src
+public
+estructura.txt
+*.log
+.DS_Store
+.vscode
+flyctl
+package-lock.json
+craco.config.js
+postcss.config.js
+tailwind.config.js
+jsconfig.json
+.env*
+*.md

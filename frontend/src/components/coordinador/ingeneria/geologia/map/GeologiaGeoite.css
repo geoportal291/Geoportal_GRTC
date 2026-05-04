@@ -957,3 +957,9 @@ body {
     border-radius: 1px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
+
+/* Override de ancho para popup del mapa interno */
+.geolmap-internal-map-container .leaflet-popup-content {
+    width: 420px !important;
+    max-width: 420px !important;
+}

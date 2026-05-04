@@ -126,6 +126,7 @@ const VistaEnsayosCantera = () => {
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
   const [fileToImport, setFileToImport] = useState(null);
+  const [currentTargetType, setCurrentTargetType] = useState(null);
 
   const fetchCanteraEnsayos = useCallback(async () => {
     try {
@@ -161,6 +162,7 @@ const VistaEnsayosCantera = () => {
       const headers = getAuthHeaders();
       const formData = new FormData();
       formData.append('file', file);
+      if (currentTargetType) formData.append('configKey', currentTargetType);
       formData.append('isSimulation', true);
       const res = await axios.post(`${API_URL}/api/ensayos/importar-canteras`, formData, { headers: { ...headers, 'Content-Type': 'multipart/form-data' } });
       setImportSummary(res.data.summary);
@@ -177,6 +179,7 @@ const VistaEnsayosCantera = () => {
       const headers = getAuthHeaders();
       const formData = new FormData();
       formData.append('file', fileToImport);
+      if (currentTargetType) formData.append('configKey', currentTargetType);
       formData.append('isSimulation', false);
       await axios.post(`${API_URL}/api/ensayos/importar-canteras`, formData, { headers: { ...headers, 'Content-Type': 'multipart/form-data' } });
       alertify.success('Importación exitosa.');
@@ -184,6 +187,25 @@ const VistaEnsayosCantera = () => {
       fetchCanteraEnsayos();
     } catch (err) { alertify.error('Error al importar.'); }
     finally { setImporting(false); }
+  };
+
+  const handleExportByType = async (e, tipoEnsayoId, descripcion) => {
+    e.stopPropagation();
+    try {
+      const resp = await axios.get(`${API_URL}/api/ensayos/canteras/exportar-tipo/${tipoEnsayoId}`, { 
+        headers: getAuthHeaders(), 
+        responseType: 'blob' 
+      });
+      const url = window.URL.createObjectURL(new Blob([resp.data]));
+      const link = document.createElement('a'); 
+      link.href = url; 
+      link.setAttribute('download', `${descripcion.replace(/ /g, '_')}_Canteras.xlsx`); 
+      link.click();
+      alertify.success(`Exportando ${descripcion}...`);
+    } catch (err) { 
+      console.error(err);
+      alertify.error('Error al exportar este tipo de ensayo.'); 
+    }
   };
 
   const handleExportAll = async () => {
@@ -211,13 +233,25 @@ const VistaEnsayosCantera = () => {
           </div>
         </div>
         <div className="header-actions">
-          <button className="btn btn-primary btn-expandable" onClick={() => setImportModalOpen(true)}>
-            <i className="fas fa-file-import"></i> <span className="btn-text">Importar Excel</span>
+          <button 
+            className="btn-main-action import" 
+            onClick={() => { setCurrentTargetType(null); setImportModalOpen(true); }}
+            title="Importar todos los ensayos (XLSX)"
+          >
+            <i className="fas fa-file-import"></i>
           </button>
-          <button className="btn btn-success btn-expandable" onClick={handleExportAll}>
-            <i className="fas fa-file-excel"></i> <span className="btn-text">Exportar Todo</span>
+          <button 
+            className="btn-main-action export" 
+            onClick={handleExportAll}
+            title="Exportar todos los ensayos a Excel"
+          >
+            <i className="fas fa-file-excel"></i>
           </button>
-          <button className="btn btn-back-circle" onClick={() => navigate(-1)} title="Volver">
+          <button 
+            className="btn-main-action back" 
+            onClick={() => navigate(-1)} 
+            title="Volver"
+          >
             <i className="fas fa-arrow-left"></i>
           </button>
         </div>
@@ -253,8 +287,31 @@ const VistaEnsayosCantera = () => {
           return (
             <div className="card-ensayo-tipo" key={key} style={{ '--accent-color': accent }}>
               <div className="card-header" onClick={() => setModalGrupo(grupo)}>
-                <h2>{grupo.descripcion}</h2>
-                <div className="header-actions"><span className="ensayo-count-badge">{grupo.ensayos.length}</span><i className="fas fa-chevron-right"></i></div>
+                <div className="header-info">
+                  <h2>{grupo.descripcion}</h2>
+                  <div className="header-subtitle">
+                    <span className="ensayo-count-badge">{grupo.ensayos.length} ensayos</span>
+                  </div>
+                </div>
+                <div className="header-actions-main">
+                  <div className="action-buttons-group">
+                    <button 
+                      className="btn-card-action import" 
+                      onClick={(e) => { e.stopPropagation(); setCurrentTargetType(key); setImportModalOpen(true); }}
+                      title="Importar este tipo"
+                    >
+                      <i className="fas fa-upload"></i>
+                    </button>
+                    <button 
+                      className="btn-card-action export" 
+                      onClick={(e) => handleExportByType(e, grupo.tipoEnsayoId, grupo.descripcion)}
+                      title="Exportar este tipo"
+                    >
+                      <i className="fas fa-download"></i>
+                    </button>
+                  </div>
+                  <i className="fas fa-chevron-right arrow-indicator"></i>
+                </div>
               </div>
               <div className="card-content">
                 {grupo.ensayos.slice(0, 5).map(ensayo => (

@@ -3,8 +3,17 @@ const db = require('../conexion'); // Adjust path as needed
 const { DateTime } = require('luxon'); // Assuming DateTime is used in project logic
 const { v4: uuidv4 } = require('uuid'); // Assuming uuidv4 is used in project logic
 const kmlService = require('./kmlService'); // NEW: Import kmlService
-const { put } = require('@vercel/blob'); // NEW: Import Vercel Blob
 const utm = require('utm'); // NEW: Import UTM for coordinate conversion
+const { uploadFileToNAS } = require('./nasStorageService');
+
+const sanitizeProjectStorageSegment = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase() || 'archivo';
+
+const getProjectKmlStorageFolder = (proyectoId) => `proyectos/${proyectoId}/trazado`;
 
 // Listar proyectos con detalle (incluyendo los nuevos campos)
 const getDetailedProyectos = async () => {
@@ -92,15 +101,16 @@ const getProyectoById = async (id) => {
                 p.distrito, p.localidad, p.longitud_total, p.progresiva_inicial, p.tipo_via,
                 p.intervalo_manual, p.is_interval_manual, p.descripcion_larga, p.create_at, p.update_at,
                 p.kml_trazado_id, 
-                COALESCE(i.kml_url, p.url_kml) as url_kml, -- Prioritize invvial.kml_url
+                COALESCE(NULLIF(i.kml_url, ''), NULLIF(psk.kml_url, ''), NULLIF(p.url_kml, '')) as url_kml,
                 kt.kml_filename, kt.kml_uploaded_at,
                 COALESCE(json_agg(pr) FILTER (WHERE pr.id IS NOT NULL), '[]'::json) as progresivas
             FROM proyectos p
             LEFT JOIN kml_trazados kt ON p.kml_trazado_id = kt.id
-            LEFT JOIN invvial i ON p.id = i.id_proyecto -- New Join
+            LEFT JOIN invvial i ON p.id = i.id_proyecto
+            LEFT JOIN proyectos_secciones_kml psk ON p.id = psk.id_proyecto AND psk.seccion = 'invvial'
             LEFT JOIN progresivas pr ON pr.proyecto_id = p.id AND pr.parent_id IS NULL
             WHERE p.id = $1
-            GROUP BY p.id, kt.id, i.kml_url -- Add i.kml_url to Group By
+            GROUP BY p.id, kt.id, i.kml_url, psk.kml_url
         `, [id]);
 
         const project = result.rows[0];
@@ -843,25 +853,25 @@ const uploadKmlToProyecto = async (proyectoId, file, userId) => {
         const kmlTrazado = await kmlService.createKmlTrazado(file, userId);
         const newKmlTrazadoId = kmlTrazado.id;
 
-        // 2. Upload to Vercel Blob (NEW STEP)
-        let kmlUrl = null;
-        try {
-            // Upload buffer to blob
-            const blob = await put(file.originalname, file.buffer, {
-                access: 'public',
-                token: process.env.BLOB_READ_WRITE_TOKEN // Ensure this env var is set or implicit
-            });
-            kmlUrl = blob.url;
-            console.log("KML uploaded to Blob:", kmlUrl);
-        } catch (blobError) {
-            console.error("Error uploading KML to Vercel Blob (continuing with DB storage):", blobError);
-            // We continue without breaking the flow, url_kml will be null/unchanged
+        // 2. Upload original file to NAS and keep its public URL on the project record
+        const safeFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
+        const finalFilename = `${Date.now()}_${sanitizeProjectStorageSegment(kmlTrazado.kml_filename)}_${safeFilename}`;
+        const targetFolder = getProjectKmlStorageFolder(proyectoId);
+        const fileBuffer = file.buffer;
+
+        if (!fileBuffer) {
+            const error = new Error('El archivo KML no contiene datos para subir al NAS.');
+            error.statusCode = 400;
+            error.isCustomError = true;
+            throw error;
         }
+
+        const kmlUrl = await uploadFileToNAS(fileBuffer, targetFolder, finalFilename);
 
         // 3. Update proyecto with kml_trazado_id AND url_kml
         const result = await client.query(
             `UPDATE proyectos
-             SET kml_trazado_id = $1, url_kml = COALESCE($2, url_kml), update_at = NOW()
+             SET kml_trazado_id = $1, url_kml = $2, update_at = NOW()
              WHERE id = $3
              RETURNING id, kml_trazado_id, url_kml;`,
             [newKmlTrazadoId, kmlUrl, proyectoId]
@@ -873,6 +883,22 @@ const uploadKmlToProyecto = async (proyectoId, file, userId) => {
             error.isCustomError = true;
             throw error;
         }
+
+        await client.query(
+            `INSERT INTO proyectos_secciones_kml (id_proyecto, seccion, kml_url)
+             VALUES ($1, 'invvial', $2)
+             ON CONFLICT (id_proyecto, seccion)
+             DO UPDATE SET kml_url = EXCLUDED.kml_url`,
+            [proyectoId, kmlUrl]
+        );
+
+        await client.query(
+            `INSERT INTO invvial (id_proyecto, kml_url)
+             VALUES ($1, $2)
+             ON CONFLICT (id_proyecto)
+             DO UPDATE SET kml_url = EXCLUDED.kml_url`,
+            [proyectoId, kmlUrl]
+        );
 
         await client.query('COMMIT');
         return {

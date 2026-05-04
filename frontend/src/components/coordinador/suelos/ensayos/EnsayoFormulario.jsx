@@ -13,6 +13,12 @@ const EnsayoFormulario = ({ data, onInputChange, resultados, tableConfig }) => {
   // Estructura nueva: Múltiples tablas y campos generales separados
   const camposGenerales = tableConfig.general_fields || [];
   const tablas = Array.isArray(tableConfig.tables) ? tableConfig.tables : [];
+  const generalFieldsAsTab = tableConfig.general_fields_as_tab === true;
+  const hasGeneralFields = camposGenerales.length > 0;
+  const sections = [
+    ...(generalFieldsAsTab && hasGeneralFields ? [{ key: '__general__', title: 'Datos Generales', type: 'general' }] : []),
+    ...tablas.map((tabla) => ({ ...tabla, type: 'table' }))
+  ];
 
   // Estructura antigua (legacy): una sola tabla y campos en el nivel superior
   const legacyCampos = tableConfig.fields || [];
@@ -22,8 +28,8 @@ const EnsayoFormulario = ({ data, onInputChange, resultados, tableConfig }) => {
   if (tableConfig.general_fields || tableConfig.tables) {
     return (
       <div className="ensayo-formulario-container">
-        {/* 1. Renderizar la sección de campos generales si existen */}
-        {camposGenerales.length > 0 && (
+        {/* 1. Renderizar la sección de campos generales si existen y no van en pestaña */}
+        {hasGeneralFields && !generalFieldsAsTab && (
           <FormularioSimple
             key="general-fields-section"
             seccion={{ titulo: 'Datos Generales', campos: camposGenerales }}
@@ -33,37 +39,45 @@ const EnsayoFormulario = ({ data, onInputChange, resultados, tableConfig }) => {
         )}
 
         {/* 2. Lógica para renderizar tablas (con o sin pestañas) */}
-        {tablas.length > 1 ? (
+        {sections.length > 1 ? (
           // Múltiples tablas: renderizar con pestañas
           // Múltiples tablas: renderizar con pestañas
           <div className="ensayo-tab-container mt-4">
             <ul className="ensayo-nav-tabs">
-              {tablas.map((tabla, index) => (
-                <li className="ensayo-nav-item" key={tabla.key}>
+              {sections.map((section, index) => (
+                <li className="ensayo-nav-item" key={section.key}>
                   <button
                     className={`ensayo-nav-link ${activeTab === index ? 'active' : ''}`}
                     onClick={(e) => { e.preventDefault(); setActiveTab(index); }}
                   >
-                    {tabla.title}
+                    {section.title}
                   </button>
                 </li>
               ))}
             </ul>
             <div className="ensayo-tab-content p-3 border border-top-0">
               {/* Contenido de las pestañas con renderizado directo */}
-              {tablas.map((tabla, index) => (
+              {sections.map((section, index) => (
                 <div
-                  key={tabla.key}
+                  key={section.key}
                   className={activeTab === index ? 'ensayo-tab-pane active' : 'ensayo-tab-pane'}
                   style={{ display: activeTab === index ? 'block' : 'none' }}
                 >
-                  <SeccionTablaDinamica
-                    seccion={{ id: tabla.key, titulo: '' }} // El título ya está en la pestaña
-                    data={data}
-                    onInputChange={onInputChange}
-                    resultados={resultados}
-                    tableConfig={tabla}
-                  />
+                  {section.type === 'general' ? (
+                    <FormularioSimple
+                      seccion={{ titulo: '', campos: camposGenerales }}
+                      data={data}
+                      onInputChange={onInputChange}
+                    />
+                  ) : (
+                    <SeccionTablaDinamica
+                      seccion={{ id: section.key, titulo: '' }}
+                      data={data}
+                      onInputChange={onInputChange}
+                      resultados={resultados}
+                      tableConfig={section}
+                    />
+                  )}
                 </div>
               ))}
             </div>

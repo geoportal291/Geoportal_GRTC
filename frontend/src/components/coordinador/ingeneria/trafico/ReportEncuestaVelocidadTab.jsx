@@ -26,9 +26,12 @@ const percentageTextPlugin = {
 
     data.datasets.forEach((dataset, i) => {
       chart.getDatasetMeta(i).data.forEach((arc, index) => {
-        const value = data.datasets[0].data[index];
+        const rawValue = dataset?.data?.[index];
+        const value = typeof rawValue === 'number'
+          ? rawValue
+          : Number(rawValue?.renderValue ?? rawValue?.value ?? rawValue?.originalValue);
 
-        if (value >= 0) {
+        if (Number.isFinite(value) && value >= 0) {
           ctx.fillStyle = 'white';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';

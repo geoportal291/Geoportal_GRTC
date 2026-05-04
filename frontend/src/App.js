@@ -51,6 +51,8 @@ import TestMapWithRoute from './components/coordinador/testmapa'; // <-- Importa
 import Geoite from './components/coordinador/pruebas/geoite'; // <-- Importar componente de mapa de prueba
 import Vialds from './components/coordinador/ingeneria/invvial/vial.jsx'; // <-- NUEVO: Importar Vialds
 import Geologia from './components/coordinador/ingeneria/geologia/Geologia.jsx'; // <-- NUEVO: Importar Geologia
+import DisenosIngenieria from './components/coordinador/ingeneria/DisenosIngenieria.jsx';
+import DisenoGeometrico from './components/coordinador/ingeneria/disenos_ingenieria/disenos_geometricos/DisenoGeometrico.jsx';
 
 // Ensayos
 import Ensayos from './ensayos/layout.jsx';
@@ -207,6 +209,8 @@ function AppContent() {
 
                 {/* NUEVO: Ruta para Geología */}
                 <Route path="/ingenieria/geologia" element={<RutaPrivada><Layout><Geologia /></Layout></RutaPrivada>} />
+                <Route path="/ingenieria/disenos-ingenieria" element={<RutaPrivada><Layout><DisenosIngenieria /></Layout></RutaPrivada>} />
+                <Route path="/ingenieria/disenos/geometrico" element={<RutaPrivada><Layout><DisenoGeometrico /></Layout></RutaPrivada>} />
 
                 {/* Ruta de prueba para el mapa */}
                 <Route path="/test-map" element={<RutaPrivada><Layout><TestMapWithRoute /></Layout></RutaPrivada>} />
@@ -233,4 +237,3 @@ function AppContent() {
 }
 
 export default App;
-

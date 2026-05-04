@@ -38,6 +38,33 @@ function setNestedValue(obj, path, value) {
     current[lastKey] = value;
 }
 
+function toFiniteNumber(value, defaultValue = 0) {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : defaultValue;
+}
+
+function safeDivide(numerator, denominator, fallback = 0) {
+    const safeNumerator = toFiniteNumber(numerator, NaN);
+    const safeDenominator = toFiniteNumber(denominator, NaN);
+
+    if (!Number.isFinite(safeNumerator) || !Number.isFinite(safeDenominator) || safeDenominator === 0) {
+        return fallback;
+    }
+
+    return safeNumerator / safeDenominator;
+}
+
+function firstPositive(...values) {
+    for (const value of values) {
+        const numericValue = toFiniteNumber(value, NaN);
+        if (Number.isFinite(numericValue) && numericValue > 0) {
+            return numericValue;
+        }
+    }
+
+    return 0;
+}
+
 
 // --- NUEVO MOTOR DE CÁLCULO "ESTILO EXCEL" ---
 
@@ -61,9 +88,15 @@ function getDependencies(formulaString) {
  * Realiza un ajuste cuadrático (y = ax^2 + bx + c) y devuelve el punto máximo (vértice).
  * Esta función es puramente matemática y estocástica, no sabe nada de "Proctor" o "Suelos".
  */
-function calcularMaximoCuadratico(xArr, yArr) {
+function calcularMaximoCuadratico(xInput, yInput) {
+    // Convertir de Matrix de mathjs a Array normal si es necesario
+    const xArr = xInput && typeof xInput.toArray === 'function' ? xInput.toArray() : xInput;
+    const yArr = yInput && typeof yInput.toArray === 'function' ? yInput.toArray() : yInput;
+
     // 1. Validación de Vectores Numéricos
-    if (!Array.isArray(xArr) || !Array.isArray(yArr)) return { x: 0, y: 0, error: "Inputs must be arrays" };
+    if (!Array.isArray(xArr) || !Array.isArray(yArr)) {
+        return { x: 0, y: 0, error: "Inputs must be arrays" };
+    }
 
     // Filtrar pares (x,y) válidos (ambos deben ser números finitos)
     const x = [];
@@ -121,16 +154,16 @@ function calcularMaximoCuadratico(xArr, yArr) {
         // Metadatos útiles (opcional): 'concavidad': a < 0 ? 'convexa' : 'concava'
         // En ensayos de compactación buscamos una parábola invertida (a < 0).
 
-        return {
+        const result = {
             x: x_vertex,
             y: y_vertex,
             a: a,
             b: b,
             c: c
         };
+        return result;
 
     } catch (err) {
-        console.error("Error en cálculo cuadrático genérico", err);
         return { x: 0, y: 0, error: err.message };
     }
 }
@@ -147,9 +180,12 @@ function topologicalSort(formulas) {
     for (const [node, formula] of Object.entries(formulas)) {
         const dependencies = getDependencies(formula.substring(1)); // Ignorar el "=" inicial
         for (const dep of dependencies) {
-            if (allNodes.includes(dep)) {
+            // Buscamos si la dependencia (ej: "results.curva.x") coincide exacto o es hija de un nodo (ej: "results.curva")
+            const matchedNode = allNodes.find(n => dep === n || dep.startsWith(n + '.'));
+            
+            if (matchedNode) {
                 graph.get(node).in++;
-                graph.get(dep).out.push(node);
+                graph.get(matchedNode).out.push(node);
             }
         }
     }
@@ -190,7 +226,6 @@ function runExcelLikeCalculations(excelConfig, formData) {
 
     if (circular.length > 0) {
         const errorMsg = `Dependencia circular detectada: ${circular.join(', ')}`;
-        console.error(errorMsg);
         return { error: errorMsg };
     }
 
@@ -213,13 +248,18 @@ function runExcelLikeCalculations(excelConfig, formData) {
             // Buscar el valor (en la data original o en resultados previos)
             let value = getNestedValue(dataForLookup, dep);
 
-            // CORRECCIÓN 3: Sanitización de Tipos
-            // Convertimos explícitamente a número. Esto arregla problemas donde "100" (string) + "50" (string) = "10050".
-            value = Number(value);
-
-            // Si la conversión falla (ej: texto ingresado) o es infinito, forzamos a 0 para no romper la cadena de cálculos.
-            if (!Number.isFinite(value)) {
-                value = 0;
+            // CORRECCIÓN 3: Sanitización inteligente
+            // Si es un objeto (como el resultado de una regresión), lo pasamos tal cual.
+            // Si es algo que se puede convertir a número, lo convertimos (evita "1" + "1" = "11").
+            if (typeof value === 'object' && value !== null) {
+                // Dejar objeto tal cual para que mathjs acceda a sus propiedades (ej: curva.x)
+            } else {
+                const numericValue = Number(value);
+                if (Number.isFinite(numericValue)) {
+                    value = numericValue;
+                } else {
+                    value = 0; // Fallback para basura o vacíos
+                }
             }
 
             scope[safeDepName] = value;
@@ -239,7 +279,6 @@ function runExcelLikeCalculations(excelConfig, formData) {
             setNestedValue(results, targetPath, roundedResult);
 
         } catch (error) {
-            console.error(`[ERROR CALCULO] para ${targetPath}: "${formulaString}"`, error);
             // En caso de error, devolvemos 0 o NaN según prefieras. 0 es más seguro para no romper la UI.
             setNestedValue(results, targetPath, 0);
         }
@@ -262,7 +301,7 @@ function _processSteps(steps, context) {
                 if (step.output) {
                     setNestedValue(context, step.output, result);
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { }
         }
         // ... (resto de lógica de loops del motor viejo si es necesaria) ...
     }
@@ -276,7 +315,6 @@ export function calcularResultados(calculationConfig, inputData) {
 
     // Detección: Si la config tiene "steps", usamos el motor antiguo
     if (calculationConfig.steps) {
-        console.log("Usando motor de cálculo antiguo (basado en steps).");
         const context = { inputs: { formData: inputData }, vars: {}, results: {}, ...math };
 
         // Inicializar variables
@@ -301,6 +339,8 @@ math.import({
     isFinite: Number.isFinite,
     isObject: (val) => typeof val === 'object' && val !== null,
     values: Object.values,
+    safeDivide,
+    firstPositive,
     regresion_cuadratica: calcularMaximoCuadratico // Exponemos con nombre amigable para las fórmulas DB
 }, {
     override: true

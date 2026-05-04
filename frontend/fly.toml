@@ -3,12 +3,12 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'geoportal-frontend-1'
+app = 'geoportal-frontend-u3zi'
 primary_region = 'gru'
 
 [build]
   [build.args]
-    REACT_APP_API_BASE = "https://geoportal-backend-1.fly.dev"
+    REACT_APP_API_BASE = "https://geoportal-backend-u3zi.fly.dev"
 
 [http_service]
   internal_port = 80
@@ -19,8 +19,6 @@ primary_region = 'gru'
   processes = ['app']
 
 [[vm]]
-  memory = '16gb'
   cpu_kind = "shared"
-  cpus = 8
-  memory_mb = 16384
-
+  cpus = 2
+  memory_mb = 2048

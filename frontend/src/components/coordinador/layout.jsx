@@ -10,6 +10,9 @@ import { VialOptionProvider } from '../../data/contexts/VialOptionContext';
 import { useAuth } from '../../data/contexts/AuthContext';
 import '../ChangelogModal.css';
 
+const EXPANDED_SIDEBAR_WIDTH = '275px';
+const COLLAPSED_SIDEBAR_WIDTH = '60px';
+
 export default function Layout({ children, setPageTitle }) {
   const { selectedProjectName } = useAuth();
   const [collapsed, setCollapsed] = useState(() => window.innerWidth < 768);
@@ -38,7 +41,7 @@ export default function Layout({ children, setPageTitle }) {
     if (window.innerWidth < 768) {
       return '0px'; // On mobile, sidebar overlays, content fills screen
     }
-    return collapsed ? '60px' : '200px'; // On desktop, sidebar pushes content
+    return collapsed ? COLLAPSED_SIDEBAR_WIDTH : EXPANDED_SIDEBAR_WIDTH;
   };
 
   const calculatedMarginLeft = getCalculatedMarginLeft();
@@ -47,7 +50,8 @@ export default function Layout({ children, setPageTitle }) {
     '/coordinador/ingenieria/trafico/trafico',
     '/ingenieria/inventario-vial',
     '/coordinador/dashboardprincipal',
-    '/ingenieria/geologia'
+    '/ingenieria/geologia',
+    '/ingenieria/disenos/geometrico'
   ].includes(location.pathname) || location.pathname.startsWith('/coordinador/recoleccion-datos');
 
 

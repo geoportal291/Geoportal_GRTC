@@ -1184,3 +1184,8 @@ ALTER TABLE geologia_capas ADD COLUMN IF NOT EXISTS drive_url TEXT;
 UPDATE geologia_capas 
 SET drive_url = 'LINK_AQUI' 
 WHERE proyecto_id = :proyecto_id AND tab_name = 'GEOTECNIA';
+
+-- Agregar opcion 'Disenos de Ingenieria' como item de primer nivel en navbar
+INSERT INTO navbar_options (nombre, link, descripcion, icono)
+VALUES ('Diseños de Ingeniería', 'disenos_ingenieria', 'Módulo de diseños de ingeniería con sub-opciones', 'fas fa-drafting-compass')
+ON CONFLICT (link) DO NOTHING;

@@ -18,8 +18,8 @@ body {
   /* RESTORED: Critical for Layout.jsx logic */
   top: 0;
   left: 0;
-  width: 200px;
-  /* RESTORED: Matches Layout.jsx calculation (200px) */
+  width: 275px;
+  /* Keep in sync with Layout.jsx and header.css */
   height: 100vh;
   background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
   /* Premium Gradient */
@@ -233,7 +233,7 @@ body {
 }
 
 .submenu a {
-  padding-left: 48px;
+  padding-left: 32px;
   /* Indent */
   font-size: 0.85rem;
   color: #94a3b8;
@@ -248,6 +248,26 @@ body {
   color: #bfdbfe;
   background: rgba(59, 130, 246, 0.1);
   border-left-color: #3b82f6;
+}
+
+.submenu li.submenu-item-pending a {
+  color: #fca5a5;
+}
+
+.submenu li.submenu-item-pending a i,
+.submenu li.submenu-item-pending a span {
+  color: inherit;
+}
+
+.submenu li.submenu-item-pending a:hover {
+  color: #fecaca;
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+.submenu li.submenu-item-pending.active a {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.12);
+  border-left-color: #ef4444;
 }
 
 /* Arrow */

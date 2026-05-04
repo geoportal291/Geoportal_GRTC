@@ -1,0 +1,91 @@
+==========================================================================
+PLAN DE ARQUITECTURA: MOTOR DE ENSAYOS 100% DINÁMICO (AGNÓSTICO)
+==========================================================================
+
+OBJETIVO: Eliminar cualquier referencia a tamices, granulometría o nombres 
+de campos específicos del código (hardcode) y mover toda la "inteligencia" 
+a configuraciones JSONB en la base de datos.
+
+--------------------------------------------------------------------------
+1. NORMALIZACIÓN BASADA EN REGLAS (DB-DRIVEN)
+--------------------------------------------------------------------------
+Actualizar la tabla 'tipo_ensayo' para incluir una columna 'config_normalizacion'.
+
+Estructura JSON sugerida:
+{
+  "filtros": [
+    {"buscar": "malla", "reemplazar": "", "is_regex": false},
+    {"buscar": "tamiz", "reemplazar": "", "is_regex": false},
+    {"buscar": "(\\d+)?\\s*1/2", "reemplazar": "$1p5", "is_regex": true},
+    {"buscar": "(\\d+)?\\s*3/4", "reemplazar": "$1p75", "is_regex": true}
+  ],
+  "ignorables": ["peso", "gramos", "retenido", "gr", "(gr)"],
+  "simbolos": {
+    "½": "1/2",
+    "¾": "3/4"
+  }
+}
+
+Lógica en ensayosService.js:
+- La función normalizeKey ya no contendrá regex fijos.
+- Cargar reglas de la DB según el tipo_ensayo.
+- Iterar sobre 'filtros' y aplicar sustituciones dinámicamente.
+
+--------------------------------------------------------------------------
+2. CATEGORÍAS DE CAMPO Y METADATOS DE IMPORTACIÓN
+--------------------------------------------------------------------------
+Eliminar la detección por prefijos (como "malla_" o "pass_200").
+
+Estructura en config_tabla:
+Cada fila o campo en la base de datos debe declarar su comportamiento de importación:
+{
+  "key": "malla_3p4",
+  "label": "3/4\"",
+  "import_rules": {
+    "default_subfield": "retenido",
+    "auto_prefix": "tables.granulometria"
+  }
+}
+
+Lógica en ensayosService.js:
+- En lugar de 'if (key.startsWith("malla_"))', usar 'if (row.import_rules.default_subfield)'.
+- El código se vuelve un "ejecutor de peticiones" en lugar de un "adivino".
+
+--------------------------------------------------------------------------
+3. MAPA DE SINÓNIMOS (ALIAS) POR PROPIEDAD
+--------------------------------------------------------------------------
+Ampliar 'config_importacion' para que permita múltiples nombres de Excel para una misma key.
+
+Estructura en config_importacion:
+{
+  "aliases": {
+    "peso_total": ["TOTAL", "PESO SECO", "P. MUESTRA"],
+    "humedad": ["% HUMEDAD", "WATER CONTENT", "W%"],
+    "gradacion": ["GRADACION", "TIPO DE SUELO", "CLASE"]
+  }
+}
+
+Lógica en ensayosService.js:
+- Durante la búsqueda de columnas, si no hay coincidencia exacta o normalizada, buscar en los arrays de 'aliases'.
+
+--------------------------------------------------------------------------
+4. TRANSFORMADORES DE ENTRADA (MAPPING LÓGICO)
+--------------------------------------------------------------------------
+Mover los fallbacks de "si contiene 'total' entonces mapear a 'peso_total'" a una configuración explícita.
+
+Estructura:
+{
+  "heuristic_rules": [
+    {"contains": "total", "map_to": "general_fields.peso_total"},
+    {"contains": "fecha", "is_date": true, "map_to": "fecha"}
+  ]
+}
+
+--------------------------------------------------------------------------
+RESUMEN DE BENEFICIOS:
+--------------------------------------------------------------------------
+1. CÓDIGO LIMPIO: El archivo ensayosService.js reduce su tamaño y complejidad.
+2. CERO REGRESIONES: Modificar un tamiz no requiere tocar el código ni reiniciar el servidor.
+3. ESCALABILIDAD: Soporte para nuevos tipos de ensayos (Química, Concreto, etc.) sin añadir una sola línea de código al backend.
+4. FLEXIBILIDAD: Permite importar Excels de diferentes laboratorios con diferentes nombres de columnas solo ajustando la DB.
+==========================================================================

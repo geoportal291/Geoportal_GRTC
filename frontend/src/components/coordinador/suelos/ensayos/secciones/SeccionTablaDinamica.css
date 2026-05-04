@@ -5,8 +5,8 @@
     /* Por ejemplo, podemos definir un borde o una sombra si queremos diferenciarlo. */
     border: 1px solid #e9ecef;
     border-radius: 8px;
-    overflow: hidden;
-    /* Asegura que la tabla interior respete los bordes redondeados */
+    overflow-x: auto;
+    overflow-y: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
@@ -22,6 +22,44 @@
 .table-responsive .table {
     margin-bottom: 0;
     /* Bootstrap añade un margen, lo removemos porque el contenedor ya lo maneja */
+    white-space: nowrap;
+}
+
+.table-responsive .table th,
+.table-responsive .table td {
+    vertical-align: middle;
+}
+
+.table-responsive .table thead th {
+    white-space: normal;
+    min-width: 60px;
+    background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
+    color: #f9fafb;
+    border-color: #111827;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.table-responsive .table thead th:first-child,
+.table-responsive .table tbody th.dynamic-row-header {
+    background: linear-gradient(180deg, #2f3b4c 0%, #18212f 100%);
+    color: #f9fafb;
+    border-color: #111827;
+    font-weight: 700;
+}
+
+.table-responsive .table tbody th.dynamic-row-header {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+}
+
+.table-responsive .table td .form-control {
+    min-width: 70px;
+}
+
+.grouped-header-table {
+    table-layout: auto;
 }
 
 /* Estilos para los campos dinámicos de cabecera (fields) */

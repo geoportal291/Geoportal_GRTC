@@ -127,9 +127,9 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const fetchTramosList = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/progresivas${selectedProjectId ? `?selectedProjectId=${selectedProjectId}` : ''}`, { headers });
+      const res = await axios.get(`${API_URL}/api/progresivas${selectedProjectId ? `?selectedProjectId=${selectedProjectId}` : ''}`, { headers });
       setTramosList(res.data);
-    } catch (err) { console.error(err); }
+    } catch (err) { }
   }, [API_URL, getAuthHeaders, selectedProjectId]);
 
   const fetchEnsayos = useCallback(async () => {
@@ -137,6 +137,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     try {
       setLoading(true);
       const headers = getAuthHeaders();
+      
       const tiposRes = await axios.get(`${API_URL}/api/tipos-ensayo`, { headers });
       const ensayosRes = await axios.get(`${API_URL}/api/tramos/${tramoId}/ensayos`, { headers });
       
@@ -147,8 +148,13 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
 
       const agrupados = allTipos.reduce((acc, tipo) => {
         const key = tipo.config_key || tipo.id;
+        const filtrados = ensayosList.filter(e => {
+          const eKey = e.config_key || e.tipo_ensayo_id;
+          return eKey == key || e.tipo_ensayo == tipo.id; // Flexibilidad en el match
+        });
+        
         acc[key] = {
-          ensayos: ensayosList.filter(e => (e.config_key || e.tipo_ensayo_id) === key),
+          ensayos: filtrados,
           tipoEnsayoId: tipo.id,
           descripcion: tipo.descripcion,
           configKey: tipo.config_key
@@ -160,8 +166,10 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       setTramo(tramoInfo);
       if (setLastTramoId) setLastTramoId(tramoId);
       sessionStorage.setItem('lastSelectedTramoId', tramoId);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+    } catch (err) { 
+    } finally { 
+      setLoading(false); 
+    }
   }, [tramoId, API_URL, getAuthHeaders, setLastTramoId]);
 
   useEffect(() => { tramoId ? fetchEnsayos() : fetchTramosList(); }, [tramoId, fetchEnsayos, fetchTramosList]);
@@ -175,12 +183,17 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       formData.append('file', file);
       if (currentTargetType) formData.append('configKey', currentTargetType);
       formData.append('isSimulation', true);
-      const res = await axios.post(`${API_URL}/api/tramos/${tramoId}/importar-ensayos`, formData, { headers: { ...headers, 'Content-Type': 'multipart/form-data' } });
+      const res = await axios.post(`${API_URL}/api/proyectos/${selectedProjectId}/tramos/${tramoId}/ensayos/importar`, formData, { 
+        headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+        params: { isSimulation: 'true' }
+      });
       setImportSummary(res.data.summary);
       setFileToImport(file);
       setImportModalOpen(false);
       setShowConfirmationModal(true);
-    } catch (err) { setImportErrors(err.response?.data?.errors || [{ error: 'Error de validación.' }]); }
+    } catch (err) { 
+      setImportErrors(err.response?.data?.details || [{ error: 'Error de validación.' }]); 
+    }
     finally { setImporting(false); }
   };
 
@@ -191,8 +204,11 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       const formData = new FormData();
       formData.append('file', fileToImport);
       if (currentTargetType) formData.append('configKey', currentTargetType);
-      formData.append('isSimulation', false);
-      await axios.post(`${API_URL}/api/tramos/${tramoId}/importar-ensayos`, formData, { headers: { ...headers, 'Content-Type': 'multipart/form-data' } });
+      
+      await axios.post(`${API_URL}/api/proyectos/${selectedProjectId}/tramos/${tramoId}/ensayos/importar`, formData, { 
+        headers: { ...headers, 'Content-Type': 'multipart/form-data' },
+        params: { isSimulation: 'false' }
+      });
       alertify.success('Importación exitosa.');
       setShowConfirmationModal(false);
       fetchEnsayos();
@@ -200,15 +216,50 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     finally { setImporting(false); }
   };
 
-  const handleExportAll = async () => {
+  const handleExportByType = async (e, tipoEnsayoId, descripcion) => {
+    e.stopPropagation();
+    console.log(`[EXPORT DEBUG] Exportando tipo ${tipoEnsayoId} para tramo ${tramoId}. URL: ${API_URL}/api/tramos/${tramoId}/ensayos/export-excel/${tipoEnsayoId}`);
     try {
-      const resp = await axios.get(`${API_URL}/api/tramos/${tramoId}/exportar-ensayos`, { headers: getAuthHeaders(), responseType: 'blob' });
+      const resp = await axios.get(`${API_URL}/api/tramos/${tramoId}/ensayos/export-excel/${tipoEnsayoId}`, { 
+        headers: getAuthHeaders(), 
+        responseType: 'blob' 
+      });
+      console.log(`[EXPORT DEBUG] Recibido blob de tamaño: ${resp.data.size} bytes`);
       const url = window.URL.createObjectURL(new Blob([resp.data]));
-      const link = document.createElement('a'); link.href = url; link.setAttribute('download', `Ensayos_Tramo_${tramoId}.xlsx`); link.click();
-    } catch (err) { alertify.error('Error al exportar.'); }
+      const link = document.createElement('a'); 
+      link.href = url; 
+      link.setAttribute('download', `${descripcion.replace(/ /g, '_')}_Tramo_${tramoId}.xlsx`); 
+      link.click();
+      alertify.success(`Exportando ${descripcion}...`);
+    } catch (err) { 
+      alertify.error('Error al exportar este tipo de ensayo.'); 
+    }
   };
 
-  const handleShowResults = (e, ensayo) => { e.stopPropagation(); setSelectedAssayForResults(ensayo); setResultsModalOpen(true); };
+  const handleExportAll = async () => {
+    console.log(`[EXPORT DEBUG] Exportando todos los ensayos para tramo ${tramoId}`);
+    try {
+      const resp = await axios.get(`${API_URL}/api/tramos/${tramoId}/ensayos/export-excel`, { 
+        headers: getAuthHeaders(), 
+        responseType: 'blob' 
+      });
+      console.log(`[EXPORT DEBUG] Recibido blob total de tamaño: ${resp.data.size} bytes`);
+      const url = window.URL.createObjectURL(new Blob([resp.data]));
+      const link = document.createElement('a'); 
+      link.href = url; 
+      link.setAttribute('download', `Todos_los_Ensayos_Tramo_${tramoId}.xlsx`); 
+      link.click();
+      alertify.success('Exportando todos los ensayos...');
+    } catch (err) { 
+      alertify.error('Error al exportar todos los ensayos.'); 
+    }
+  };
+
+  const handleShowResults = (ev, assay) => {
+    ev.stopPropagation();
+    setSelectedAssayForResults(assay);
+    setResultsModalOpen(true);
+  };
 
   if (!tramoId) return <div className="loading-spinner">Seleccione un tramo...</div>;
   if (loading) return <div className="loading-overlay"><div className="loading-spinner"></div><p>Cargando Dashboard...</p></div>;
@@ -228,14 +279,29 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
           </div>
         </div>
         <div className="header-actions">
-          <button className="btn btn-primary btn-expandable" onClick={() => { setCurrentTargetType(null); setImportModalOpen(true); }}>
-            <i className="fas fa-file-import"></i> <span className="btn-text">Importar Excel</span>
+          <button 
+            className="btn-main-action import btn-expandable-premium" 
+            onClick={() => { setCurrentTargetType(null); setImportModalOpen(true); }}
+            title="Importar todos los ensayos (XLSX)"
+          >
+            <i className="fas fa-file-import"></i>
+            <span className="btn-text">Importar Todo</span>
           </button>
-          <button className="btn btn-success btn-expandable" onClick={handleExportAll}>
-            <i className="fas fa-file-excel"></i> <span className="btn-text">Exportar Todo</span>
+          <button 
+            className="btn-main-action export btn-expandable-premium" 
+            onClick={handleExportAll}
+            title="Exportar todos los ensayos a Excel"
+          >
+            <i className="fas fa-file-excel"></i>
+            <span className="btn-text">Exportar Todo</span>
           </button>
-          <button className="btn btn-back-circle" onClick={() => navigate(-1)} title="Volver">
+          <button 
+            className="btn-main-action back btn-expandable-premium" 
+            onClick={() => navigate(-1)} 
+            title="Volver al panel anterior"
+          >
             <i className="fas fa-arrow-left"></i>
+            <span className="btn-text">Retroceder</span>
           </button>
         </div>
       </header>
@@ -279,15 +345,45 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       <main className="ensayos-grid">
         {Object.entries(ensayosAgrupados).map(([key, grupo], index) => {
           const accent = colors[index % colors.length];
+          const hechosGrupo = grupo.ensayos.filter(e => e.datos_formulario && Object.keys(e.datos_formulario).length > 0).length;
+          const totalGrupo = grupo.ensayos.length;
+          const pctGrupo = totalGrupo > 0 ? (hechosGrupo/totalGrupo)*100 : 0;
+
           return (
             <div className="card-ensayo-tipo" key={key} style={{ '--accent-color': accent }}>
               <div className="card-header" onClick={() => setModalGrupo(grupo)}>
-                <h2>{grupo.descripcion}</h2>
-                <div className="header-actions">
-                  <span className="ensayo-count-badge">{grupo.ensayos.length}</span>
-                  <i className="fas fa-chevron-right"></i>
+                <div className="header-info">
+                  <h2>{grupo.descripcion}</h2>
+                  <div className="header-subtitle">
+                    <span className="ensayo-count-badge">{totalGrupo} ensayos</span>
+                    <span className="mini-progress-text">{hechosGrupo}/{totalGrupo} completados</span>
+                  </div>
+                </div>
+                <div className="header-actions-main">
+                  <div className="action-buttons-group">
+                    <button 
+                      className="btn-card-action import" 
+                      onClick={(e) => { e.stopPropagation(); setCurrentTargetType(key); setImportModalOpen(true); }}
+                      title="Importar este tipo"
+                    >
+                      <i className="fas fa-upload"></i>
+                    </button>
+                    <button 
+                      className="btn-card-action export" 
+                      onClick={(e) => handleExportByType(e, grupo.tipoEnsayoId, grupo.descripcion)}
+                      title="Exportar este tipo"
+                    >
+                      <i className="fas fa-download"></i>
+                    </button>
+                  </div>
+                  <i className="fas fa-chevron-right arrow-indicator"></i>
                 </div>
               </div>
+              
+              <div className="card-progress-bar">
+                <div className="card-progress-fill" style={{ width: `${pctGrupo}%` }}></div>
+              </div>
+
               <div className="card-content">
                 {grupo.ensayos.slice(0, 5).map(e => (
                   <div className="mini-card-ensayo" key={e.id} onClick={() => navigate(`/coordinador/suelos/ensayos/${e.id}`)}>

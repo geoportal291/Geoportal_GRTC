@@ -58,6 +58,7 @@ const amigoSecretoService = require('./services/amigoSecretoService');
 const wishlistService = require('./services/wishlistService');
 const modelos3DService = require('./services/modelos3DService');
 const geologiaCapasService = require('./services/geologiaCapasService'); // NEW
+const { uploadFileToNAS, deleteFileFromNAS } = require('./services/nasStorageService'); // NEW NAS Storage
 
 console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
@@ -66,7 +67,8 @@ const emailService = require('./services/emailService');
 const whitelist = [
     'http://localhost:3000',
     'https://geoportalbetav3.fly.dev',
-    'https://geoportal-frontend-1.fly.dev'
+    'https://geoportal-frontend-1.fly.dev',
+    'https://geoportal-frontend-u3zi.fly.dev'
 ];
 
 const corsOptions = {
@@ -165,7 +167,7 @@ const authenticateToken = async (req, res, next) => {
 // Middleware de autorización específico para Geología
 const authorizeGeologyManage = async (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'No autenticado' });
-    
+
     // Convertir a número por seguridad
     const roleId = parseInt(req.user.rol_id, 10);
     const specialtyId = parseInt(req.user.codigo_esp, 10);
@@ -185,6 +187,19 @@ const authorizeGeologyManage = async (req, res, next) => {
 };
 
 // Middleware de autorización para ADMIN y COORDINADOR PROYECTO
+const authorizeDisenoGeometricoManage = (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'No autenticado' });
+
+    const isAdmin = req.user.rol_nombre === 'ADMIN';
+    const isCoordinator = req.user.rol_nombre === 'COORDINADOR PROYECTO';
+
+    if (isAdmin || isCoordinator) {
+        return next();
+    }
+
+    return res.status(403).json({ error: 'Acceso denegado: No tiene permisos de gestion en Diseno Geometrico' });
+};
+
 const authorizeAdminOrCoordinator = (req, res, next) => {
     if (!req.user || (req.user.rol_nombre !== 'ADMIN' && req.user.rol_nombre !== 'COORDINADOR PROYECTO')) {
         return res.status(403).json({ error: 'Acceso denegado: Rol no autorizado' });
@@ -710,13 +725,13 @@ app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (
                 try {
                     const zip = new AdmZip(req.file.buffer);
                     const zipEntries = zip.getEntries();
-                    
+
                     // Buscamos el primer archivo .xml o .ifc dentro del ZIP
-                    const targetEntry = zipEntries.find(entry => 
+                    const targetEntry = zipEntries.find(entry =>
                         !entry.isDirectory && (
-                        entry.name.toUpperCase().endsWith('.XML') || 
-                        entry.name.toUpperCase().endsWith('.IFC')
-                      )
+                            entry.name.toUpperCase().endsWith('.XML') ||
+                            entry.name.toUpperCase().endsWith('.IFC')
+                        )
                     );
 
                     if (!targetEntry) {
@@ -772,7 +787,7 @@ app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (
                         // MIGRACIÓN A DB: Guardar directamente en la base de datos (PostgreSQL)
                         // para evitar límites de Vercel Blob (1GB)
                         console.log(`[DEBUG 3D] Malla detectada (${metadataPython.obj_content.length} bytes). Guardando en BASE DE DATOS.`);
-                        
+
                         // Límite de seguridad: 10MB para no saturar la DB
                         if (metadataPython.obj_content.length > 10 * 1024 * 1024) {
                             throw new Error('El modelo excede el límite de 10MB para almacenamiento en DB.');
@@ -963,23 +978,14 @@ app.post('/api/proyectos/:id/panel-fotografico/upload-kmz', authenticateToken, a
                 if (imageBuffer) {
                     try {
                         const safeFilename = (imageFilename || `foto_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9-._]/g, '_');
-                        const blobPath = `geologia-fotos/${proyectoId}/${Date.now()}_${safeFilename}`;
-                        const blobOptions = { access: 'public', contentType: 'image/jpeg' };
+                        const targetFolder = getGeologiaStorageFolder(proyectoId, 'panel_fotografico');
+                        const finalFilename = `${Date.now()}_${safeFilename}`;
 
-                        // Limpiar el token de posibles comillas o espacios accidentales
-                        const cleanToken = (blobToken || '').replace(/['"]/g, '').trim();
-                        if (cleanToken) blobOptions.token = cleanToken;
-
-                        const ext = safeFilename.split('.').pop().toLowerCase();
-                        const mimeTypes = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
-                        if (mimeTypes[ext]) blobOptions.contentType = mimeTypes[ext];
-
-                        console.log(`[Panel Fotográfico] Subiendo a Vercel Blob: ${blobPath}...`);
-                        const blob = await put(blobPath, imageBuffer, blobOptions);
-                        imageUrl = blob.url;
+                        console.log(`[Panel Fotográfico] Subiendo a NAS QNAP: ${targetFolder}/${finalFilename}...`);
+                        imageUrl = await uploadFileToNAS(imageBuffer, targetFolder, finalFilename);
                     } catch (putErr) {
-                        console.error(`[Panel Fotográfico] ERROR CRÍTICO VERCEL BLOB (${imageFilename}):`, putErr.message);
-                        if (putErr.response) console.error(`[Panel Fotográfico] Detalle error Vercel:`, putErr.response.data);
+                        console.error(`[Panel Fotográfico] ERROR CRÍTICO NAS QNAP (${imageFilename}):`, putErr.message);
+                        if (putErr.response) console.error(`[Panel Fotográfico] Detalle error NAS:`, putErr.response.data);
                     }
                 } else {
                     console.warn(`[Panel Fotográfico] No se encontró buffer de imagen para ${nombre || 'elemento sin nombre'} (${imageFilename})`);
@@ -996,7 +1002,7 @@ app.post('/api/proyectos/:id/panel-fotografico/upload-kmz', authenticateToken, a
 
         if (validResults.length === 0 && results.length > 0) {
             console.error("[Panel Fotográfico] No se pudo subir ninguna imagen de las encontradas en el KMZ.");
-            throw new Error("No se pudo subir ninguna imagen a Vercel Blob. Verifique sus tokens de acceso.");
+            throw new Error("No se pudo subir ninguna imagen al NAS. Verifique la configuración de WebDAV y los permisos.");
         }
 
         // 6. Inserción en BD
@@ -1242,18 +1248,22 @@ app.get('/api/amigo-secreto/wishlist/:userId', authenticateToken, async (req, re
 // Get all assays for a specific tramo
 app.get('/api/tramos/:tramoId/ensayos', authenticateToken, async (req, res) => {
     const { tramoId } = req.params;
+    console.log(`[DEBUG] GET /api/tramos/${tramoId}/ensayos hit`);
     try {
         const ensayosList = await ensayosService.getEnsayosByTramoId(tramoId);
+        console.log(`[DEBUG] ensayosList count: ${ensayosList.length}`);
         const tramoInfo = await progresivasService.getProgresivaById(tramoId);
+        console.log(`[DEBUG] tramoInfo found: ${!!tramoInfo}`);
         res.json({
             ensayos: ensayosList,
             tramo: tramoInfo
         });
     } catch (err) {
-        console.error(`Error al obtener ensayos para el tramo ${tramoId}:`, err);
+        console.error(`[ERROR] Error al obtener ensayos para el tramo ${tramoId}:`, err);
         res.status(500).json({ error: 'Error al obtener los ensayos del tramo', details: err.message });
     }
 });
+
 
 // Get all assays from all canteras
 app.get('/api/ensayos/canteras', authenticateToken, async (req, res) => {
@@ -1328,7 +1338,7 @@ app.put('/api/ensayos/:id/base', authenticateToken, async (req, res) => {
 });
 
 // Obtener todos los ensayos
-app.get('/ensayos', async (req, res) => {
+const handleGetEnsayos = async (req, res) => {
     try {
         const ensayos = await ensayosService.getEnsayos();
         res.json(ensayos);
@@ -1336,7 +1346,10 @@ app.get('/ensayos', async (req, res) => {
         console.error('Error al obtener ensayos:', err);
         res.status(500).json({ error: 'Error al obtener ensayos', details: err.message });
     }
-});
+};
+
+app.get('/ensayos', handleGetEnsayos);
+app.get('/api/ensayos', authenticateToken, handleGetEnsayos);
 
 // GET /api/ensayos/details - Nueva ruta para obtener detalles completos de ensayos
 app.get('/api/ensayos/details', async (req, res) => {
@@ -1925,6 +1938,43 @@ async function uploadFileToVercelBlob(file) {
     }
 }
 
+function sanitizeTrafficPathSegment(value, fallback = 'archivo') {
+    const sanitized = String(value || '')
+        .trim()
+        .replace(/[^a-zA-Z0-9-_]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+    return sanitized || fallback;
+}
+
+async function uploadTrafficFileToNAS(file, category, description, index, options = {}) {
+    try {
+        const targetFolder = ['trafico', sanitizeTrafficPathSegment(category, 'general')];
+        const descriptionSegment = sanitizeTrafficPathSegment(description, options.defaultDescription || 'archivo');
+
+        if (options.useDescriptionFolder !== false) {
+            targetFolder.push(descriptionSegment);
+        }
+
+        const originalExtension = path.extname(file.originalname);
+        const explicitBaseName = options.fileBaseName
+            ? sanitizeTrafficPathSegment(options.fileBaseName, descriptionSegment)
+            : null;
+        const fallbackBaseName = sanitizeTrafficPathSegment(path.basename(file.originalname, originalExtension), descriptionSegment);
+        const fileBaseName = explicitBaseName || fallbackBaseName;
+        const fileSuffix = index !== undefined && index !== null && index !== ''
+            ? `_${sanitizeTrafficPathSegment(index, '0')}`
+            : `_${Date.now()}`;
+        const finalFilename = `${fileBaseName}${fileSuffix}${originalExtension}`;
+
+        return await uploadFileToNAS(file.buffer, targetFolder.join('/'), finalFilename);
+    } catch (error) {
+        console.error(`Error al subir archivo de tráfico (${category}) al NAS:`, error);
+        throw new Error(`Error al subir archivo de tráfico (${category}) al NAS`);
+    }
+}
+
 // Crear un nuevo anuncio con archivo y subirlo
 app.post('/anuncios', authenticateToken, upload.single('file'), async (req, res) => {
     const { titulo, contenido, fecha_inicio, fecha_fin, usuario_id } = req.body;
@@ -1957,7 +2007,7 @@ app.post('/api/trafico/upload-image', upload.single('image'), async (req, res) =
         if (!stationId) {
             return res.status(400).json({ error: 'stationId es requerido.' });
         }
-        const imageUrl = await uploadFileToVercelBlob(req.file);
+        const imageUrl = await uploadTrafficFileToNAS(req.file, 'general', description, null);
         const result = await db.query(
             'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date) VALUES ($1, $2, $3, $4) RETURNING *',
             [stationId, imageUrl, description, upload_date]
@@ -1969,90 +2019,6 @@ app.post('/api/trafico/upload-image', upload.single('image'), async (req, res) =
     }
 });
 
-// Nueva función para subir imagenes de estación de control a Vercel Blob
-async function uploadStationImageToVercelBlob(file, description, index) {
-    try {
-        const sanitizedDescription = description.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const originalExtension = path.extname(file.originalname);
-        const filename = `trafico/estacion/${sanitizedDescription}/${sanitizedDescription}_${index}${originalExtension}`;
-        const blob = await put(filename, file.buffer, {
-            access: 'public',
-            allowOverwrite: true,
-        });
-        return blob.url;
-    } catch (error) {
-        console.error('Error al subir archivo de estación a Vercel Blob:', error);
-        throw new Error('Error al subir archivo de estación a Vercel Blob');
-    }
-}
-
-// Nueva funcion para subir imagenes de tramo a Vercel Blob
-async function uploadTramoImageToVercelBlob(file, description, index) {
-    try {
-        const sanitizedDescription = description.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const originalExtension = path.extname(file.originalname);
-        const filename = `trafico/tramo/${sanitizedDescription}/${sanitizedDescription}_${index}${originalExtension}`;
-        const blob = await put(filename, file.buffer, {
-            access: 'public',
-            allowOverwrite: true,
-        });
-        return blob.url;
-    } catch (error) {
-        console.error('Error al subir archivo de tramo a Vercel Blob:', error);
-        throw new Error('Error al subir archivo de tramo a Vercel Blob');
-    }
-}
-
-// Nueva función para subir imagenes de conteo vehicular a Vercel Blob
-async function uploadConteoVehicularImageToVercelBlob(file, description, index) {
-    try {
-        const sanitizedDescription = description.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const originalExtension = path.extname(file.originalname);
-        const filename = `trafico/conteovehicular/${sanitizedDescription}/${sanitizedDescription}_${index}${originalExtension}`;
-        const blob = await put(filename, file.buffer, {
-            access: 'public',
-            allowOverwrite: true,
-        });
-        return blob.url;
-    } catch (error) {
-        console.error('Error al subir archivo de conteo vehicular a Vercel Blob:', error);
-        throw new Error('Error al subir archivo de conteo vehicular a Vercel Blob');
-    }
-}
-
-// Nueva funcion para subir archivos de censo de cargas a Vercel Blob
-async function uploadCensoDeCargasFileToVercelBlob(file, description, index) {
-    try {
-        const sanitizedDescription = description.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const originalExtension = path.extname(file.originalname);
-        const filename = `trafico/censodecargas/${sanitizedDescription}/${sanitizedDescription}_${index}${originalExtension}`;
-        const blob = await put(filename, file.buffer, {
-            access: 'public',
-            allowOverwrite: true,
-        });
-        return blob.url;
-    } catch (error) {
-        console.error('Error al subir archivo de censo de cargas a Vercel Blob:', error);
-        throw new Error('Error al subir archivo de censo de cargas a Vercel Blob');
-    }
-}
-
-// Nueva funcion para subir archivos de encuesta de velocidad a Vercel Blob
-async function uploadEncuestaVelocidadFileToVercelBlob(file, description, index) {
-    try {
-        const sanitizedDescription = description.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const originalExtension = path.extname(file.originalname);
-        const filename = `trafico/encuestavelocidad/${sanitizedDescription}/${sanitizedDescription}_${index}${originalExtension}`;
-        const blob = await put(filename, file.buffer, {
-            access: 'public',
-            allowOverwrite: true,
-        });
-        return blob.url;
-    } catch (error) {
-        console.error('Error al subir archivo de encuesta de velocidad a Vercel Blob:', error);
-        throw new Error('Error al subir archivo de encuesta de velocidad a Vercel Blob');
-    }
-}
 // Nuevo endpoint para subir imágenes de estación de control
 app.post('/api/trafico/estacion/upload-image', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('image'), async (req, res) => {
     try {
@@ -2070,7 +2036,7 @@ app.post('/api/trafico/estacion/upload-image', authenticateToken, authorizePermi
             return res.status(404).json({ error: `La estación con id ${stationId} no fue encontrada.` });
         }
 
-        const imageUrl = await uploadStationImageToVercelBlob(req.file, description, index);
+        const imageUrl = await uploadTrafficFileToNAS(req.file, 'estacion', description, index);
 
         //insertar la nueva imagen en la tabla trafico_imagenes
         const result = await db.query(
@@ -2099,7 +2065,7 @@ app.post('/api/trafico/tramo/upload-image', authenticateToken, authorizePermissi
         if (!tramoId) {
             return res.status(400).json({ error: 'tramoId es requerido.' });
         }
-        const imageUrl = await uploadTramoImageToVercelBlob(req.file, description, index);
+        const imageUrl = await uploadTrafficFileToNAS(req.file, 'tramo', description, index);
 
         // Reutilizamos la tabla trafico_imagenes, guardando el tramoId en la columna station_id
         const result = await db.query(
@@ -2124,7 +2090,7 @@ app.post('/api/trafico/conteovehicular/upload-file', authenticateToken, authoriz
         if (!stationId) {
             return res.status(400).json({ error: 'stationId es requerido.' });
         }
-        const fileUrl = await uploadConteoVehicularImageToVercelBlob(req.file, description, index);
+        const fileUrl = await uploadTrafficFileToNAS(req.file, 'conteovehicular', description, index);
 
         const result = await db.query(
             'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
@@ -2138,22 +2104,6 @@ app.post('/api/trafico/conteovehicular/upload-file', authenticateToken, authoriz
     }
 });
 
-// Nueva función para subir archivos Excel de conteo vehicular a Vercel Blob
-async function uploadConteoVehicularExcelToVercelBlob(file, stationId) {
-    try {
-        const originalExtension = path.extname(file.originalname);
-        const filename = `trafico/reportconteo/${stationId}_${Date.now()}${originalExtension}`;
-        const blob = await put(filename, file.buffer, {
-            access: 'public',
-            allowOverwrite: true,
-        });
-        return blob.url;
-    } catch (error) {
-        console.error('Error al subir archivo Excel de conteo vehicular a Vercel Blob:', error);
-        throw new Error('Error al subir archivo Excel de conteo vehicular a Vercel Blob');
-    }
-}
-
 // Nuevo endpoint para subir archivos Excel de conteo vehicular
 app.post('/api/trafico/conteovehicular/upload-excel', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('excelFile'), async (req, res) => {
     try {
@@ -2164,7 +2114,10 @@ app.post('/api/trafico/conteovehicular/upload-excel', authenticateToken, authori
         if (!stationId) {
             return res.status(400).json({ error: 'stationId es requerido.' });
         }
-        const excelUrl = await uploadConteoVehicularExcelToVercelBlob(req.file, stationId);
+        const excelUrl = await uploadTrafficFileToNAS(req.file, 'reportconteo', stationId, Date.now(), {
+            useDescriptionFolder: false,
+            fileBaseName: stationId
+        });
         const { DateTime } = require('luxon'); // Asegúrate de tener luxon importado al inicio si no lo está
         const upload_date = DateTime.utc().toISODate();
 
@@ -2236,10 +2189,10 @@ app.post('/api/kml/upload', authenticateToken, authorizePermission('proyectos', 
     }
 });
 
-app.get('/api/tipoensayos', authenticateToken, async (req, res) => {
+app.get('/api/tipos-ensayo', authenticateToken, async (req, res) => {
     try {
-        const result = await db.query('SELECT id, codigo, descripcion FROM tipo_ensayo ORDER BY descripcion');
-        console.log('DEBUG: Backend /tipo-ensayos response rows:', result.rows.length);
+        const result = await db.query('SELECT * FROM tipo_ensayo ORDER BY descripcion');
+        console.log('DEBUG: Backend /api/tipos-ensayo response rows:', result.rows.length);
         res.json(result.rows);
     } catch (err) {
         console.error('❌ Error al obtener tipos de ensayo:', err);
@@ -2800,8 +2753,8 @@ app.get('/api/trafico/conteovehicular/latest-excel/:stationId', async (req, res)
     const { stationId } = req.params;
     try {
         const result = await db.query(
-            'SELECT image_url FROM trafico_imagenes WHERE source_type = $1 ORDER BY upload_date DESC, id DESC LIMIT 1',
-            ['conteo_vehicular_excel']
+            'SELECT image_url FROM trafico_imagenes WHERE station_id = $1 AND source_type = $2 ORDER BY upload_date DESC, id DESC LIMIT 1',
+            [stationId, 'conteo_vehicular_excel']
         );
         if (result.rows.length > 0) {
             res.json({ status: 'ok', excelUrl: result.rows[0].image_url });
@@ -2814,23 +2767,6 @@ app.get('/api/trafico/conteovehicular/latest-excel/:stationId', async (req, res)
     }
 });
 
-// Nueva función para subir archivos de encuesta origen destino a Vercel Blob
-async function uploadEncuestaOrigenDestinoFileToVercelBlob(file, description, index) {
-    try {
-        const sanitizedDescription = description.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const originalExtension = path.extname(file.originalname);
-        const filename = `trafico/encuestaorigendestino/${sanitizedDescription}/${sanitizedDescription}_${index}${originalExtension}`;
-        const blob = await put(filename, file.buffer, {
-            access: 'public',
-            allowOverwrite: true,
-        });
-        return blob.url;
-    } catch (error) {
-        console.error('Error al subir archivo de encuesta origen destino a Vercel Blob:', error);
-        throw new Error('Error al subir archivo de encuesta origen destino a Vercel Blob');
-    }
-}
-
 // Nuevo endpoint para subir archivos de encuesta origen destino
 app.post('/api/trafico/encuestaorigendestino/upload-file', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('file'), async (req, res) => {
     try {
@@ -2841,7 +2777,7 @@ app.post('/api/trafico/encuestaorigendestino/upload-file', authenticateToken, au
         if (!stationId) {
             return res.status(400).json({ error: 'stationId es requerido.' });
         }
-        const fileUrl = await uploadEncuestaOrigenDestinoFileToVercelBlob(req.file, description, index);
+        const fileUrl = await uploadTrafficFileToNAS(req.file, 'encuestaorigendestino', description, index);
 
         // Insertar el nuevo archivo en la tabla trafico_imagenes
         const result = await db.query(
@@ -2865,7 +2801,7 @@ app.post('/api/trafico/censodecargas/upload-file', authenticateToken, authorizeP
         if (!stationId) {
             return res.status(400).json({ error: 'stationId es requerido.' });
         }
-        const fileUrl = await uploadCensoDeCargasFileToVercelBlob(req.file, description, index);
+        const fileUrl = await uploadTrafficFileToNAS(req.file, 'censodecargas', description, index);
 
         // Insertar el nuevo archivo en la tabla trafico_imagenes
         const result = await db.query(
@@ -2889,7 +2825,7 @@ app.post('/api/trafico/encuestavelocidad/upload-file', authenticateToken, author
         if (!sectionId) {
             return res.status(400).json({ error: 'sectionId es requerido.' });
         }
-        const fileUrl = await uploadEncuestaVelocidadFileToVercelBlob(req.file, description, index);
+        const fileUrl = await uploadTrafficFileToNAS(req.file, 'encuestavelocidad', description, index);
 
         // Insertar el nuevo archivo en la tabla trafico_imagenes
         const result = await db.query(
@@ -2907,7 +2843,19 @@ app.post('/api/trafico/encuestavelocidad/upload-file', authenticateToken, author
 app.delete('/api/trafico/delete-image-group', async (req, res) => {
     const { stationId, description, uploadDate } = req.body;
     try {
-        // Lógica para eliminar las imágenes de la base de datos
+        const imagesResult = await db.query(
+            'SELECT image_url FROM trafico_imagenes WHERE station_id = $1 AND description = $2 AND upload_date = $3',
+            [stationId, description, uploadDate]
+        );
+
+        for (const row of imagesResult.rows) {
+            try {
+                await deleteFileFromNAS(row.image_url);
+            } catch (nasError) {
+                console.warn(`No se pudo eliminar el archivo del NAS: ${row.image_url}.`, nasError.message);
+            }
+        }
+
         const result = await db.query(
             'DELETE FROM trafico_imagenes WHERE station_id = $1 AND description = $2 AND upload_date = $3',
             [stationId, description, uploadDate]
@@ -2928,8 +2876,12 @@ app.delete('/api/trafico/delete-image-group', async (req, res) => {
 app.delete('/api/trafico/delete-image', async (req, res) => {
     const { imageUrl } = req.body;
     try {
-        // Eliminar de Vercel Blob
-        await del(imageUrl);
+        try {
+            await deleteFileFromNAS(imageUrl);
+        } catch (nasError) {
+            console.warn(`No se pudo eliminar el archivo del NAS: ${imageUrl}.`, nasError.message);
+        }
+
         // Eliminar de la base de datos
         const result = await db.query(
             'DELETE FROM trafico_imagenes WHERE image_url = $1',
@@ -3364,7 +3316,7 @@ app.get('/api/proyectos/:projectId/history', authenticateToken, authorizeAdminOr
 });
 
 // NEW: Endpoint to upload a KML file for a project
-app.post('/api/proyectos/:proyectoId/upload-kml', authenticateToken, upload.single('kmlFile'), async (req, res) => {
+app.post('/api/proyectos/:proyectoId/upload-kml', authenticateToken, authorizePermission('proyectos', 'edicion'), upload.single('kmlFile'), async (req, res) => {
     const { proyectoId } = req.params;
     const { file } = req; // Multer places the file here
     const userId = req.user.id; // Get authenticated user ID
@@ -3397,18 +3349,35 @@ app.get('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
         let result;
         if (section) {
             // First try the new section-aware table
-            result = await db.query('SELECT kml_url FROM proyectos_secciones_kml WHERE id_proyecto = $1 AND seccion = $2', [id, section]);
+            result = await db.query(
+                `SELECT kml_url
+                 FROM proyectos_secciones_kml
+                 WHERE id_proyecto = $1 AND seccion = $2 AND NULLIF(kml_url, '') IS NOT NULL`,
+                [id, section]
+            );
 
             // Fallback for 'invvial' section if not found in the new table
             if (result.rows.length === 0 && section === 'invvial') {
-                result = await db.query('SELECT kml_url FROM invvial WHERE id_proyecto = $1', [id]);
+                result = await db.query(
+                    `SELECT COALESCE(NULLIF(i.kml_url, ''), NULLIF(p.url_kml, '')) AS kml_url
+                     FROM proyectos p
+                     LEFT JOIN invvial i ON i.id_proyecto = p.id
+                     WHERE p.id = $1`,
+                    [id]
+                );
             }
         } else {
-            // Legacy/default behavior: fallback to invvial table
-            result = await db.query('SELECT kml_url FROM invvial WHERE id_proyecto = $1', [id]);
+            // Legacy/default behavior with fallback to the project-level URL
+            result = await db.query(
+                `SELECT COALESCE(NULLIF(i.kml_url, ''), NULLIF(p.url_kml, '')) AS kml_url
+                 FROM proyectos p
+                 LEFT JOIN invvial i ON i.id_proyecto = p.id
+                 WHERE p.id = $1`,
+                [id]
+            );
         }
 
-        if (result.rows.length > 0) {
+        if (result.rows.length > 0 && result.rows[0].kml_url) {
             res.json({ url: result.rows[0].kml_url });
         } else {
             // Return 200 with null instead of 404 to avoid console errors in the map component
@@ -3462,26 +3431,14 @@ app.post('/api/proyectos/:projectId/upload-kml', authenticateToken, authorizePer
     }
 
     try {
-        // 1. Process KML/KMZ file using kmlService
-        const kmlResult = await kmlService.createKmlTrazado(req.file, userId);
-        const kmlTrazadoId = kmlResult.id;
-
-        // 2. Link the new KML Trazado to the Project
-        await db.query(
-            'UPDATE proyectos SET kml_trazado_id = $1, update_at = NOW() WHERE id = $2',
-            [kmlTrazadoId, projectId]
-        );
-
-        // 3. (Optional) Audit log could be added here
-
-        res.status(201).json({
-            message: 'Archivo KML subido y procesado correctamente.',
-            kml_filename: kmlResult.kml_filename,
-            id: kmlTrazadoId
-        });
+        const result = await proyectosService.uploadKmlToProyecto(projectId, req.file, userId);
+        res.status(200).json(result);
 
     } catch (error) {
         console.error(`Error uploading KML for project ${projectId}:`, error);
+        if (error.isCustomError) {
+            return res.status(error.statusCode || 400).json({ error: error.message });
+        }
         res.status(error.statusCode || 500).json({ error: error.message || 'Error interno al procesar KML.' });
     }
 });
@@ -4452,7 +4409,8 @@ app.post(
                 tramoId,
                 file.buffer,
                 req.user,
-                isSimulation === 'true' // PASAR el booleano
+                isSimulation === 'true', // PASAR el booleano
+                { configKey: req.body?.configKey || null }
             );
             res.status(201).json(result);
         } catch (err) {
@@ -4944,6 +4902,12 @@ app.post('/api/trafico/guardar-trazado', authenticateToken, authorizeAdminOrCoor
 app.delete('/api/trafico/delete-image', authenticateToken, async (req, res) => {
     const { stationId, imageUrl } = req.body;
     try {
+        try {
+            await deleteFileFromNAS(imageUrl);
+        } catch (nasError) {
+            console.warn(`No se pudo eliminar el archivo del NAS: ${imageUrl}.`, nasError.message);
+        }
+
         const result = await db.query('DELETE FROM trafico_imagenes WHERE station_id = $1 AND image_url = $2', [stationId, imageUrl]);
         if (result.rowCount > 0) {
             res.json({ status: 'ok', message: 'Imagen eliminada correctamente' });
@@ -4960,6 +4924,19 @@ app.delete('/api/trafico/delete-image', authenticateToken, async (req, res) => {
 app.delete('/api/trafico/delete-image-group', authenticateToken, async (req, res) => {
     const { stationId, description, uploadDate } = req.body;
     try {
+        const imagesResult = await db.query(
+            'SELECT image_url FROM trafico_imagenes WHERE station_id = $1 AND description = $2 AND upload_date = $3',
+            [stationId, description, uploadDate]
+        );
+
+        for (const row of imagesResult.rows) {
+            try {
+                await deleteFileFromNAS(row.image_url);
+            } catch (nasError) {
+                console.warn(`No se pudo eliminar el archivo del NAS: ${row.image_url}.`, nasError.message);
+            }
+        }
+
         const result = await db.query('DELETE FROM trafico_imagenes WHERE station_id = $1 AND description = $2 AND upload_date = $3', [stationId, description, uploadDate]);
         if (result.rowCount > 0) {
             res.json({ status: 'ok', message: `Se eliminaron ${result.rowCount} imágenes del grupo.` });
@@ -4988,6 +4965,16 @@ app.get('/api/trafico/download-excel', async (req, res) => {
 
         // Set the content type from the original response
         res.setHeader('Content-Type', response.headers['content-type']);
+        if (response.headers['content-length']) {
+            res.setHeader('Content-Length', response.headers['content-length']);
+        }
+        if (response.headers['content-disposition']) {
+            res.setHeader('Content-Disposition', response.headers['content-disposition']);
+        } else {
+            const pathname = new URL(url).pathname;
+            const fallbackFilename = decodeURIComponent(path.basename(pathname)) || 'archivo';
+            res.setHeader('Content-Disposition', `attachment; filename="${fallbackFilename}"`);
+        }
         // Pipe the stream to the response
         response.data.pipe(res);
 
@@ -5799,6 +5786,18 @@ app.get('/api/proyectos/assigned-detailed', authenticateToken, async (req, res) 
 // ==========================================
 
 // --- GEOLOGÍA CAPAS (KML/KMZ/Shapefiles RAR/ZIP) ---
+const sanitizeGeologiaStorageSegment = (value) => String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9-_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+
+const getGeologiaStorageFolder = (proyectoId, bucketName) => {
+    const safeBucket = sanitizeGeologiaStorageSegment(bucketName) || 'otros';
+    return `geologia/${proyectoId}/${safeBucket}`;
+};
+
 const ensureGeologiaCapasDriveUrlColumn = async () => {
     await db.query('ALTER TABLE geologia_capas ADD COLUMN IF NOT EXISTS drive_url TEXT;');
 };
@@ -5807,7 +5806,7 @@ app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeGeolog
     try {
         await ensureGeologiaCapasDriveUrlColumn();
         const proyectoId = parseInt(req.params.id);
-        const tabName = req.body.tabName;
+        const tabName = String(req.body.tabName || '').trim();
         const file = req.file;
 
         if (!file || !tabName) return res.status(400).json({ status: 'error', message: 'Faltan datos' });
@@ -5815,20 +5814,29 @@ app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeGeolog
         console.log(`📂 [Geología] Iniciando subida para pID: ${proyectoId}, Tab: ${tabName}, Archivo: ${file.originalname} (${file.size} bytes)`);
 
         const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
-        const filename = `geologia/${proyectoId}/${tabName}/${Date.now()}_${cleanFilename}`;
+        const remoteFilename = `${Date.now()}_${cleanFilename}`;
+        const targetFolder = getGeologiaStorageFolder(proyectoId, tabName);
+        const storagePath = `${targetFolder}/${remoteFilename}`;
+        let fileUrl;
 
-        // Upload original file to Vercel Blob
-        let blob;
         try {
-            console.log(`☁️ [Geología] Intentando subir a Vercel Blob...`);
-            blob = await put(filename, file.buffer, {
-                access: 'public',
-                token: process.env.BLOB_READ_WRITE_TOKEN_GEOLOGIA || process.env.BLOB_READ_WRITE_TOKEN
-            });
-            console.log(`✅ [Geología] Subido a Vercel Blob: ${blob.url}`);
-        } catch (blobErr) {
-            console.error('❌ [Geología] Error al subir a Vercel Blob:', blobErr);
-            throw new Error(`Falla en Vercel Blob: ${blobErr.message}`);
+            if (true) {
+                console.log(`🗄️ [Geología] Subiendo archivo al NAS: ${storagePath}`);
+                fileUrl = await uploadFileToNAS(file.buffer, targetFolder, remoteFilename);
+                console.log(`✅ [Geología] Subido al NAS: ${fileUrl}`);
+            } else {
+                console.log(`☁️ [Geología] Intentando subir a Vercel Blob: ${storagePath}`);
+                const blob = await put(storagePath, file.buffer, {
+                    access: 'public',
+                    token: process.env.BLOB_READ_WRITE_TOKEN_GEOLOGIA || process.env.BLOB_READ_WRITE_TOKEN
+                });
+                fileUrl = blob.url;
+                console.log(`✅ [Geología] Subido a Vercel Blob: ${fileUrl}`);
+            }
+        } catch (storageErr) {
+            const storageName = 'NAS';
+            console.error(`❌ [Geología] Error al subir a ${storageName}:`, storageErr);
+            throw new Error(`Falla en ${storageName}: ${storageErr.message}`);
         }
 
         let geojsonData = null;
@@ -5908,11 +5916,314 @@ app.post('/api/proyectos/:id/geologia-capas', authenticateToken, authorizeGeolog
                 geojson_data = EXCLUDED.geojson_data, uploaded_at = CURRENT_TIMESTAMP
             RETURNING *;
         `;
-        const dbResult = await db.query(query, [proyectoId, tabName, blob.url, file.originalname, geojsonData ? JSON.stringify(geojsonData) : null]);
+        const dbResult = await db.query(query, [proyectoId, tabName, fileUrl, file.originalname, geojsonData ? JSON.stringify(geojsonData) : null]);
         console.log(`✅ [Geología] Guardado exitosamente en ID: ${dbResult.rows[0]?.id}`);
         res.status(200).json({ status: 'success', data: dbResult.rows[0] });
     } catch (err) {
         console.error('❌ [Geología] Error Final:', err.message);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+const ensureDisenoGeometricoCapasTable = async () => {
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS diseno_geometrico_capas (
+            id SERIAL PRIMARY KEY,
+            proyecto_id INTEGER NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+            tab_name VARCHAR(100) NOT NULL,
+            file_url TEXT NOT NULL DEFAULT '',
+            file_name VARCHAR(255) NOT NULL DEFAULT '',
+            drive_url TEXT,
+            geojson_data JSONB,
+            uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (proyecto_id, tab_name)
+        );
+    `);
+
+    await db.query('ALTER TABLE diseno_geometrico_capas ADD COLUMN IF NOT EXISTS drive_url TEXT;');
+    await db.query('ALTER TABLE diseno_geometrico_capas ADD COLUMN IF NOT EXISTS geojson_data JSONB;');
+    await db.query('ALTER TABLE diseno_geometrico_capas ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;');
+    await db.query("ALTER TABLE diseno_geometrico_capas ALTER COLUMN file_url SET DEFAULT '';");
+    await db.query("ALTER TABLE diseno_geometrico_capas ALTER COLUMN file_name SET DEFAULT '';");
+};
+
+const ensureFeatureCollection = (value) => {
+    if (!value || value.type !== 'FeatureCollection' || !Array.isArray(value.features)) {
+        return { type: 'FeatureCollection', features: [] };
+    }
+
+    return value;
+};
+
+app.post('/api/proyectos/:id/diseno-geometrico-capas/blank', authenticateToken, authorizeDisenoGeometricoManage, async (req, res) => {
+    try {
+        await ensureDisenoGeometricoCapasTable();
+
+        const proyectoId = parseInt(req.params.id, 10);
+        const tabName = String(req.body?.tabName || '').trim();
+        const displayName = String(req.body?.displayName || '').trim();
+
+        if (!proyectoId || !tabName) {
+            return res.status(400).json({ status: 'error', message: 'Faltan datos para crear la capa vacia' });
+        }
+
+        const result = await db.query(`
+            INSERT INTO diseno_geometrico_capas (proyecto_id, tab_name, file_url, file_name, geojson_data)
+            VALUES ($1, $2, '', $3, $4)
+            RETURNING *;
+        `, [
+            proyectoId,
+            tabName,
+            displayName || tabName,
+            JSON.stringify({ type: 'FeatureCollection', features: [] })
+        ]);
+
+        res.status(200).json({ status: 'success', data: result.rows[0] });
+    } catch (err) {
+        console.error('Error en Diseno Geometrico POST /blank:', err);
+        if (err.code === '23505') {
+            return res.status(409).json({ status: 'error', message: 'Ya existe una capa con ese nombre' });
+        }
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.post('/api/proyectos/:id/diseno-geometrico-capas', authenticateToken, authorizeDisenoGeometricoManage, upload.single('archivo'), async (req, res) => {
+    try {
+        await ensureDisenoGeometricoCapasTable();
+
+        const proyectoId = parseInt(req.params.id, 10);
+        const tabName = String(req.body.tabName || '').trim();
+        const displayName = String(req.body.displayName || '').trim();
+        const file = req.file;
+
+        if (!file || !tabName) {
+            return res.status(400).json({ status: 'error', message: 'Faltan datos para registrar la capa' });
+        }
+
+        const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
+        const filename = `diseno-geometrico/${proyectoId}/${tabName}/${Date.now()}_${cleanFilename}`;
+
+        const blob = await put(filename, file.buffer, {
+            access: 'public',
+            token: process.env.BLOB_READ_WRITE_TOKEN_GEOLOGIA || process.env.BLOB_READ_WRITE_TOKEN
+        });
+
+        let geojsonData = null;
+        const ext = path.extname(file.originalname).toLowerCase();
+
+        if (ext === '.rar' || ext === '.zip') {
+            const formData = new FormData();
+            formData.append('file', file.buffer, { filename: file.originalname });
+
+            const pythonRes = await axios.post('http://127.0.0.1:8000/convert-shapefile', formData, {
+                headers: formData.getHeaders(),
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity,
+                timeout: 300000
+            });
+
+            if (pythonRes.data?.status === 'ok' && pythonRes.data?.geojson) {
+                geojsonData = pythonRes.data.geojson;
+            } else {
+                throw new Error(`Respuesta invalida del conversor de shapefiles: ${JSON.stringify(pythonRes.data)}`);
+            }
+        } else if (ext === '.kml' || ext === '.kmz') {
+            let kmlText = '';
+
+            if (ext === '.kmz') {
+                const zip = new AdmZip(file.buffer);
+                const zipEntries = zip.getEntries();
+                const kmlEntry = zipEntries.find((entry) => entry.entryName.toLowerCase().endsWith('.kml'));
+
+                if (!kmlEntry) {
+                    throw new Error('No se encontro ningun archivo KML dentro del KMZ');
+                }
+
+                kmlText = zip.readAsText(kmlEntry);
+            } else {
+                kmlText = file.buffer.toString('utf-8');
+            }
+
+            const doc = new DOMParser().parseFromString(kmlText, 'text/xml');
+            const { injectFoldersToGeoJSON } = require('./utils/kmlFolderInjector');
+            geojsonData = injectFoldersToGeoJSON(kmlText, kml(doc));
+
+            if (geojsonData?.features) {
+                const fallbackLayerName = displayName || cleanFilename.replace(/\.(kmz|kml)$/i, '').replace(/^[0-9]+_/, '');
+                geojsonData.features.forEach((feature) => {
+                    if (!feature.properties) feature.properties = {};
+                    feature.properties._layer_name = feature.properties.folder || feature.properties.type || fallbackLayerName;
+                });
+            }
+        }
+
+        const savedName = displayName || file.originalname;
+        const result = await db.query(`
+            INSERT INTO diseno_geometrico_capas (proyecto_id, tab_name, file_url, file_name, geojson_data)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (proyecto_id, tab_name) DO UPDATE
+            SET file_url = EXCLUDED.file_url,
+                file_name = EXCLUDED.file_name,
+                geojson_data = EXCLUDED.geojson_data,
+                uploaded_at = CURRENT_TIMESTAMP
+            RETURNING *;
+        `, [proyectoId, tabName, blob.url, savedName, geojsonData ? JSON.stringify(geojsonData) : null]);
+
+        res.status(200).json({ status: 'success', data: result.rows[0] });
+    } catch (err) {
+        console.error('Error en Diseno Geometrico POST /capas:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.get('/api/proyectos/:id/diseno-geometrico-capas', authenticateToken, async (req, res) => {
+    try {
+        await ensureDisenoGeometricoCapasTable();
+
+        const proyectoId = parseInt(req.params.id, 10);
+        const result = await db.query(`
+            SELECT id, proyecto_id, tab_name, file_url, file_name, uploaded_at, geojson_data, drive_url
+            FROM diseno_geometrico_capas
+            WHERE proyecto_id = $1
+            ORDER BY uploaded_at DESC, id DESC;
+        `, [proyectoId]);
+
+        res.status(200).json({ status: 'success', data: result.rows });
+    } catch (err) {
+        console.error('Error en Diseno Geometrico GET /capas:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.get('/api/proyectos/:id/diseno-geometrico-capas/:tabName', authenticateToken, async (req, res) => {
+    try {
+        await ensureDisenoGeometricoCapasTable();
+
+        const proyectoId = parseInt(req.params.id, 10);
+        const { tabName } = req.params;
+        const result = await db.query(`
+            SELECT id, proyecto_id, tab_name, file_url, file_name, uploaded_at, geojson_data, drive_url
+            FROM diseno_geometrico_capas
+            WHERE proyecto_id = $1 AND tab_name = $2;
+        `, [proyectoId, tabName]);
+
+        res.status(200).json({ status: 'success', data: result.rows[0] || null });
+    } catch (err) {
+        console.error('Error en Diseno Geometrico GET /capas/:tabName:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.patch('/api/proyectos/:id/diseno-geometrico-capas/:tabName/rename', authenticateToken, authorizeDisenoGeometricoManage, async (req, res) => {
+    try {
+        await ensureDisenoGeometricoCapasTable();
+
+        const proyectoId = parseInt(req.params.id, 10);
+        const { tabName } = req.params;
+        const newName = String(req.body?.newName || '').trim();
+
+        if (!newName) {
+            return res.status(400).json({ status: 'error', message: 'Falta el nuevo nombre' });
+        }
+
+        const result = await db.query(`
+            UPDATE diseno_geometrico_capas
+            SET file_name = $1
+            WHERE proyecto_id = $2 AND tab_name = $3
+            RETURNING *;
+        `, [newName, proyectoId, tabName]);
+
+        if (!result.rowCount) {
+            return res.status(404).json({ status: 'error', message: 'Capa no encontrada' });
+        }
+
+        res.status(200).json({ status: 'success', data: result.rows[0] });
+    } catch (err) {
+        console.error('Error en Diseno Geometrico PATCH /rename:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.patch('/api/proyectos/:id/diseno-geometrico-capas/:tabName/drive-link', authenticateToken, authorizeDisenoGeometricoManage, async (req, res) => {
+    try {
+        await ensureDisenoGeometricoCapasTable();
+
+        const proyectoId = parseInt(req.params.id, 10);
+        const { tabName } = req.params;
+        const driveUrl = typeof req.body?.driveUrl === 'string' ? req.body.driveUrl.trim() || null : null;
+
+        const result = await db.query(`
+            INSERT INTO diseno_geometrico_capas (proyecto_id, tab_name, drive_url, file_name, file_url)
+            VALUES ($1, $2, $3, 'CARPETA CONFIGURADA', '')
+            ON CONFLICT (proyecto_id, tab_name) DO UPDATE
+            SET drive_url = EXCLUDED.drive_url
+            RETURNING *;
+        `, [proyectoId, tabName, driveUrl]);
+
+        res.status(200).json({ status: 'success', data: result.rows[0] });
+    } catch (err) {
+        console.error('Error en Diseno Geometrico PATCH /drive-link:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.patch('/api/proyectos/:id/diseno-geometrico-capas/:tabName/geojson', authenticateToken, authorizeDisenoGeometricoManage, async (req, res) => {
+    try {
+        await ensureDisenoGeometricoCapasTable();
+
+        const proyectoId = parseInt(req.params.id, 10);
+        const { tabName } = req.params;
+        const fileName = String(req.body?.fileName || '').trim();
+        const geojsonData = ensureFeatureCollection(req.body?.geojsonData);
+
+        const result = await db.query(`
+            UPDATE diseno_geometrico_capas
+            SET geojson_data = $1,
+                uploaded_at = CURRENT_TIMESTAMP,
+                file_name = CASE
+                    WHEN $2 <> '' THEN $2
+                    ELSE file_name
+                END
+            WHERE proyecto_id = $3 AND tab_name = $4
+            RETURNING *;
+        `, [
+            JSON.stringify(geojsonData),
+            fileName,
+            proyectoId,
+            tabName
+        ]);
+
+        if (!result.rowCount) {
+            return res.status(404).json({ status: 'error', message: 'Capa no encontrada para guardar' });
+        }
+
+        res.status(200).json({ status: 'success', data: result.rows[0] });
+    } catch (err) {
+        console.error('Error en Diseno Geometrico PATCH /geojson:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.delete('/api/proyectos/:id/diseno-geometrico-capas/:tabName', authenticateToken, authorizeDisenoGeometricoManage, async (req, res) => {
+    try {
+        await ensureDisenoGeometricoCapasTable();
+
+        const proyectoId = parseInt(req.params.id, 10);
+        const { tabName } = req.params;
+        const result = await db.query(`
+            DELETE FROM diseno_geometrico_capas
+            WHERE proyecto_id = $1 AND tab_name = $2
+            RETURNING id;
+        `, [proyectoId, tabName]);
+
+        if (!result.rowCount) {
+            return res.status(404).json({ status: 'error', message: 'Capa no encontrada para eliminar' });
+        }
+
+        res.status(200).json({ status: 'success', message: 'Capa eliminada correctamente' });
+    } catch (err) {
+        console.error('Error en Diseno Geometrico DELETE /capas/:tabName:', err);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -6015,7 +6326,7 @@ app.patch('/api/proyectos/:id/geologia-capas/:tabName/drive-link', authenticateT
             SET drive_url = EXCLUDED.drive_url
             RETURNING *;
         `;
-        
+
         let result;
         try {
             result = await db.query(upsertQuery, [id, tabName, driveUrl]);
@@ -6041,6 +6352,52 @@ app.patch('/api/proyectos/:id/geologia-capas/:tabName/drive-link', authenticateT
     }
 });
 
+// EXPORTACIÓN DE ENSAYOS DE TRAMO (POR TRAMO SELECCIONADO)
+// Exportar un tipo específico de ensayo para un tramo
+app.get('/api/tramos/:tramoId/ensayos/export-excel/:tipoEnsayoId', authenticateToken, async (req, res) => {
+    const { tramoId, tipoEnsayoId } = req.params;
+    try {
+        const fileBuffer = await ensayosService.exportEnsayosToExcelByTipo(tramoId, tipoEnsayoId);
+        console.log(`[EXPORT ROUTE] Buffer generado para tipo ${tipoEnsayoId}: ${fileBuffer ? fileBuffer.length : 0} bytes`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="ensayos_tramo_${tramoId}_tipo_${tipoEnsayoId}.xlsx"`);
+        res.end(fileBuffer, 'binary');
+    } catch (err) {
+        console.error(`Error al exportar ensayos de tramo ${tramoId} por tipo ${tipoEnsayoId}:`, err);
+        res.status(500).json({ error: 'Error al exportar ensayos a Excel', details: err.message });
+    }
+});
+
+// Exportar todos los ensayos de un tramo
+app.get('/api/tramos/:tramoId/ensayos/export-excel', authenticateToken, async (req, res) => {
+    const { tramoId } = req.params;
+    console.log(`[DEBUG ROUTE] Recibida petición de exportación total para tramo: ${tramoId}`);
+    try {
+        const fileBuffer = await ensayosService.exportEnsayosToExcelByTramo(tramoId);
+        console.log(`[EXPORT ROUTE] Buffer generado para tramo ${tramoId}: ${fileBuffer ? fileBuffer.length : 0} bytes`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="todos_los_ensayos_tramo_${tramoId}.xlsx"`);
+        res.end(fileBuffer, 'binary');
+    } catch (err) {
+        console.error(`Error al exportar todos los ensayos del tramo ${tramoId}:`, err);
+        res.status(500).json({ error: 'Error al exportar ensayos a Excel', details: err.message });
+    }
+});
+
+// EXPORTACIÓN DE ENSAYOS DE CANTERAS (POR TIPO DE ENSAYO GLOBAL)
+app.get('/api/ensayos/canteras/exportar-tipo/:tipoEnsayoId', authenticateToken, async (req, res) => {
+    const { tipoEnsayoId } = req.params;
+    try {
+        const fileBuffer = await ensayosService.exportCanteraEnsayosToExcelByTipo(tipoEnsayoId);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="ensayos_canteras_tipo_${tipoEnsayoId}.xlsx"`);
+        res.send(fileBuffer);
+    } catch (err) {
+        console.error(`Error al exportar ensayos de cantera por tipo ${tipoEnsayoId}:`, err);
+        res.status(500).json({ error: 'Error al exportar ensayos de cantera a Excel', details: err.message });
+    }
+});
+
 app.get('/api/proyectos/:id/geologia-muestras', authenticateToken, async (req, res) => {
     try {
         const query = 'SELECT * FROM geologia_muestras WHERE proyecto_id = $1 ORDER BY id DESC;';
@@ -6058,11 +6415,11 @@ app.post('/api/proyectos/:id/geologia-muestras', authenticateToken, authorizeGeo
         let fileUrl = null;
 
         if (req.file) {
-            const blob = await put(`geologia_muestras/${proyectoId}/${codigo}_${Date.now()}_${req.file.originalname}`, req.file.buffer, {
-                access: 'public',
-                token: process.env.BLOB_READ_WRITE_TOKEN_GEOLOGIA || process.env.BLOB_READ_WRITE_TOKEN
-            });
-            fileUrl = blob.url;
+            const safeCode = sanitizeGeologiaStorageSegment(codigo) || 'muestra';
+            const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
+            const targetFolder = getGeologiaStorageFolder(proyectoId, 'muestras');
+            const finalFilename = `${safeCode}_${Date.now()}_${safeFilename}`;
+            fileUrl = await uploadFileToNAS(req.file.buffer, targetFolder, finalFilename);
         }
 
         const query = `

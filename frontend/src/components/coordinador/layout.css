@@ -16,7 +16,7 @@
 }
 
 .navbar-wrapper {
-    width: 200px;
+    width: 275px;
     /* Default expanded width */
     transition: width 0.3s ease;
     flex-shrink: 0;

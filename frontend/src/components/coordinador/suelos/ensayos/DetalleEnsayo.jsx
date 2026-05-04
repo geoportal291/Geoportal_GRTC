@@ -12,6 +12,32 @@ import { calcularResultados } from './ensayos.calculos.js';
 
 Chart.register(...registerables);
 
+const stripGeneralFieldDefaults = (currentTableConfig) => {
+  if (!currentTableConfig?.general_fields?.length) return currentTableConfig;
+
+  return {
+    ...currentTableConfig,
+    general_fields: currentTableConfig.general_fields.map(({ defaultValue, ...field }) => field)
+  };
+};
+
+const normalizeEnsayoConfig = (cfg) => {
+  if (!cfg || typeof cfg !== 'object') return cfg;
+
+  let tableConfig = cfg.tableConfig;
+
+  if (cfg.config_key === 'proctor') {
+    tableConfig = stripGeneralFieldDefaults(tableConfig);
+  }
+
+  return {
+    ...cfg,
+    tableConfig,
+    formConfig: tableConfig,
+    calculationConfig: cfg.calculationConfig
+  };
+};
+
 export default function DetalleEnsayo() {
   const navigate = useNavigate();
   const { ensayoId } = useParams();
@@ -35,6 +61,27 @@ export default function DetalleEnsayo() {
   const [activeTab, setActiveTab] = useState('formulario');
 
   const API_URL = process.env.REACT_APP_API_BASE ?? '';
+
+  const applyGeneralFieldDefaults = useCallback((currentData, currentTableConfig) => {
+    if (!currentTableConfig?.general_fields?.length) return currentData;
+
+    const nextData = JSON.parse(JSON.stringify(currentData || {}));
+    if (!nextData.general_fields || typeof nextData.general_fields !== 'object') {
+      nextData.general_fields = {};
+    }
+
+    currentTableConfig.general_fields.forEach((field) => {
+      const hasValue = nextData.general_fields[field.key] !== undefined
+        && nextData.general_fields[field.key] !== null
+        && nextData.general_fields[field.key] !== '';
+
+      if (!hasValue && field.defaultValue !== undefined) {
+        nextData.general_fields[field.key] = field.defaultValue;
+      }
+    });
+
+    return nextData;
+  }, []);
 
   const getAuthHeaders = useCallback(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
@@ -97,12 +144,13 @@ export default function DetalleEnsayo() {
 
         if (data.tipo_ensayo) {
           const configRes = await axios.get(`${API_URL}/api/config/ensayo-tipos/${data.tipo_ensayo}`, { headers });
-          const cfg = configRes.data;
+          const cfg = normalizeEnsayoConfig(configRes.data);
           setFormConfig(cfg.formConfig);
           setResultsConfig(cfg.resultsConfig);
           setTableConfig(cfg.tableConfig);
           setCalculationConfig(cfg.calculationConfig);
           setGraficosConfig(cfg.graficosConfig);
+          setFormData(prev => applyGeneralFieldDefaults(prev, cfg.tableConfig));
         }
       } catch (err) {
         setError('Error al cargar los datos del ensayo.');
@@ -112,6 +160,11 @@ export default function DetalleEnsayo() {
     };
     fetchEnsayoAndConfig();
   }, [ensayoId, API_URL, getAuthHeaders]);
+
+  useEffect(() => {
+    if (!tableConfig?.general_fields?.length) return;
+    setFormData(prev => applyGeneralFieldDefaults(prev, tableConfig));
+  }, [tableConfig, applyGeneralFieldDefaults]);
 
   // === CÁLCULO AUTOMÁTICO DE RESULTADOS (LÓGICA CORRECTA Y FINAL) ===
   useEffect(() => {
@@ -285,7 +338,14 @@ export default function DetalleEnsayo() {
                 )}
               </div>
               <div className="tab-panel"><VisorResultados config={resultsConfig} data={resultados} /></div>
-              <div className="tab-panel"><VisorGraficos graficosConfig={graficosConfig} resultados={resultados} /></div>
+              <div className="tab-panel">
+                <VisorGraficos
+                  graficosConfig={graficosConfig}
+                  resultados={resultados}
+                  formData={formData}
+                  tableConfig={tableConfig}
+                />
+              </div>
             </div>
           </div>
         </div>

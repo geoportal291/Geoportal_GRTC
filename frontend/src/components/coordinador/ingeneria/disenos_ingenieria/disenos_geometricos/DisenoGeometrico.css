@@ -1,0 +1,831 @@
+.diseno-geometrico-shell {
+  --dg-surface: rgba(255, 255, 255, 0.92);
+  --dg-stroke: rgba(148, 163, 184, 0.22);
+  --dg-text: #143256;
+  --dg-muted: #6b7b93;
+  --dg-primary: #0f8f95;
+  --dg-primary-deep: #0f6f7b;
+  --dg-accent: #1e88e5;
+  --dg-danger: #e65b5b;
+  min-height: 100vh;
+  margin-top: 60px;
+  padding: 14px 18px 18px;
+  color: var(--dg-text);
+  background:
+    radial-gradient(circle at top left, rgba(38, 175, 188, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(30, 136, 229, 0.12), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(34, 197, 94, 0.14), transparent 26%),
+    linear-gradient(180deg, #f4f8fb 0%, #edf4f8 100%);
+}
+
+.dg-header-card,
+.dg-panel,
+.dg-toolbar-card,
+.dg-map-card,
+.dg-table-card {
+  border: 1px solid var(--dg-stroke);
+  border-radius: 20px;
+  background: var(--dg-surface);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.dg-header-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 16px 20px;
+}
+
+.dg-header-kicker {
+  display: inline-flex;
+  margin-bottom: 5px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dg-primary);
+}
+
+.dg-header-card h1 {
+  margin: 0 0 8px;
+  font-size: 1.34rem;
+  line-height: 1.08;
+}
+
+.dg-header-card p {
+  margin: 0;
+  max-width: 760px;
+  color: var(--dg-muted);
+  font-size: 0.78rem;
+  line-height: 1.38;
+}
+
+.dg-project-pill {
+  min-width: 260px;
+  padding: 9px 12px;
+  border: 1px solid rgba(15, 143, 149, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(15, 143, 149, 0.1), rgba(30, 136, 229, 0.08));
+}
+
+.dg-project-pill span,
+.dg-project-pill strong {
+  display: block;
+}
+
+.dg-project-pill span {
+  font-size: 0.62rem;
+  color: var(--dg-muted);
+}
+
+.dg-project-pill strong {
+  margin-top: 4px;
+  font-size: 0.8rem;
+}
+
+.dg-workspace {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 300px;
+  gap: 12px;
+  align-items: start;
+}
+
+.dg-left-column,
+.dg-right-column,
+.dg-center-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dg-panel,
+.dg-toolbar-card,
+.dg-table-card {
+  padding: 13px;
+}
+
+.dg-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.dg-panel-head h2 {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.dg-panel-head p {
+  margin: 6px 0 0;
+  color: var(--dg-muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.dg-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dg-toolbar-btn,
+.dg-tool-disabled,
+.dg-primary-btn,
+.dg-secondary-btn,
+.dg-danger-btn,
+.dg-mini-form button,
+.dg-upload-form button,
+.dg-row-actions button,
+.dg-layer-actions button {
+  border: none;
+  border-radius: 13px;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, background 0.18s ease;
+}
+
+.dg-toolbar-btn,
+.dg-tool-disabled {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  min-height: 58px;
+  padding: 7px 8px;
+  background: #f7fbfd;
+  color: var(--dg-text);
+  border: 1px solid rgba(202, 214, 226, 0.9);
+}
+
+.dg-toolbar-btn.compact {
+  min-height: 46px;
+}
+
+.dg-toolbar-btn i,
+.dg-tool-disabled i {
+  font-size: 0.76rem;
+}
+
+.dg-toolbar-btn span,
+.dg-tool-disabled span {
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.dg-toolbar-btn.active {
+  color: #ffffff;
+  border-color: rgba(15, 143, 149, 0.85);
+  background: linear-gradient(135deg, var(--dg-primary), #11a2b0);
+  box-shadow: 0 16px 28px rgba(15, 143, 149, 0.2);
+}
+
+.dg-toolbar-btn:hover:not(:disabled),
+.dg-primary-btn:hover,
+.dg-secondary-btn:hover:not(:disabled),
+.dg-danger-btn:hover:not(:disabled),
+.dg-mini-form button:hover:not(:disabled),
+.dg-upload-form button:hover:not(:disabled),
+.dg-row-actions button:hover:not(:disabled),
+.dg-layer-actions button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.dg-toolbar-btn:disabled,
+.dg-tool-disabled:disabled,
+.dg-primary-btn:disabled,
+.dg-secondary-btn:disabled,
+.dg-danger-btn:disabled,
+.dg-mini-form button:disabled,
+.dg-upload-form button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dg-tool-disabled {
+  position: relative;
+  color: var(--dg-muted);
+}
+
+.dg-tool-disabled small {
+  font-size: 0.64rem;
+  color: var(--dg-primary);
+}
+
+.dg-inline-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dg-full-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.dg-primary-btn,
+.dg-secondary-btn,
+.dg-danger-btn,
+.dg-mini-form button,
+.dg-upload-form button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.dg-primary-btn,
+.dg-mini-form button,
+.dg-upload-form button {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--dg-primary), #10a2af);
+  box-shadow: 0 16px 30px rgba(15, 143, 149, 0.18);
+}
+
+.dg-secondary-btn {
+  color: var(--dg-text);
+  background: #eef5f8;
+}
+
+.dg-danger-btn {
+  color: #ffffff;
+  background: linear-gradient(135deg, #ef6464, #d73c6c);
+}
+
+.dg-mini-form,
+.dg-upload-form,
+.dg-property-stack,
+.dg-metric-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dg-mini-form {
+  margin-bottom: 8px;
+}
+
+.dg-upload-form label,
+.dg-property-stack label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--dg-text);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.dg-mini-form input,
+.dg-upload-form input,
+.dg-property-stack input,
+.dg-property-stack select {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  border-radius: 11px;
+  background: #ffffff;
+  color: var(--dg-text);
+  font-size: 0.76rem;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dg-mini-form input:focus,
+.dg-upload-form input:focus,
+.dg-property-stack input:focus,
+.dg-property-stack select:focus {
+  outline: none;
+  border-color: rgba(15, 143, 149, 0.8);
+  box-shadow: 0 0 0 4px rgba(15, 143, 149, 0.12);
+}
+
+.dg-layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.dg-layer-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 1px solid rgba(217, 226, 235, 0.92);
+  border-radius: 14px;
+  background: #f9fcfe;
+}
+
+.dg-layer-row.active {
+  border-color: rgba(15, 143, 149, 0.52);
+  background: rgba(15, 143, 149, 0.08);
+}
+
+.dg-layer-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.dg-layer-main strong,
+.dg-layer-main small {
+  display: block;
+}
+
+.dg-layer-main small {
+  margin-top: 4px;
+  color: var(--dg-muted);
+  font-size: 0.64rem;
+}
+
+.dg-layer-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7ccf87, #32b17e);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
+.dg-layer-swatch.active {
+  background: linear-gradient(135deg, #2a9db1, #1e88e5);
+}
+
+.dg-layer-actions,
+.dg-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dg-layer-actions button,
+.dg-row-actions button {
+  width: 28px;
+  height: 28px;
+  font-size: 0.68rem;
+  color: var(--dg-text);
+  background: #ffffff;
+  border: 1px solid rgba(218, 227, 236, 0.92);
+}
+
+.dg-toolbar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 13px;
+}
+
+.dg-toolbar-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.dg-toolbar-top h2 {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.dg-toolbar-top p {
+  margin: 6px 0 0;
+  color: var(--dg-muted);
+  font-size: 0.68rem;
+  line-height: 1.32;
+}
+
+.dg-toolbar-layout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dg-tool-section {
+  padding: 9px;
+  border: 1px solid rgba(214, 224, 233, 0.92);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(248, 251, 254, 0.92), rgba(241, 247, 251, 0.88));
+  min-width: 0;
+}
+
+.dg-tool-section-head {
+  margin-bottom: 6px;
+}
+
+.dg-tool-section-kicker {
+  display: inline-flex;
+  margin-bottom: 4px;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dg-primary);
+}
+
+.dg-tool-section-head strong {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--dg-text);
+}
+
+.dg-toolbar-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dg-toolbar-group--compact {
+  gap: 10px;
+}
+
+.dg-toolbar-card .dg-toolbar-btn {
+  width: 100%;
+  min-height: 52px;
+  min-width: 0;
+}
+
+.dg-toolbar-group--compact .dg-toolbar-btn {
+  min-height: 50px;
+  min-width: 0;
+  padding: 7px 9px;
+  gap: 3px;
+  border-radius: 11px;
+}
+
+.dg-toolbar-group--compact .dg-toolbar-btn i {
+  font-size: 0.72rem;
+}
+
+.dg-toolbar-group--compact .dg-toolbar-btn span {
+  font-size: 0.6rem;
+}
+
+.dg-save-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  white-space: nowrap;
+  align-self: flex-end;
+}
+
+.dg-save-badge.saved {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.dg-save-badge.saving {
+  color: #0f766e;
+  background: rgba(15, 143, 149, 0.12);
+}
+
+.dg-save-badge.dirty {
+  color: #9a6700;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.dg-save-badge.error {
+  color: #b42318;
+  background: rgba(230, 91, 91, 0.15);
+}
+
+.dg-map-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 620px;
+}
+
+.dg-map-view-switch {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 700;
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(202, 214, 226, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.dg-map-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(202, 214, 226, 0.9);
+  border-radius: 12px;
+  background: #f7fbfd;
+  color: var(--dg-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.dg-map-view-btn i {
+  font-size: 0.72rem;
+}
+
+.dg-map-view-btn:hover {
+  transform: translateY(-1px);
+}
+
+.dg-map-view-btn.active {
+  color: #ffffff;
+  border-color: rgba(15, 143, 149, 0.85);
+  background: linear-gradient(135deg, var(--dg-primary), #11a2b0);
+  box-shadow: 0 14px 24px rgba(15, 143, 149, 0.22);
+}
+
+.dg-map,
+.dg-map-empty {
+  width: 100%;
+  min-height: 620px;
+  height: 100%;
+}
+
+.dg-map-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 28px;
+  background:
+    linear-gradient(135deg, rgba(15, 143, 149, 0.06), rgba(30, 136, 229, 0.05)),
+    repeating-linear-gradient(-45deg, rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.08) 12px, transparent 12px, transparent 24px);
+}
+
+.dg-map-empty h2 {
+  margin: 0 0 8px;
+}
+
+.dg-map-empty p {
+  margin: 0;
+  color: var(--dg-muted);
+  line-height: 1.6;
+}
+
+.dg-popup-reference-title {
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: var(--dg-primary-deep);
+}
+
+.dg-table-wrap {
+  overflow-x: auto;
+}
+
+.dg-feature-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dg-feature-table th,
+.dg-feature-table td {
+  padding: 9px 7px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  text-align: left;
+  font-size: 0.74rem;
+}
+
+.dg-feature-table thead th {
+  color: var(--dg-muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dg-feature-table tbody tr.active {
+  background: rgba(30, 136, 229, 0.08);
+}
+
+.dg-feature-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--dg-accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dg-property-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 9px;
+  border-radius: 12px;
+  background: #f7fbfd;
+  border: 1px solid rgba(220, 229, 236, 0.86);
+}
+
+.dg-property-item span {
+  color: var(--dg-muted);
+  font-size: 0.68rem;
+}
+
+.dg-property-item strong {
+  text-align: right;
+  font-size: 0.74rem;
+}
+
+.dg-color-field {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 12px;
+  align-items: center;
+}
+
+.dg-color-field input[type='color'] {
+  width: 54px;
+  min-width: 54px;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.dg-empty-box {
+  padding: 14px 11px;
+  border: 1px dashed rgba(148, 163, 184, 0.6);
+  border-radius: 14px;
+  text-align: center;
+  background: rgba(247, 251, 253, 0.75);
+  color: var(--dg-muted);
+}
+
+.dg-popup-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.dg-popup-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dg-popup-key {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--dg-primary-deep);
+}
+
+.dg-popup-value,
+.dg-popup-empty {
+  font-size: 0.68rem;
+  color: var(--dg-text);
+  word-break: break-word;
+}
+
+.dg-point-icon span,
+.dg-draw-marker-icon span,
+.dg-measure-node span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.dg-draw-marker-icon span {
+  background: #ef4444;
+  border: 3px solid #ffffff;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.22);
+}
+
+.dg-measure-node span {
+  background: #0f766e;
+  border: 2px solid #ffffff;
+}
+
+.dg-measure-label span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(15, 118, 110, 0.3);
+  color: #0f766e;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 16px;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+}
+
+@media (max-width: 1500px) {
+  .dg-workspace {
+    grid-template-columns: 290px minmax(0, 1fr) 280px;
+  }
+}
+
+@media (max-width: 1260px) {
+  .dg-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .dg-map-card,
+  .dg-map,
+  .dg-map-empty {
+    min-height: 540px;
+  }
+}
+
+@media (max-width: 880px) {
+  .diseno-geometrico-shell {
+    margin-top: 50px;
+    padding: 16px;
+  }
+
+  .dg-header-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dg-project-pill {
+    min-width: 100%;
+  }
+
+  .dg-toolbar-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dg-toolbar-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dg-toolbar-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dg-toolbar-card .dg-toolbar-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .dg-toolbar-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dg-map-view-switch {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    justify-content: stretch;
+  }
+
+  .dg-map-view-btn {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  .dg-tool-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dg-inline-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .dg-feature-table th,
+  .dg-feature-table td {
+    padding: 12px 8px;
+  }
+}

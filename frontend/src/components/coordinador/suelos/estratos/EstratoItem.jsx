@@ -180,7 +180,6 @@ const EstratoItem = React.memo(React.forwardRef(({
                         >
                             <i className="fas fa-plus" /> Añadir Ensayo
                         </button>
-                        {/* Botón Clasificar Suelo Eliminado */}
                         {selectedEnsayo && (
                             <div className="selected-ensayo-actions">
                                 <button

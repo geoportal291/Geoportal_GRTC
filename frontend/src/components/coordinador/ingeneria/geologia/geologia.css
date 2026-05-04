@@ -700,3 +700,9 @@
 .geolint-map-container .leaflet-top.leaflet-left {
     margin-top: 0px !important;
 }
+
+/* Override de ancho para popups internos de geologia */
+.geolpopup-main-container .leaflet-popup-content {
+    min-width: 360px !important;
+    max-width: 460px !important;
+}
