@@ -5,6 +5,7 @@ import alertify from 'alertifyjs';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import ResultadosBrevesModal from './ResultadosBrevesModal';
+import EnsayoDetalleModal from './EnsayoDetalleModal';
 import './VistaGeneralEnsayos.css';
 import './ResultadosBrevesModal.css';
 
@@ -58,7 +59,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, summary, loading }) => 
 };
 
 // ========== EnsayosFullListModal ==========
-const EnsayosFullListModal = ({ isOpen, onClose, grupo, navigate, handleShowResults }) => {
+const EnsayosFullListModal = ({ isOpen, onClose, grupo, onOpenEnsayo, handleShowResults }) => {
   const [searchTerm, setSearchTerm] = useState('');
   if (!isOpen || !grupo) return null;
   const filtered = grupo.ensayos.filter(e => `${e.nombre_ensayo} ${e.codigo_ensayo} ${e.progresiva_nombre}`.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -79,7 +80,7 @@ const EnsayosFullListModal = ({ isOpen, onClose, grupo, navigate, handleShowResu
             </thead>
             <tbody>
               {filtered.map(e => (
-                <tr key={e.id} onClick={() => navigate(`/coordinador/suelos/ensayos/${e.id}`)} style={{cursor:'pointer'}}>
+                <tr key={e.id} onClick={() => onOpenEnsayo(e)} style={{cursor:'pointer'}}>
                   <td className="assay-code">{e.nombre_ensayo || e.codigo_ensayo}</td>
                   <td>{e.progresiva_nombre || e.cantera_nombre}</td>
                   <td>E: {e.estrato_orden}</td>
@@ -122,6 +123,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const [currentTargetType, setCurrentTargetType] = useState(null);
   const [isResultsModalOpen, setResultsModalOpen] = useState(false);
   const [selectedAssayForResults, setSelectedAssayForResults] = useState(null);
+  const [selectedAssayForDetail, setSelectedAssayForDetail] = useState(null);
   const [tramosList, setTramosList] = useState([]);
 
   const fetchTramosList = useCallback(async () => {
@@ -261,6 +263,10 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     setResultsModalOpen(true);
   };
 
+  const handleOpenEnsayo = (assay) => {
+    setSelectedAssayForDetail(assay);
+  };
+
   if (!tramoId) return <div className="loading-spinner">Seleccione un tramo...</div>;
   if (loading) return <div className="loading-overlay"><div className="loading-spinner"></div><p>Cargando Dashboard...</p></div>;
 
@@ -386,7 +392,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
 
               <div className="card-content">
                 {grupo.ensayos.slice(0, 5).map(e => (
-                  <div className="mini-card-ensayo" key={e.id} onClick={() => navigate(`/coordinador/suelos/ensayos/${e.id}`)}>
+                  <div className="mini-card-ensayo" key={e.id} onClick={() => handleOpenEnsayo(e)}>
                     <div className="mini-card-horizontal-layout">
                       <div className="mini-card-main-data">
                         <i className="fas fa-vial" style={{color:accent}}></i>
@@ -416,8 +422,16 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
 
       <ImportModal isOpen={isImportModalOpen} onClose={()=>setImportModalOpen(false)} onImport={handleImportFile} loading={importing} errors={importErrors} />
       <ConfirmationModal isOpen={showConfirmationModal} onClose={()=>setShowConfirmationModal(false)} onConfirm={confirmImport} summary={importSummary} loading={importing} />
-      <EnsayosFullListModal isOpen={!!modalGrupo} onClose={()=>setModalGrupo(null)} grupo={modalGrupo} navigate={navigate} handleShowResults={handleShowResults} />
+      <EnsayosFullListModal isOpen={!!modalGrupo} onClose={()=>setModalGrupo(null)} grupo={modalGrupo} onOpenEnsayo={handleOpenEnsayo} handleShowResults={handleShowResults} />
       {isResultsModalOpen && <ResultadosBrevesModal isOpen={isResultsModalOpen} onClose={()=>setResultsModalOpen(false)} ensayo={selectedAssayForResults} />}
+      <EnsayoDetalleModal
+        isOpen={!!selectedAssayForDetail}
+        ensayos={selectedAssayForDetail ? [selectedAssayForDetail] : []}
+        initialEnsayoId={selectedAssayForDetail?.id ?? null}
+        showEnsayoTabs={false}
+        onClose={() => setSelectedAssayForDetail(null)}
+        onSaved={fetchEnsayos}
+      />
     </div>
   );
 };

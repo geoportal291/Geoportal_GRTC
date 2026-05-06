@@ -2140,23 +2140,28 @@ app.post('/api/trafico/conteovehicular/upload-excel', authenticateToken, authori
     }
 });
 
-async function uploadKmlToVercelBlob(file) {
+function sanitizeKmlStorageSegment(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9-_.]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'archivo';
+}
+
+async function uploadKmlToNAS(file, projectId = null) {
     try {
-        // Sanitize filename to prevent path traversal issues and create a unique name
-        const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9-_\.]/g, '_');
-        const filename = `tramoinv/${Date.now()}_${cleanFilename}`;
+        const cleanFilename = sanitizeKmlStorageSegment(file.originalname);
+        const finalFilename = `${Date.now()}_${cleanFilename}`;
+        const targetFolder = projectId
+            ? `proyectos/${projectId}/trazado`
+            : 'proyectos/kml_temporal';
 
-        console.log(`Uploading KML to Vercel Blob with filename: ${filename}`);
-        const blob = await put(filename, file.buffer, {
-            access: 'public',
-            allowOverwrite: true,
-        });
-
-        console.log(`Upload successful. Blob URL: ${blob.url}`);
-        return blob.url;
+        console.log(`[KML NAS] Uploading KML to NAS with filename: ${finalFilename}`);
+        return await uploadFileToNAS(file.buffer, targetFolder, finalFilename);
     } catch (error) {
-        console.error('Error al subir archivo KML a Vercel Blob:', error);
-        throw new Error('Error al subir archivo KML a Vercel Blob');
+        console.error('Error al subir archivo KML al NAS:', error);
+        throw new Error('Error al subir archivo KML al NAS');
     }
 }
 
@@ -2167,18 +2172,19 @@ app.post('/api/kml/upload', authenticateToken, authorizePermission('proyectos', 
             return res.status(400).json({ error: 'No se proporcionó ningún archivo KML.' });
         }
         // El buffer del archivo ya está en req.file.buffer gracias a multer.memoryStorage
-        const fileForBlob = {
+        const fileForNas = {
             originalname: req.file.originalname,
             buffer: req.file.buffer
         };
+        const requestedProjectId = req.body?.projectId || null;
 
-        // Usar la función de ayuda para subir el buffer del archivo
-        const blobUrl = await uploadKmlToVercelBlob(fileForBlob);
+        // Usar NAS como almacenamiento para KML
+        const kmlUrl = await uploadKmlToNAS(fileForNas, requestedProjectId);
 
         // No es necesario limpiar el archivo del disco ya que se usó memoryStorage
 
         // Responder con la URL pública del archivo subido
-        res.status(201).json({ url: blobUrl });
+        res.status(201).json({ url: kmlUrl });
     } catch (error) {
         console.error('Error en el endpoint /api/kml/upload:', error);
         // Ensure the temporary file is cleaned up on error as well
@@ -3344,6 +3350,10 @@ app.post('/api/proyectos/:proyectoId/upload-kml', authenticateToken, authorizePe
 app.get('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { section } = req.query; // e.g. 'trafico', 'invvial'
+    const isLegacyBlobUrl = (value) => {
+        const normalized = String(value || '').toLowerCase();
+        return normalized.includes('.blob.vercel-storage.com') || normalized.includes('public.blob.vercel-storage.com');
+    };
 
     try {
         let result;
@@ -3378,7 +3388,15 @@ app.get('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
         }
 
         if (result.rows.length > 0 && result.rows[0].kml_url) {
-            res.json({ url: result.rows[0].kml_url });
+            const currentUrl = result.rows[0].kml_url;
+
+            if (isLegacyBlobUrl(currentUrl)) {
+                console.warn(`[KML] Se detectó URL legacy de Vercel Blob para proyecto ${id} (${section || 'default'}). Se devolverá null para evitar cargas inválidas.`);
+                res.json({ url: null, blockedLegacyUrl: true });
+                return;
+            }
+
+            res.json({ url: currentUrl });
         } else {
             // Return 200 with null instead of 404 to avoid console errors in the map component
             res.json({ url: null });
@@ -3472,7 +3490,7 @@ app.delete('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
     const targetSection = section || 'invvial';
 
     try {
-        // 1. Get the URL of the KML to delete it from Vercel Blob
+        // 1. Get the URL of the KML to delete it from the active storage backend.
         let getUrlResult;
         if (targetSection === 'invvial') {
             getUrlResult = await db.query('SELECT kml_url FROM invvial WHERE id_proyecto = $1', [id]);
@@ -3483,12 +3501,13 @@ app.delete('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
         if (getUrlResult.rows.length > 0) {
             const { kml_url } = getUrlResult.rows[0];
 
-            // Delete from Vercel Blob storage if exists
+            // Delete from NAS when the URL belongs to the public NAS base.
+            // Legacy Vercel URLs are ignored here; the DB reference is removed below.
             if (kml_url) {
                 try {
-                    await del(kml_url);
-                } catch (blobErr) {
-                    console.warn(`Could not delete blob ${kml_url}: ${blobErr.message}`);
+                    await deleteFileFromNAS(kml_url);
+                } catch (storageErr) {
+                    console.warn(`Could not delete KML from active storage ${kml_url}: ${storageErr.message}`);
                 }
             }
 

@@ -16,6 +16,9 @@ import './geoite.css';
 import axiosInstance from '../../../../../api/axios';
 import { saveAs } from 'file-saver';
 
+const GEOITE_TRAFFIC_CONTROL_EVENT = 'geoite:traffic-control';
+const GEOITE_TRAFFIC_STATE_EVENT = 'geoite:traffic-kml-state';
+
 
 // Este componente encapsula TODA la lógica imperativa para no causar re-renders.
 const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlightedTramoId, alcantarillasData, onAlcantarillaClick, onRouteLoaded, onShowDetails, graphicsImages }) => {
@@ -660,6 +663,16 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
         uploadModal.id = 'invvial-menu-kml-carga';
         L.DomEvent.disableClickPropagation(uploadModal);
 
+        const notifyKmlStateChange = (url = '') => {
+            window.dispatchEvent(new CustomEvent(GEOITE_TRAFFIC_STATE_EVENT, {
+                detail: {
+                    projectId: projectIdRef.current,
+                    section: sectionRef.current,
+                    url
+                }
+            }));
+        };
+
         // --- Helper de Iconos POI ---
         const getPoiIcon = (type) => {
             let html = '';
@@ -701,6 +714,14 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
         };
 
         const loadKmlFromUrl = async (url, showAlerts = true) => {
+            const normalizedUrl = String(url || '').toLowerCase();
+            if (normalizedUrl.includes('.blob.vercel-storage.com')) {
+                if (showAlerts) {
+                    alertify.error('Este KML aún apunta a Vercel Blob y fue bloqueado. Debes volver a cargarlo en el NAS.');
+                }
+                return;
+            }
+
             try {
                 if (showAlerts) alertify.message(`Descargando KML desde la URL...`);
                 const response = await fetch(url);
@@ -897,6 +918,8 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
 
             const formData = new FormData();
             formData.append('kmlFile', file);
+            formData.append('projectId', projectIdRef.current);
+            formData.append('section', sectionRef.current);
 
             try {
                 alertify.message('Subiendo archivo KML...');
@@ -915,6 +938,7 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
                     section: sectionRef.current 
                 });
                 alertify.message('Asociando KML con el proyecto.');
+                notifyKmlStateChange(newUrl);
 
                 uploadModal.style.display = 'none';
 
@@ -1287,6 +1311,7 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
                     params: { section: section }
                 });
                 let kmlUrl = response.data && response.data.url;
+                notifyKmlStateChange(kmlUrl || '');
 
                 if (kmlUrl) {
                     const showAlerts = !window.hasShownInitialKmlAlert;
@@ -1296,6 +1321,7 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
                     }
                 }
             } catch (error) {
+                notifyKmlStateChange('');
                 if (error.response && error.response.status !== 404) {
                     console.error("Error loading initial KML:", error);
                 }
@@ -1420,6 +1446,12 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
                             params: { section: sectionRef.current }
                         });
                         drawnItems.clearLayers();
+                        measurementLayers.clearLayers();
+                        poiLayerRef.current.clearLayers();
+                        citiesLayerRef.current.clearLayers();
+                        allDynamicCitiesRef.current.clear();
+                        geoJsonLayerRef.current = null;
+                        notifyKmlStateChange('');
                         alertify.success('El KML ha sido eliminado del proyecto.');
                     } catch (error) {
                         console.error("Error deleting KML:", error);
@@ -1434,6 +1466,28 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
         };
 
         deleteKmlButton.onclick = handleDeleteKml;
+
+        const handleExternalTrafficControl = (event) => {
+            const detail = event.detail || {};
+            if (String(detail.projectId) !== String(projectIdRef.current) || detail.section !== sectionRef.current) {
+                return;
+            }
+
+            if (detail.action === 'upload') {
+                const uploadInput = uploadModal.querySelector('#invvial-kmlUploadInput');
+                if (uploadInput) {
+                    uploadInput.value = '';
+                    uploadInput.click();
+                }
+                return;
+            }
+
+            if (detail.action === 'delete') {
+                handleDeleteKml();
+            }
+        };
+
+        window.addEventListener(GEOITE_TRAFFIC_CONTROL_EVENT, handleExternalTrafficControl);
 
         const handleUpdateInfo = async () => {
             const geoJsonDrawn = drawnItems.toGeoJSON();
@@ -1672,6 +1726,7 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
         map.on('click', () => map.closePopup());     // ensure click anywhere on map closes popup
 
         return () => {
+            window.removeEventListener(GEOITE_TRAFFIC_CONTROL_EVENT, handleExternalTrafficControl);
             if (map) {
                 map.off('zoomend', handleZoomChange);
                 map.off('moveend', handleMoveEnd);

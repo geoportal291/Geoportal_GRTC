@@ -568,6 +568,36 @@
   height: 100%;
 }
 
+.dg-maptiler-3d {
+  position: relative;
+}
+
+.dg-maptiler-3d .maplibregl-ctrl-top-left {
+  margin-top: 12px;
+  margin-left: 12px;
+}
+
+.dg-maptiler-terrain-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  border: none;
+  background: #ffffff;
+  color: #5b6472;
+  cursor: pointer;
+}
+
+.dg-maptiler-terrain-btn i {
+  font-size: 0.84rem;
+}
+
+.dg-maptiler-terrain-btn.active {
+  background: linear-gradient(135deg, var(--dg-primary), #11a2b0);
+  color: #ffffff;
+}
+
 .dg-map-empty {
   display: flex;
   align-items: center;
@@ -668,6 +698,97 @@
   padding: 0;
   border: none;
   background: transparent;
+}
+
+.dg-attributes-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dg-attributes-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.dg-attributes-head span {
+  color: var(--dg-muted);
+  font-size: 0.68rem;
+}
+
+.dg-attributes-head strong {
+  font-size: 0.74rem;
+}
+
+.dg-attributes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.dg-color-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.dg-color-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid rgba(158, 181, 210, 0.38);
+  border-radius: 11px;
+  background: rgba(246, 250, 255, 0.86);
+}
+
+.dg-color-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex: 0 0 14px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
+.dg-color-legend-label {
+  min-width: 0;
+  color: var(--dg-text);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.dg-attribute-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: #f7fbfd;
+  border: 1px solid rgba(220, 229, 236, 0.86);
+}
+
+.dg-attribute-key {
+  color: var(--dg-primary-deep);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dg-attribute-value {
+  font-size: 0.72rem;
+  color: var(--dg-text);
+  word-break: break-word;
 }
 
 .dg-empty-box {

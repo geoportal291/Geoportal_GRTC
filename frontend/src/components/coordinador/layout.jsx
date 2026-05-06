@@ -4,6 +4,7 @@ import Header from './header';
 import Navbar from './navbar';
 import ChangelogModal from '../ChangelogModal';
 import Traficods from './ingeneria/trafico/trafico.jsx';
+import TraficoV2 from './ingeneria/trafico_v2/TraficoV2.jsx';
 import Vialds from './ingeneria/invvial/vial.jsx';
 import { TrafficOptionProvider } from '../../data/contexts/TrafficOptionContext';
 import { VialOptionProvider } from '../../data/contexts/VialOptionContext';
@@ -28,6 +29,7 @@ export default function Layout({ children, setPageTitle }) {
 
   const location = useLocation();
   const isAmigoSecretoRoute = location.pathname.startsWith('/eventos/amigo-secreto');
+  const isTrafficV2Route = location.pathname === '/coordinador/ingenieria/trafico/traficov2';
 
   const handleTrafficOptionChange = (option) => {
     setTrafficOption(option);
@@ -48,6 +50,7 @@ export default function Layout({ children, setPageTitle }) {
 
   const isFullWidthRoute = [
     '/coordinador/ingenieria/trafico/trafico',
+    '/coordinador/ingenieria/trafico/traficov2',
     '/ingenieria/inventario-vial',
     '/coordinador/dashboardprincipal',
     '/ingenieria/geologia',
@@ -57,7 +60,7 @@ export default function Layout({ children, setPageTitle }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {!isAmigoSecretoRoute && location.pathname !== '/coordinador/dashboardprincipal' && (
+      {!isAmigoSecretoRoute && location.pathname !== '/coordinador/dashboardprincipal' && !isTrafficV2Route && (
         <Header
           sidebarCollapsed={collapsed}
           setPageTitle={setPageTitle}
@@ -99,6 +102,8 @@ export default function Layout({ children, setPageTitle }) {
             <TrafficOptionProvider value={trafficOption}>
               <Traficods isNavbarExpanded={!collapsed} />
             </TrafficOptionProvider>
+          ) : location.pathname === '/coordinador/ingenieria/trafico/traficov2' ? (
+            <TraficoV2 isNavbarExpanded={!collapsed} />
           ) : location.pathname === '/ingenieria/inventario-vial' ? (
             <VialOptionProvider value={{ vialHeaderOption: vialOption, setVialHeaderOption: setVialOption }}>
               <Vialds isNavbarExpanded={!collapsed} />

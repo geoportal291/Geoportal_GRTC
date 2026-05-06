@@ -185,7 +185,7 @@ const EstratoItem = React.memo(React.forwardRef(({
                                 <button
                                     type="button"
                                     className="action-btn view"
-                                    onClick={() => handleViewEnsayo(selectedEnsayo)}
+                                    onClick={() => handleViewEnsayo(selectedEnsayo, Array.isArray(estrato?.ensayos) ? estrato.ensayos : [])}
                                 >
                                     <i className="fas fa-eye" /> Ver
                                 </button>

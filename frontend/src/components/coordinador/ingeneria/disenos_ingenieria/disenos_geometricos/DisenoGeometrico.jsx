@@ -11,6 +11,8 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import shp from 'shpjs';
 import { DOMParser } from 'xmldom';
+import * as maptilersdk from '@maptiler/sdk';
+import '@maptiler/sdk/dist/maptiler-sdk.css';
 import axiosInstance from '../../../../../api/axios';
 import { useAuth } from '../../../../../data/contexts/AuthContext';
 import { usePageTitle } from '../../../../contexts/PageTitleContext';
@@ -18,20 +20,46 @@ import './DisenoGeometrico.css';
 
 const ACCEPTED_FILE_TYPES = '.zip,.rar,.kml,.kmz';
 const AUTO_SAVE_DELAY_MS = 1500;
+const DG_MAX_MAP_ZOOM = 30;
+const MAPTILER_KEY = process.env.REACT_APP_MAPTILER_KEY || '';
+if (MAPTILER_KEY) {
+  maptilersdk.config.apiKey = MAPTILER_KEY;
+}
 const BASEMAPS = {
   street: {
     key: 'street',
     label: 'Mapa',
     icon: 'fa-map',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap contributors'
+    attribution: '&copy; OpenStreetMap contributors',
+    maxNativeZoom: 19,
+    maxZoom: DG_MAX_MAP_ZOOM
   },
   ortho: {
     key: 'ortho',
     label: 'Ortofoto',
     icon: 'fa-satellite',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri'
+    url: MAPTILER_KEY
+      ? `https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`
+      : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: MAPTILER_KEY
+      ? '&copy; MapTiler &copy; OpenStreetMap contributors'
+      : 'Tiles &copy; Esri',
+    maxNativeZoom: MAPTILER_KEY ? 22 : 19,
+    maxZoom: DG_MAX_MAP_ZOOM
+  },
+  hybrid: {
+    key: 'hybrid',
+    label: 'Hibrido',
+    icon: 'fa-layer-group',
+    url: MAPTILER_KEY
+      ? `https://api.maptiler.com/maps/hybrid-v4/256/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`
+      : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: MAPTILER_KEY
+      ? '&copy; MapTiler &copy; OpenStreetMap contributors'
+      : 'Tiles &copy; Esri',
+    maxNativeZoom: MAPTILER_KEY ? 22 : 19,
+    maxZoom: DG_MAX_MAP_ZOOM
   }
 };
 const STATUS_LABELS = {
@@ -40,6 +68,26 @@ const STATUS_LABELS = {
   dirty: 'Cambios sin guardar',
   error: 'Error al guardar'
 };
+const ATTRIBUTE_COLOR_PALETTE = [
+  '#2563eb',
+  '#dc2626',
+  '#16a34a',
+  '#d97706',
+  '#7c3aed',
+  '#db2777',
+  '#0f766e',
+  '#9333ea',
+  '#ea580c',
+  '#0891b2',
+  '#4f46e5',
+  '#65a30d'
+];
+const ATTRIBUTE_COLOR_OPTIONS = [
+  { value: 'descript', label: 'Descript', aliases: ['descript', 'descrip', 'description', 'descripcion'] },
+  { value: 'offset', label: 'Offset', aliases: ['offset', 'offsets'] },
+  { value: 'eje', label: 'Eje', aliases: ['eje', 'axis'] },
+  { value: 'daylight', label: 'Daylight', aliases: ['daylight', 'dylight', 'dylith'] }
+];
 
 const EMPTY_FEATURE_COLLECTION = Object.freeze({
   type: 'FeatureCollection',
@@ -208,6 +256,23 @@ const getFeatureCount = (layer) => {
   return Array.isArray(geojson.features) ? geojson.features.length : 0;
 };
 
+const normalizeAttributeToken = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+
+const getLayerSwatchColor = (layer) => {
+  const geojson = parseGeojson(layer?.geojson_data);
+  const firstFeature = Array.isArray(geojson?.features)
+    ? geojson.features.find((feature) => feature?.geometry && feature?.properties?.stroke)
+    || geojson.features.find((feature) => feature?.geometry)
+    : null;
+
+  return firstFeature?.properties?.stroke || firstFeature?.properties?.fill || '#32b17e';
+};
+
 const createFeatureId = () => `dg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 const getDefaultStyleByType = (featureType) => {
@@ -283,10 +348,16 @@ const normalizeFeatureCollection = (value) => {
     return cloneGeojson(EMPTY_FEATURE_COLLECTION);
   }
 
-  return {
+  const normalizedCollection = {
     type: 'FeatureCollection',
     features: value.features.filter((feature) => feature?.geometry).map((feature, index) => normalizeFeature(feature, index))
   };
+
+  if (value?.dg_meta && typeof value.dg_meta === 'object') {
+    normalizedCollection.dg_meta = cloneGeojson(value.dg_meta);
+  }
+
+  return normalizedCollection;
 };
 
 const createPointIcon = (feature, isSelected) => {
@@ -448,9 +519,42 @@ const getFeatureCoordinates = (feature) => {
   }
 };
 
-const featureToPopupHtml = (feature) => {
+const getFeatureSourceAttributes = (feature) => {
   const properties = feature?.properties || {};
-  const entries = Object.entries(properties).filter(([, value]) => value !== null && value !== undefined && value !== '');
+  const hiddenKeys = new Set([
+    'stroke',
+    'stroke-width',
+    'stroke-opacity',
+    'fill',
+    'fill-opacity',
+    'visible',
+    'nombre',
+    'name'
+  ]);
+
+  return Object.entries(properties).filter(([key, value]) => (
+    !String(key).startsWith('dg_')
+    && !hiddenKeys.has(key)
+    && value !== null
+    && value !== undefined
+    && value !== ''
+  ));
+};
+
+const findFeatureAttributeEntry = (feature, aliases = []) => {
+  if (!aliases.length) return null;
+
+  const aliasSet = new Set(aliases.map(normalizeAttributeToken));
+  return getFeatureSourceAttributes(feature).find(([key]) => aliasSet.has(normalizeAttributeToken(key))) || null;
+};
+
+const getFeatureAttributeValue = (feature, aliases = []) => {
+  const match = findFeatureAttributeEntry(feature, aliases);
+  return match ? match[1] : '';
+};
+
+const featureToPopupHtml = (feature) => {
+  const entries = getFeatureSourceAttributes(feature);
 
   if (!entries.length) {
     return '<div class="dg-popup-empty">Sin atributos disponibles</div>';
@@ -467,6 +571,211 @@ const featureToPopupHtml = (feature) => {
     </div>
   `;
 };
+
+const createMaptilerDataset = (geojsonData) => {
+  const normalized = normalizeFeatureCollection(geojsonData);
+
+  return {
+    points: {
+      type: 'FeatureCollection',
+      features: normalized.features.filter((feature) => feature?.geometry?.type?.includes('Point'))
+    },
+    lines: {
+      type: 'FeatureCollection',
+      features: normalized.features.filter((feature) => feature?.geometry?.type?.includes('Line'))
+    },
+    polygons: {
+      type: 'FeatureCollection',
+      features: normalized.features.filter((feature) => feature?.geometry?.type?.includes('Polygon'))
+    }
+  };
+};
+
+const getCombinedBoundsFeatureCollection = (...collections) => {
+  const features = collections.flatMap((collection) => (
+    Array.isArray(collection?.features) ? collection.features.filter((feature) => feature?.geometry) : []
+  ));
+
+  return {
+    type: 'FeatureCollection',
+    features
+  };
+};
+
+function MaptilerTerrainMap({
+  activeGeojson,
+  projectReferenceGeojson,
+  showProjectReference
+}) {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const terrainEnabledRef = useRef(false);
+
+  useEffect(() => {
+    if (!containerRef.current || !MAPTILER_KEY) return undefined;
+
+    const map = new maptilersdk.Map({
+      container: containerRef.current,
+      style: maptilersdk.MapStyle.SATELLITE,
+      center: [-77.0428, -12.0464],
+      zoom: 12,
+      pitch: 0,
+      bearing: 0,
+      maxPitch: 60,
+      terrain: false,
+      hash: false,
+      navigationControl: false,
+      terrainControl: false,
+      geolocateControl: false,
+      scaleControl: false,
+      attributionControl: true,
+      fadeDuration: 0,
+      canvasContextAttributes: {
+        antialias: false
+      }
+    });
+
+    const ensureLayer = (layerId, sourceId, type, paint) => {
+      if (map.getLayer(layerId)) return;
+      map.addLayer({
+        id: layerId,
+        type,
+        source: sourceId,
+        paint
+      });
+    };
+
+    const apply3dView = (enabled) => {
+      if (enabled) {
+        map.enableTerrain(1.12);
+        map.easeTo({ pitch: 54, bearing: 0, duration: 700 });
+      } else {
+        map.easeTo({ pitch: 0, bearing: 0, duration: 520 });
+        window.setTimeout(() => {
+          if (mapRef.current === map) {
+            map.disableTerrain();
+          }
+        }, 540);
+      }
+
+      terrainEnabledRef.current = enabled;
+    };
+
+    const ThreeDToggleControl = function () { };
+    ThreeDToggleControl.prototype.onAdd = function () {
+      const container = document.createElement('div');
+      container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'dg-maptiler-terrain-btn';
+      button.title = 'Alternar vista 3D';
+      button.innerHTML = '<i class="fas fa-layer-group"></i>';
+      button.onclick = () => {
+        const nextEnabled = !terrainEnabledRef.current;
+        apply3dView(nextEnabled);
+        button.classList.toggle('active', nextEnabled);
+      };
+
+      container.appendChild(button);
+      return container;
+    };
+    ThreeDToggleControl.prototype.onRemove = function () { };
+
+    map.on('load', () => {
+      map.addControl(new maptilersdk.NavigationControl(), 'top-left');
+      map.addControl(new ThreeDToggleControl(), 'top-left');
+
+      map.addSource('dg-active-points', { type: 'geojson', data: createMaptilerDataset(activeGeojson).points });
+      map.addSource('dg-active-lines', { type: 'geojson', data: createMaptilerDataset(activeGeojson).lines });
+      map.addSource('dg-active-polygons', { type: 'geojson', data: createMaptilerDataset(activeGeojson).polygons });
+      map.addSource('dg-project-reference', { type: 'geojson', data: normalizeFeatureCollection(projectReferenceGeojson) });
+
+      ensureLayer('dg-active-polygon-fill', 'dg-active-polygons', 'fill', {
+        'fill-color': ['coalesce', ['get', 'fill'], ['get', 'stroke'], '#86efac'],
+        'fill-opacity': 0.14
+      });
+      ensureLayer('dg-active-polygon-line', 'dg-active-polygons', 'line', {
+        'line-color': ['coalesce', ['get', 'stroke'], '#1e88e5'],
+        'line-width': ['coalesce', ['get', 'stroke-width'], 2.5]
+      });
+      ensureLayer('dg-active-line', 'dg-active-lines', 'line', {
+        'line-color': ['coalesce', ['get', 'stroke'], '#1e88e5'],
+        'line-width': ['coalesce', ['get', 'stroke-width'], 2.5]
+      });
+      ensureLayer('dg-active-point', 'dg-active-points', 'circle', {
+        'circle-radius': 4.5,
+        'circle-color': ['coalesce', ['get', 'fill'], ['get', 'stroke'], '#ef4444'],
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': 1.5
+      });
+
+      ensureLayer('dg-project-reference-line', 'dg-project-reference', 'line', {
+        'line-color': '#f97316',
+        'line-width': 2.5,
+        'line-dasharray': [3, 2]
+      });
+
+      const boundsCollection = getCombinedBoundsFeatureCollection(
+        activeGeojson,
+        showProjectReference ? projectReferenceGeojson : null
+      );
+
+      if (boundsCollection.features.length) {
+        const [minX, minY, maxX, maxY] = turf.bbox(boundsCollection);
+        map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 48, duration: 0 });
+      }
+    });
+
+    mapRef.current = map;
+
+    return () => {
+      terrainEnabledRef.current = false;
+      mapRef.current = null;
+      map.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const activeData = createMaptilerDataset(activeGeojson);
+
+    const update = () => {
+      const setSourceData = (sourceId, data) => {
+        const source = map.getSource(sourceId);
+        if (source) {
+          source.setData(data);
+        }
+      };
+
+      setSourceData('dg-active-points', activeData.points);
+      setSourceData('dg-active-lines', activeData.lines);
+      setSourceData('dg-active-polygons', activeData.polygons);
+      setSourceData('dg-project-reference', showProjectReference ? normalizeFeatureCollection(projectReferenceGeojson) : cloneGeojson(EMPTY_FEATURE_COLLECTION));
+    };
+
+    if (map.loaded()) {
+      update();
+    } else {
+      map.once('load', update);
+    }
+  }, [activeGeojson, projectReferenceGeojson, showProjectReference]);
+
+  if (!MAPTILER_KEY) {
+    return (
+      <div className="dg-map-empty">
+        <div>
+          <h2>Vista 3D no disponible</h2>
+          <p>Configura `REACT_APP_MAPTILER_KEY` para habilitar el modo 3D de MapTiler.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <div ref={containerRef} className="dg-map dg-maptiler-3d"></div>;
+}
 
 function MapLifecycle({ mapRef, measurementLayerRef }) {
   const map = useMap();
@@ -812,6 +1121,8 @@ export default function DisenoGeometrico() {
     perimeterKm: 0
   });
   const [baseMapKey, setBaseMapKey] = useState('street');
+  const [isThreeDMode, setIsThreeDMode] = useState(false);
+  const [showProjectReference, setShowProjectReference] = useState(false);
   const [projectReferenceGeojson, setProjectReferenceGeojson] = useState(() => cloneGeojson(EMPTY_FEATURE_COLLECTION));
   const [hasProjectReference, setHasProjectReference] = useState(false);
 
@@ -905,6 +1216,9 @@ export default function DisenoGeometrico() {
   const selectedFeatureMetrics = useMemo(() => getFeatureMetrics(selectedFeature), [selectedFeature]);
   const selectedFeatureCoordinates = useMemo(() => getFeatureCoordinates(selectedFeature), [selectedFeature]);
   const selectedFeatureType = useMemo(() => getFeatureType(selectedFeature), [selectedFeature]);
+  const selectedFeatureSupportsFill = selectedFeatureType === 'polygon' || selectedFeatureType === 'rectangle' || selectedFeatureType === 'circle';
+  const selectedFeatureSourceAttributes = useMemo(() => getFeatureSourceAttributes(selectedFeature), [selectedFeature]);
+  const selectedLayerColorRule = selectedLayer?.geojson_data?.dg_meta?.colorByAttribute || '';
   const selectedLayerStatus = selectedTabName ? (saveStateByTab[selectedTabName] || 'saved') : 'saved';
   const activeFeatureSummary = useMemo(() => {
     return activeFeatures.reduce((summary, feature) => {
@@ -921,6 +1235,45 @@ export default function DisenoGeometrico() {
       return summary;
     }, { points: 0, lines: 0, areas: 0 });
   }, [activeFeatures]);
+  const availableAttributeColorOptions = useMemo(() => ATTRIBUTE_COLOR_OPTIONS.map((option) => {
+    const actualKey = activeFeatures
+      .map((feature) => findFeatureAttributeEntry(feature, option.aliases)?.[0] || '')
+      .find(Boolean);
+
+    if (!actualKey) return null;
+
+    const distinctValues = [...new Set(
+      activeFeatures
+        .map((feature) => getFeatureAttributeValue(feature, option.aliases))
+        .filter((value) => value !== null && value !== undefined && value !== '')
+        .map((value) => String(value))
+    )];
+
+    return {
+      ...option,
+      actualKey,
+      valueCount: distinctValues.length
+    };
+  }).filter(Boolean), [activeFeatures]);
+  const selectedLayerColorOption = useMemo(
+    () => availableAttributeColorOptions.find((option) => option.value === selectedLayerColorRule) || null,
+    [availableAttributeColorOptions, selectedLayerColorRule]
+  );
+  const selectedLayerColorLegend = useMemo(() => {
+    if (!selectedLayerColorOption) return [];
+
+    const distinctValues = [...new Set(
+      activeFeatures
+        .map((feature) => getFeatureAttributeValue(feature, selectedLayerColorOption.aliases))
+        .filter((value) => value !== null && value !== undefined && value !== '')
+        .map((value) => String(value))
+    )];
+
+    return distinctValues.map((value, index) => ({
+      value,
+      color: ATTRIBUTE_COLOR_PALETTE[index % ATTRIBUTE_COLOR_PALETTE.length]
+    }));
+  }, [activeFeatures, selectedLayerColorOption]);
   const activeBaseMap = BASEMAPS[baseMapKey] || BASEMAPS.street;
   const projectReferenceHasFeatures = useMemo(
     () => Array.isArray(projectReferenceGeojson?.features) && projectReferenceGeojson.features.length > 0,
@@ -1653,6 +2006,74 @@ export default function DisenoGeometrico() {
     commitActiveCollection(nextCollection, { selectedFeatureId });
   }, [activeFeatureCollection, commitActiveCollection, selectedFeatureId, selectedLayer]);
 
+  const handleApplyBorderColorsByAttribute = useCallback((attributeName) => {
+    if (!selectedLayer) return;
+
+    const nextCollection = cloneGeojson(activeFeatureCollection);
+    const nextMeta = {
+      ...(nextCollection.dg_meta && typeof nextCollection.dg_meta === 'object' ? nextCollection.dg_meta : {})
+    };
+
+    if (!attributeName) {
+      nextMeta.colorByAttribute = '';
+      nextMeta.colorByAttributeKey = '';
+      nextCollection.dg_meta = nextMeta;
+      commitActiveCollection(nextCollection, { selectedFeatureId: selectedFeatureIdRef.current });
+      alertify.success('Coloreo automatico desactivado');
+      return;
+    }
+
+    const selectedOption = availableAttributeColorOptions.find((option) => option.value === attributeName);
+    if (!selectedOption) {
+      alertify.warning('Ese atributo no esta disponible en la capa activa');
+      return;
+    }
+
+    const distinctValues = [...new Set(
+      activeFeatures
+        .map((feature) => getFeatureAttributeValue(feature, selectedOption.aliases))
+        .filter((value) => value !== null && value !== undefined && value !== '')
+        .map((value) => String(value))
+    )];
+    const colorMap = new Map(
+      distinctValues.map((value, index) => [
+        value,
+        ATTRIBUTE_COLOR_PALETTE[index % ATTRIBUTE_COLOR_PALETTE.length]
+      ])
+    );
+
+    nextCollection.features = nextCollection.features.map((feature) => {
+      const nextFeature = normalizeFeature(feature);
+      const attributeValue = getFeatureAttributeValue(nextFeature, selectedOption.aliases);
+
+      if (attributeValue === null || attributeValue === undefined || attributeValue === '') {
+        return nextFeature;
+      }
+
+      nextFeature.properties.stroke = colorMap.get(String(attributeValue)) || nextFeature.properties.stroke;
+      return nextFeature;
+    });
+
+    nextMeta.colorByAttribute = selectedOption.value;
+    nextMeta.colorByAttributeKey = selectedOption.actualKey;
+    nextCollection.dg_meta = nextMeta;
+
+    nextCollection.features.forEach((feature) => {
+      const featureId = getFeatureId(feature);
+      const layer = layerRegistryRef.current[featureId];
+      if (!layer) return;
+
+      layer.feature = feature;
+      applyLayerStyle(layer, feature, featureId === selectedFeatureIdRef.current);
+      if (layer.getPopup()) {
+        layer.setPopupContent(featureToPopupHtml(feature));
+      }
+    });
+
+    commitActiveCollection(nextCollection, { selectedFeatureId: selectedFeatureIdRef.current });
+    alertify.success(`Bordes coloreados por ${selectedOption.label}`);
+  }, [activeFeatureCollection, activeFeatures, availableAttributeColorOptions, commitActiveCollection, selectedLayer]);
+
   const handleDeleteFeature = (featureId) => {
     const layer = layerRegistryRef.current[featureId];
     const editableGroup = editableGroupRef.current;
@@ -1744,6 +2165,7 @@ export default function DisenoGeometrico() {
       return;
     }
 
+    setShowProjectReference(true);
     fitBounds(bounds);
   };
 
@@ -1785,7 +2207,7 @@ export default function DisenoGeometrico() {
               </div>
               <div className="dg-property-item">
                 <span>Trazado del proyecto</span>
-                <strong>{hasProjectReference ? 'Disponible' : 'No cargado'}</strong>
+                <strong>{hasProjectReference ? (showProjectReference ? 'Visible' : 'Oculto') : 'No cargado'}</strong>
               </div>
               <div className="dg-property-item">
                 <span>Modo actual</span>
@@ -1793,10 +2215,21 @@ export default function DisenoGeometrico() {
               </div>
             </div>
 
-            <button type="button" className="dg-secondary-btn dg-full-btn" disabled={!projectReferenceHasFeatures} onClick={handleFocusProjectReference}>
-              <i className="fas fa-route"></i>
-              <span>Ir al trazado del proyecto</span>
-            </button>
+            <div className="dg-inline-actions">
+              <button type="button" className="dg-secondary-btn" disabled={!projectReferenceHasFeatures} onClick={handleFocusProjectReference}>
+                <i className="fas fa-route"></i>
+                <span>Ir al trazado</span>
+              </button>
+              <button
+                type="button"
+                className="dg-secondary-btn"
+                disabled={!projectReferenceHasFeatures}
+                onClick={() => setShowProjectReference((current) => !current)}
+              >
+                <i className={`fas ${showProjectReference ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                <span>{showProjectReference ? 'Ocultar trazado' : 'Mostrar trazado'}</span>
+              </button>
+            </div>
           </section>
 
           <section className="dg-panel">
@@ -1826,7 +2259,10 @@ export default function DisenoGeometrico() {
                   return (
                     <div key={layer.tab_name} className={`dg-layer-row ${isActive ? 'active' : ''}`}>
                       <button type="button" className="dg-layer-main" onClick={() => handleSelectLayer(layer.tab_name)}>
-                        <span className={`dg-layer-swatch ${isActive ? 'active' : ''}`}></span>
+                        <span
+                          className={`dg-layer-swatch ${isActive ? 'active' : ''}`}
+                          style={{ background: getLayerSwatchColor(layer) }}
+                        ></span>
                         <div>
                           <strong>{layer.file_name || layer.tab_name}</strong>
                           <small>{getFeatureCount(layer)} elementos</small>
@@ -1940,7 +2376,7 @@ export default function DisenoGeometrico() {
             {projectId ? (
               <>
                 <div className="dg-map-view-switch" role="group" aria-label="Cambiar vista del mapa">
-                  {Object.values(BASEMAPS).map((baseMap) => (
+                  {!isThreeDMode && Object.values(BASEMAPS).map((baseMap) => (
                     <button
                       key={baseMap.key}
                       type="button"
@@ -1951,62 +2387,96 @@ export default function DisenoGeometrico() {
                       <span>{baseMap.label}</span>
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className={`dg-map-view-btn ${isThreeDMode ? 'active' : ''}`}
+                    onClick={() => setIsThreeDMode((current) => !current)}
+                    disabled={!MAPTILER_KEY}
+                    title={MAPTILER_KEY ? 'Alternar vista 3D de MapTiler' : 'Configura la key de MapTiler para usar 3D'}
+                  >
+                    <i className="fas fa-cubes"></i>
+                    <span>{isThreeDMode ? 'Volver 2D' : '3D'}</span>
+                  </button>
                 </div>
 
-                <MapContainer className="dg-map" center={[-12.0464, -77.0428]} zoom={6} zoomControl={false} doubleClickZoom>
-                  <TileLayer key={activeBaseMap.key} attribution={activeBaseMap.attribution} url={activeBaseMap.url} />
-                  <ZoomControl position="topleft" />
-                  <ScaleControl position="bottomleft" />
-                  <MapLifecycle mapRef={mapRef} measurementLayerRef={measurementLayerRef} />
-                  <ActiveToolController
-                    activeTool={activeTool}
-                    editableGroupRef={editableGroupRef}
-                    measurementLayerRef={measurementLayerRef}
-                    canEdit={canManage}
-                    onFeatureCreated={handleFeatureCreated}
-                    onFeaturesEdited={handleFeaturesEdited}
-                    onFeaturesDeleted={handleFeaturesDeleted}
-                    onMeasurementUpdate={setMeasurementSummary}
-                    onToolReset={() => setActiveTool('select')}
+                {isThreeDMode ? (
+                  <MaptilerTerrainMap
+                    activeGeojson={activeFeatureCollection}
+                    projectReferenceGeojson={projectReferenceGeojson}
+                    showProjectReference={showProjectReference && projectReferenceHasFeatures}
                   />
-
-                  {projectReferenceHasFeatures && (
-                    <GeoJSON
-                      key={`project-reference-${serializeGeojson(projectReferenceGeojson)}`}
-                      data={projectReferenceGeojson}
-                      style={getProjectReferenceStyle}
-                      pointToLayer={(feature, latlng) => L.circleMarker(latlng, {
-                        radius: 5,
-                        color: '#ffffff',
-                        weight: 2,
-                        fillColor: '#f97316',
-                        fillOpacity: 1
-                      })}
-                      onEachFeature={(feature, leafletLayer) => {
-                        leafletLayer.bindPopup(`
-                          <div class="dg-popup-reference-title">Trazado del proyecto</div>
-                          ${featureToPopupHtml(feature)}
-                        `);
-                      }}
+                ) : (
+                  <MapContainer
+                    className="dg-map"
+                    center={[-12.0464, -77.0428]}
+                    zoom={6}
+                    zoomControl={false}
+                    doubleClickZoom
+                    maxZoom={activeBaseMap.maxZoom || DG_MAX_MAP_ZOOM}
+                    zoomSnap={0.25}
+                    zoomDelta={0.5}
+                    wheelPxPerZoomLevel={80}
+                  >
+                    <TileLayer
+                      key={activeBaseMap.key}
+                      attribution={activeBaseMap.attribution}
+                      url={activeBaseMap.url}
+                      maxNativeZoom={activeBaseMap.maxNativeZoom || 19}
+                      maxZoom={activeBaseMap.maxZoom || DG_MAX_MAP_ZOOM}
                     />
-                  )}
+                    <ZoomControl position="topleft" />
+                    <ScaleControl position="bottomleft" />
+                    <MapLifecycle mapRef={mapRef} measurementLayerRef={measurementLayerRef} />
+                    <ActiveToolController
+                      activeTool={activeTool}
+                      editableGroupRef={editableGroupRef}
+                      measurementLayerRef={measurementLayerRef}
+                      canEdit={canManage}
+                      onFeatureCreated={handleFeatureCreated}
+                      onFeaturesEdited={handleFeaturesEdited}
+                      onFeaturesDeleted={handleFeaturesDeleted}
+                      onMeasurementUpdate={setMeasurementSummary}
+                      onToolReset={() => setActiveTool('select')}
+                    />
 
-                  {layers
-                    .filter((layer) => layer.tab_name !== selectedTabName && (visibleTabs[layer.tab_name] ?? true))
-                    .map((layer) => (
+                    {projectReferenceHasFeatures && showProjectReference && (
                       <GeoJSON
-                        key={`${layer.tab_name}-${serializeGeojson(layer.geojson_data)}`}
-                        data={layer.geojson_data}
-                        style={(feature) => getVectorStyle(feature, false)}
-                        pointToLayer={(feature, latlng) => L.marker(latlng, { icon: createPointIcon(feature, false) })}
+                        key={`project-reference-${serializeGeojson(projectReferenceGeojson)}`}
+                        data={projectReferenceGeojson}
+                        style={getProjectReferenceStyle}
+                        pointToLayer={(feature, latlng) => L.circleMarker(latlng, {
+                          radius: 5,
+                          color: '#ffffff',
+                          weight: 2,
+                          fillColor: '#f97316',
+                          fillOpacity: 1
+                        })}
                         onEachFeature={(feature, leafletLayer) => {
-                          leafletLayer.bindPopup(featureToPopupHtml(feature));
+                          leafletLayer.bindPopup(`
+                            <div class="dg-popup-reference-title">Trazado del proyecto</div>
+                            ${featureToPopupHtml(feature)}
+                          `);
                         }}
                       />
-                    ))}
+                    )}
 
-                  <FeatureGroup ref={editableGroupRef}></FeatureGroup>
-                </MapContainer>
+                    {layers
+                      .filter((layer) => layer.tab_name !== selectedTabName && (visibleTabs[layer.tab_name] ?? true))
+                      .map((layer) => (
+                        <GeoJSON
+                          key={`${layer.tab_name}-${serializeGeojson(layer.geojson_data)}`}
+                          data={layer.geojson_data}
+                          style={(feature) => getVectorStyle(feature, false)}
+                          pointToLayer={(feature, latlng) => L.marker(latlng, { icon: createPointIcon(feature, false) })}
+                          onEachFeature={(feature, leafletLayer) => {
+                            leafletLayer.bindPopup(featureToPopupHtml(feature));
+                          }}
+                        />
+                      ))}
+
+                    <FeatureGroup ref={editableGroupRef}></FeatureGroup>
+                  </MapContainer>
+                )}
               </>
             ) : (
               <div className="dg-map-empty">
@@ -2125,6 +2595,55 @@ export default function DisenoGeometrico() {
           <section className="dg-panel">
             <div className="dg-panel-head">
               <div>
+                <h2>Colores por atributo</h2>
+                <p>Aplica colores distintos al borde segun los campos del shape o KML.</p>
+              </div>
+            </div>
+
+            <div className="dg-property-stack">
+              <label>
+                Campo para colorear
+                <select
+                  value={selectedLayerColorRule}
+                  onChange={(event) => handleApplyBorderColorsByAttribute(event.target.value)}
+                  disabled={!canManage || !selectedLayer || !availableAttributeColorOptions.length}
+                >
+                  <option value="">Manual</option>
+                  {availableAttributeColorOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label} ({option.actualKey} - {option.valueCount} valores)
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="dg-property-item">
+                <span>Estado</span>
+                <strong>
+                  {selectedLayerColorOption
+                    ? `Activo por ${selectedLayerColorOption.actualKey}`
+                    : 'Sin regla automatica'}
+                </strong>
+              </div>
+
+              {selectedLayerColorLegend.length ? (
+                <div className="dg-color-legend">
+                  {selectedLayerColorLegend.map((item) => (
+                    <div key={item.value} className="dg-color-legend-row">
+                      <span className="dg-color-legend-swatch" style={{ background: item.color }}></span>
+                      <span className="dg-color-legend-label">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="dg-empty-box">Selecciona un campo como `Descript`, `Offset`, `Eje` o `Daylight` para repartir colores automaticamente.</div>
+              )}
+            </div>
+          </section>
+
+          <section className="dg-panel">
+            <div className="dg-panel-head">
+              <div>
                 <h2>Propiedades</h2>
                 <p>{selectedFeature ? 'Geometria seleccionada' : 'Selecciona una geometria'}</p>
               </div>
@@ -2161,22 +2680,36 @@ export default function DisenoGeometrico() {
                 )}
 
                 <div className="dg-property-item">
-                  <span>Color</span>
+                  <span>Color de borde</span>
                   <label className="dg-color-field">
                     <input
                       type="color"
                       value={selectedFeature.properties?.stroke || '#1e88e5'}
-                      onChange={(event) => updateSelectedFeature({
-                        stroke: event.target.value,
-                        fill: getFeatureType(selectedFeature) === 'point'
-                          ? event.target.value
-                          : (selectedFeature.properties?.fill || event.target.value)
-                      })}
+                      onChange={(event) => updateSelectedFeature(
+                        selectedFeatureType === 'point'
+                          ? { stroke: event.target.value, fill: event.target.value }
+                          : { stroke: event.target.value }
+                      )}
                       disabled={!canManage}
                     />
                     <span>{selectedFeature.properties?.stroke || '#1e88e5'}</span>
                   </label>
                 </div>
+
+                {selectedFeatureSupportsFill && (
+                  <div className="dg-property-item">
+                    <span>Color de relleno</span>
+                    <label className="dg-color-field">
+                      <input
+                        type="color"
+                        value={selectedFeature.properties?.fill || selectedFeature.properties?.stroke || '#86efac'}
+                        onChange={(event) => updateSelectedFeature({ fill: event.target.value })}
+                        disabled={!canManage}
+                      />
+                      <span>{selectedFeature.properties?.fill || selectedFeature.properties?.stroke || '#86efac'}</span>
+                    </label>
+                  </div>
+                )}
 
                 <label>
                   Grosor
@@ -2188,6 +2721,26 @@ export default function DisenoGeometrico() {
                     <option value={6}>6 px</option>
                   </select>
                 </label>
+
+                <div className="dg-attributes-section">
+                  <div className="dg-attributes-head">
+                    <span>Atributos de origen</span>
+                    <strong>{selectedFeatureSourceAttributes.length}</strong>
+                  </div>
+
+                  {selectedFeatureSourceAttributes.length ? (
+                    <div className="dg-attributes-list">
+                      {selectedFeatureSourceAttributes.map(([key, value]) => (
+                        <div key={key} className="dg-attribute-row">
+                          <span className="dg-attribute-key">{key}</span>
+                          <strong className="dg-attribute-value">{String(value)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="dg-empty-box">Esta geometria no trae atributos adicionales del shape o KML.</div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="dg-empty-box">No hay una geometria seleccionada.</div>

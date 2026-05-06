@@ -5,6 +5,7 @@ import alertify from 'alertifyjs';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import FormularioEnsayo from '../ensayos/FormularioEnsayo';
+import EnsayoDetalleModal from '../ensayos/EnsayoDetalleModal';
 import EstratoItem from '../estratos/EstratoItem'; // Import the new EstratoItem component
 import PerfilEstratigraficoModal from '../estratos/PerfilEstratigraficoModal'; // Import the new PerfilEstratigraficoModal component
 import VisorGraficosProgresivaModal from '../estratos/VisorGraficosProgresivaModal'; // NEW: Import VisorGraficosProgresivaModal
@@ -256,6 +257,9 @@ export default function GestorDeTramosActual() {
     const [viewingEstratos, setViewingEstratos] = useState(null);
     const [expandedEnsayos, setExpandedEnsayos] = useState({});
     const [selectedEnsayoInModal, setSelectedEnsayoInModal] = useState(null);
+    const [showEnsayoDetalleModal, setShowEnsayoDetalleModal] = useState(false);
+    const [ensayosDetalleGrupo, setEnsayosDetalleGrupo] = useState([]);
+    const [selectedEnsayoDetalleId, setSelectedEnsayoDetalleId] = useState(null);
 
     // NEW: State for graphics modal
     const [viewingGraficosFor, setViewingGraficosFor] = useState(null);
@@ -707,49 +711,22 @@ export default function GestorDeTramosActual() {
     // ***************************************************
 
 
-    const handleViewEnsayo = (ensayo) => {
-        const assayDetails = `
-    <div class="ensayo-details-modal-container">
-        <div class="ensayo-details-modal-header">
-            <i class="fas fa-vial"></i>
-            <h2>Detalles del Ensayo</h2>
-        </div>
-        <div class="ensayo-details-modal-content">
-            <div class="modal-detail-item">
-                <i class="fas fa-tag"></i>
-                <span class="modal-detail-label">Nombre:</span>
-                <span class="modal-detail-value">${ensayo.nombre_ensayo}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-flask"></i>
-                <span class="modal-detail-label">Tipo:</span>
-                <span class="modal-detail-value">${ensayo.tipo_ensayo_descripcion || ensayo.tipo_ensayo}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-calendar-alt"></i>
-                <span class="modal-detail-label">Fecha:</span>
-                <span class="modal-detail-value">${formatDateForDisplay(ensayo.fecha)}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-chart-bar"></i>
-                <span class="modal-detail-label">Resultado:</span>
-                <span class="modal-detail-value">${typeof ensayo.resultado === 'object' && ensayo.resultado !== null ? 'Ver detalles' : (ensayo.resultado || '—')}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-user"></i>
-                <span class="modal-detail-label">Responsable:</span>
-                <span class="modal-detail-value">${ensayo.responsable_nombre || 'N/A'}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-info-circle"></i>
-                <span class="modal-detail-label">Estado:</span>
-                <span class="modal-detail-value status-badge status-${ensayo.estado?.toLowerCase()}">${ensayo.estado}</span>
-            </div>
-        </div>
-    </div>
-    `;
-        // Remove the default title and padding from alertify to use our own
-        alertify.alert('', assayDetails).set('padding', false);
+    const handleViewEnsayo = (ensayo, ensayosGrupo = []) => {
+        if (!ensayo?.id) return;
+
+        const normalizedGroup = Array.isArray(ensayosGrupo) && ensayosGrupo.length > 0
+            ? ensayosGrupo.filter(Boolean)
+            : [ensayo];
+
+        setEnsayosDetalleGrupo(normalizedGroup);
+        setSelectedEnsayoDetalleId(ensayo.id);
+        setShowEnsayoDetalleModal(true);
+    };
+
+    const handleCloseEnsayoDetalleModal = () => {
+        setShowEnsayoDetalleModal(false);
+        setEnsayosDetalleGrupo([]);
+        setSelectedEnsayoDetalleId(null);
     };
 
     const formatDateForDisplay = (dateString) => {
@@ -1092,7 +1069,7 @@ export default function GestorDeTramosActual() {
                                                                         <div className="ensayo-main-actions">
                                                                             {selectedEnsayo && (
                                                                                 <div className="selected-ensayo-actions">
-                                                                                    <button type="button" className="action-btn view" onClick={() => handleViewEnsayo(selectedEnsayo)}><i className="fas fa-eye"></i> Ver</button>
+                                                                                    <button type="button" className="action-btn view" onClick={() => handleViewEnsayo(selectedEnsayo, estrato.ensayos || [])}><i className="fas fa-eye"></i> Ver</button>
                                                                                     <button type="button" className="action-btn action-btn-granulometria-simple" onClick={() => navigate(`/coordinador/suelos/ensayos/${selectedEnsayo.id}`)}>Ir a Ensayo</button>
                                                                                     <button type="button" className="action-btn edit" onClick={() => handleEditEnsayo(viewingEstratos, estrato, selectedEnsayo)}><i className="fas fa-edit"></i> Editar</button>
                                                                                     <button type="button" className="action-btn delete" onClick={() => { handleDeleteEnsayo(selectedEnsayo.id); setSelectedEnsayoInModal(null); }}><i className="fas fa-trash"></i> Eliminar</button>
@@ -1182,6 +1159,19 @@ export default function GestorDeTramosActual() {
                     </div>
                 </div>
             )}
+
+            <EnsayoDetalleModal
+                isOpen={showEnsayoDetalleModal}
+                ensayos={ensayosDetalleGrupo}
+                initialEnsayoId={selectedEnsayoDetalleId}
+                showEnsayoTabs
+                onClose={handleCloseEnsayoDetalleModal}
+                onSaved={() => {
+                    if (tramoSeleccionado) {
+                        fetchProgresivas(tramoSeleccionado.id, currentPage, searchTerm);
+                    }
+                }}
+            />
         </>
     );
 }

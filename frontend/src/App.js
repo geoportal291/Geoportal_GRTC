@@ -46,6 +46,7 @@ import Ambiental from './components/especialista/ambiental';
 import Estructuras from './components/especialista/estructuras';
 import Topografico from './components/especialista/topografico';
 import Traficods from './components/coordinador/ingeneria/trafico/trafico.jsx';
+import TraficoV2 from './components/coordinador/ingeneria/trafico_v2/TraficoV2.jsx';
 import GeoTestPage from './components/coordinador/ingeneria/trafico/GeoTestPage.jsx'; // <-- Importar página de prueba
 import TestMapWithRoute from './components/coordinador/testmapa'; // <-- Importar componente de mapa de prueba
 import Geoite from './components/coordinador/pruebas/geoite'; // <-- Importar componente de mapa de prueba
@@ -125,6 +126,8 @@ function AppContent() {
         // Actualizar el título según la ruta
         if (location.pathname === '/coordinador/ingenieria/trafico/trafico') {
             setPageTitle('Área de Tráfico');
+        } else if (location.pathname === '/coordinador/ingenieria/trafico/traficov2') {
+            setPageTitle('Área de Tráfico V2');
         } else if (location.pathname === '/perfil') {
             setPageTitle('Mi Perfil');
         } else if (location.pathname === '/coordinador/Progresivas') {
@@ -202,6 +205,7 @@ function AppContent() {
                 <Route path="/especialista/suelos" element={<RutaPrivada><Layout><Suelos /></Layout></RutaPrivada>} />*/}
                 {/* Coordinador: Trafico */}
                 <Route path="/coordinador/ingenieria/trafico/trafico" element={<RutaPrivada><Layout><Traficods /></Layout></RutaPrivada>} />
+                <Route path="/coordinador/ingenieria/trafico/traficov2" element={<RutaPrivada><Layout><TraficoV2 /></Layout></RutaPrivada>} />
                 <Route path="/geotest" element={<RutaPrivada><Layout><GeoTestPage /></Layout></RutaPrivada>} />
 
                 {/* NUEVO: Ruta para Inventario Vial */}

@@ -1,85 +1,77 @@
-import React, { useState, useEffect, useCallback } from 'react';  
+import React, { useState, useEffect, useCallback } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction'; // Para interacciones como drag & drop
+import interactionPlugin from '@fullcalendar/interaction';
 import alertify from 'alertifyjs';
-import './calendar.css';  // Importa el archivo de estilos
-import esLocale from '@fullcalendar/core/locales/es';  // Importamos el locale de español
+import './calendar.css';
+import esLocale from '@fullcalendar/core/locales/es';
 
 export default function Calendar() {
-  const [events, setEvents] = useState([]);  // Estado para los eventos del calendario
-  const [modalVisible, setModalVisible] = useState(false);  // Estado para controlar la visibilidad del modal
-  const [selectedEvent, setSelectedEvent] = useState(null);  // Estado para almacenar el evento seleccionado
+  const [events, setEvents] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   const API_BASE = process.env.REACT_APP_API_BASE;
 
-  // Usamos useCallback para memorizar la función
+
   const fetchAnuncios = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/anuncios/activos`);
       const data = await res.json();
 
-      console.log('Datos recuperados del backend:', data);  // Verifica si los datos llegan correctamente
+      console.log('Datos recuperados del backend:', data);
 
-      // Filtramos los anuncios para que solo se muestren los que no han expirado
       const filteredEvents = data.filter(event => {
         const fechaExpiracion = new Date(event.fecha_expiracion);
         const fechaActual = new Date();
-        return fechaExpiracion >= fechaActual;  // Solo eventos cuya fecha de expiración es posterior a la fecha actual
+        return fechaExpiracion >= fechaActual;
       });
 
-      console.log('Eventos filtrados:', filteredEvents);  // Verifica los eventos después de ser filtrados
+      console.log('Eventos filtrados:', filteredEvents);
 
-      // Formateamos los anuncios filtrados para el calendario
       const formattedEvents = filteredEvents.map(event => {
         const fechaExpiracion = new Date(event.fecha_expiracion);
+        const formattedFechaExpiracion = fechaExpiracion.toISOString().split('T')[0];
 
-        // Convertir la fecha de expiración a formato ISO estándar (YYYY-MM-DD) para FullCalendar
-        const formattedFechaExpiracion = fechaExpiracion.toISOString().split('T')[0]; // Solo la fecha (sin hora)
-
-        // Asegurarnos de que el título no esté vacío y no tenga el valor "0"
-        const title = event.titulo && event.titulo.trim() !== "" ? event.titulo : "Sin título";  // Si no tiene título, asignamos un valor por defecto
-
+        const title = event.titulo && event.titulo.trim() !== "" ? event.titulo : "Sin título";
         return {
-          title: title,  // Título correcto
-          start: formattedFechaExpiracion,  // Solo se muestra la fecha de expiración
-          end: formattedFechaExpiracion,  // Añadimos la misma fecha para mantener la coherencia
+          title: title,
+          start: formattedFechaExpiracion,
+          end: formattedFechaExpiracion,
           description: event.contenido,
-          expiration: fechaExpiracion.toISOString(), // Usaremos la fecha completa con hora en el modal
+          expiration: fechaExpiracion.toISOString(),
         };
       });
 
-      console.log('Eventos formateados:', formattedEvents);  // Verifica los eventos después de ser formateados
+      console.log('Eventos formateados:', formattedEvents);
 
-      setEvents(formattedEvents);  // Actualiza el estado de eventos para el calendario
+      setEvents(formattedEvents);
     } catch (error) {
       console.error('Error al cargar los eventos:', error);
       alertify.error('Error al cargar anuncios');
     }
-  }, [API_BASE]);  // Dependencia de API_BASE
+  }, [API_BASE]);
 
   useEffect(() => {
-    fetchAnuncios();  // Llamamos a la función en el useEffect
+    fetchAnuncios();
   }, [fetchAnuncios]);
 
-  // Función para convertir la fecha en formato local peruano
+
   const formatDate = (date) => {
-    return new Date(date).toLocaleString('es-PE'); // Usamos 'es-PE' para formato en español (Perú)
+    return new Date(date).toLocaleString('es-PE');
   };
 
-  // Función para mostrar el modal con los detalles del evento
   const handleEventClick = (info) => {
-    setSelectedEvent(info.event);  // Establecemos el evento seleccionado
-    setModalVisible(true);  // Mostramos el modal
+    setSelectedEvent(info.event);
+    setModalVisible(true);
   };
 
-  // Función para cerrar el modal
   const closeModal = () => {
     setModalVisible(false);
     setSelectedEvent(null);
   };
 
-  console.log('Eventos para el calendario:', events);  // Verifica si los eventos están bien pasados al FullCalendar
+  console.log('Eventos para el calendario:', events);
 
   return (
     <div>
@@ -87,12 +79,12 @@ export default function Calendar() {
       <FullCalendar
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
-        events={events}  // Los eventos se pasan desde el estado
-        eventClick={handleEventClick}  // Al hacer clic en un evento, muestra el modal
-        locale={esLocale}  // Configuramos el idioma a español
+        events={events}
+        eventClick={handleEventClick}
+        locale={esLocale}
       />
 
-      {/* Modal Elegante */}
+
       {modalVisible && selectedEvent && (
         <div className={`modal-overlay ${modalVisible ? 'open' : ''}`}>
           <div className="modal-content">

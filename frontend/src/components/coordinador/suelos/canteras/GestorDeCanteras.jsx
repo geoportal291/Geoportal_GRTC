@@ -8,6 +8,7 @@ import SuelosMap from '../mapa/SuelosMap';
 import './GestorDeCanteras.css';
 import '../proyectos/GestorProyectos.css';
 import FormularioEnsayo from '../ensayos/FormularioEnsayo';
+import EnsayoDetalleModal from '../ensayos/EnsayoDetalleModal';
 import PerfilEstratigraficoModal from '../estratos/PerfilEstratigraficoModal';
 import EstratoItem from '../estratos/EstratoItem';
 import TramoSelectionModal from '../gestion_tramos/TramoSelectionModal';
@@ -70,21 +71,22 @@ export default function GestorDeCanteras() {
   const [currentCanteraForAssay, setCurrentCanteraForAssay] = useState(null);
   const [currentEstratoForAssay, setCurrentEstratoForAssay] = useState(null);
   const [ensayoToEdit, setEnsayoToEdit] = useState(null);
+  const [selectedEnsayoForDetail, setSelectedEnsayoForDetail] = useState(null);
   const [showClasificacionModal, setShowClasificacionModal] = useState(false);
   const [estratoToClasificar, setEstratoToClasificar] = useState(null);
 
   const handleOpenClasificacionModal = (estrato) => {
     setEstratoToClasificar(estrato);
-    // Por ahora, solo mostramos un mensaje. Luego abrirá el modal.
+
     alertify.message(`Próximamente: Clasificación para estrato ID: ${estrato.id}`);
-    // setShowClasificacionModal(true); // Esto se activará cuando el modal exista
+
   };
 
 
   useEffect(() => {
   }, [showEnsayoModal]);
 
-  // API_URL: defensiva por si no tienes REACT_APP_API_BASE
+
   const API_BASE = process.env.REACT_APP_API_BASE || process.env.REACT_APP_API_URL || 'http://localhost:3001';
   const API_URL = `${API_BASE}/api`;
 
@@ -101,7 +103,7 @@ export default function GestorDeCanteras() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, [user]);
 
-  // Fetch tramos del usuario (por proyecto)
+
   const fetchTramos = useCallback(async () => {
     if (!selectedProjectId) {
       setInitialLoading(false);
@@ -148,7 +150,7 @@ export default function GestorDeCanteras() {
     }
   }, [userTramos, location.state, selectedTramoId, handleTramoSelect]);
 
-  // Fetch canteras por tramo
+
   const fetchCanteras = useCallback(async () => {
     if (!selectedTramoId) {
       setCanteras([]);
@@ -161,7 +163,7 @@ export default function GestorDeCanteras() {
       const fetchedCanteras = response.data || [];
       setCanteras(fetchedCanteras);
 
-      // If not coming from a navigation state, select the first cantera
+
       if (!location.state?.canteraId) {
         setCanteraSeleccionada(fetchedCanteras.length > 0 ? fetchedCanteras[0] : null);
       }
@@ -319,47 +321,7 @@ export default function GestorDeCanteras() {
   };
 
   const handleViewEnsayo = (ensayo) => {
-    const assayDetails = `
-    <div class="ensayo-details-modal-container">
-        <div class="ensayo-details-modal-header">
-            <i class="fas fa-vial"></i>
-            <h2>Detalles del Ensayo</h2>
-        </div>
-        <div class="ensayo-details-modal-content">
-            <div class="modal-detail-item">
-                <i class="fas fa-tag"></i>
-                <span class="modal-detail-label">Nombre:</span>
-                <span class="modal-detail-value">${ensayo.nombre_ensayo}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-flask"></i>
-                <span class="modal-detail-label">Tipo:</span>
-                <span class="modal-detail-value">${ensayo.tipo_ensayo_descripcion || ensayo.tipo_ensayo}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-calendar-alt"></i>
-                <span class="modal-detail-label">Fecha:</span>
-                <span class="modal-detail-value">${new Date(ensayo.fecha).toLocaleDateString()}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-chart-bar"></i>
-                <span class="modal-detail-label">Resultado:</span>
-                <span class="modal-detail-value">${typeof ensayo.resultado === 'object' && ensayo.resultado !== null ? 'Ver detalles' : (ensayo.resultado || '—')}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-user"></i>
-                <span class="modal-detail-label">Responsable:</span>
-                <span class="modal-detail-value">${ensayo.responsable_nombre || 'N/A'}</span>
-            </div>
-            <div class="modal-detail-item">
-                <i class="fas fa-info-circle"></i>
-                <span class="modal-detail-label">Estado:</span>
-                <span class="modal-detail-value status-badge status-${ensayo.estado?.toLowerCase()}">${ensayo.estado}</span>
-            </div>
-        </div>
-    </div>
-    `;
-    alertify.alert('', assayDetails).set('padding', false);
+    setSelectedEnsayoForDetail(ensayo);
   };
 
   const handleAssayCreated = useCallback(() => {
@@ -552,6 +514,15 @@ export default function GestorDeCanteras() {
           </div>
         </div>
       )}
+
+      <EnsayoDetalleModal
+        isOpen={!!selectedEnsayoForDetail}
+        ensayos={selectedEnsayoForDetail ? [selectedEnsayoForDetail] : []}
+        initialEnsayoId={selectedEnsayoForDetail?.id ?? null}
+        showEnsayoTabs={false}
+        onClose={() => setSelectedEnsayoForDetail(null)}
+        onSaved={fetchCanteras}
+      />
 
       {showGestionarEstratosModal && (
         <PerfilEstratigraficoModal

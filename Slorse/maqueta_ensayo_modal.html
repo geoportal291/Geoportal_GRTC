@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maqueta: Ensayo en Ventana Emergente</title>
+    <style>
+        /* Estilos Base y Reset */
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-body: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --overlay: rgba(15, 23, 42, 0.7);
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            line-height: 1.5;
+        }
+
+        /* Layout Principal */
+        .header {
+            background-color: #1e293b;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: #0f172a;
+        }
+
+        /* Lista de Progresivas */
+        .progresiva-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .progresiva-header {
+            background-color: #f8fafc;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ensayos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+            padding: 1.5rem;
+        }
+
+        .ensayo-card {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .ensayo-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .ensayo-title {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .ensayo-status {
+            font-size: 0.8rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            background: #dcfce7;
+            color: #166534;
+            display: inline-block;
+            align-self: flex-start;
+        }
+
+        /* MODAL EMERGENTE */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--overlay);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-container {
+            background-color: var(--bg-card);
+            width: 95%;
+            max-width: 1400px;
+            height: 90vh;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            transform: scale(0.95);
+            transition: transform 0.2s ease;
+            overflow: hidden;
+        }
+
+        .modal-overlay.active .modal-container {
+            transform: scale(1);
+        }
+
+        /* Modal Header */
+        .modal-header {
+            padding: 1.25rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #f8fafc;
+        }
+
+        .modal-title-area h2 {
+            font-size: 1.25rem;
+            color: #0f172a;
+            margin-bottom: 0.25rem;
+        }
+
+        .modal-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0.5rem;
+            line-height: 1;
+        }
+        
+        .close-btn:hover {
+            color: #ef4444;
+        }
+
+        /* Modal Body */
+        .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            background-color: #f8fafc;
+        }
+
+        /* Simulación de contenido del ensayo */
+        .ensayo-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 1rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .form-section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .mock-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .mock-table th, .mock-table td {
+            border: 1px solid var(--border);
+            padding: 0.75rem;
+            text-align: left;
+        }
+
+        .mock-table th {
+            background-color: #f1f5f9;
+            font-size: 0.875rem;
+        }
+
+        .mock-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+        }
+
+        /* Modal Footer */
+        .modal-footer {
+            padding: 1rem 2rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            background-color: white;
+        }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.2s;
+        }
+
+        .btn-outline {
+            background: white;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover {
+            background: #f1f5f9;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div><strong>Geoportal</strong> | Mecánica de Suelos</div>
+        <div>Usuario Coordinador</div>
+    </header>
+
+    <div class="container">
+        <h1 class="page-title">Ensayos del Tramo: KM 0+000 al KM 15+000</h1>
+
+        <!-- Lista de Progresivas de fondo -->
+        <div class="progresiva-card">
+            <div class="progresiva-header">
+                <span>Progresiva KM 10+500</span>
+                <span>Estrato 1 (0.00m - 1.50m)</span>
+            </div>
+            <div class="ensayos-grid">
+                <div class="ensayo-card" onclick="abrirModal('Análisis Granulométrico', 'KM 10+500')">
+                    <span class="ensayo-title">Análisis Granulométrico</span>
+                    <span class="ensayo-status">Completado</span>
+                    <span style="font-size: 0.85rem; color: #64748b;">Muestra: M-1</span>
+                </div>
+                <div class="ensayo-card" onclick="abrirModal('Límites de Consistencia', 'KM 10+500')">
+                    <span class="ensayo-title">Límites de Consistencia</span>
+                    <span class="ensayo-status" style="background:#fef08a; color:#854d0e;">En Proceso</span>
+                    <span style="font-size: 0.85rem; color: #64748b;">Muestra: M-1</span>
+                </div>
+                <div class="ensayo-card" onclick="abrirModal('Ensayo Proctor', 'KM 10+500')">
+                    <span class="ensayo-title">Ensayo Proctor Modificado</span>
+                    <span class="ensayo-status" style="background:#e2e8f0; color:#475569;">Pendiente</span>
+                    <span style="font-size: 0.85rem; color: #64748b;">Muestra: M-1</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="progresiva-card">
+            <div class="progresiva-header">
+                <span>Progresiva KM 12+200</span>
+                <span>Estrato 1 (0.00m - 2.00m)</span>
+            </div>
+            <div class="ensayos-grid">
+                <div class="ensayo-card" onclick="abrirModal('Análisis Granulométrico', 'KM 12+200')">
+                    <span class="ensayo-title">Análisis Granulométrico</span>
+                    <span class="ensayo-status">Completado</span>
+                    <span style="font-size: 0.85rem; color: #64748b;">Muestra: M-1</span>
+                </div>
+                <div class="ensayo-card" onclick="abrirModal('CBR', 'KM 12+200')">
+                    <span class="ensayo-title">Ensayo CBR</span>
+                    <span class="ensayo-status" style="background:#e2e8f0; color:#475569;">Pendiente</span>
+                    <span style="font-size: 0.85rem; color: #64748b;">Muestra: M-1</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VENTANA EMERGENTE (MODAL) PARA EL DETALLE DEL ENSAYO -->
+    <div class="modal-overlay" id="ensayoModal">
+        <div class="modal-container">
+            
+            <!-- Cabecera del Modal -->
+            <div class="modal-header">
+                <div class="modal-title-area">
+                    <h2 id="modalTitle">Análisis Granulométrico</h2>
+                    <div class="modal-subtitle">Progresiva <span id="modalProg">KM 10+500</span> | Estrato 1</div>
+                </div>
+                <button class="close-btn" onclick="cerrarModal()">&times;</button>
+            </div>
+
+            <!-- Cuerpo del Modal -->
+            <div class="modal-body">
+                <div class="ensayo-content">
+                    
+                    <!-- Simulación de pestañas -->
+                    <div class="tab-buttons">
+                        <button class="tab-btn active">Datos de Laboratorio</button>
+                        <button class="tab-btn">Resultados y Gráficos</button>
+                    </div>
+
+                    <!-- Simulación de un formulario dinámico -->
+                    <div class="form-section">
+                        <h3>Datos Generales</h3>
+                        <table class="mock-table">
+                            <tr>
+                                <th>Peso Total (g)</th>
+                                <th>Peso Fracción Fina (g)</th>
+                                <th>Gradación</th>
+                            </tr>
+                            <tr>
+                                <td><input type="text" class="mock-input" value="5000" /></td>
+                                <td><input type="text" class="mock-input" value="1200" /></td>
+                                <td>
+                                    <select class="mock-input">
+                                        <option>A</option>
+                                        <option>B</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Tabla de Tamices</h3>
+                        <table class="mock-table">
+                            <tr>
+                                <th style="width: 20%;">Tamiz</th>
+                                <th>mm</th>
+                                <th>Peso Retenido (g)</th>
+                                <th style="background:#e2e8f0;">% Retenido</th>
+                                <th style="background:#e2e8f0;">% Pasa</th>
+                            </tr>
+                            <tr>
+                                <td><strong>3"</strong></td>
+                                <td>75.00</td>
+                                <td><input type="text" class="mock-input" value="0" /></td>
+                                <td style="background:#f8fafc;">0.0%</td>
+                                <td style="background:#f8fafc;">100.0%</td>
+                            </tr>
+                            <tr>
+                                <td><strong>2 1/2"</strong></td>
+                                <td>63.00</td>
+                                <td><input type="text" class="mock-input" value="150" /></td>
+                                <td style="background:#f8fafc;">3.0%</td>
+                                <td style="background:#f8fafc;">97.0%</td>
+                            </tr>
+                            <tr>
+                                <td><strong>2"</strong></td>
+                                <td>50.00</td>
+                                <td><input type="text" class="mock-input" value="200" /></td>
+                                <td style="background:#f8fafc;">4.0%</td>
+                                <td style="background:#f8fafc;">93.0%</td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" style="text-align:center; color:#64748b;">( ... Más tamices ... )</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Fondo</strong></td>
+                                <td>-</td>
+                                <td><input type="text" class="mock-input" value="4650" readonly style="background:#f1f5f9;"/></td>
+                                <td style="background:#f8fafc;">93.0%</td>
+                                <td style="background:#f8fafc;">0.0%</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Pie del Modal -->
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarYcerrar()">Guardar Cambios</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const modal = document.getElementById('ensayoModal');
+        const titleEl = document.getElementById('modalTitle');
+        const progEl = document.getElementById('modalProg');
+
+        function abrirModal(tipoEnsayo, progresiva) {
+            titleEl.textContent = tipoEnsayo;
+            progEl.textContent = progresiva;
+            modal.classList.add('active');
+            // Evitar scroll en el body cuando el modal está abierto
+            document.body.style.overflow = 'hidden';
+        }
+
+        function cerrarModal() {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function guardarYcerrar() {
+            // Simulamos guardado
+            alert('Datos guardados correctamente.');
+            cerrarModal();
+        }
+
+        // Cerrar al hacer clic fuera del modal (en el overlay)
+        modal.addEventListener('click', function(e) {
+            if(e.target === modal) {
+                cerrarModal();
+            }
+        });
+    </script>
+</body>
+</html>

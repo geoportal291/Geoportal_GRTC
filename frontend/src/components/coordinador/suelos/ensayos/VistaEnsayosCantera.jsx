@@ -5,6 +5,7 @@ import alertify from 'alertifyjs';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import ResultadosBrevesModal from './ResultadosBrevesModal';
+import EnsayoDetalleModal from './EnsayoDetalleModal';
 import './VistaGeneralEnsayos.css';
 import './ResultadosBrevesModal.css';
 
@@ -58,7 +59,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, summary, loading }) => 
 };
 
 // ========== EnsayosFullListModal (Version Canteras) ==========
-const EnsayosFullListModal = ({ isOpen, onClose, grupo, navigate, handleShowResults }) => {
+const EnsayosFullListModal = ({ isOpen, onClose, grupo, onOpenEnsayo, handleShowResults }) => {
   const [searchTerm, setSearchTerm] = useState('');
   if (!isOpen || !grupo) return null;
   const filteredEnsayos = grupo.ensayos.filter(ensayo => {
@@ -83,7 +84,7 @@ const EnsayosFullListModal = ({ isOpen, onClose, grupo, navigate, handleShowResu
             <tbody>
               {filteredEnsayos.length > 0 ? (
                 filteredEnsayos.map((ensayo) => (
-                  <tr key={ensayo.id} onClick={() => navigate(`/coordinador/suelos/ensayos/${ensayo.id}`)} style={{ cursor: 'pointer' }}>
+                  <tr key={ensayo.id} onClick={() => onOpenEnsayo(ensayo)} style={{ cursor: 'pointer' }}>
                     <td className="assay-code">{ensayo.nombre_ensayo || ensayo.codigo_ensayo}</td>
                     <td>{ensayo.cantera_nombre || ensayo.progresiva_nombre || 'N/A'}</td>
                     <td>E: {ensayo.estrato_orden || 'N/A'}</td>
@@ -119,6 +120,7 @@ const VistaEnsayosCantera = () => {
   const [modalGrupo, setModalGrupo] = useState(null);
   const [isResultsModalOpen, setResultsModalOpen] = useState(false);
   const [selectedAssayForResults, setSelectedAssayForResults] = useState(null);
+  const [selectedAssayForDetail, setSelectedAssayForDetail] = useState(null);
   
   const [isImportModalOpen, setImportModalOpen] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -154,6 +156,7 @@ const VistaEnsayosCantera = () => {
   useEffect(() => { fetchCanteraEnsayos(); }, [fetchCanteraEnsayos]);
 
   const handleShowResults = (e, ensayo) => { e.stopPropagation(); setSelectedAssayForResults(ensayo); setResultsModalOpen(true); };
+  const handleOpenEnsayo = (ensayo) => { setSelectedAssayForDetail(ensayo); };
 
   const handleImportFile = async (file) => {
     setImporting(true);
@@ -315,7 +318,7 @@ const VistaEnsayosCantera = () => {
               </div>
               <div className="card-content">
                 {grupo.ensayos.slice(0, 5).map(ensayo => (
-                  <div className="mini-card-ensayo" key={ensayo.id} onClick={() => navigate(`/coordinador/suelos/ensayos/${ensayo.id}`)}>
+                  <div className="mini-card-ensayo" key={ensayo.id} onClick={() => handleOpenEnsayo(ensayo)}>
                     <div className="mini-card-horizontal-layout">
                       <div className="mini-card-main-data">
                         <i className="fas fa-vial" style={{ color: accent }}></i>
@@ -343,10 +346,18 @@ const VistaEnsayosCantera = () => {
         })}
       </main>
 
-      <EnsayosFullListModal isOpen={!!modalGrupo} onClose={() => setModalGrupo(null)} grupo={modalGrupo} navigate={navigate} handleShowResults={handleShowResults} />
+      <EnsayosFullListModal isOpen={!!modalGrupo} onClose={() => setModalGrupo(null)} grupo={modalGrupo} onOpenEnsayo={handleOpenEnsayo} handleShowResults={handleShowResults} />
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onImport={handleImportFile} loading={importing} errors={importErrors} />
       <ConfirmationModal isOpen={showConfirmationModal} onClose={() => setShowConfirmationModal(false)} onConfirm={confirmImport} summary={importSummary} loading={importing} />
       {isResultsModalOpen && <ResultadosBrevesModal isOpen={isResultsModalOpen} onClose={() => setResultsModalOpen(false)} ensayo={selectedAssayForResults} />}
+      <EnsayoDetalleModal
+        isOpen={!!selectedAssayForDetail}
+        ensayos={selectedAssayForDetail ? [selectedAssayForDetail] : []}
+        initialEnsayoId={selectedAssayForDetail?.id ?? null}
+        showEnsayoTabs={false}
+        onClose={() => setSelectedAssayForDetail(null)}
+        onSaved={fetchCanteraEnsayos}
+      />
     </div>
   );
 };
