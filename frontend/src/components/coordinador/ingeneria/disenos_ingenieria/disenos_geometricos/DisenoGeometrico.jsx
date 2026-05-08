@@ -11,8 +11,6 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import shp from 'shpjs';
 import { DOMParser } from 'xmldom';
-import * as maptilersdk from '@maptiler/sdk';
-import '@maptiler/sdk/dist/maptiler-sdk.css';
 import axiosInstance from '../../../../../api/axios';
 import { useAuth } from '../../../../../data/contexts/AuthContext';
 import { usePageTitle } from '../../../../contexts/PageTitleContext';
@@ -22,9 +20,6 @@ const ACCEPTED_FILE_TYPES = '.zip,.rar,.kml,.kmz';
 const AUTO_SAVE_DELAY_MS = 1500;
 const DG_MAX_MAP_ZOOM = 30;
 const MAPTILER_KEY = process.env.REACT_APP_MAPTILER_KEY || '';
-if (MAPTILER_KEY) {
-  maptilersdk.config.apiKey = MAPTILER_KEY;
-}
 const BASEMAPS = {
   street: {
     key: 'street',
@@ -573,20 +568,20 @@ const featureToPopupHtml = (feature) => {
 };
 
 const createMaptilerDataset = (geojsonData) => {
-  const normalized = normalizeFeatureCollection(geojsonData);
+  const features = Array.isArray(geojsonData?.features) ? geojsonData.features : [];
 
   return {
     points: {
       type: 'FeatureCollection',
-      features: normalized.features.filter((feature) => feature?.geometry?.type?.includes('Point'))
+      features: features.filter((feature) => feature?.geometry?.type?.includes('Point'))
     },
     lines: {
       type: 'FeatureCollection',
-      features: normalized.features.filter((feature) => feature?.geometry?.type?.includes('Line'))
+      features: features.filter((feature) => feature?.geometry?.type?.includes('Line'))
     },
     polygons: {
       type: 'FeatureCollection',
-      features: normalized.features.filter((feature) => feature?.geometry?.type?.includes('Polygon'))
+      features: features.filter((feature) => feature?.geometry?.type?.includes('Polygon'))
     }
   };
 };
@@ -602,7 +597,7 @@ const getCombinedBoundsFeatureCollection = (...collections) => {
   };
 };
 
-function MaptilerTerrainMap({
+const MaptilerTerrainMap = React.memo(function MaptilerTerrainMap({
   activeGeojson,
   projectReferenceGeojson,
   showProjectReference
@@ -610,129 +605,159 @@ function MaptilerTerrainMap({
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const terrainEnabledRef = useRef(false);
+  const sdkRef = useRef(null);
+  const [isThreeDLoading, setIsThreeDLoading] = useState(Boolean(MAPTILER_KEY));
 
   useEffect(() => {
     if (!containerRef.current || !MAPTILER_KEY) return undefined;
 
-    const map = new maptilersdk.Map({
-      container: containerRef.current,
-      style: maptilersdk.MapStyle.SATELLITE,
-      center: [-77.0428, -12.0464],
-      zoom: 12,
-      pitch: 0,
-      bearing: 0,
-      maxPitch: 60,
-      terrain: false,
-      hash: false,
-      navigationControl: false,
-      terrainControl: false,
-      geolocateControl: false,
-      scaleControl: false,
-      attributionControl: true,
-      fadeDuration: 0,
-      canvasContextAttributes: {
-        antialias: false
-      }
-    });
+    let cancelled = false;
+    let localMap = null;
 
-    const ensureLayer = (layerId, sourceId, type, paint) => {
-      if (map.getLayer(layerId)) return;
-      map.addLayer({
-        id: layerId,
-        type,
-        source: sourceId,
-        paint
+    const setupMap = async () => {
+      setIsThreeDLoading(true);
+      const sdkModule = await import('@maptiler/sdk');
+      await import('@maptiler/sdk/dist/maptiler-sdk.css');
+
+      if (cancelled || !containerRef.current) return;
+
+      const sdk = sdkModule;
+      sdk.config.apiKey = MAPTILER_KEY;
+      sdkRef.current = sdk;
+
+      localMap = new sdk.Map({
+        container: containerRef.current,
+        style: sdk.MapStyle.SATELLITE,
+        center: [-77.0428, -12.0464],
+        zoom: 12,
+        pitch: 0,
+        bearing: 0,
+        maxPitch: 60,
+        terrain: false,
+        hash: false,
+        navigationControl: false,
+        terrainControl: false,
+        geolocateControl: false,
+        scaleControl: false,
+        attributionControl: true,
+        fadeDuration: 0,
+        canvasContextAttributes: {
+          antialias: false,
+          powerPreference: 'low-power'
+        }
       });
-    };
 
-    const apply3dView = (enabled) => {
-      if (enabled) {
-        map.enableTerrain(1.12);
-        map.easeTo({ pitch: 54, bearing: 0, duration: 700 });
-      } else {
-        map.easeTo({ pitch: 0, bearing: 0, duration: 520 });
-        window.setTimeout(() => {
-          if (mapRef.current === map) {
-            map.disableTerrain();
-          }
-        }, 540);
-      }
-
-      terrainEnabledRef.current = enabled;
-    };
-
-    const ThreeDToggleControl = function () { };
-    ThreeDToggleControl.prototype.onAdd = function () {
-      const container = document.createElement('div');
-      container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'dg-maptiler-terrain-btn';
-      button.title = 'Alternar vista 3D';
-      button.innerHTML = '<i class="fas fa-layer-group"></i>';
-      button.onclick = () => {
-        const nextEnabled = !terrainEnabledRef.current;
-        apply3dView(nextEnabled);
-        button.classList.toggle('active', nextEnabled);
+      const ensureLayer = (layerId, sourceId, type, paint) => {
+        if (localMap.getLayer(layerId)) return;
+        localMap.addLayer({
+          id: layerId,
+          type,
+          source: sourceId,
+          paint
+        });
       };
 
-      container.appendChild(button);
-      return container;
+      const apply3dView = (enabled) => {
+        if (enabled) {
+          localMap.enableTerrain(1.12);
+          localMap.easeTo({ pitch: 54, bearing: 0, duration: 700 });
+        } else {
+          localMap.easeTo({ pitch: 0, bearing: 0, duration: 520 });
+          window.setTimeout(() => {
+            if (mapRef.current === localMap) {
+              localMap.disableTerrain();
+            }
+          }, 540);
+        }
+
+        terrainEnabledRef.current = enabled;
+      };
+
+      const ThreeDToggleControl = function () { };
+      ThreeDToggleControl.prototype.onAdd = function () {
+        const container = document.createElement('div');
+        container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'dg-maptiler-terrain-btn';
+        button.title = 'Alternar vista 3D';
+        button.innerHTML = '<i class="fas fa-layer-group"></i>';
+        button.onclick = () => {
+          const nextEnabled = !terrainEnabledRef.current;
+          apply3dView(nextEnabled);
+          button.classList.toggle('active', nextEnabled);
+        };
+
+        container.appendChild(button);
+        return container;
+      };
+      ThreeDToggleControl.prototype.onRemove = function () { };
+
+      localMap.on('load', () => {
+        localMap.addControl(new sdk.NavigationControl(), 'top-left');
+        localMap.addControl(new ThreeDToggleControl(), 'top-left');
+
+        localMap.addSource('dg-active-points', { type: 'geojson', data: createMaptilerDataset(activeGeojson).points, tolerance: 1.5, maxzoom: 14 });
+        localMap.addSource('dg-active-lines', { type: 'geojson', data: createMaptilerDataset(activeGeojson).lines, tolerance: 2.0, maxzoom: 14 });
+        localMap.addSource('dg-active-polygons', { type: 'geojson', data: createMaptilerDataset(activeGeojson).polygons, tolerance: 2.0, maxzoom: 14 });
+        localMap.addSource('dg-project-reference', { type: 'geojson', data: projectReferenceGeojson, tolerance: 2.5, maxzoom: 14 });
+
+        ensureLayer('dg-active-polygon-fill', 'dg-active-polygons', 'fill', {
+          'fill-color': ['coalesce', ['get', 'fill'], ['get', 'stroke'], '#86efac'],
+          'fill-opacity': 0.14
+        });
+        ensureLayer('dg-active-polygon-line', 'dg-active-polygons', 'line', {
+          'line-color': ['coalesce', ['get', 'stroke'], '#1e88e5'],
+          'line-width': ['coalesce', ['get', 'stroke-width'], 2.5]
+        });
+        ensureLayer('dg-active-line', 'dg-active-lines', 'line', {
+          'line-color': ['coalesce', ['get', 'stroke'], '#1e88e5'],
+          'line-width': ['coalesce', ['get', 'stroke-width'], 2.5]
+        });
+        ensureLayer('dg-active-point', 'dg-active-points', 'circle', {
+          'circle-radius': 4.5,
+          'circle-color': ['coalesce', ['get', 'fill'], ['get', 'stroke'], '#ef4444'],
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1.5
+        });
+
+        ensureLayer('dg-project-reference-line', 'dg-project-reference', 'line', {
+          'line-color': '#f97316',
+          'line-width': 2.5,
+          'line-dasharray': [3, 2]
+        });
+
+        const boundsCollection = getCombinedBoundsFeatureCollection(
+          activeGeojson,
+          showProjectReference ? projectReferenceGeojson : null
+        );
+
+        if (boundsCollection.features.length) {
+          const [minX, minY, maxX, maxY] = turf.bbox(boundsCollection);
+          localMap.fitBounds([[minX, minY], [maxX, maxY]], { padding: 48, duration: 0 });
+        }
+
+        setIsThreeDLoading(false);
+      });
+
+      mapRef.current = localMap;
     };
-    ThreeDToggleControl.prototype.onRemove = function () { };
 
-    map.on('load', () => {
-      map.addControl(new maptilersdk.NavigationControl(), 'top-left');
-      map.addControl(new ThreeDToggleControl(), 'top-left');
-
-      map.addSource('dg-active-points', { type: 'geojson', data: createMaptilerDataset(activeGeojson).points });
-      map.addSource('dg-active-lines', { type: 'geojson', data: createMaptilerDataset(activeGeojson).lines });
-      map.addSource('dg-active-polygons', { type: 'geojson', data: createMaptilerDataset(activeGeojson).polygons });
-      map.addSource('dg-project-reference', { type: 'geojson', data: normalizeFeatureCollection(projectReferenceGeojson) });
-
-      ensureLayer('dg-active-polygon-fill', 'dg-active-polygons', 'fill', {
-        'fill-color': ['coalesce', ['get', 'fill'], ['get', 'stroke'], '#86efac'],
-        'fill-opacity': 0.14
-      });
-      ensureLayer('dg-active-polygon-line', 'dg-active-polygons', 'line', {
-        'line-color': ['coalesce', ['get', 'stroke'], '#1e88e5'],
-        'line-width': ['coalesce', ['get', 'stroke-width'], 2.5]
-      });
-      ensureLayer('dg-active-line', 'dg-active-lines', 'line', {
-        'line-color': ['coalesce', ['get', 'stroke'], '#1e88e5'],
-        'line-width': ['coalesce', ['get', 'stroke-width'], 2.5]
-      });
-      ensureLayer('dg-active-point', 'dg-active-points', 'circle', {
-        'circle-radius': 4.5,
-        'circle-color': ['coalesce', ['get', 'fill'], ['get', 'stroke'], '#ef4444'],
-        'circle-stroke-color': '#ffffff',
-        'circle-stroke-width': 1.5
-      });
-
-      ensureLayer('dg-project-reference-line', 'dg-project-reference', 'line', {
-        'line-color': '#f97316',
-        'line-width': 2.5,
-        'line-dasharray': [3, 2]
-      });
-
-      const boundsCollection = getCombinedBoundsFeatureCollection(
-        activeGeojson,
-        showProjectReference ? projectReferenceGeojson : null
-      );
-
-      if (boundsCollection.features.length) {
-        const [minX, minY, maxX, maxY] = turf.bbox(boundsCollection);
-        map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 48, duration: 0 });
+    setupMap().catch((error) => {
+      console.error('No se pudo cargar la vista 3D de MapTiler:', error);
+      if (!cancelled) {
+        setIsThreeDLoading(false);
       }
     });
 
-    mapRef.current = map;
-
     return () => {
+      cancelled = true;
       terrainEnabledRef.current = false;
       mapRef.current = null;
-      map.remove();
+      if (localMap) {
+        localMap.remove();
+      }
     };
   }, []);
 
@@ -753,7 +778,7 @@ function MaptilerTerrainMap({
       setSourceData('dg-active-points', activeData.points);
       setSourceData('dg-active-lines', activeData.lines);
       setSourceData('dg-active-polygons', activeData.polygons);
-      setSourceData('dg-project-reference', showProjectReference ? normalizeFeatureCollection(projectReferenceGeojson) : cloneGeojson(EMPTY_FEATURE_COLLECTION));
+      setSourceData('dg-project-reference', showProjectReference ? projectReferenceGeojson : cloneGeojson(EMPTY_FEATURE_COLLECTION));
     };
 
     if (map.loaded()) {
@@ -774,8 +799,20 @@ function MaptilerTerrainMap({
     );
   }
 
-  return <div ref={containerRef} className="dg-map dg-maptiler-3d"></div>;
-}
+  return (
+    <div className="dg-map dg-maptiler-3d">
+      <div ref={containerRef} className="dg-maptiler-3d-canvas"></div>
+      {isThreeDLoading && (
+        <div className="dg-maptiler-loading">
+          <div>
+            <strong>Cargando vista 3D</strong>
+            <span>Optimizando el mapa para esta sesion...</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 function MapLifecycle({ mapRef, measurementLayerRef }) {
   const map = useMap();
@@ -1275,10 +1312,25 @@ export default function DisenoGeometrico() {
     }));
   }, [activeFeatures, selectedLayerColorOption]);
   const activeBaseMap = BASEMAPS[baseMapKey] || BASEMAPS.street;
+  const isThreeDToolLocked = isThreeDMode;
   const projectReferenceHasFeatures = useMemo(
     () => Array.isArray(projectReferenceGeojson?.features) && projectReferenceGeojson.features.length > 0,
     [projectReferenceGeojson]
   );
+
+  useEffect(() => {
+    if (!isThreeDMode) return;
+
+    if (activeTool !== 'select') {
+      setActiveTool('select');
+    }
+
+    setMeasurementSummary({
+      distanceKm: 0,
+      areaHa: 0,
+      perimeterKm: 0
+    });
+  }, [activeTool, isThreeDMode]);
 
   const commitHistory = useCallback((tabName, nextGeojson) => {
     ensureHistory(tabName, layersRef.current.find((layer) => layer.tab_name === tabName)?.geojson_data || EMPTY_FEATURE_COLLECTION);
@@ -2319,7 +2371,7 @@ export default function DisenoGeometrico() {
             <div className="dg-toolbar-top">
               <div>
                 <h2>Herramientas del editor</h2>
-                <p>Ordenadas por flujo de trabajo para dibujar, corregir y exportar sin duplicaciones.</p>
+                <p>{isThreeDMode ? 'En vista 3D el mapa queda en modo visual, por eso se bloquean las herramientas de edicion y medicion.' : 'Ordenadas por flujo de trabajo para dibujar, corregir y exportar sin duplicaciones.'}</p>
               </div>
             </div>
 
@@ -2330,11 +2382,11 @@ export default function DisenoGeometrico() {
                   <strong>Selecciona y corrige</strong>
                 </div>
                 <div className="dg-toolbar-group dg-toolbar-group--compact">
-                  <ToolbarButton active={activeTool === 'select'} compact disabled={!projectId} icon="fa-arrow-pointer" label="Seleccionar" onClick={() => setActiveTool('select')} />
-                  <ToolbarButton active={activeTool === 'edit'} compact disabled={!projectId || !selectedLayer || !canManage} icon="fa-pen" label="Editar" onClick={() => handleToolSelection('edit')} />
-                  <ToolbarButton active={activeTool === 'delete'} compact disabled={!projectId || !selectedLayer || !canManage} icon="fa-trash" label="Borrar" onClick={() => handleToolSelection('delete')} />
-                  <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer} icon="fa-rotate-left" label="Deshacer" onClick={handleUndo} />
-                  <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer} icon="fa-rotate-right" label="Rehacer" onClick={handleRedo} />
+                  <ToolbarButton active={activeTool === 'select'} compact disabled={!projectId || isThreeDToolLocked} icon="fa-arrow-pointer" label="Seleccionar" onClick={() => setActiveTool('select')} />
+                  <ToolbarButton active={activeTool === 'edit'} compact disabled={!projectId || !selectedLayer || !canManage || isThreeDToolLocked} icon="fa-pen" label="Editar" onClick={() => handleToolSelection('edit')} />
+                  <ToolbarButton active={activeTool === 'delete'} compact disabled={!projectId || !selectedLayer || !canManage || isThreeDToolLocked} icon="fa-trash" label="Borrar" onClick={() => handleToolSelection('delete')} />
+                  <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer || isThreeDToolLocked} icon="fa-rotate-left" label="Deshacer" onClick={handleUndo} />
+                  <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer || isThreeDToolLocked} icon="fa-rotate-right" label="Rehacer" onClick={handleRedo} />
                 </div>
               </div>
 
@@ -2344,11 +2396,11 @@ export default function DisenoGeometrico() {
                   <strong>Crea geometrias</strong>
                 </div>
                 <div className="dg-toolbar-group dg-toolbar-group--compact">
-                  <ToolbarButton active={activeTool === 'point'} compact disabled={!projectId || !selectedLayer || !canManage} icon="fa-location-dot" label="Punto" onClick={() => handleToolSelection('point')} />
-                  <ToolbarButton active={activeTool === 'line'} compact disabled={!projectId || !selectedLayer || !canManage} icon="fa-share-nodes" label="Linea" onClick={() => handleToolSelection('line')} />
-                  <ToolbarButton active={activeTool === 'polygon'} compact disabled={!projectId || !selectedLayer || !canManage} icon="fa-draw-polygon" label="Poligono" onClick={() => handleToolSelection('polygon')} />
-                  <ToolbarButton active={activeTool === 'rectangle'} compact disabled={!projectId || !selectedLayer || !canManage} icon="fa-vector-square" label="Rectangulo" onClick={() => handleToolSelection('rectangle')} />
-                  <ToolbarButton active={activeTool === 'circle'} compact disabled={!projectId || !selectedLayer || !canManage} icon="fa-circle-notch" label="Circulo" onClick={() => handleToolSelection('circle')} />
+                  <ToolbarButton active={activeTool === 'point'} compact disabled={!projectId || !selectedLayer || !canManage || isThreeDToolLocked} icon="fa-location-dot" label="Punto" onClick={() => handleToolSelection('point')} />
+                  <ToolbarButton active={activeTool === 'line'} compact disabled={!projectId || !selectedLayer || !canManage || isThreeDToolLocked} icon="fa-share-nodes" label="Linea" onClick={() => handleToolSelection('line')} />
+                  <ToolbarButton active={activeTool === 'polygon'} compact disabled={!projectId || !selectedLayer || !canManage || isThreeDToolLocked} icon="fa-draw-polygon" label="Poligono" onClick={() => handleToolSelection('polygon')} />
+                  <ToolbarButton active={activeTool === 'rectangle'} compact disabled={!projectId || !selectedLayer || !canManage || isThreeDToolLocked} icon="fa-vector-square" label="Rectangulo" onClick={() => handleToolSelection('rectangle')} />
+                  <ToolbarButton active={activeTool === 'circle'} compact disabled={!projectId || !selectedLayer || !canManage || isThreeDToolLocked} icon="fa-circle-notch" label="Circulo" onClick={() => handleToolSelection('circle')} />
                 </div>
               </div>
 
@@ -2358,9 +2410,9 @@ export default function DisenoGeometrico() {
                   <strong>Mide, guarda y exporta</strong>
                 </div>
                 <div className="dg-toolbar-group dg-toolbar-group--compact">
-                  <ToolbarButton active={activeTool === 'measure-distance'} compact disabled={!projectId} icon="fa-ruler" label="Medir" onClick={() => handleToolSelection('measure-distance')} />
-                  <ToolbarButton active={activeTool === 'measure-area'} compact disabled={!projectId} icon="fa-ruler-combined" label="Medir area" onClick={() => handleToolSelection('measure-area')} />
-                  <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer || !canManage} icon="fa-floppy-disk" label="Guardar" onClick={handleSaveCurrentLayer} />
+                  <ToolbarButton active={activeTool === 'measure-distance'} compact disabled={!projectId || isThreeDToolLocked} icon="fa-ruler" label="Medir" onClick={() => handleToolSelection('measure-distance')} />
+                  <ToolbarButton active={activeTool === 'measure-area'} compact disabled={!projectId || isThreeDToolLocked} icon="fa-ruler-combined" label="Medir area" onClick={() => handleToolSelection('measure-area')} />
+                  <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer || !canManage || isThreeDToolLocked} icon="fa-floppy-disk" label="Guardar" onClick={handleSaveCurrentLayer} />
                   <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer} icon="fa-file-export" label="GeoJSON" onClick={handleExportGeojson} />
                   <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer} icon="fa-earth-americas" label="KML" onClick={handleExportKml} />
                 </div>
@@ -2441,7 +2493,7 @@ export default function DisenoGeometrico() {
 
                     {projectReferenceHasFeatures && showProjectReference && (
                       <GeoJSON
-                        key={`project-reference-${serializeGeojson(projectReferenceGeojson)}`}
+                        key="project-reference"
                         data={projectReferenceGeojson}
                         style={getProjectReferenceStyle}
                         pointToLayer={(feature, latlng) => L.circleMarker(latlng, {
@@ -2464,7 +2516,7 @@ export default function DisenoGeometrico() {
                       .filter((layer) => layer.tab_name !== selectedTabName && (visibleTabs[layer.tab_name] ?? true))
                       .map((layer) => (
                         <GeoJSON
-                          key={`${layer.tab_name}-${serializeGeojson(layer.geojson_data)}`}
+                          key={layer.tab_name}
                           data={layer.geojson_data}
                           style={(feature) => getVectorStyle(feature, false)}
                           pointToLayer={(feature, latlng) => L.marker(latlng, { icon: createPointIcon(feature, false) })}

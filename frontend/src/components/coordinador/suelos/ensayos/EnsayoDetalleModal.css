@@ -11,6 +11,10 @@
 }
 
 .ensayo-detalle-modal-dialog {
+  --ensayo-accent-strong: #2563eb;
+  --ensayo-accent-mid: #3b82f6;
+  --ensayo-accent-soft: #60a5fa;
+  --ensayo-accent-surface: #eff6ff;
   width: min(1380px, 100%);
   max-height: calc(100vh - 40px);
   display: flex;
@@ -27,7 +31,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 18px 22px 14px;
-  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 55%, #60a5fa 100%);
+  background: linear-gradient(135deg, var(--ensayo-accent-strong) 0%, var(--ensayo-accent-mid) 55%, var(--ensayo-accent-soft) 100%);
   color: #fff;
 }
 
@@ -62,25 +66,24 @@
 }
 
 .ensayo-detalle-assay-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 10px;
-  overflow-x: auto;
   padding: 14px 18px;
-  background: #eaf3ff;
+  background: linear-gradient(180deg, var(--ensayo-accent-surface) 0%, #e6f0ff 100%);
   border-bottom: 1px solid rgba(59, 130, 246, 0.14);
 }
 
 .ensayo-detalle-assay-tab {
-  min-width: 180px;
+  min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  align-items: flex-start;
-  padding: 12px 14px;
-  border: 1px solid rgba(59, 130, 246, 0.16);
-  border-radius: 14px;
-  background: #fff;
-  color: #1e3a8a;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 14px;
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ensayo-accent-strong);
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
@@ -91,25 +94,58 @@
 }
 
 .ensayo-detalle-assay-tab.active {
-  border-color: #2563eb;
-  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
-  box-shadow: 0 12px 22px rgba(37, 99, 235, 0.16);
+  border-color: var(--ensayo-accent-strong);
+  background: linear-gradient(135deg, #ffffff 0%, #dbeafe 100%);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.14);
 }
 
 .ensayo-detalle-assay-tab-label {
-  font-size: 0.95rem;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 0.92rem;
   font-weight: 700;
-}
-
-.ensayo-detalle-assay-tab-meta {
-  font-size: 0.78rem;
-  color: #64748b;
 }
 
 .ensayo-detalle-modal-body {
   flex: 1;
   overflow: auto;
-  padding: 16px 18px 18px;
+  padding: 16px 18px 0;
+}
+
+.ensayo-detalle-modal-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ensayo-detalle-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ensayo-detalle-modal-body::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.4);
+  border-radius: 20px;
+}
+
+.ensayo-detalle-modal-body::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.7);
+}
+
+.ensayo-detalle-modal-body .card {
+  border: 1px solid rgba(147, 197, 253, 0.22);
+  box-shadow: 0 16px 32px rgba(148, 163, 184, 0.16);
+}
+
+.ensayo-detalle-modal-body .card-header {
+  background: linear-gradient(135deg, var(--ensayo-accent-strong) 0%, var(--ensayo-accent-mid) 55%, var(--ensayo-accent-soft) 100%);
+  border-bottom: none;
+  color: #fff;
+}
+
+.ensayo-detalle-modal-body .card-header .nav-tabs .nav-link.active {
+  color: var(--ensayo-accent-strong);
 }
 
 .detalle-ensayo-container-modal {
@@ -131,7 +167,7 @@
 }
 
 .ensayo-modal-inline-subtitle {
-  color: #64748b;
+  color: #5b6f8a;
   font-size: 0.88rem;
   font-weight: 600;
 }
@@ -148,6 +184,75 @@
   color: #334155;
 }
 
+.ensayo-detail-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  padding: 18px 10px 12px;
+  margin-top: 14px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0) 0%, rgba(248, 251, 255, 0.96) 28%, #f8fbff 100%);
+}
+
+.ensayo-detail-savebtn {
+  min-width: 220px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  background: linear-gradient(135deg, var(--ensayo-accent-strong) 0%, var(--ensayo-accent-mid) 55%, var(--ensayo-accent-soft) 100%);
+  color: #fff;
+  box-shadow: 0 14px 24px rgba(37, 99, 235, 0.22);
+}
+
+.ensayo-detail-savebtn:hover,
+.ensayo-detail-savebtn:focus {
+  background: linear-gradient(135deg, #1d4ed8 0%, var(--ensayo-accent-strong) 45%, var(--ensayo-accent-mid) 100%);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* --- Nuevas Pestañas Limpias --- */
+.ensayo-internal-tabs {
+  margin-bottom: 1rem;
+}
+
+.ensayo-tab-buttons {
+  display: flex;
+  gap: 1.5rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.ensayo-tab-btn {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #64748b;
+  padding: 0.6rem 0.5rem;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+  margin-bottom: -2px;
+}
+
+.ensayo-tab-btn:hover {
+  color: var(--ensayo-accent-mid);
+}
+
+.ensayo-tab-btn.active {
+  color: var(--ensayo-accent-strong);
+  border-bottom-color: var(--ensayo-accent-strong);
+}
+
+.ensayo-tab-content-area {
+  background: #ffffff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(147, 197, 253, 0.3);
+  box-shadow: 0 4px 16px rgba(148, 163, 184, 0.06);
+}
+
 @media (max-width: 960px) {
   .ensayo-detalle-modal-overlay {
     padding: 12px;
@@ -158,13 +263,12 @@
     border-radius: 14px;
   }
 
+  .ensayo-detalle-assay-tabs {
+    grid-template-columns: 1fr;
+  }
+
   .ensayo-modal-inline-header {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .ensayo-modal-inline-actions {
-    justify-content: flex-end;
-    flex-wrap: wrap;
   }
 }

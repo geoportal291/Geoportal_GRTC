@@ -32,6 +32,19 @@ const getModelos3D = async (proyectoId, tramoId) => {
 };
 
 /**
+ * Obtiene un modelo 3D por su ID
+ */
+const getModelo3DById = async (id) => {
+    try {
+        const result = await db.query('SELECT * FROM modelos_3d WHERE id = $1 LIMIT 1', [id]);
+        return result.rows[0] || null;
+    } catch (err) {
+        console.error('Error al obtener modelo 3D por ID:', err);
+        throw new Error('Error al obtener el modelo 3D.');
+    }
+};
+
+/**
  * Registra un nuevo modelo 3D en la base de datos
  */
 const createModelo3D = async (modeloData) => {
@@ -89,6 +102,7 @@ const deleteModelo3D = async (id) => {
 
 module.exports = {
     getModelos3D,
+    getModelo3DById,
     createModelo3D,
     deleteModelo3D
 };

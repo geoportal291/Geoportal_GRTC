@@ -14,9 +14,6 @@ const ION_TOKEN = process.env.REACT_APP_CESIUM_TOKEN;
 export default function Vista3D() {
     const { selectedProjectId, user } = useAuth();
 
-    // DEPURACIÓN TEMPORAL: Queremos ver qué hay dentro de Cesium
-    console.log("[Vista3D] Contenido del objeto Cesium:", Cesium);
-
     // DESESTRUCTURACIÓN SEGURA
     const {
         Viewer, Ion, Terrain, Cartesian3, Cartographic, Geometry, GeometryAttribute,
@@ -30,14 +27,7 @@ export default function Vista3D() {
 
     const [soilData, setSoilData] = useState(null); // NUEVO: Mover aquí para evitar TDZ
 
-    useEffect(() => {
-        if (soilData) {
-            console.log("[Vista3D] Datos de suelo cargados:", {
-                trazados: soilData.tracks?.length,
-                progresivas: soilData.progresivas?.length
-            });
-        }
-    }, [soilData]);
+
 
     // --- ESTADOS Y REFERENCIAS (Definidos al inicio para evitar TDZ) ---
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -57,13 +47,16 @@ export default function Vista3D() {
     const [mapStyle, setMapStyle] = useState('hipso');
     const [showEstratosLayer, setShowEstratosLayer] = useState(false);
     const [projectZone, setProjectZone] = useState('18S'); // NUEVO: Zona detectada automáticamente
+    const [selectedProgressiva3D, setSelectedProgressiva3D] = useState(null);
+    const [dioramaSize, setDioramaSize] = useState(500);
+    const [cameraMode, setCameraMode] = useState('orbit');
 
     // --- DERIVADOS Y HELPERS PARA UI ---
-    const statusMessage = isUploading 
-        ? `Subiendo: ${uploadProgress}%` 
-        : isGlobalLoading 
-        ? "Cargando datos..." 
-        : "";
+    const statusMessage = isUploading
+        ? `Subiendo: ${uploadProgress}%`
+        : isGlobalLoading
+            ? "Cargando datos..."
+            : "";
 
     const toggleFullScreen = () => setIsFullscreen(prev => !prev);
 
@@ -85,6 +78,20 @@ export default function Vista3D() {
     const kmlDataSourcesRef = useRef([]); // Referencia para líneas de trazado KML
     const fullTramoWallEntitiesRef = useRef([]);
     const abortControllersRef = useRef(new Map());
+    const dioramaBoxEntitiesRef = useRef([]);
+    const dioramaConstraintRef = useRef(null);
+    const isApplyingDioramaClampRef = useRef(false);
+    const isDioramaTransitioningRef = useRef(false);
+    const dioramaAnchorRef = useRef(null);
+    const progressivaAnchorsRef = useRef(new Map());
+    const movementKeysRef = useRef({
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        up: false,
+        down: false
+    });
 
     // --- MOTOR DE PROGRESIVAS ---
     useProgresivasData();
@@ -96,11 +103,15 @@ export default function Vista3D() {
      */
     const renderFinalMesh = useCallback((verticesInfo, elevationData, minZ, maxZ, indicesTriangulos, indicesBoundary, indicesBordesFull) => {
         const viewer = viewerRef.current;
-        console.log("[Vista3D] renderFinalMesh invocado. Vértices:", verticesInfo?.length);
         if (!viewer || viewer.isDestroyed() || !verticesInfo || verticesInfo.length === 0) {
             console.warn("[Vista3D] renderFinalMesh abortado: viewer inválido o sin vértices.");
             return;
         }
+
+        const isDioramaActive = !!selectedProgressiva3D;
+        const showHipsoSurface = mapStyle === 'hipso' || mapStyle === 'estratos' || isDioramaActive;
+        const showMeshOverlay = mapStyle === 'malla';
+        const showBoundaryLines = mapStyle !== 'malla' && !isDioramaActive;
 
         const midZ = minZ + (maxZ - minZ) / 2.0;
 
@@ -162,7 +173,7 @@ export default function Vista3D() {
             geometryInstances: new GeometryInstance({ geometry: solidGeometryHipso }),
             appearance: new PerInstanceColorAppearance({ flat: false, translucent: false, closed: false }),
             asynchronous: false,
-            show: mapStyle === 'hipso'
+            show: showHipsoSurface
         });
         solidPrimitiveHipso.isCustomTopography = true;
 
@@ -173,7 +184,7 @@ export default function Vista3D() {
             }),
             appearance: new PerInstanceColorAppearance({ flat: true, translucent: true, closed: false }),
             asynchronous: false,
-            show: mapStyle === 'malla'
+            show: showMeshOverlay
         });
         solidPrimitiveMalla.isCustomTopography = true;
 
@@ -189,7 +200,7 @@ export default function Vista3D() {
             }),
             appearance: new PerInstanceColorAppearance({ flat: true, translucent: false }),
             asynchronous: false,
-            show: mapStyle === 'malla'
+            show: showMeshOverlay
         });
         wirePrimitiveMalla.isCustomTopography = true;
 
@@ -205,7 +216,7 @@ export default function Vista3D() {
             }),
             appearance: new PerInstanceColorAppearance({ flat: true, translucent: false }),
             asynchronous: false,
-            show: mapStyle !== 'malla'
+            show: showBoundaryLines
         });
         wirePrimitiveBoundary.isCustomTopography = true;
 
@@ -214,81 +225,609 @@ export default function Vista3D() {
         mallaWireRef.current = wirePrimitiveMalla;
         boundaryWireRef.current = wirePrimitiveBoundary;
 
-        // --- ESTRATOS 3D ---
-        const getBoundaryNoise = (vertexIdx, boundaryLevel) => {
-            if (boundaryLevel === 0) return 0.0;
-            const v = vertices[vertexIdx];
-            const x = v.x % 1000.0, y = v.y % 1000.0;
-            return (Math.sin(x * 0.05 + y * 0.05) * 2.5 + Math.cos(x * 0.1 - y * 0.08) * 1.5) * (1.0 + boundaryLevel * 0.1);
-        };
-
-        const createStratumSlice = (topBias, botBias, topLvl, botLvl, hex) => {
-            const count = vertices.length;
-            const lPos = new Float64Array(count * 2 * 3);
-            const lSt = new Float32Array(count * 2 * 2);
-            const normal = new Cartesian3();
-
-            for (let i = 0; i < count; i++) {
-                const v = vertices[i];
-                const finalTop = (topBias * zExag) + getBoundaryNoise(i, topLvl);
-                const finalBot = (botBias * zExag) + getBoundaryNoise(i, botLvl);
-                Cartesian3.normalize(v, normal);
-                const pTop = Cartesian3.add(v, Cartesian3.multiplyByScalar(normal, -finalTop, new Cartesian3()), new Cartesian3());
-                lPos[i * 3] = pTop.x; lPos[i * 3 + 1] = pTop.y; lPos[i * 3 + 2] = pTop.z;
-                lSt[i * 2] = (v.x % 1000) * 0.1; lSt[i * 2 + 1] = (v.y % 1000) * 0.1;
-                const pBot = Cartesian3.add(v, Cartesian3.multiplyByScalar(normal, -finalBot, new Cartesian3()), new Cartesian3());
-                lPos[(i + count) * 3] = pBot.x; lPos[(i + count) * 3 + 1] = pBot.y; lPos[(i + count) * 3 + 2] = pBot.z;
-                lSt[(i + count) * 2] = (v.x % 1000) * 0.1; lSt[(i + count) * 2 + 1] = (v.y % 1000) * 0.1;
-            }
-
-            const lInd = [];
-            for (let i = 0; i < indicesTriangulos.length; i += 3) {
-                lInd.push(indicesTriangulos[i], indicesTriangulos[i + 1], indicesTriangulos[i + 2]);
-                lInd.push(indicesTriangulos[i] + count, indicesTriangulos[i + 2] + count, indicesTriangulos[i + 1] + count);
-            }
-            for (let i = 0; i < indicesBoundary.length; i += 2) {
-                const ta = indicesBoundary[i], tb = indicesBoundary[i + 1], ba = ta + count, bb = tb + count;
-                lInd.push(ta, ba, tb); lInd.push(ba, bb, tb);
-            }
-
-            const prim = new Primitive({
-                geometryInstances: new GeometryInstance({
-                    geometry: new Geometry({
-                        attributes: {
-                            position: new GeometryAttribute({ componentDatatype: ComponentDatatype.DOUBLE, componentsPerAttribute: 3, values: lPos }),
-                            st: new GeometryAttribute({ componentDatatype: ComponentDatatype.FLOAT, componentsPerAttribute: 2, values: lSt })
-                        },
-                        indices: new Uint32Array(lInd),
-                        primitiveType: PrimitiveType.TRIANGLES,
-                        boundingSphere: BoundingSphere.fromPoints(vertices)
-                    })
-                }),
-                appearance: new MaterialAppearance({
-                    material: new Material({
-                        fabric: {
-                            uniforms: { u_baseColor: Color.fromCssColorString(hex).withAlpha(1.0) },
-                            source: `czm_material czm_getMaterial(czm_materialInput materialInput){ czm_material m = czm_getDefaultMaterial(materialInput); m.diffuse = u_baseColor.rgb; m.alpha = u_baseColor.a; return m; }`
-                        }
-                    }),
-                    flat: false, translucent: true, closed: true
-                }),
-                asynchronous: false
-            });
-            prim.isCustomTopography = true;
-            return prim;
-        };
-
-        const estrato1 = createStratumSlice(0.01, 0.20, 0, 1, '#A67D5D');
-        const estrato2 = createStratumSlice(0.20, 1.00, 1, 2, '#b8a99a');
-        const estrato3 = createStratumSlice(1.00, 1.50, 2, 3, '#858585');
-
-        estratosRefs.current = [estrato1, estrato2, estrato3];
-        const reveal = (mapStyle === 'estratos' || (mapOpacity === 0 && showEstratosLayer));
-        estratosRefs.current.forEach(e => e.show = reveal);
-
-        [estrato3, estrato2, estrato1, solidPrimitiveHipso, solidPrimitiveMalla, wirePrimitiveMalla, wirePrimitiveBoundary].forEach(p => viewer.scene.primitives.add(p));
+        estratosRefs.current = [];
+        [solidPrimitiveHipso, solidPrimitiveMalla, wirePrimitiveMalla, wirePrimitiveBoundary].forEach(p => viewer.scene.primitives.add(p));
         viewer.scene.requestRender();
-    }, [zExag, mapStyle, mapOpacity, showEstratosLayer]);
+    }, [zExag, mapStyle, mapOpacity, selectedProgressiva3D, showEstratosLayer]);
+
+    const clearDioramaBox = useCallback(() => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed()) return;
+        dioramaBoxEntitiesRef.current.forEach(entity => viewer.entities.remove(entity));
+        dioramaBoxEntitiesRef.current = [];
+    }, []);
+
+    const disableDioramaConstraints = useCallback(() => {
+        dioramaConstraintRef.current = null;
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed()) return;
+        const controller = viewer.scene?.screenSpaceCameraController;
+        if (!controller) return;
+        controller.maximumZoomDistance = Number.POSITIVE_INFINITY;
+        controller.minimumZoomDistance = 1;
+        controller.enableInputs = true;
+        controller.enableLook = true;
+        controller.enableTilt = true;
+        controller.enableTranslate = true;
+        controller.enableRotate = true;
+        controller.enableZoom = true;
+        if (viewer.scene?.globe) {
+            viewer.scene.globe.translucency.enabled = false;
+            viewer.scene.globe.undergroundColor = Color.BLACK.withAlpha(0.0);
+        }
+    }, []);
+
+    const applyCameraMode = useCallback((mode) => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed()) return;
+
+        const controller = viewer.scene?.screenSpaceCameraController;
+        if (!controller) return;
+        movementKeysRef.current = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            up: false,
+            down: false
+        };
+
+        if (mode === 'firstPerson') {
+            controller.enableInputs = true;
+            controller.enableLook = true;
+            controller.enableTilt = true;
+            controller.enableTranslate = false;
+            controller.enableRotate = true;
+            controller.enableZoom = false;
+            controller.inertiaSpin = 0.0;
+            controller.inertiaTranslate = 0.0;
+            controller.inertiaZoom = 0.0;
+            controller.minimumZoomDistance = 1.0;
+            controller.maximumZoomDistance = Math.max(420, dioramaSize * 1.8);
+            return;
+        }
+
+        controller.enableInputs = true;
+        controller.enableLook = true;
+        controller.enableTilt = true;
+        controller.enableTranslate = true;
+        controller.enableRotate = true;
+        controller.enableZoom = true;
+        controller.inertiaSpin = 0.7;
+        controller.inertiaTranslate = 0.7;
+        controller.inertiaZoom = 0.7;
+        controller.minimumZoomDistance = mode === 'diorama' ? 1.0 : 1;
+        controller.maximumZoomDistance = mode === 'diorama'
+            ? Math.max(250, dioramaSize * 1.35)
+            : Number.POSITIVE_INFINITY;
+    }, [dioramaSize]);
+
+    const getSceneCamera = useCallback((viewer) => {
+        if (!viewer || viewer.isDestroyed()) return null;
+        try {
+            return viewer.scene?.camera || null;
+        } catch (e) {
+            console.warn("[Vista3D] No se pudo resolver scene.camera.", e);
+            return null;
+        }
+    }, []);
+
+    const resetCameraTransform = useCallback((camera) => {
+        if (!camera || typeof camera.lookAtTransform !== 'function' || !Cesium.Matrix4?.IDENTITY) return;
+        try {
+            camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        } catch (e) {
+            console.warn("[Vista3D][FP] No se pudo resetear el transform de la camara.", e);
+        }
+    }, []);
+
+    const isViewerStable = useCallback((viewer) => {
+        if (!viewer || viewer !== viewerRef.current || viewer.isDestroyed()) return false;
+        try {
+            return !!viewer.scene && !!viewer.entities && !!viewer.dataSources;
+        } catch (e) {
+            return false;
+        }
+    }, []);
+
+    const offsetLonLatMeters = useCallback((centerLon, centerLat, eastMeters, northMeters) => {
+        const metersPerLon = 111320 * Math.cos(Cesium.Math.toRadians(centerLat)) || 1;
+        return {
+            lon: centerLon + (eastMeters / metersPerLon),
+            lat: centerLat + (northMeters / 110540)
+        };
+    }, []);
+
+    const resolveProgressivaAnchor = useCallback((progressiva, fallbackHeight = null) => {
+        const viewer = viewerRef.current;
+        if (!progressiva) return null;
+
+        const cachedAnchor = progressivaAnchorsRef.current.get(progressiva.id);
+        if (cachedAnchor) {
+            return {
+                lon: cachedAnchor.lon,
+                lat: cachedAnchor.lat,
+                surfaceZ: Number.isFinite(fallbackHeight) && fallbackHeight !== 0
+                    ? fallbackHeight
+                    : cachedAnchor.surfaceZ
+            };
+        }
+
+        let lon;
+        let lat;
+        let surfaceZ = Number.isFinite(fallbackHeight) ? fallbackHeight : parseFloat(progressiva.elevacion);
+
+        const markerEntity = viewer?.entities?.getById?.(`prog-marker-${progressiva.id}`);
+        if (markerEntity?.position) {
+            try {
+                const markerPosition = markerEntity.position.getValue(Cesium.JulianDate.now());
+                if (markerPosition) {
+                    const carto = Cesium.Cartographic.fromCartesian(markerPosition);
+                    lon = Cesium.Math.toDegrees(carto.longitude);
+                    lat = Cesium.Math.toDegrees(carto.latitude);
+                    if (!Number.isFinite(surfaceZ)) {
+                        surfaceZ = carto.height || 0;
+                    }
+                }
+            } catch (e) { }
+        }
+
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+            const progressivaCoords = processCoordinates(progressiva.coordenada_este, progressiva.coordenada_norte, projectZone);
+            const wgs = utmToWgs84(progressivaCoords.x, progressivaCoords.y, projectZone);
+            lon = wgs.lon;
+            lat = wgs.lat;
+        }
+
+        return Number.isFinite(lon) && Number.isFinite(lat)
+            ? { lon, lat, surfaceZ: Number.isFinite(surfaceZ) ? surfaceZ : 0 }
+            : null;
+    }, [projectZone]);
+
+    const enforceDioramaCameraBounds = useCallback(() => {
+        const viewer = viewerRef.current;
+        const constraint = dioramaConstraintRef.current;
+        if (!viewer || viewer.isDestroyed() || !constraint || isApplyingDioramaClampRef.current || isDioramaTransitioningRef.current || cameraMode === 'firstPerson') return;
+
+        const camera = getSceneCamera(viewer);
+        if (!camera || !camera._scene) return;
+
+        let cameraCartographic;
+        try {
+            cameraCartographic = camera.positionCartographic;
+        } catch (e) {
+            console.warn("[Vista3D] No se pudo leer positionCartographic durante el clamp del diorama.", e);
+            return;
+        }
+
+        if (!cameraCartographic) return;
+
+        const currentLon = Cesium.Math.toDegrees(cameraCartographic.longitude);
+        const currentLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
+        const currentHeight = cameraCartographic.height || 0;
+        const metersPerLon = 111320 * Math.cos(Cesium.Math.toRadians(constraint.centerLat)) || 1;
+        const deltaLonMeters = (currentLon - constraint.centerLon) * metersPerLon;
+        const deltaLatMeters = (currentLat - constraint.centerLat) * 110540;
+        let clampedLonMeters = Math.min(Math.max(deltaLonMeters, -constraint.halfWidthMeters), constraint.halfWidthMeters);
+        let clampedLatMeters = Math.min(Math.max(deltaLatMeters, -constraint.halfDepthMeters), constraint.halfDepthMeters);
+
+        const normalizedX = clampedLonMeters / Math.max(constraint.halfWidthMeters, 1);
+        const normalizedY = clampedLatMeters / Math.max(constraint.halfDepthMeters, 1);
+        const ellipseFactor = Math.sqrt((normalizedX ** 2) + (normalizedY ** 2));
+        if (ellipseFactor > 1) {
+            clampedLonMeters /= ellipseFactor;
+            clampedLatMeters /= ellipseFactor;
+        }
+
+        const clampedHeight = Math.min(Math.max(currentHeight, constraint.minHeight), constraint.maxHeight);
+
+        if (clampedLonMeters === deltaLonMeters && clampedLatMeters === deltaLatMeters && clampedHeight === currentHeight) {
+            return;
+        }
+
+        const targetLon = constraint.centerLon + (clampedLonMeters / metersPerLon);
+        const targetLat = constraint.centerLat + (clampedLatMeters / 110540);
+        if (cameraMode === 'firstPerson') {
+            console.log("[Vista3D][FP] clamp", {
+                current: {
+                    lon: currentLon,
+                    lat: currentLat,
+                    height: currentHeight
+                },
+                target: {
+                    lon: targetLon,
+                    lat: targetLat,
+                    height: clampedHeight
+                }
+            });
+        }
+
+        isApplyingDioramaClampRef.current = true;
+        try {
+            camera.setView({
+                destination: Cartesian3.fromDegrees(targetLon, targetLat, clampedHeight),
+                orientation: {
+                    heading: camera.heading,
+                    pitch: camera.pitch,
+                    roll: camera.roll
+                }
+            });
+        } finally {
+            isApplyingDioramaClampRef.current = false;
+        }
+    }, [Cartesian3, cameraMode, getSceneCamera]);
+
+    const updateFirstPersonMovement = useCallback(() => {
+        const viewer = viewerRef.current;
+        const constraint = dioramaConstraintRef.current;
+        if (!viewer || viewer.isDestroyed() || cameraMode !== 'firstPerson' || !constraint || isDioramaTransitioningRef.current) {
+            return;
+        }
+
+        const keys = movementKeysRef.current;
+        if (!Object.values(keys).some(Boolean)) return;
+
+        const camera = getSceneCamera(viewer);
+        if (!camera || !camera._scene) return;
+        const step = Math.max(0.75, dioramaSize / 220);
+        const verticalStep = Math.max(0.35, step * 0.45);
+        console.log("[Vista3D][FP] movement tick", {
+            keys,
+            step,
+            verticalStep,
+            before: {
+                heading: camera.heading,
+                pitch: camera.pitch,
+                roll: camera.roll
+            }
+        });
+
+        if (keys.forward) camera.moveForward(step);
+        if (keys.backward) camera.moveBackward(step);
+        if (keys.left) camera.moveLeft(step);
+        if (keys.right) camera.moveRight(step);
+        if (keys.up) camera.moveUp(verticalStep);
+        if (keys.down) camera.moveDown(verticalStep);
+
+        let cameraCartographic;
+        try {
+            cameraCartographic = camera.positionCartographic;
+        } catch (e) {
+            return;
+        }
+        if (cameraCartographic) {
+            const currentLon = Cesium.Math.toDegrees(cameraCartographic.longitude);
+            const currentLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
+            const currentHeight = cameraCartographic.height || 0;
+            const metersPerLon = 111320 * Math.cos(Cesium.Math.toRadians(constraint.centerLat)) || 1;
+            let deltaLonMeters = (currentLon - constraint.centerLon) * metersPerLon;
+            let deltaLatMeters = (currentLat - constraint.centerLat) * 110540;
+            deltaLonMeters = Math.min(Math.max(deltaLonMeters, -constraint.halfWidthMeters), constraint.halfWidthMeters);
+            deltaLatMeters = Math.min(Math.max(deltaLatMeters, -constraint.halfDepthMeters), constraint.halfDepthMeters);
+            const clampedHeight = Math.min(Math.max(currentHeight, constraint.minHeight), constraint.maxHeight);
+            const targetLon = constraint.centerLon + (deltaLonMeters / metersPerLon);
+            const targetLat = constraint.centerLat + (deltaLatMeters / 110540);
+            camera.setView({
+                destination: Cartesian3.fromDegrees(targetLon, targetLat, clampedHeight),
+                orientation: {
+                    heading: camera.heading,
+                    pitch: camera.pitch,
+                    roll: 0
+                }
+            });
+        }
+
+        console.log("[Vista3D][FP] movement result", {
+            after: {
+                heading: camera.heading,
+                pitch: camera.pitch,
+                roll: camera.roll
+            }
+        });
+    }, [cameraMode, dioramaSize, getSceneCamera]);
+
+    const buildEdgeIndices = useCallback((triangleIndices) => {
+        const edgeIndices = [];
+        for (let i = 0; i < triangleIndices.length; i += 3) {
+            const a = triangleIndices[i];
+            const b = triangleIndices[i + 1];
+            const c = triangleIndices[i + 2];
+            edgeIndices.push(a, b, b, c, c, a);
+        }
+        return edgeIndices;
+    }, []);
+
+    const buildBoundaryIndices = useCallback((triangleIndices) => {
+        const edgeCounter = new Map();
+
+        const registerEdge = (start, end) => {
+            const key = start < end ? `${start}_${end}` : `${end}_${start}`;
+            const current = edgeCounter.get(key);
+            if (current) {
+                current.count += 1;
+            } else {
+                edgeCounter.set(key, { start, end, count: 1 });
+            }
+        };
+
+        for (let i = 0; i < triangleIndices.length; i += 3) {
+            const a = triangleIndices[i];
+            const b = triangleIndices[i + 1];
+            const c = triangleIndices[i + 2];
+            registerEdge(a, b);
+            registerEdge(b, c);
+            registerEdge(c, a);
+        }
+
+        const boundaryIndices = [];
+        edgeCounter.forEach(({ start, end, count }) => {
+            if (count === 1) {
+                boundaryIndices.push(start, end);
+            }
+        });
+
+        return boundaryIndices;
+    }, []);
+
+    const renderDioramaBox = useCallback((progressiva, sizeMeters, minZ, maxZ) => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed() || !progressiva?.coordenada_este || !progressiva?.coordenada_norte) return;
+
+        clearDioramaBox();
+
+        const progressivaElevation = parseFloat(progressiva.elevacion);
+        const anchor = resolveProgressivaAnchor(progressiva);
+        if (!anchor) return;
+        const surfaceReferenceZ = Number.isFinite(progressivaElevation) && progressivaElevation !== 0
+            ? progressivaElevation
+            : (Number.isFinite(anchor.surfaceZ) && anchor.surfaceZ !== 0
+                ? anchor.surfaceZ
+                : (Number.isFinite(maxZ) ? maxZ : 0));
+        const baseZ = Math.min(Number.isFinite(minZ) ? minZ : surfaceReferenceZ - 6, surfaceReferenceZ - 6);
+        const topZ = Math.max(Number.isFinite(maxZ) ? maxZ + 25 : surfaceReferenceZ + 2000, surfaceReferenceZ + 2000);
+        const halfWidth = Math.max(90, sizeMeters * 0.58);
+        const halfDepth = Math.max(50, sizeMeters * 0.34);
+        const centerLon = anchor.lon;
+        const centerLat = anchor.lat;
+        const roundedRectLonLat = [];
+        const segments = 6;
+
+        const pushCorner = (startAngle, endAngle) => {
+            for (let i = 0; i <= segments; i++) {
+                const t = startAngle + ((endAngle - startAngle) * i) / segments;
+                roundedRectLonLat.push(
+                    offsetLonLatMeters(
+                        centerLon,
+                        centerLat,
+                        Math.cos(t) * halfWidth,
+                        Math.sin(t) * halfDepth
+                    )
+                );
+            }
+        };
+
+        pushCorner(Math.PI * 1.5, Math.PI * 2.0);
+        pushCorner(0, Math.PI * 0.5);
+        pushCorner(Math.PI * 0.5, Math.PI);
+        pushCorner(Math.PI, Math.PI * 1.5);
+
+        const bottomPositions = [];
+        const topPositions = [];
+
+        roundedRectLonLat.forEach(({ lon, lat }) => {
+            bottomPositions.push(Cartesian3.fromDegrees(lon, lat, baseZ));
+            topPositions.push(Cartesian3.fromDegrees(lon, lat, topZ));
+        });
+
+        const topLoop = viewer.entities.add({
+            polyline: {
+                positions: [...topPositions, topPositions[0]],
+                width: 2,
+                material: Color.CYAN.withAlpha(0.95)
+            }
+        });
+
+        const bottomLoop = viewer.entities.add({
+            polyline: {
+                positions: [...bottomPositions, bottomPositions[0]],
+                width: 2,
+                material: Color.CYAN.withAlpha(0.35)
+            }
+        });
+
+        const walls = viewer.entities.add({
+            wall: {
+                positions: [...roundedRectLonLat, roundedRectLonLat[0]].map(({ lon, lat }) => Cartesian3.fromDegrees(lon, lat)),
+                minimumHeights: new Array(roundedRectLonLat.length + 1).fill(baseZ),
+                maximumHeights: new Array(roundedRectLonLat.length + 1).fill(topZ),
+                material: Color.CYAN.withAlpha(0.02),
+                outline: true,
+                outlineColor: Color.CYAN.withAlpha(0.32)
+            }
+        });
+
+        const guideIndices = [0, Math.floor(roundedRectLonLat.length / 4), Math.floor(roundedRectLonLat.length / 2), Math.floor((roundedRectLonLat.length * 3) / 4)];
+        const verticals = guideIndices.map((idx) => {
+            const { lon, lat } = roundedRectLonLat[idx];
+            return viewer.entities.add({
+                polyline: {
+                    positions: [
+                        Cartesian3.fromDegrees(lon, lat, baseZ),
+                        Cartesian3.fromDegrees(lon, lat, topZ)
+                    ],
+                    width: 1.5,
+                    material: Color.CYAN.withAlpha(0.5)
+                }
+            });
+        });
+
+        dioramaBoxEntitiesRef.current = [topLoop, bottomLoop, walls, ...verticals];
+        dioramaAnchorRef.current = {
+            lon: centerLon,
+            lat: centerLat,
+            surfaceZ: surfaceReferenceZ
+        };
+        dioramaConstraintRef.current = {
+            centerLon,
+            centerLat,
+            halfWidthMeters: halfWidth,
+            halfDepthMeters: halfDepth,
+            minHeight: surfaceReferenceZ + 1.8,
+            maxHeight: surfaceReferenceZ + 2000,
+            surfaceHeight: surfaceReferenceZ
+        };
+
+        const controller = viewer.scene?.screenSpaceCameraController;
+        if (controller) {
+            controller.maximumZoomDistance = Math.max(420, sizeMeters * 1.8);
+            controller.minimumZoomDistance = 1.0;
+        }
+
+        if (viewer.scene?.globe) {
+            viewer.scene.globe.translucency.enabled = false;
+            viewer.scene.globe.undergroundColor = Color.BLACK.withAlpha(0.0);
+        }
+    }, [Cartesian3, Color, clearDioramaBox, projectZone, resolveProgressivaAnchor]);
+
+    const renderModelChunk = useCallback((modelData, progressiva = null) => {
+        if (!modelData?.rawVertices?.length || !modelData?.rawIndicesTriangulos?.length) {
+            return;
+        }
+
+        const rawVertices = modelData.rawVertices;
+        let selectedTriangles = modelData.rawIndicesTriangulos;
+        const isChunkMode = !!(progressiva?.coordenada_este && progressiva?.coordenada_norte);
+
+        if (isChunkMode) {
+            const progressivaCoords = processCoordinates(progressiva.coordenada_este, progressiva.coordenada_norte, projectZone);
+            const centerX = parseFloat(progressivaCoords.x);
+            const centerY = parseFloat(progressivaCoords.y);
+            const half = dioramaSize / 2;
+            const extendedHalf = half * 1.6;
+
+            const withinChunk = (vertex) => (
+                vertex.x >= centerX - half &&
+                vertex.x <= centerX + half &&
+                vertex.y >= centerY - half &&
+                vertex.y <= centerY + half
+            );
+
+            const withinExtendedChunk = (vertex) => (
+                vertex.x >= centerX - extendedHalf &&
+                vertex.x <= centerX + extendedHalf &&
+                vertex.y >= centerY - extendedHalf &&
+                vertex.y <= centerY + extendedHalf
+            );
+
+            const croppedTriangles = [];
+            const fallbackTriangles = [];
+
+            for (let i = 0; i < modelData.rawIndicesTriangulos.length; i += 3) {
+                const a = modelData.rawIndicesTriangulos[i];
+                const b = modelData.rawIndicesTriangulos[i + 1];
+                const c = modelData.rawIndicesTriangulos[i + 2];
+                const va = rawVertices[a];
+                const vb = rawVertices[b];
+                const vc = rawVertices[c];
+                if (!va || !vb || !vc) continue;
+
+                const centroidX = (va.x + vb.x + vc.x) / 3;
+                const centroidY = (va.y + vb.y + vc.y) / 3;
+                const centroidInside = (
+                    centroidX >= centerX - half &&
+                    centroidX <= centerX + half &&
+                    centroidY >= centerY - half &&
+                    centroidY <= centerY + half
+                );
+
+                if (centroidInside) {
+                    croppedTriangles.push(a, b, c);
+                } else if (withinChunk(va) || withinChunk(vb) || withinChunk(vc)) {
+                    fallbackTriangles.push(a, b, c);
+                } else if (withinExtendedChunk(va) || withinExtendedChunk(vb) || withinExtendedChunk(vc)) {
+                    fallbackTriangles.push(a, b, c);
+                }
+            }
+
+            selectedTriangles = croppedTriangles.length > 0 ? croppedTriangles : fallbackTriangles;
+        }
+
+        if (!selectedTriangles.length) {
+            if (isChunkMode) {
+                console.warn("[Vista3D] El chunk LandXML no encontró triángulos para la progresiva seleccionada.");
+                currentModelDataRef.current = {
+                    ...modelData,
+                    activeVertices: [],
+                    activeIndicesTriangulos: [],
+                    activeVerticesInfo: [],
+                    activeElevationData: [],
+                    activeMinZ: modelData.rawMinZ,
+                    activeMaxZ: modelData.rawMaxZ,
+                    activeIndicesBordesFull: []
+                };
+                clearDioramaBox();
+                return;
+            }
+            selectedTriangles = modelData.rawIndicesTriangulos;
+        }
+
+        const usedVertexIndices = new Set(selectedTriangles);
+        const remap = new Map();
+        const activeVertices = [];
+
+        Array.from(usedVertexIndices).sort((a, b) => a - b).forEach((originalIndex) => {
+            const vertex = rawVertices[originalIndex];
+            if (!vertex) return;
+            remap.set(originalIndex, activeVertices.length);
+            activeVertices.push(vertex);
+        });
+
+        const remappedTriangles = [];
+        for (let i = 0; i < selectedTriangles.length; i += 3) {
+            const a = remap.get(selectedTriangles[i]);
+            const b = remap.get(selectedTriangles[i + 1]);
+            const c = remap.get(selectedTriangles[i + 2]);
+            if ([a, b, c].some(v => v === undefined)) continue;
+            remappedTriangles.push(a, b, c);
+        }
+
+        if (!activeVertices.length || !remappedTriangles.length) {
+            return;
+        }
+
+        const verticesInfo = activeVertices.map(({ lon, lat, z }) => ({ lon, lat, z }));
+        const elevationData = activeVertices.map(v => v.z);
+        let minZ = Infinity;
+        let maxZ = -Infinity;
+        for (let i = 0; i < elevationData.length; i++) {
+            const z = elevationData[i];
+            if (z < minZ) minZ = z;
+            if (z > maxZ) maxZ = z;
+        }
+        const indicesBordesFull = buildEdgeIndices(remappedTriangles);
+        const indicesBoundary = buildBoundaryIndices(remappedTriangles);
+
+        currentModelDataRef.current = {
+            ...modelData,
+            activeVertices,
+            activeIndicesTriangulos: remappedTriangles,
+            activeVerticesInfo: verticesInfo,
+            activeElevationData: elevationData,
+            activeMinZ: minZ,
+            activeMaxZ: maxZ,
+            activeIndicesBordesFull: indicesBordesFull,
+            activeIndicesBoundary: indicesBoundary
+        };
+
+        renderFinalMesh(verticesInfo, elevationData, minZ, maxZ, remappedTriangles, indicesBoundary, indicesBordesFull);
+
+        if (progressiva?.coordenada_este && progressiva?.coordenada_norte) {
+            renderDioramaBox(progressiva, dioramaSize, minZ, maxZ);
+        } else {
+            clearDioramaBox();
+            disableDioramaConstraints();
+        }
+    }, [buildBoundaryIndices, buildEdgeIndices, clearDioramaBox, dioramaSize, disableDioramaConstraints, renderDioramaBox, renderFinalMesh]);
 
     /**
      * Renderiza cilindros 3D para sondajes.
@@ -346,9 +885,6 @@ export default function Vista3D() {
             });
             if (res.ok && isMounted.current) {
                 const data = await res.json();
-                console.log("[Vista3D] --- INSPECCIÓN DE DATOS DE SUELO ---");
-                console.log("[Vista3D] Trazados recibidos:", data.tracks);
-                console.log("[Vista3D] Progresivas recibidas (ejemplo 1era):", data.progresivas?.[0]);
                 setSoilData(data);
             } else {
                 console.error("[Vista3D] Error en respuesta de API Suelos:", res.status);
@@ -358,31 +894,146 @@ export default function Vista3D() {
         }
     }, [selectedProjectId, user?.token]);
 
-    const flyToProgressive = useCallback((p) => {
-        if (!viewerRef.current) return;
-        const { lon, lat } = utmToWgs84(p.coordenada_este, p.coordenada_norte, projectZone);
-        // Aumentamos el offset Z a 1200m para una vista panorámica más cómoda
-        const z = (p.elevacion ? parseFloat(p.elevacion) : 500) + 1200;
-        viewerRef.current.camera.flyTo({
-            destination: Cartesian3.fromDegrees(lon, lat, z),
-            duration: 1.5,
+    const enterFirstPerson = useCallback(() => {
+        const viewer = viewerRef.current;
+        const constraint = dioramaConstraintRef.current;
+        if (!viewer || viewer.isDestroyed() || !selectedProgressiva3D || !constraint) return;
+        const camera = getSceneCamera(viewer);
+        if (!camera || !camera._scene) return;
+        const anchor = dioramaAnchorRef.current || resolveProgressivaAnchor(selectedProgressiva3D, constraint.surfaceHeight);
+        if (!anchor) return;
+        console.log("[Vista3D][FP] enter", {
+            progresivaId: selectedProgressiva3D.id,
+            nombre: selectedProgressiva3D.nombre,
+            anchor,
+            constraint,
+            before: {
+                heading: camera.heading,
+                pitch: camera.pitch,
+                roll: camera.roll
+            }
+        });
+
+        isDioramaTransitioningRef.current = true;
+        const heading = Cesium.Math.toRadians(18);
+        camera.setView({
+            destination: Cartesian3.fromDegrees(
+                anchor.lon,
+                anchor.lat,
+                Math.max(anchor.surfaceZ + 25, constraint.minHeight + 20)
+            ),
             orientation: {
-                heading: 0,
-                pitch: Cesium.Math.toRadians(-90), // Vista cenital
+                heading,
+                pitch: Cesium.Math.toRadians(-12),
                 roll: 0
             }
         });
-    }, [utmToWgs84, projectZone]);
+        console.log("[Vista3D][FP] setView applied", {
+            destination: {
+                lon: anchor.lon,
+                lat: anchor.lat,
+                height: Math.max(anchor.surfaceZ + 25, constraint.minHeight + 20)
+            },
+            after: {
+                heading: camera.heading,
+                pitch: camera.pitch,
+                roll: camera.roll
+            }
+        });
+        isDioramaTransitioningRef.current = false;
+        setCameraMode('firstPerson');
+    }, [Cartesian3, getSceneCamera, resolveProgressivaAnchor, selectedProgressiva3D]);
+
+    const exitFirstPerson = useCallback(() => {
+        if (!selectedProgressiva3D) {
+            setCameraMode('orbit');
+            return;
+        }
+        setCameraMode('diorama');
+    }, [selectedProgressiva3D]);
+
+    const focusOnSelectedProgressiva = useCallback(() => {
+        const viewer = viewerRef.current;
+        const camera = getSceneCamera(viewer);
+        const constraint = dioramaConstraintRef.current;
+        const anchor = dioramaAnchorRef.current;
+        if (!viewer || viewer.isDestroyed() || !camera || !constraint || !anchor) return;
+
+        isDioramaTransitioningRef.current = true;
+        try {
+            camera.setView({
+                destination: Cartesian3.fromDegrees(
+                    anchor.lon,
+                    anchor.lat,
+                    Math.max(anchor.surfaceZ + Math.max(85, dioramaSize * 0.24), constraint.minHeight + 25)
+                ),
+                orientation: {
+                    heading: Cesium.Math.toRadians(18),
+                    pitch: Cesium.Math.toRadians(-10),
+                    roll: 0
+                }
+            });
+        } finally {
+            window.setTimeout(() => {
+                isDioramaTransitioningRef.current = false;
+            }, 0);
+        }
+    }, [Cartesian3, dioramaSize, getSceneCamera]);
+
+    const flyToProgressive = useCallback(async (p) => {
+        if (!viewerRef.current) return;
+        const viewer = viewerRef.current;
+        const camera = getSceneCamera(viewer);
+        if (!camera || !camera._scene) return;
+        setSelectedProgressiva3D(p);
+        setCameraMode('diorama');
+        const initialAnchor = resolveProgressivaAnchor(p);
+        if (!initialAnchor) return;
+        let { lon, lat } = initialAnchor;
+
+        let surfaceZ = initialAnchor.surfaceZ;
+        if (!Number.isFinite(surfaceZ) || surfaceZ === 0) {
+            try {
+                const tProvider = viewer.scene.terrainProvider || viewer.terrainProvider;
+                const sampled = await chunkedSampleTerrain(Cesium, tProvider, [Cartographic.fromDegrees(lon, lat)], 1);
+                surfaceZ = sampled?.[0]?.height;
+            } catch (e) { }
+        }
+
+        if (!Number.isFinite(surfaceZ)) {
+            surfaceZ = currentModelDataRef.current?.activeMaxZ
+                || currentModelDataRef.current?.rawMaxZ
+                || 500;
+        }
+
+        dioramaAnchorRef.current = { lon, lat, surfaceZ };
+
+        const cameraHeight = Math.max(80, dioramaSize * 0.22);
+        isDioramaTransitioningRef.current = true;
+        try {
+            camera.setView({
+                destination: Cartesian3.fromDegrees(lon, lat, surfaceZ + cameraHeight),
+                orientation: {
+                    heading: Cesium.Math.toRadians(18),
+                    pitch: Cesium.Math.toRadians(-10),
+                    roll: 0
+                }
+            });
+        } finally {
+            window.setTimeout(() => {
+                isDioramaTransitioningRef.current = false;
+            }, 0);
+        }
+    }, [Cartesian3, Cartographic, dioramaSize, getSceneCamera, resolveProgressivaAnchor]);
 
     // --- EFECTO: RENDERIZADO DE SUELOS Y TRAZADOS (INTELIGENTE: Auto-Zona y Elevación Real) ---
     useEffect(() => {
         const viewer = viewerRef.current;
-        if (!viewer || viewer.isDestroyed() || !soilData || !isViewerReady) {
+        if (!isViewerStable(viewer) || !soilData || !isViewerReady) {
             console.warn("[Vista3D] Renderizado de suelos en espera: Visor no listo, destruido o sin datos.");
             return;
         }
-
-        console.log("[Vista3D] --- INICIANDO RENDERIZADO 3D (AUTO) ---");
+        progressivaAnchorsRef.current = new Map();
 
         // 1. Limpiar previos
         kmlDataSourcesRef.current.forEach(ds => viewer.dataSources.remove(ds));
@@ -392,7 +1043,7 @@ export default function Vista3D() {
 
         // 2. Renderizar Tracks y Detectar Zona
         const loadTracks = async () => {
-            console.log("%c[Vista3D] 🚀 INICIANDO CARGA DE TRACKS KML...", "color: #3498db; font-weight: bold; font-size: 14px;");
+            if (!isViewerStable(viewer)) return;
 
             if (!soilData.tracks || soilData.tracks.length === 0) {
                 console.warn("[Vista3D] ⚠️ No hay tracks en soilData.tracks");
@@ -402,15 +1053,11 @@ export default function Vista3D() {
             let zoneDetected = false;
             for (const track of (soilData.tracks || [])) {
                 try {
-                    console.log(`[Vista3D] 🛰️ Procesando track: ${track.nombre || 'Sin nombre'} (ID Tramo: ${track.tramo_id})`);
-
+                    if (!isViewerStable(viewer)) return;
                     if (!track.kml_content) {
                         console.error(`[Vista3D] ❌ El track ${track.nombre} no tiene contenido KML.`);
                         continue;
                     }
-
-                    console.log(`[Vista3D] ℹ️ Longitud KML: ${track.kml_content.length} caracteres. Empieza con: ${track.kml_content.substring(0, 50)}...`);
-
                     // --- HACK: INYECTAR TESSELLATE ---
                     // Si el KML no tiene tessellate, Cesium ignora el clampToGround o crashea.
                     // Lo inyectamos por fuerza bruta en el string XML.
@@ -424,13 +1071,13 @@ export default function Vista3D() {
                     const kmlBlob = new Blob([kmlPrepared], { type: 'application/vnd.google-earth.kml+xml' });
 
                     const ds = await Cesium.KmlDataSource.load(kmlBlob, {
-                        camera: viewer.camera,
+                        camera: getSceneCamera(viewer),
                         canvas: viewer.canvas,
                         clampToGround: true
                     });
+                    if (!isViewerStable(viewer)) return;
 
                     const entities = ds.entities.values;
-                    console.log(`%c[Vista3D] ✅ Trazado '${track.nombre}' cargado con ${entities.length} entidades.`, "color: #2ecc71; font-weight: bold;");
 
                     if (entities.length === 0) {
                         console.warn(`[Vista3D] ⚠️ El KML '${track.nombre}' no tiene entidades válidas (Puntos/Líneas).`);
@@ -445,7 +1092,7 @@ export default function Vista3D() {
                                 const carto = Cartographic.fromCartesian(pos);
                                 const lonDeg = Cesium.Math.toDegrees(carto.longitude);
                                 const zone = getUtmZoneFromLon(lonDeg);
-                                console.log(`[Vista3D] 📍 Zona UTM detectada automáticamente: ${zone}`);
+
                                 setProjectZone(zone);
                                 zoneDetected = true;
                             }
@@ -468,7 +1115,6 @@ export default function Vista3D() {
 
                     // AUTO-ENFOQUE: Volar al primer trazado cargado para validación visual
                     if (!zoneDetected) {
-                        console.log("[Vista3D] ✈️ Volando al trazado...");
                         viewer.flyTo(ds, {
                             duration: 2,
                             offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
@@ -483,6 +1129,7 @@ export default function Vista3D() {
 
         // 3. RENDERIZADO DE ESTRATOS (Cilindros)
         const renderHoles = async () => {
+            if (!isViewerStable(viewer)) return;
             const calicatasConCoords = (soilData.progresivas || []).filter(p => p.coordenada_este && p.coordenada_norte && p.estratos && p.estratos.length > 0);
             if (calicatasConCoords.length === 0) return;
 
@@ -496,10 +1143,11 @@ export default function Vista3D() {
 
             let sampledMap = {};
             if (cartographicsToSample.length > 0) {
+                if (!isViewerStable(viewer)) return;
                 // Cesium 1.104+ usa scene.terrainProvider. El getter viewer.terrainProvider puede ser undefined.
-                const tProvider = viewer.scene.terrainProvider || viewer.terrainProvider;
-
-                console.log("[Vista3D] Muestreando terreno para calicatas. Provider detected:", tProvider?.constructor?.name || "None");
+                const scene = viewer.scene;
+                if (!scene) return;
+                const tProvider = scene.terrainProvider || viewer.terrainProvider;
 
                 try {
                     const sampled = await chunkedSampleTerrain(Cesium, tProvider, cartographicsToSample);
@@ -512,7 +1160,9 @@ export default function Vista3D() {
             }
 
             try {
+                if (!isViewerStable(viewer)) return;
                 calicatasConCoords.forEach((p) => {
+                    if (!isViewerStable(viewer)) return;
                     const { lon, lat } = utmToWgs84(p.coordenada_este, p.coordenada_norte, projectZone);
 
                     // PRIORIDAD DE ELEVACIÓN: 1. DB (Topografía Real) | 2. Terreno Cesium
@@ -523,6 +1173,8 @@ export default function Vista3D() {
                         const key = `${Cesium.Math.toRadians(lon)}_${Cesium.Math.toRadians(lat)}`;
                         surfaceZ = sampledMap[key] || 0;
                     }
+
+                    progressivaAnchorsRef.current.set(p.id, { lon, lat, surfaceZ });
 
                     // --- NUEVO: MARCADOR Y ETIQUETA PREMIUM (Estilo Maqueta) ---
                     const markerId = `prog-marker-${p.id}`;
@@ -562,7 +1214,7 @@ export default function Vista3D() {
                                 position: Cartesian3.fromDegrees(lon, lat, surfaceZ - 7.0), // Centro del cilindro a -7m
                                 cylinder: {
                                     length: 14.0, topRadius: 1.2, bottomRadius: 1.2,
-                                    material: Color.GRAY.withAlpha(0.6), 
+                                    material: Color.GRAY.withAlpha(0.6),
                                     outline: true
                                 }
                             });
@@ -593,7 +1245,9 @@ export default function Vista3D() {
                         });
                     }
                 });
-                viewer.scene.requestRender();
+                if (isViewerStable(viewer)) {
+                    viewer.scene.requestRender();
+                }
             } catch (e) {
                 console.error("[Vista3D] Error en renderizado 3D de calicatas:", e);
             }
@@ -605,7 +1259,7 @@ export default function Vista3D() {
         };
 
         initialize3D();
-    }, [soilData, isViewerReady, projectZone]);
+    }, [getSceneCamera, isViewerStable, soilData, isViewerReady, projectZone]);
 
     const fetchAllData = useCallback(async () => {
         setIsGlobalLoading(true);
@@ -659,7 +1313,6 @@ export default function Vista3D() {
 
     useEffect(() => {
         isMounted.current = true;
-        console.log("[Vista3D] Montando el visor ..");
 
         let viewer;
 
@@ -751,10 +1404,17 @@ export default function Vista3D() {
                     controller.inertiaSpin = 0.7;
                     controller.inertiaTranslate = 0.7;
                     controller.inertiaZoom = 0.7;
+                    controller.enableLook = true;
+                    controller.enableTilt = true;
+                    controller.enableTranslate = true;
+                    controller.enableRotate = true;
+                    controller.enableZoom = true;
                 }
 
+                viewer.scene.preRender.addEventListener(enforceDioramaCameraBounds);
+                viewer.scene.preRender.addEventListener(updateFirstPersonMovement);
+
                 if (isMounted.current) {
-                    console.log("[Vista3D] ✅ Visor Cesium inicializado con éxito.");
                     viewerRef.current = viewer;
                     setIsViewerReady(true); // DIPARAR RENDERIZADO DE DATOS
                 } else {
@@ -770,14 +1430,18 @@ export default function Vista3D() {
         initializeViewer();
 
         return () => {
-            console.log("[Vista3D] Desmontando visor ..");
             isMounted.current = false;
+            disableDioramaConstraints();
             if (viewer && !viewer.isDestroyed()) {
+                try {
+                    viewer.scene.preRender.removeEventListener(enforceDioramaCameraBounds);
+                    viewer.scene.preRender.removeEventListener(updateFirstPersonMovement);
+                } catch (e) { }
                 viewer.destroy();
             }
             viewerRef.current = null;
         };
-    }, []);
+    }, [disableDioramaConstraints, enforceDioramaCameraBounds, updateFirstPersonMovement]);
 
 
     // --- MANEJO DE ARCHIVOS ---
@@ -967,23 +1631,25 @@ export default function Vista3D() {
 
     // --- SELECCIÓN DE MODELO ---
     useEffect(() => {
-        console.log("[Vista3D] useEffect selectedModelo disparado. Modelo:", selectedModelo?.id, "Viewer:", !!viewerRef.current);
         if (!selectedModelo || !viewerRef.current) {
-            console.log("[Vista3D] Abortando efecto: No hay modelo o viewer.");
             return;
         }
         const viewer = viewerRef.current;
-        console.log("[Vista3D] Procesando modelo:", selectedModelo.nombre_archivo || selectedModelo.id);
 
         // CASO ESPECIAL: Si es un Tramo Maestro (Streaming), no hay malla fija que procesar
         if (selectedModelo.url_archivo === 'STREAMING_LOCAL_SIN_MALLA') {
-            console.log("[Vista3D] Detectado modelo de STREAMING");
+            setCameraMode('orbit');
+            disableDioramaConstraints();
+            clearDioramaBox();
             if (selectedModelo.metadata && selectedModelo.metadata.centro_utm) {
                 const { x, y } = selectedModelo.metadata.centro_utm;
-                console.log("[Vista3D] Centro UTM detectado:", x, y);
-                const wgs = utmToWgs84(x, y, 18, 'S');
-                console.log("[Vista3D] Conversión WGS84 para vuelo:", wgs);
-                viewer.camera.flyTo({
+                const wgs = utmToWgs84(x, y, projectZone);
+                const sceneCamera = getSceneCamera(viewer);
+                if (!sceneCamera) {
+                    setIsGlobalLoading(false);
+                    return;
+                }
+                sceneCamera.flyTo({
                     destination: Cartesian3.fromDegrees(wgs.lon, wgs.lat, 1200), // Vista más amplia para tramos
                     duration: 1.5
                 });
@@ -1012,16 +1678,16 @@ export default function Vista3D() {
                 }
 
                 setIsGlobalLoading(true);
-                console.log("[Vista3D] Cargando malla OBJ...");
                 let objData = null;
 
                 if (selectedModelo.url_archivo === 'DB_EMBEDDED_OBJ') {
-                    console.log("[Vista3D] Extrayendo malla desde la Base de Datos (PostgreSQL)...");
                     objData = selectedModelo.metadata?.obj_content;
                     if (!objData) throw new Error("No se encontró el contenido OBJ en los metadatos de la DB.");
                 } else {
-                    console.log("[Vista3D] Descargando malla desde URL externa:", selectedModelo.url_archivo);
-                    const resp = await fetch(selectedModelo.url_archivo);
+                    const proxyUrl = `${API_BASE}/api/modelos-3d/${selectedModelo.id}/obj`;
+                    const resp = await fetch(proxyUrl, {
+                        headers: { 'Authorization': `Bearer ${user?.token}` }
+                    });
                     if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
                     objData = await resp.text();
                 }
@@ -1034,25 +1700,23 @@ export default function Vista3D() {
                     throw new Error("El servidor devolvió una página HTML en lugar de un objeto 3D o el archivo no se generó correctamente.");
                 }
 
-                console.log("[Vista3D] Datos OBJ listos, longitud:", objData?.length || 0);
-
-                const verticesInfo = [], elevationData = [], indicesTriangulos = [], indicesBordesFull = [];
+                const rawVertices = [];
+                const indicesTriangulos = [];
                 let minZ = Infinity, maxZ = -Infinity;
                 let sumLon = 0, sumLat = 0;
 
                 const lines = objData.split('\n');
                 const len = lines.length;
-                console.log("[Vista3D] Procesando", len, "líneas del OBJ...");
 
                 for (let i = 0; i < len; i++) {
                     const line = lines[i];
                     if (line.startsWith('v ')) {
                         const parts = line.trim().split(/\s+/);
                         const vx = parseFloat(parts[2]), vy = parseFloat(parts[1]), vz = parseFloat(parts[3]);
-                        const { lon, lat } = utmToWgs84(vx, vy);
+                        const processedCoords = processCoordinates(vx, vy, projectZone);
+                        const { lon, lat } = utmToWgs84(processedCoords.x, processedCoords.y, projectZone);
 
-                        verticesInfo.push({ lon, lat, z: vz });
-                        elevationData.push(vz);
+                        rawVertices.push({ x: processedCoords.x, y: processedCoords.y, z: vz, lon, lat });
                         sumLon += lon; sumLat += lat;
 
                         if (vz < minZ) minZ = vz; if (vz > maxZ) maxZ = vz;
@@ -1061,27 +1725,46 @@ export default function Vista3D() {
                         if (parts.length >= 4) {
                             const v1 = parseInt(parts[1]) - 1, v2 = parseInt(parts[2]) - 1, v3 = parseInt(parts[3]) - 1;
                             indicesTriangulos.push(v1, v2, v3);
-                            indicesBordesFull.push(v1, v2, v2, v3, v3, v1);
                         }
                     }
 
                     if (i % 15000 === 0 && i > 0) await new Promise(resolve => setTimeout(resolve, 0));
                 }
 
-                console.log("[Vista3D] Procesamiento finalizado. Vértices:", verticesInfo.length, "Triángulos:", indicesTriangulos.length / 3);
-                currentModelDataRef.current = { verticesInfo, elevationData, minZ, maxZ, indicesTriangulos, indicesBoundary: [], indicesBordesFull };
-                const midZ = minZ + (maxZ - minZ) / 2.0;
+                const parsedModelData = {
+                    rawVertices,
+                    rawIndicesTriangulos: indicesTriangulos,
+                    rawMinZ: minZ,
+                    rawMaxZ: maxZ
+                };
 
-                renderFinalMesh(verticesInfo, elevationData, minZ, maxZ, indicesTriangulos, [], indicesBordesFull);
+                currentModelDataRef.current = parsedModelData;
+                renderModelChunk(parsedModelData, selectedProgressiva3D);
+
+                const activeMesh = currentModelDataRef.current;
+                const activeMinZ = activeMesh?.activeMinZ ?? minZ;
+                const activeMaxZ = activeMesh?.activeMaxZ ?? maxZ;
+                const activeVerticesInfo = activeMesh?.activeVerticesInfo || rawVertices.map(({ lon, lat, z }) => ({ lon, lat, z }));
+                const midZ = activeMinZ + (activeMaxZ - activeMinZ) / 2.0;
 
                 setIsGlobalLoading(false);
 
-                if (verticesInfo.length > 0) {
-                    const centerLon = sumLon / verticesInfo.length;
-                    const centerLat = sumLat / verticesInfo.length;
-                    console.log("[Vista3D] Volando a centro de malla:", centerLon, centerLat, "Altitud:", midZ + 800);
-                    viewer.camera.flyTo({
-                        destination: Cartesian3.fromDegrees(centerLon, centerLat, midZ + 800),
+                if (activeVerticesInfo.length > 0) {
+                    const selectedProgressivaCoords = selectedProgressiva3D
+                        ? processCoordinates(selectedProgressiva3D.coordenada_este, selectedProgressiva3D.coordenada_norte, projectZone)
+                        : null;
+                    const centerLon = selectedProgressiva3D
+                        ? utmToWgs84(selectedProgressivaCoords.x, selectedProgressivaCoords.y, projectZone).lon
+                        : sumLon / rawVertices.length;
+                    const centerLat = selectedProgressiva3D
+                        ? utmToWgs84(selectedProgressivaCoords.x, selectedProgressivaCoords.y, projectZone).lat
+                        : sumLat / rawVertices.length;
+                    const sceneCamera = getSceneCamera(viewer);
+                    if (!sceneCamera) {
+                        return;
+                    }
+                    sceneCamera.flyTo({
+                        destination: Cartesian3.fromDegrees(centerLon, centerLat, selectedProgressiva3D ? midZ + Math.max(120, dioramaSize * 0.75) : midZ + 800),
                         duration: 2.0
                     });
                 } else {
@@ -1092,21 +1775,96 @@ export default function Vista3D() {
                 setIsGlobalLoading(false);
             }
         })();
-    }, [selectedModelo, renderFinalMesh]);
+    }, [Cartesian3, clearDioramaBox, dioramaSize, disableDioramaConstraints, getSceneCamera, projectZone, renderModelChunk, selectedModelo, selectedProgressiva3D, user?.token]);
+
+    useEffect(() => {
+        if (!viewerRef.current || !currentModelDataRef.current?.rawVertices?.length || !selectedModelo) {
+            return;
+        }
+
+        if (selectedModelo.url_archivo === 'STREAMING_LOCAL_SIN_MALLA') {
+            clearDioramaBox();
+            return;
+        }
+
+        renderModelChunk(currentModelDataRef.current, selectedProgressiva3D);
+    }, [clearDioramaBox, dioramaSize, renderModelChunk, selectedModelo, selectedProgressiva3D]);
+
+    useEffect(() => {
+        applyCameraMode(cameraMode);
+    }, [applyCameraMode, cameraMode]);
+
+    useEffect(() => {
+        if (!selectedProgressiva3D && cameraMode !== 'orbit') {
+            setCameraMode('orbit');
+        } else if (selectedProgressiva3D && cameraMode === 'orbit') {
+            setCameraMode('diorama');
+        }
+    }, [cameraMode, selectedProgressiva3D]);
+
+    useEffect(() => {
+        const handleKeyChange = (event, isPressed) => {
+            if (cameraMode !== 'firstPerson') return;
+
+            const activeTag = document.activeElement?.tagName;
+            if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
+
+            const key = event.key.toLowerCase();
+            const mapping = {
+                w: 'forward',
+                arrowup: 'forward',
+                s: 'backward',
+                arrowdown: 'backward',
+                a: 'left',
+                arrowleft: 'left',
+                d: 'right',
+                arrowright: 'right',
+                q: 'down',
+                e: 'up'
+            };
+
+            const movementKey = mapping[key];
+            if (!movementKey) return;
+            event.preventDefault();
+            movementKeysRef.current[movementKey] = isPressed;
+            console.log("[Vista3D][FP] key", {
+                key,
+                movementKey,
+                isPressed,
+                mode: cameraMode
+            });
+        };
+
+        const handleKeyDown = (event) => handleKeyChange(event, true);
+        const handleKeyUp = (event) => handleKeyChange(event, false);
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, [cameraMode]);
 
     const centerMap = useCallback(() => {
         const viewer = viewerRef.current;
         if (!viewer) return;
 
         // Prioridad 1: Vuelo a la malla LandXML actual
-        if (currentModelDataRef.current && currentModelDataRef.current.verticesInfo && currentModelDataRef.current.verticesInfo.length > 0) {
-            const { verticesInfo, minZ, maxZ } = currentModelDataRef.current;
+        if (currentModelDataRef.current && currentModelDataRef.current.activeVerticesInfo && currentModelDataRef.current.activeVerticesInfo.length > 0) {
+            const { activeVerticesInfo, activeMinZ, activeMaxZ } = currentModelDataRef.current;
+            const verticesInfo = activeVerticesInfo;
+            const minZ = activeMinZ;
+            const maxZ = activeMaxZ;
             const midZ = minZ + (maxZ - minZ) / 2.0;
             let sumLon = 0, sumLat = 0;
             verticesInfo.forEach(v => { sumLon += v.lon; sumLat += v.lat; });
             const centerLon = sumLon / verticesInfo.length;
             const centerLat = sumLat / verticesInfo.length;
-            viewer.camera.flyTo({
+            const sceneCamera = getSceneCamera(viewer);
+            if (!sceneCamera) return;
+            sceneCamera.flyTo({
                 destination: Cartesian3.fromDegrees(centerLon, centerLat, midZ + 1500),
                 duration: 2.0,
                 orientation: {
@@ -1135,7 +1893,7 @@ export default function Vista3D() {
             });
             return;
         }
-    }, [Cartesian3]);
+    }, [Cartesian3, getSceneCamera]);
 
     // --- UI RENDER (dashboardContent y loadingOverlay) ---
     // (Keeping them at the end to ensure all references are initialized)
@@ -1148,11 +1906,10 @@ export default function Vista3D() {
                     <div className="flex items-center gap-2 pr-4 border-r border-slate-200">
                         <button
                             onClick={() => setIsLeftOpen(!isLeftOpen)}
-                            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all border ${
-                                isLeftOpen 
-                                ? 'bg-blue-600 border-blue-500 text-white shadow-lg' 
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all border ${isLeftOpen
+                                ? 'bg-blue-600 border-blue-500 text-white shadow-lg'
                                 : 'bg-white border-slate-200 text-slate-500 hover:text-blue-700 hover:border-blue-300'
-                            }`}
+                                }`}
                             title="Explorador de Modelos"
                         >
                             <i className={`fas ${isLeftOpen ? 'fa-folder-open' : 'fa-folder'}`}></i>
@@ -1187,16 +1944,15 @@ export default function Vista3D() {
                             <i className={`fas ${document.fullscreenElement ? 'fa-compress' : 'fa-expand'}`}></i>
                             <span className="hidden sm:inline">Pantalla Completa</span>
                         </button>
-                        
+
                         <div className="w-[1px] h-4 bg-slate-200 mx-1"></div>
 
                         <button
                             onClick={() => setIsRightOpen(!isRightOpen)}
-                            className={`w-8 h-8 flex items-center justify-center transition-all rounded-md border ${
-                                isRightOpen 
-                                ? 'bg-blue-600 border-blue-500 text-white shadow-md' 
+                            className={`w-8 h-8 flex items-center justify-center transition-all rounded-md border ${isRightOpen
+                                ? 'bg-blue-600 border-blue-500 text-white shadow-md'
                                 : 'bg-white border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200'
-                            }`}
+                                }`}
                             title="Configuración Visual"
                         >
                             <i className="fas fa-cog"></i>
@@ -1211,52 +1967,52 @@ export default function Vista3D() {
                 {/* A. SIDEBAR IZQUIERDO */}
                 {isLeftOpen && (
                     <aside className="absolute left-0 top-0 w-72 border-r border-white/5 bg-slate-950/40 backdrop-blur-3xl flex flex-col z-40 shrink-0 shadow-[20px_0_40px_rgba(0,0,0,0.5)] h-full animate-in slide-in-from-left-full duration-500 ease-out">
-                    <div className="p-4 border-b border-slate-800/50">
-                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".xml,.zip,.ifc" />
-                        <button onClick={() => fileInputRef.current.click()} className="w-full bg-blue-600/10 hover:bg-blue-600 border border-blue-500/30 text-blue-400 hover:text-white py-4 rounded-xl transition-all flex flex-col items-center gap-1 group">
-                            <i className="fa-solid fa-cloud-arrow-up text-xl group-hover:scale-110 transition-transform"></i>
-                            <span className="text-[10px] font-bold uppercase tracking-wider">Importar LandXML</span>
-                        </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                        <div className="px-2 mb-2">
-                            <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Modelos Disponibles</h4>
+                        <div className="p-4 border-b border-slate-800/50">
+                            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".xml,.zip,.ifc" />
+                            <button onClick={() => fileInputRef.current.click()} className="w-full bg-blue-600/10 hover:bg-blue-600 border border-blue-500/30 text-blue-400 hover:text-white py-4 rounded-xl transition-all flex flex-col items-center gap-1 group">
+                                <i className="fa-solid fa-cloud-arrow-up text-xl group-hover:scale-110 transition-transform"></i>
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Importar LandXML</span>
+                            </button>
                         </div>
-                        {modelos.length === 0 ? (
-                            <div className="text-center py-10 px-4">
-                                <i className="fa-solid fa-folder-open text-slate-700 text-3xl mb-3"></i>
-                                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Sin modelos cargados</p>
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                            <div className="px-2 mb-2">
+                                <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Modelos Disponibles</h4>
                             </div>
-                        ) : (
-                            modelos.map(m => (
-                                <div
-                                    key={m.id}
-                                    onClick={() => setSelectedModelo(m)}
-                                    className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedModelo?.id === m.id
+                            {modelos.length === 0 ? (
+                                <div className="text-center py-10 px-4">
+                                    <i className="fa-solid fa-folder-open text-slate-700 text-3xl mb-3"></i>
+                                    <p className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Sin modelos cargados</p>
+                                </div>
+                            ) : (
+                                modelos.map(m => (
+                                    <div
+                                        key={m.id}
+                                        onClick={() => setSelectedModelo(m)}
+                                        className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedModelo?.id === m.id
                                             ? 'bg-blue-600 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.2)]'
                                             : 'bg-slate-800/40 border-slate-800 hover:border-slate-600'
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <i className="fa-solid fa-cube text-blue-400 text-[10px]"></i>
-                                        <h4 className="text-[10px] font-bold text-white truncate flex-1 leading-tight">{m.nombre_archivo}</h4>
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <i className="fa-solid fa-cube text-blue-400 text-[10px]"></i>
+                                            <h4 className="text-[10px] font-bold text-white truncate flex-1 leading-tight">{m.nombre_archivo}</h4>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${selectedModelo?.id === m.id ? 'bg-blue-400 text-blue-950' : 'bg-slate-800 text-slate-500'
+                                                }`}>OBJ</span>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
+                                                className="text-slate-600 hover:text-red-400 p-1 transition-colors"
+                                            >
+                                                <i className="fa-solid fa-trash-can text-[10px]"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${selectedModelo?.id === m.id ? 'bg-blue-400 text-blue-950' : 'bg-slate-800 text-slate-500'
-                                            }`}>OBJ</span>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
-                                            className="text-slate-600 hover:text-red-400 p-1 transition-colors"
-                                        >
-                                            <i className="fa-solid fa-trash-can text-[10px]"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </aside>
+                                ))
+                            )}
+                        </div>
+                    </aside>
                 )}
 
                 {/* B. ÁREA CENTRAL (MAPA) */}
@@ -1270,8 +2026,8 @@ export default function Vista3D() {
                                 key={style}
                                 onClick={() => setMapStyle(style)}
                                 className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-2xl border transition-all duration-300 ${mapStyle === style
-                                        ? 'bg-blue-600 border-blue-400 text-white translate-x-[-4px] shadow-blue-600/40'
-                                        : 'bg-slate-900/80 backdrop-blur-md border-slate-700 text-slate-500 hover:text-white'
+                                    ? 'bg-blue-600 border-blue-400 text-white translate-x-[-4px] shadow-blue-600/40'
+                                    : 'bg-slate-900/80 backdrop-blur-md border-slate-700 text-slate-500 hover:text-white'
                                     }`}
                                 title={style.toUpperCase()}
                             >
@@ -1283,11 +2039,10 @@ export default function Vista3D() {
                     {/* Botón Flotante para Centrar Tramo */}
                     <button
                         onClick={centerMap}
-                        className={`absolute bottom-6 transition-all duration-300 w-12 h-12 rounded-xl flex items-center justify-center shadow-xl border z-30 ${isRightOpen ? 'right-[344px]' : 'right-6'} ${
-                            mapStyle === 'hipso' 
-                            ? 'bg-blue-600 border-blue-400 text-white' 
+                        className={`absolute bottom-6 transition-all duration-300 w-12 h-12 rounded-xl flex items-center justify-center shadow-xl border z-30 ${isRightOpen ? 'right-[344px]' : 'right-6'} ${mapStyle === 'hipso'
+                            ? 'bg-blue-600 border-blue-400 text-white'
                             : 'bg-slate-900/80 backdrop-blur-md border-slate-700 text-slate-400 hover:text-white'
-                        }`}
+                            }`}
                         title="Centrar en el Proyecto"
                     >
                         <i className="fas fa-crosshairs text-xl"></i>
@@ -1344,6 +2099,94 @@ export default function Vista3D() {
                                 <input type="range" min="0" max="1" step="0.01" value={mapOpacity} onChange={(e) => setMapOpacity(parseFloat(e.target.value))} className="w-full h-1 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" />
                             </div>
 
+                            <div className="p-5 rounded-2xl border bg-cyan-500/5 border-cyan-400/20 shadow-inner shadow-cyan-500/5">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-300">
+                                            <i className="fa-solid fa-cube text-sm"></i>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[10px] font-black text-white uppercase tracking-tighter">Modo Diorama</span>
+                                            <span className="block text-[8px] text-cyan-200/70 font-bold uppercase tracking-widest">
+                                                {selectedProgressiva3D ? selectedProgressiva3D.nombre : 'Selecciona una progresiva'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {selectedProgressiva3D && (
+                                        <button
+                                            onClick={() => {
+                                                setSelectedProgressiva3D(null);
+                                                setCameraMode('orbit');
+                                            }}
+                                            className="text-[8px] px-2 py-1 rounded-md border border-cyan-400/20 text-cyan-200 hover:bg-cyan-400/10 transition-colors uppercase tracking-widest font-black"
+                                        >
+                                            Reset
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="space-y-4 pt-4 border-t border-cyan-400/10">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Modo de Cámara</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                {
+                                                    id: 'orbit',
+                                                    label: 'Global',
+                                                    action: () => {
+                                                        setSelectedProgressiva3D(null);
+                                                        setCameraMode('orbit');
+                                                    }
+                                                },
+                                                {
+                                                    id: 'diorama',
+                                                    label: 'Diorama',
+                                                    action: () => {
+                                                        setCameraMode('diorama');
+                                                        focusOnSelectedProgressiva();
+                                                    }
+                                                },
+                                                { id: 'firstPerson', label: '1ra Persona', action: enterFirstPerson }
+                                            ].map(({ id, label, action }) => {
+                                                const isActive = cameraMode === id;
+                                                const isDisabled = (id === 'diorama' || id === 'firstPerson') && !selectedProgressiva3D;
+                                                return (
+                                                    <button
+                                                        key={id}
+                                                        onClick={() => {
+                                                            if (isDisabled) return;
+                                                            if (id === 'diorama' && cameraMode === 'firstPerson') {
+                                                                exitFirstPerson();
+                                                            } else {
+                                                                action();
+                                                            }
+                                                        }}
+                                                        className={`px-2 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${isDisabled
+                                                            ? 'bg-slate-900/40 border-slate-800 text-slate-600 cursor-not-allowed'
+                                                            : isActive
+                                                                ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-[0_0_16px_rgba(34,211,238,0.18)]'
+                                                                : 'bg-slate-900/70 border-slate-700 text-slate-300 hover:border-cyan-400/40 hover:text-white'
+                                                            }`}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <p className="text-[9px] text-slate-500 italic leading-relaxed">
+                                            En primera persona usa `W A S D`, `Q`, `E` y el mouse para orientar la vista dentro del diorama.
+                                        </p>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Ventana Local</label>
+                                        <span className="bg-cyan-500 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full">{dioramaSize} m</span>
+                                    </div>
+                                    <input type="range" min="300" max="500" step="25" value={dioramaSize} onChange={(e) => setDioramaSize(parseInt(e.target.value, 10))} className="w-full h-1 bg-slate-900 rounded-full appearance-none accent-cyan-400 cursor-pointer" />
+                                    <p className="text-[9px] text-slate-500 italic leading-relaxed">
+                                        Al elegir una progresiva, el LandXML se recorta dentro de este chunk para enfocar estratos y superficie local.
+                                    </p>
+                                </div>
+                            </div>
+
                             <div className={`p-5 rounded-2xl border transition-all duration-500 ${mapOpacity < 0.1 ? 'bg-blue-600/5 border-blue-500/20 shadow-inner' : 'bg-slate-800/10 border-slate-800 opacity-60'}`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
@@ -1395,7 +2238,9 @@ export default function Vista3D() {
                                                         key={p.id}
                                                         onClick={() => !isDisabled && flyToProgressive(p)}
                                                         className={`group p-3 rounded-xl border transition-all flex items-center justify-between ${isDisabled
-                                                                ? 'bg-slate-900/40 border-slate-800/50 opacity-40 cursor-not-allowed'
+                                                            ? 'bg-slate-900/40 border-slate-800/50 opacity-40 cursor-not-allowed'
+                                                            : selectedProgressiva3D?.id === p.id
+                                                                ? 'bg-cyan-500/10 border-cyan-400/40 shadow-[0_0_18px_rgba(34,211,238,0.12)] cursor-pointer'
                                                                 : 'bg-slate-800/30 border-slate-800 hover:border-blue-500/50 hover:bg-blue-600/5 cursor-pointer shadow-sm'
                                                             }`}
                                                         title={isDisabled ? "Este punto no tiene coordenadas o estratos registrados" : "Volar a esta ubicación"}
@@ -1406,6 +2251,11 @@ export default function Vista3D() {
                                                             <div className="flex flex-col overflow-hidden">
                                                                 <span className={`text-[10px] font-bold transition-colors uppercase tracking-tight truncate ${isDisabled ? 'text-slate-500' : 'text-slate-300 group-hover:text-white'
                                                                     }`}>{p.nombre}</span>
+                                                                {!isDisabled && selectedProgressiva3D?.id === p.id && (
+                                                                    <span className="text-[7px] font-black text-cyan-300 uppercase tracking-[0.2em] mt-0.5">
+                                                                        Diorama Activo
+                                                                    </span>
+                                                                )}
                                                                 {isDisabled && (
                                                                     <span className="text-[7px] font-black text-rose-500 uppercase tracking-widest mt-0.5">
                                                                         {!hasCoords ? 'Sin Coordenadas' : 'Sin Estratos'}

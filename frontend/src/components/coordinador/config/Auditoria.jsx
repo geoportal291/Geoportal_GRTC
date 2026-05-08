@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '../../../api/axios';
 import { usePageTitle } from '../../contexts/PageTitleContext';
+import alertify from 'alertifyjs';
+import 'alertifyjs/build/css/alertify.css';
 import './Auditoria.css';
 
 const Auditoria = () => {
@@ -10,20 +12,39 @@ const Auditoria = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [logsPerPage] = useState(20);
 
-  useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        const response = await axiosInstance.get('/api/audit/logs');
-        setLogs(response.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error al obtener logs de auditoría:', error);
-        setLoading(false);
-      }
-    };
+  const fetchLogs = async () => {
+    try {
+      const response = await axiosInstance.get('/api/audit/logs');
+      setLogs(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error al obtener logs de auditoría:', error);
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchLogs();
   }, [setPageTitle]);
+
+  const handleClearLogs = () => {
+    alertify.confirm(
+      'Limpiar Auditoría',
+      '¿Estás seguro de que deseas eliminar todos los registros de auditoría? Esta acción no se puede deshacer.',
+      async () => {
+        try {
+          await axiosInstance.delete('/api/audit/logs');
+          alertify.success('Registros de auditoría limpiados correctamente.');
+          setLogs([]);
+          setCurrentPage(1);
+        } catch (error) {
+          console.error('Error al limpiar logs:', error);
+          alertify.error('Error al limpiar los registros.');
+        }
+      },
+      () => {}
+    ).set('labels', {ok:'Sí, Limpiar', cancel:'Cancelar'});
+  };
 
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
@@ -32,20 +53,16 @@ const Auditoria = () => {
 
   const formatDetalles = (detalles) => {
     try {
-      // First, check if it's a string that looks like a JSON object or array
       if (typeof detalles === 'string' && (detalles.trim().startsWith('{') || detalles.trim().startsWith('['))) {
         const parsed = JSON.parse(detalles);
-        return JSON.stringify(parsed); // Stringify without pretty-printing
+        return JSON.stringify(parsed);
       }
-      // If it's not a JSON-like string, return it as is
       return detalles;
     } catch (error) {
-      // If JSON.parse fails, return the original string
       return detalles;
     }
   };
 
-  // Pagination logic
   const indexOfLastLog = currentPage * logsPerPage;
   const indexOfFirstLog = indexOfLastLog - logsPerPage;
   const currentLogs = logs.slice(indexOfFirstLog, indexOfLastLog);
@@ -59,7 +76,23 @@ const Auditoria = () => {
 
   return (
     <div className="auditoria-container">
-      <h2>Registros de Auditoría</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2 style={{ margin: 0 }}>Registros de Auditoría</h2>
+        <button 
+          onClick={handleClearLogs} 
+          style={{ 
+            backgroundColor: '#dc3545', 
+            color: 'white', 
+            border: 'none', 
+            padding: '10px 15px', 
+            borderRadius: '4px', 
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          Limpiar Auditoría
+        </button>
+      </div>
       {loading ? (
         <p className="loading-text">Cargando...</p>
       ) : (

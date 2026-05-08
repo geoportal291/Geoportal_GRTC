@@ -9,6 +9,16 @@ import EnsayoDetalleModal from './EnsayoDetalleModal';
 import './VistaGeneralEnsayos.css';
 import './ResultadosBrevesModal.css';
 
+const checkIsDone = (e) => {
+  if (e.estado && e.estado.toLowerCase() === 'completado') return true;
+  return e.datos_formulario && Object.keys(e.datos_formulario).length > 0;
+};
+
+const getEnsayoStatus = (e) => {
+  if (e.estado && e.estado.toLowerCase() === 'en proceso') return 'EN PROCESO';
+  return checkIsDone(e) ? 'COMPLETADO' : (e.estado ? e.estado.toUpperCase() : 'PENDIENTE');
+};
+
 // ========== ImportModal ==========
 const ImportModal = ({ isOpen, onClose, onImport, loading, errors }) => {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -85,8 +95,8 @@ const EnsayosFullListModal = ({ isOpen, onClose, grupo, onOpenEnsayo, handleShow
                   <td>{e.progresiva_nombre || e.cantera_nombre}</td>
                   <td>E: {e.estrato_orden}</td>
                   <td>
-                    <span className={`status-badge-pill status-${(e.estado || 'pendiente').toLowerCase().replace(' ', '-')}`}>
-                      {e.estado || 'PENDIENTE'}
+                    <span className={`status-badge-pill status-${getEnsayoStatus(e).toLowerCase().replace(' ', '-')}`}>
+                      {getEnsayoStatus(e)}
                     </span>
                   </td>
                   <td style={{textAlign:'center'}}>
@@ -271,7 +281,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   if (loading) return <div className="loading-overlay"><div className="loading-spinner"></div><p>Cargando Dashboard...</p></div>;
 
   const total = Object.values(ensayosAgrupados).reduce((a, g) => a + g.ensayos.length, 0);
-  const done = Object.values(ensayosAgrupados).reduce((a, g) => a + g.ensayos.filter(e => e.datos_formulario && Object.keys(e.datos_formulario).length > 0).length, 0);
+  const done = Object.values(ensayosAgrupados).reduce((a, g) => a + g.ensayos.filter(e => checkIsDone(e)).length, 0);
   const colors = ['#54a0ca', '#28a745', '#fd7e14', '#6f42c1', '#17a2b8', '#dc3545', '#6610f2', '#e83e8c'];
 
   return (
@@ -339,7 +349,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
               <div className="stat-header"><span className="stat-label">PRÓXIMO OBJETIVO</span><i className="fas fa-flag-checkered stat-icon"></i></div>
               <div className="milestone-content">
                 {(() => {
-                  const items = Object.values(ensayosAgrupados).map(g=>({desc:g.descripcion, pend:g.ensayos.length - g.ensayos.filter(e=>e.datos_formulario && Object.keys(e.datos_formulario).length>0).length})).filter(i=>i.pend>0).sort((a,b)=>a.pend-b.pend);
+                  const items = Object.values(ensayosAgrupados).map(g=>({desc:g.descripcion, pend:g.ensayos.length - g.ensayos.filter(e=>checkIsDone(e)).length})).filter(i=>i.pend>0).sort((a,b)=>a.pend-b.pend);
                   return items[0] ? <><div className="milestone-name">{items[0].desc}</div><div className="milestone-sub">Faltan {items[0].pend} ensayos</div></> : <div className="milestone-name">Meta lograda</div>;
                 })()}
               </div>
@@ -351,7 +361,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       <main className="ensayos-grid">
         {Object.entries(ensayosAgrupados).map(([key, grupo], index) => {
           const accent = colors[index % colors.length];
-          const hechosGrupo = grupo.ensayos.filter(e => e.datos_formulario && Object.keys(e.datos_formulario).length > 0).length;
+          const hechosGrupo = grupo.ensayos.filter(e => checkIsDone(e)).length;
           const totalGrupo = grupo.ensayos.length;
           const pctGrupo = totalGrupo > 0 ? (hechosGrupo/totalGrupo)*100 : 0;
 
@@ -403,8 +413,8 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                         <span className="mini-estrato">E: {e.estrato_orden}</span>
                       </div>
                       <div className="mini-card-side-data">
-                        <span className={`status-badge-pill status-${(e.estado || 'pendiente').toLowerCase().replace(' ', '-')}`}>
-                          {e.estado || 'PENDIENTE'}
+                        <span className={`status-badge-pill status-${getEnsayoStatus(e).toLowerCase().replace(' ', '-')}`}>
+                          {getEnsayoStatus(e)}
                         </span>
                         <button className="btn-results-circle" onClick={(ev) => { ev.stopPropagation(); handleShowResults(ev, e); }} title="Ver Resultados">
                           <i className="fas fa-poll-h"></i>

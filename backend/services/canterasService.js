@@ -1,11 +1,11 @@
 const db = require('../conexion');
-const { put, del } = require('@vercel/blob');
 const fsp = require('fs').promises;
 const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
 const { exec } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
+const { uploadFileToNAS, deleteFileFromNAS } = require('./nasStorageService');
 
 // --- Funciones de Canteras ---
 
@@ -216,19 +216,9 @@ const uploadImage = async (file, userId) => {
         throw new Error('ID de usuario es requerido para la subida de imagen.');
     }
 
-    let blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS;
-
-    if (!blobToken) {
-        // Fallback al token original si BLOB_READ_WRITE_TOKEN_SUELOS no está configurado
-        blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-    }
-
-    if (!blobToken) {
-        throw new Error(`Ningún token de Vercel Blob configurado (BLOB_READ_WRITE_TOKEN_SUELOS o BLOB_READ_WRITE_TOKEN).`);
-    }
-
     const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
-    const filename = `canteras/${userId}/${Date.now()}_${cleanFilename}`;
+    const finalFilename = `${Date.now()}_${cleanFilename}`;
+    const targetFolder = `suelos/canteras/${userId}`;
 
     try {
         let fileBuffer;
@@ -240,9 +230,7 @@ const uploadImage = async (file, userId) => {
             throw new Error('El archivo no tiene contenido válido (ni buffer ni path).');
         }
 
-        const blob = await put(filename, fileBuffer, { access: 'public', token: blobToken });
-
-        return blob.url;
+        return await uploadFileToNAS(fileBuffer, targetFolder, finalFilename);
     } finally {
         // Eliminar el archivo temporal SOLO si se usó diskStorage
         if (file && file.path) {
@@ -277,18 +265,15 @@ const addImagenToCantera = async (canteraId, imagenUrl, descripcion, nombreArchi
 
 const deleteImagen = async (imagenId) => {
     try {
-        // Primero, obtener la URL de la imagen para borrarla de Vercel
+        // Primero, obtener la URL de la imagen para borrarla del almacenamiento activo.
         const res = await db.query('SELECT imagen_url FROM cantera_imagenes WHERE id = $1', [imagenId]);
         if (res.rows.length > 0) {
             const { imagen_url } = res.rows[0];
-
-            // Obtener el token de Vercel Blob
-            let blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS || process.env.BLOB_READ_WRITE_TOKEN;
-            if (!blobToken) {
-                throw new Error('No se ha configurado un token de Vercel Blob para la eliminación.');
+            try {
+                await deleteFileFromNAS(imagen_url);
+            } catch (storageErr) {
+                console.warn(`No se pudo eliminar la imagen del NAS: ${imagen_url}.`, storageErr.message);
             }
-
-            await del(imagen_url, { token: blobToken }); // Eliminar de Vercel Blob con token
         }
         // Luego, eliminar el registro de la base de datos
         await db.query('DELETE FROM cantera_imagenes WHERE id = $1', [imagenId]);
@@ -307,14 +292,13 @@ const deleteBulkImagenes = async (imageIds) => {
         const res = await db.query('SELECT imagen_url FROM cantera_imagenes WHERE id = ANY($1::int[])', [imageIds]);
         const urls = res.rows.map(r => r.imagen_url).filter(Boolean);
 
-        // 2. Borrar de Blob (del acepta array de URLs)
+        // 2. Borrar del NAS cuando la URL ya corresponde al almacenamiento nuevo.
         if (urls.length > 0) {
-            let blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS || process.env.BLOB_READ_WRITE_TOKEN;
-            if (blobToken) {
+            for (const imageUrl of urls) {
                 try {
-                    await del(urls, { token: blobToken });
-                } catch (blobErr) {
-                    console.error('Error borrando de Vercel Blob (continuando DB delete):', blobErr);
+                    await deleteFileFromNAS(imageUrl);
+                } catch (storageErr) {
+                    console.warn(`No se pudo eliminar la imagen del NAS: ${imageUrl}.`, storageErr.message);
                 }
             }
         }
@@ -390,10 +374,10 @@ const deleteCanteraEstrato = async (estratoId) => {
         await client.query('BEGIN');
         // Delete assays first
         await client.query('DELETE FROM ensayos WHERE estrato_id = $1', [estratoId]);
-        
+
         const query = 'DELETE FROM estratos WHERE id = $1 RETURNING *;';
         const result = await client.query(query, [estratoId]);
-        
+
         await client.query('COMMIT');
         return result.rows[0];
     } catch (err) {
@@ -412,11 +396,9 @@ const uploadBulkImages = async (files, canteraId, userId) => {
         throw new Error('No se subieron archivos.');
     }
 
-    let blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS || process.env.BLOB_READ_WRITE_TOKEN;
-    if (!blobToken) throw new Error('Token de Blob no configurado.');
-
     const uploadedImages = [];
     const tempDirs = [];
+    const targetFolder = `suelos/canteras/${userId}/${canteraId}`;
 
     try {
         for (const file of files) {
@@ -468,12 +450,10 @@ const uploadBulkImages = async (files, canteraId, userId) => {
                             const imgBuffer = await fsp.readFile(imgPath);
                             const originalName = path.basename(imgPath);
                             const cleanName = originalName.replace(/[^a-zA-Z0-9-._]/g, '_');
-                            // Estructura: canteras/USER_ID/CANTERA_ID/TIMESTAMP_NAME
-                            const filename = `canteras/${userId}/${canteraId}/${Date.now()}_${cleanName}`;
+                            const finalFilename = `${Date.now()}_${cleanName}`;
+                            const imageUrl = await uploadFileToNAS(imgBuffer, targetFolder, finalFilename);
 
-                            const blob = await put(filename, imgBuffer, { access: 'public', token: blobToken });
-
-                            const savedImg = await addImagenToCantera(canteraId, blob.url, 'Importación Masiva (ZIP)', originalName);
+                            const savedImg = await addImagenToCantera(canteraId, imageUrl, 'Importación Masiva (ZIP)', originalName);
                             uploadedImages.push(savedImg);
                         } catch (imgErr) {
                             console.error(`Error subiendo imagen individual del ZIP ${imgPath}:`, imgErr);
@@ -496,11 +476,10 @@ const uploadBulkImages = async (files, canteraId, userId) => {
 
                     if (fileBuffer) {
                         const cleanName = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
-                        const filename = `canteras/${userId}/${canteraId}/${Date.now()}_${cleanName}`;
+                        const finalFilename = `${Date.now()}_${cleanName}`;
+                        const imageUrl = await uploadFileToNAS(fileBuffer, targetFolder, finalFilename);
 
-                        const blob = await put(filename, fileBuffer, { access: 'public', token: blobToken });
-
-                        const savedImg = await addImagenToCantera(canteraId, blob.url, 'Importación Masiva (Directa)', file.originalname);
+                        const savedImg = await addImagenToCantera(canteraId, imageUrl, 'Importación Masiva (Directa)', file.originalname);
                         uploadedImages.push(savedImg);
                     }
                 } catch (imgErr) {

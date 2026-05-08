@@ -883,24 +883,41 @@ const SuelosMap = (props) => {
       <MapContainer
         center={[-12.930, -72.630]} // Centro aprox Quillabamba
         zoom={13}
+        maxZoom={21}
         style={{ height: '100%', width: '100%' }}
         zoomControl={true} // Enabled native zoom (topleft)
         ref={mapRef}
       >
         {!showLayersControl && (
-          <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+          <TileLayer 
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+            maxNativeZoom={16}
+            maxZoom={21}
+          />
         )}
 
         {showLayersControl && (
           <LayersControl position="topright">
             <LayersControl.BaseLayer name="Estándar">
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <TileLayer 
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                maxNativeZoom={19}
+                maxZoom={21}
+              />
             </LayersControl.BaseLayer>
             <LayersControl.BaseLayer checked name="Satélite">
-              <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+              <TileLayer 
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+                maxNativeZoom={16}
+                maxZoom={21}
+              />
             </LayersControl.BaseLayer>
             <LayersControl.BaseLayer name="Topográfico">
-              <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" />
+              <TileLayer 
+                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" 
+                maxNativeZoom={16}
+                maxZoom={21}
+              />
             </LayersControl.BaseLayer>
 
             <LayersControl.Overlay checked name="Progresivas">
@@ -928,12 +945,14 @@ const SuelosMap = (props) => {
         <MapResizer centerTo={props.centerTo} />
 
         {/* CONTROLES MODERNOS INTEGRADOS */}
-        <MapControlsWrapper 
-          displayMode={props.displayMode || 'full'}
-          displayLayersRef={displayLayersRef}
-          measurementLayersRef={measurementLayersRef}
-          persistentMeasurementLayersRef={persistentMeasurementLayersRef}
-        />
+        {!props.hideToolbar && (
+          <MapControlsWrapper 
+            displayMode={props.displayMode || 'full'}
+            displayLayersRef={displayLayersRef}
+            measurementLayersRef={measurementLayersRef}
+            persistentMeasurementLayersRef={persistentMeasurementLayersRef}
+          />
+        )}
       </MapContainer>
     </div>
   );

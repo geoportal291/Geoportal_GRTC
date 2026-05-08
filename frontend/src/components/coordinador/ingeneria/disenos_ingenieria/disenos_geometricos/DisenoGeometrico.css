@@ -572,6 +572,46 @@
   position: relative;
 }
 
+.dg-maptiler-3d-canvas {
+  width: 100%;
+  min-height: 620px;
+  height: 100%;
+}
+
+.dg-maptiler-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 18, 28, 0.22);
+  backdrop-filter: blur(2px);
+  z-index: 20;
+}
+
+.dg-maptiler-loading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(180, 197, 217, 0.55);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+  text-align: center;
+}
+
+.dg-maptiler-loading strong {
+  font-size: 0.82rem;
+  color: var(--dg-text);
+}
+
+.dg-maptiler-loading span {
+  font-size: 0.72rem;
+  color: var(--dg-muted);
+}
+
 .dg-maptiler-3d .maplibregl-ctrl-top-left {
   margin-top: 12px;
   margin-left: 12px;

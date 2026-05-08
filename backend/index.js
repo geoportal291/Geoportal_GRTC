@@ -64,6 +64,155 @@ console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
 const emailService = require('./services/emailService');
 
+function simplifyObjContent(objContent, maxFaces = 120000) {
+    if (!objContent || typeof objContent !== 'string') {
+        return '';
+    }
+
+    const lines = objContent.split('\n');
+    const vertexLines = [];
+    const faceLines = [];
+    const objectLines = [];
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        if (line.startsWith('o ')) {
+            objectLines.push(line);
+        } else if (line.startsWith('v ')) {
+            vertexLines.push(line);
+        } else if (line.startsWith('f ')) {
+            faceLines.push(line);
+        }
+    }
+
+    if (faceLines.length <= maxFaces) {
+        return objContent;
+    }
+
+    const step = Math.max(1, Math.ceil(faceLines.length / maxFaces));
+    const selectedFaces = [];
+    const usedVertexIndices = new Set();
+
+    for (let i = 0; i < faceLines.length; i += step) {
+        const faceLine = faceLines[i];
+        const parts = faceLine.split(/\s+/).slice(1);
+        if (parts.length < 3) continue;
+
+        const indices = parts.slice(0, 3)
+            .map((token) => parseInt(String(token).split('/')[0], 10))
+            .filter((value) => Number.isInteger(value) && value > 0);
+
+        if (indices.length !== 3) continue;
+        indices.forEach((index) => usedVertexIndices.add(index));
+        selectedFaces.push(indices);
+    }
+
+    const sortedIndices = Array.from(usedVertexIndices).sort((a, b) => a - b);
+    const remap = new Map();
+    const simplifiedVertices = [];
+
+    sortedIndices.forEach((originalIndex, idx) => {
+        const vertexLine = vertexLines[originalIndex - 1];
+        if (!vertexLine) return;
+        remap.set(originalIndex, idx + 1);
+        simplifiedVertices.push(vertexLine);
+    });
+
+    const simplifiedFaces = [];
+    for (const face of selectedFaces) {
+        const mapped = face.map((index) => remap.get(index));
+        if (mapped.some((value) => !value)) continue;
+        simplifiedFaces.push(`f ${mapped[0]} ${mapped[1]} ${mapped[2]}`);
+    }
+
+    return [
+        ...objectLines.slice(0, 1),
+        ...simplifiedVertices,
+        ...simplifiedFaces
+    ].join('\n');
+}
+
+async function resolveLandXmlObjStorage({
+    objContent,
+    fileName,
+    userId
+}) {
+    const cleanBaseName = path.basename(fileName, path.extname(fileName))
+        .replace(/[^a-zA-Z0-9-_]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '') || 'modelo_landxml';
+
+    if (objContent.length <= 10 * 1024 * 1024) {
+        return {
+            urlArchivoFinal: 'DB_EMBEDDED_OBJ',
+            metadataPatch: {
+                obj_content: objContent,
+                obj_storage: 'DB',
+                obj_resolution: 'FULL'
+            }
+        };
+    }
+
+    const targetFolder = `suelos/landxml/${userId || 'anonimo'}`;
+    const finalObjFilename = `${Date.now()}_${cleanBaseName}.obj`;
+
+    try {
+        console.log(`[DEBUG 3D] Malla excede 10MB. Subiendo OBJ completo al NAS: ${targetFolder}/${finalObjFilename}`);
+        const publicUrl = await uploadFileToNAS(
+            Buffer.from(objContent, 'utf-8'),
+            targetFolder,
+            finalObjFilename
+        );
+
+        return {
+            urlArchivoFinal: publicUrl,
+            metadataPatch: {
+                obj_storage: 'NAS',
+                obj_filename: finalObjFilename,
+                obj_resolution: 'FULL'
+            }
+        };
+    } catch (storageError) {
+        const status = storageError.response?.status;
+        console.warn(`[DEBUG 3D] Falló upload de OBJ completo al NAS (${status || storageError.message}). Intentando versión reducida...`);
+
+        const simplifiedObjContent = simplifyObjContent(objContent);
+        if (!simplifiedObjContent) {
+            throw storageError;
+        }
+
+        if (simplifiedObjContent.length <= 10 * 1024 * 1024) {
+            return {
+                urlArchivoFinal: 'DB_EMBEDDED_OBJ',
+                metadataPatch: {
+                    obj_content: simplifiedObjContent,
+                    obj_storage: 'DB',
+                    obj_resolution: 'REDUCED',
+                    obj_original_storage_error: status || storageError.message
+                }
+            };
+        }
+
+        const reducedFilename = `${Date.now()}_${cleanBaseName}_reduced.obj`;
+        const reducedUrl = await uploadFileToNAS(
+            Buffer.from(simplifiedObjContent, 'utf-8'),
+            targetFolder,
+            reducedFilename
+        );
+
+        return {
+            urlArchivoFinal: reducedUrl,
+            metadataPatch: {
+                obj_storage: 'NAS',
+                obj_filename: reducedFilename,
+                obj_resolution: 'REDUCED',
+                obj_original_storage_error: status || storageError.message
+            }
+        };
+    }
+}
+
 const whitelist = [
     'http://localhost:3000',
     'https://geoportalbetav3.fly.dev',
@@ -701,6 +850,47 @@ app.get('/api/modelos-3d', authenticateToken, async (req, res) => {
     }
 });
 
+app.get('/api/modelos-3d/:id/obj', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const modelo = await modelos3DService.getModelo3DById(id);
+
+        if (!modelo) {
+            return res.status(404).json({ error: 'Modelo 3D no encontrado.' });
+        }
+
+        if (modelo.url_archivo === 'DB_EMBEDDED_OBJ') {
+            const objContent = modelo.metadata?.obj_content;
+            if (!objContent) {
+                return res.status(404).json({ error: 'La malla OBJ no existe en los metadatos del modelo.' });
+            }
+
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            return res.send(objContent);
+        }
+
+        if (!modelo.url_archivo || ['PENDIENTE', 'STREAMING_LOCAL_SIN_MALLA'].includes(modelo.url_archivo)) {
+            return res.status(400).json({ error: 'Este modelo no tiene una malla OBJ descargable.' });
+        }
+
+        const remoteResponse = await axios.get(modelo.url_archivo, {
+            responseType: 'text',
+            timeout: 120000,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+        });
+
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        return res.send(remoteResponse.data);
+    } catch (err) {
+        console.error('[DEBUG 3D] Error sirviendo malla OBJ:', err.message);
+        return res.status(err.response?.status || 500).json({
+            error: 'No se pudo obtener la malla OBJ del modelo.',
+            detalle: err.response?.data || err.message
+        });
+    }
+});
+
 app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (req, res) => {
     try {
         if (!req.file) {
@@ -784,17 +974,22 @@ app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (
                         urlArchivoFinal = 'STREAMING_LOCAL_SIN_MALLA';
                         delete metadataPython.obj_content;
                     } else {
-                        // MIGRACIÓN A DB: Guardar directamente en la base de datos (PostgreSQL)
-                        // para evitar límites de Vercel Blob (1GB)
-                        console.log(`[DEBUG 3D] Malla detectada (${metadataPython.obj_content.length} bytes). Guardando en BASE DE DATOS.`);
+                        console.log(`[DEBUG 3D] Malla detectada (${metadataPython.obj_content.length} bytes). Evaluando estrategia de almacenamiento.`);
+                        const storageResult = await resolveLandXmlObjStorage({
+                            objContent: metadataPython.obj_content,
+                            fileName,
+                            userId: req.user.id
+                        });
 
-                        // Límite de seguridad: 10MB para no saturar la DB
-                        if (metadataPython.obj_content.length > 10 * 1024 * 1024) {
-                            throw new Error('El modelo excede el límite de 10MB para almacenamiento en DB.');
+                        urlArchivoFinal = storageResult.urlArchivoFinal;
+                        metadataPython = {
+                            ...metadataPython,
+                            ...storageResult.metadataPatch
+                        };
+
+                        if (urlArchivoFinal !== 'DB_EMBEDDED_OBJ') {
+                            delete metadataPython.obj_content;
                         }
-
-                        urlArchivoFinal = 'DB_EMBEDDED_OBJ';
-                        // El contenido se queda en metadataPython.obj_content y se guardará vía JSONB
                     }
                 }
             } else if (ext === 'IFC') {
@@ -844,7 +1039,22 @@ app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (
 app.delete('/api/modelos-3d/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
+        const existingModel = await modelos3DService.getModelo3DById(id);
+
+        if (!existingModel) {
+            return res.status(404).json({ status: 'error', error: 'Modelo 3D no encontrado.' });
+        }
+
         const result = await modelos3DService.deleteModelo3D(id);
+
+        if (existingModel.url_archivo && !['DB_EMBEDDED_OBJ', 'STREAMING_LOCAL_SIN_MALLA', 'PENDIENTE'].includes(existingModel.url_archivo)) {
+            try {
+                await deleteFileFromNAS(existingModel.url_archivo);
+            } catch (cleanupError) {
+                console.warn('[DEBUG 3D] No se pudo eliminar la malla OBJ del NAS:', cleanupError.message);
+            }
+        }
+
         res.json({ message: 'Modelo 3D eliminado exitosamente', data: result });
     } catch (err) {
         res.status(500).json({ status: 'error', error: err.message });
@@ -4651,6 +4861,16 @@ app.post('/api/audit/log', authenticateToken, async (req, res) => {
     }
 });
 
+
+app.delete('/api/audit/logs', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
+    try {
+        await db.query('DELETE FROM auditoria');
+        res.status(200).json({ status: 'ok', message: 'Registros de auditoría limpiados correctamente.' });
+    } catch (err) {
+        console.error('Error al limpiar logs de auditoría:', err);
+        res.status(500).json({ error: 'Error al limpiar logs de auditoría', details: err.message });
+    }
+});
 app.get('/api/audit/logs', authenticateToken, async (req, res) => {
     try {
         const result = await db.query(`

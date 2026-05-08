@@ -105,7 +105,7 @@ export default function CanteraFormModal({
     }
   }, [canteraToEdit]);
 
-  const [isSelecting, setIsSelecting] = useState(false); // Estado para el modo de selección en mapa
+  const [metodoUbicacion, setMetodoUbicacion] = useState('coordenadas'); // 'coordenadas', 'mapa', 'kml'
 
   const [progresivas, setProgresivas] = useState([]);
   const [loadingProgresivas, setLoadingProgresivas] = useState(false);
@@ -290,7 +290,7 @@ export default function CanteraFormModal({
 
   // ✅ Click en el mapa
   const handleMapClick = (e) => { // Leaflet pasa el objeto de evento completo
-    if (!isSelecting) return; // Prevent selection if not in active mode
+    if (metodoUbicacion !== 'mapa') return; // Prevent selection if not in active mode
     if (!e.latlng) return;
     const { lat, lng } = e.latlng;
     setCanteraMarkerPosition([lat, lng]); // Guardamos la posición para el marcador
@@ -309,7 +309,6 @@ export default function CanteraFormModal({
       console.error('Error al convertir Lat/Lon a UTM en handleMapClick:', error);
       alertify.error('Error al convertir coordenadas Lat/Lon a UTM.');
     }
-    setIsSelecting(false); // Desactivar el modo de selección después de hacer clic
   };
 
   // Memoize KML IDs to prevent map reload/flicker
@@ -345,6 +344,8 @@ export default function CanteraFormModal({
         ? parseInt(formData.id_progresiva_referencia, 10)
         : null,
       desplazamiento_km: formData.desplazamiento_km ? parseFloat(formData.desplazamiento_km) : null,
+      latitud: formData.latitud ? parseFloat(formData.latitud) : null,
+      longitud: formData.longitud ? parseFloat(formData.longitud) : null,
     };
 
     try {
@@ -454,48 +455,90 @@ export default function CanteraFormModal({
           {step === 2 && (
             <div className="form-step-content">
               <div className="form-grid">
-                {/* Coordenadas absolutas */}
-                <div className="form-group">
-                  <label htmlFor="coordenada_este">Coordenada Este (UTM)</label>
-                  <input type="number" step="any" id="coordenada_este" name="coordenada_este" value={formData.coordenada_este} onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="coordenada_norte">Coordenada Norte (UTM)</label>
-                  <input type="number" step="any" id="coordenada_norte" name="coordenada_norte" value={formData.coordenada_norte} onChange={handleChange} />
-                </div>
-
-                {/* Botón para seleccionar en mapa */}
+                {/* Opciones de Método de Ubicación */}
                 <div className="form-group full-width">
-                  <button type="button" className={`btn-secondary ${isSelecting ? 'active' : ''}`} onClick={() => setIsSelecting(!isSelecting)}>
-                    <i className="fas fa-map-marker-alt"></i>
-                    {isSelecting ? 'Seleccionando... (clic en el mapa)' : 'Seleccionar en Mapa'}
-                  </button>
-                </div>
-
-                {/* Archivo KML */}
-                <div className="form-group full-width">
-                  <label htmlFor="kml_upload">Importar KML/KMZ (Ubicación)</label>
-                  <input type="file" id="kml_upload" name="kml_upload" accept=".kml,.kmz" onChange={handleKmlUpload} />
-                </div>
-
-                {/* Mapa */}
-                <div className="form-group full-width">
-                  <div className="map-section"> {/* Usamos la clase map-section de GestorDeCanteras.css */}
-                    <SuelosMap
-                      displayMode="form"
-                      style={{ height: '100%', width: '100%' }}
-                      kmlTrazadoIds={kmlIdsMemo}
-                      markerPosition={canteraMarkerPosition}
-                      onMapClick={handleMapClick}
-                      center={mapCenter}
-                      transientGeoJson={uploadedKmlGeoJson}
-                      isSelecting={isSelecting}
-                      layerContext="modal"
-                      hideKmlPoints={true}
-                      hideToolbar={true}
-                    />
+                  <label style={{ marginBottom: '10px' }}>Método de Ubicación</label>
+                  <div className="button-group" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button 
+                      type="button" 
+                      className="btn-secondary" 
+                      style={metodoUbicacion === 'coordenadas' ? { backgroundColor: '#1a237e', color: 'white', borderColor: '#1a237e' } : { backgroundColor: 'white', color: '#1a237e', borderColor: '#1a237e', border: '2px solid #1a237e' }}
+                      onClick={() => setMetodoUbicacion('coordenadas')}
+                    >
+                      <i className="fas fa-edit"></i> Ingresar Coordenadas
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn-secondary"
+                      style={metodoUbicacion === 'mapa' ? { backgroundColor: '#1a237e', color: 'white', borderColor: '#1a237e' } : { backgroundColor: 'white', color: '#1a237e', borderColor: '#1a237e', border: '2px solid #1a237e' }}
+                      onClick={() => setMetodoUbicacion('mapa')}
+                    >
+                      <i className="fas fa-map-marker-alt"></i> Seleccionar en Mapa
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn-secondary"
+                      style={metodoUbicacion === 'kml' ? { backgroundColor: '#1a237e', color: 'white', borderColor: '#1a237e' } : { backgroundColor: 'white', color: '#1a237e', borderColor: '#1a237e', border: '2px solid #1a237e' }}
+                      onClick={() => setMetodoUbicacion('kml')}
+                    >
+                      <i className="fas fa-file-upload"></i> Importar KML/KMZ
+                    </button>
                   </div>
                 </div>
+
+                <div className="form-group full-width">
+                  <hr style={{ border: 'none', borderTop: '1px solid #ddd', margin: '5px 0 15px 0' }} />
+                </div>
+
+                {/* 1. Coordenadas absolutas */}
+                {metodoUbicacion === 'coordenadas' && (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="coordenada_este">Coordenada Este (UTM)</label>
+                      <input type="number" step="any" id="coordenada_este" name="coordenada_este" value={formData.coordenada_este} onChange={handleChange} />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="coordenada_norte">Coordenada Norte (UTM)</label>
+                      <input type="number" step="any" id="coordenada_norte" name="coordenada_norte" value={formData.coordenada_norte} onChange={handleChange} />
+                    </div>
+                  </>
+                )}
+
+                {/* 2. Mapa */}
+                {metodoUbicacion === 'mapa' && (
+                  <div className="form-group full-width">
+                    <p style={{ marginBottom: '10px', color: '#555', fontWeight: 'bold' }}>
+                      <i className="fas fa-info-circle" style={{ marginRight: '5px' }}></i> 
+                      Haga clic en el mapa para establecer la ubicación de la cantera.
+                    </p>
+                    <div className="map-section" style={{ minHeight: '400px', height: '400px', width: '100%', border: '1px solid #ccc', borderRadius: '8px', overflow: 'hidden' }}>
+                      <SuelosMap
+                        displayMode="form"
+                        style={{ height: '100%', width: '100%' }}
+                        kmlTrazadoIds={kmlIdsMemo}
+                        markerPosition={canteraMarkerPosition}
+                        onMapClick={handleMapClick}
+                        center={mapCenter}
+                        transientGeoJson={uploadedKmlGeoJson}
+                        isSelecting={true} // Siempre activo en modo mapa
+                        layerContext="modal"
+                        hideKmlPoints={true}
+                        hideToolbar={true}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Archivo KML */}
+                {metodoUbicacion === 'kml' && (
+                  <div className="form-group full-width">
+                    <label htmlFor="kml_upload">Subir archivo KML/KMZ</label>
+                    <input type="file" id="kml_upload" name="kml_upload" accept=".kml,.kmz" onChange={handleKmlUpload} />
+                    <p style={{ marginTop: '8px', fontSize: '0.9em', color: '#666' }}>
+                      Se extraerá la primera coordenada válida del archivo y se establecerá como ubicación.
+                    </p>
+                  </div>
+                )}
 
                 {/* Referencia de progresiva */}
                 <div className="form-group full-width">

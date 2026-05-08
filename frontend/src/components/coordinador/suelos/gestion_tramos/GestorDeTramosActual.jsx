@@ -1070,7 +1070,7 @@ export default function GestorDeTramosActual() {
                                                                             {selectedEnsayo && (
                                                                                 <div className="selected-ensayo-actions">
                                                                                     <button type="button" className="action-btn view" onClick={() => handleViewEnsayo(selectedEnsayo, estrato.ensayos || [])}><i className="fas fa-eye"></i> Ver</button>
-                                                                                    <button type="button" className="action-btn action-btn-granulometria-simple" onClick={() => navigate(`/coordinador/suelos/ensayos/${selectedEnsayo.id}`)}>Ir a Ensayo</button>
+                                                                                    <button type="button" className="action-btn action-btn-granulometria-simple" onClick={() => handleViewEnsayo(selectedEnsayo, estrato.ensayos || [])}>Ir a Ensayo</button>
                                                                                     <button type="button" className="action-btn edit" onClick={() => handleEditEnsayo(viewingEstratos, estrato, selectedEnsayo)}><i className="fas fa-edit"></i> Editar</button>
                                                                                     <button type="button" className="action-btn delete" onClick={() => { handleDeleteEnsayo(selectedEnsayo.id); setSelectedEnsayoInModal(null); }}><i className="fas fa-trash"></i> Eliminar</button>
                                                                                 </div>

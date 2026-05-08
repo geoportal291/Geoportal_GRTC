@@ -5,13 +5,13 @@ const ensayosService = require('./ensayosService'); // Importar ensayosService
 const suelosNlpService = require('./suelosNlpService'); // Importar NLP Service
 const fsp = require('fs').promises;
 const kmlService = require('./kmlService'); // NEW: Import kmlService
-const { put, del } = require('@vercel/blob');
 const AdmZip = require('adm-zip');
 const { DOMParser } = require('xmldom');
 const path = require('path');
 const turf = require('@turf/turf');
 const { kml } = require('@tmcw/togeojson');
 const utm = require('utm');
+const { uploadFileToNAS, deleteFileFromNAS } = require('./nasStorageService');
 
 // --- HELPERS PARA INTERPOLACIÓN DE COORDENADAS ---
 const parseToMeters = (val) => {
@@ -186,10 +186,10 @@ const importarConEnsayos = async ({ parentProgresiva, generatedChildren, estrato
 
         for (const prog of generatedChildren) {
             const uniqueSubProgresivaCodigo = `${parentId}-${prog.codigo}`;
-            
+
             let ce = prog.coordenada_este;
             let cn = prog.coordenada_norte;
-            
+
             if ((ce === null || ce === undefined || ce === '') && kmlTrackData) {
                 const interp = interpolateUsingTrack(kmlTrackData, parseToMeters(prog.codigo), startMeters, prog.linea || linea);
                 if (interp) {
@@ -362,10 +362,10 @@ const createBulkProgresivas = async (parentProgresiva, generatedChildren) => {
 
         for (const prog of generatedChildren) {
             const uniqueSubProgresivaCodigo = `${parentId}-${prog.codigo}`;
-            
+
             let ce = prog.coordenada_este;
             let cn = prog.coordenada_norte;
-            
+
             if ((ce === null || ce === undefined || ce === '') && kmlTrackData) {
                 const interp = interpolateUsingTrack(kmlTrackData, parseToMeters(prog.codigo), startMeters, prog.linea || linea);
                 if (interp) {
@@ -776,13 +776,13 @@ const deleteProgresiva = async (id) => {
 
             // 3. Delete estratos for all affected progresivas
             await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = ANY($1::int[])', [allAffectedProgIds]);
-            
+
             // 4. Delete child progresivas
             await client.query('DELETE FROM progresivas WHERE parent_id = $1', [id]);
-            
+
             // 5. Delete the parent progresiva itself
             const result = await client.query('DELETE FROM progresivas WHERE id = $1', [id]);
-            
+
             await client.query('COMMIT');
             return result.rowCount;
         }
@@ -956,25 +956,25 @@ const updateProgresiva = async (id, progresivaData) => {
 
             // 3. Recorrer los children del frontend
             for (const prog of generatedChildren) {
-            const childId = prog.id;
-            const isExistingChild = existingChildrenMap.has(childId);
-            let currentChildDbId;
+                const childId = prog.id;
+                const isExistingChild = existingChildrenMap.has(childId);
+                let currentChildDbId;
 
-            let ce = prog.coordenada_este;
-            let cn = prog.coordenada_norte;
-            console.log(`[DEBUG updateProgresiva] Child ${prog.id || prog.codigo} - IN Coords: (${ce}, ${cn})`);
-            
-            if ((ce === null || ce === undefined || ce === '') && kmlTrackData) {
-                const interp = interpolateUsingTrack(kmlTrackData, parseToMeters(prog.codigo || prog.progresiva_inicial), startMeters, prog.linea || linea);
-                if (interp) {
-                    ce = interp.este;
-                    cn = interp.norte;
-                    console.log(`[DEBUG updateProgresiva] Child ${prog.id || prog.codigo} - INTERPOLATED Coords: (${ce}, ${cn})`);
+                let ce = prog.coordenada_este;
+                let cn = prog.coordenada_norte;
+                console.log(`[DEBUG updateProgresiva] Child ${prog.id || prog.codigo} - IN Coords: (${ce}, ${cn})`);
+
+                if ((ce === null || ce === undefined || ce === '') && kmlTrackData) {
+                    const interp = interpolateUsingTrack(kmlTrackData, parseToMeters(prog.codigo || prog.progresiva_inicial), startMeters, prog.linea || linea);
+                    if (interp) {
+                        ce = interp.este;
+                        cn = interp.norte;
+                        console.log(`[DEBUG updateProgresiva] Child ${prog.id || prog.codigo} - INTERPOLATED Coords: (${ce}, ${cn})`);
+                    }
                 }
-            }
 
-            if (isExistingChild) {
-                await client.query(`
+                if (isExistingChild) {
+                    await client.query(`
                     UPDATE progresivas SET
                         nombre = $1,
                         descripcion = $2,
@@ -988,126 +988,126 @@ const updateProgresiva = async (id, progresivaData) => {
                         actualizado_en = NOW()
                     WHERE id = $10
                 `, [
-                    prog.nombre,
-                    prog.descripcion,
-                    prog.progresiva_inicial,
-                    prog.progresiva_final,
-                    prog.estado || 'pendiente',
-                    ce,
-                    cn,
-                    prog.linea,
-                    prog.lado,
-                    childId
-                ]);
-                currentChildDbId = childId;
-                childrenToKeepIds.add(childId);
+                        prog.nombre,
+                        prog.descripcion,
+                        prog.progresiva_inicial,
+                        prog.progresiva_final,
+                        prog.estado || 'pendiente',
+                        ce,
+                        cn,
+                        prog.linea,
+                        prog.lado,
+                        childId
+                    ]);
+                    currentChildDbId = childId;
+                    childrenToKeepIds.add(childId);
 
-            } else {
-                const childInsertResult = await client.query(`
+                } else {
+                    const childInsertResult = await client.query(`
                     INSERT INTO progresivas
                     (proyecto_id, parent_id, codigo, nombre, descripcion, progresiva_inicial, progresiva_final, estado, coordenada_este, coordenada_norte, linea, lado)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                     RETURNING id
                 `, [
-                    proyecto_id,
-                    id,
-                    `${id}-${prog.codigo}`,
-                    prog.nombre,
-                    prog.descripcion,
-                    prog.progresiva_inicial,
-                    prog.progresiva_final,
-                    prog.estado || 'pendiente',
-                    ce,
-                    cn,
-                    prog.linea,
-                    prog.lado
-                ]);
-                currentChildDbId = childInsertResult.rows[0].id;
-                childrenToKeepIds.add(currentChildDbId);
-            }
+                        proyecto_id,
+                        id,
+                        `${id}-${prog.codigo}`,
+                        prog.nombre,
+                        prog.descripcion,
+                        prog.progresiva_inicial,
+                        prog.progresiva_final,
+                        prog.estado || 'pendiente',
+                        ce,
+                        cn,
+                        prog.linea,
+                        prog.lado
+                    ]);
+                    currentChildDbId = childInsertResult.rows[0].id;
+                    childrenToKeepIds.add(currentChildDbId);
+                }
 
-            // --- Estratos ---
-            if (prog.estratos_perfil !== undefined) {
-                console.log(`[DEBUG] updateProgresiva: Sincronizando estratos para hija ${currentChildDbId}`);
-                const existingEstratosResult = await client.query(`
+                // --- Estratos ---
+                if (prog.estratos_perfil !== undefined) {
+                    console.log(`[DEBUG] updateProgresiva: Sincronizando estratos para hija ${currentChildDbId}`);
+                    const existingEstratosResult = await client.query(`
                     SELECT id, nombre, descripcion, cota_inicial, cota_final, orden
                     FROM estratos
                     WHERE parent_type = 'progresiva' AND parent_id = $1
                     ORDER BY orden ASC
                 `, [currentChildDbId]);
 
-                const existingEstratos = existingEstratosResult.rows;
-                const existingEstratosMap = new Map(existingEstratos.map(e => [Number(e.id), e]));
-                const estratosToKeepIds = new Set();
+                    const existingEstratos = existingEstratosResult.rows;
+                    const existingEstratosMap = new Map(existingEstratos.map(e => [Number(e.id), e]));
+                    const estratosToKeepIds = new Set();
 
-                if (Array.isArray(prog.estratos_perfil)) {
-                    for (const [index, estrato] of prog.estratos_perfil.entries()) {
-                        const rawEstratoId = estrato.id;
-                        const estratoId = (rawEstratoId !== undefined && rawEstratoId !== null && rawEstratoId !== '') ? Number(rawEstratoId) : null;
-                        const isExistingEstrato = (estratoId !== null && !isNaN(estratoId)) && existingEstratosMap.has(estratoId);
+                    if (Array.isArray(prog.estratos_perfil)) {
+                        for (const [index, estrato] of prog.estratos_perfil.entries()) {
+                            const rawEstratoId = estrato.id;
+                            const estratoId = (rawEstratoId !== undefined && rawEstratoId !== null && rawEstratoId !== '') ? Number(rawEstratoId) : null;
+                            const isExistingEstrato = (estratoId !== null && !isNaN(estratoId)) && existingEstratosMap.has(estratoId);
 
-                        const prof_ini = parseFloat(estrato.profundidad_inicial || estrato.cota_inicial);
-                        const prof_fin = parseFloat(estrato.profundidad_final || estrato.cota_final);
+                            const prof_ini = parseFloat(estrato.profundidad_inicial || estrato.cota_inicial);
+                            const prof_fin = parseFloat(estrato.profundidad_final || estrato.cota_final);
 
-                        if (isNaN(prof_ini) || isNaN(prof_fin)) {
-                            throw { type: 'ExcelDataValidationError', message: `Profundidad inválida en estrato ${estrato.nombre || estrato.descripcion} de progresiva ${prog.nombre}` };
-                        }
+                            if (isNaN(prof_ini) || isNaN(prof_fin)) {
+                                throw { type: 'ExcelDataValidationError', message: `Profundidad inválida en estrato ${estrato.nombre || estrato.descripcion} de progresiva ${prog.nombre}` };
+                            }
 
-                        if (isExistingEstrato) {
-                            await client.query(`
+                            if (isExistingEstrato) {
+                                await client.query(`
                                 UPDATE estratos SET
                                     nombre = $1, descripcion = $2, cota_inicial = $3, cota_final = $4, orden = $5
                                 WHERE id = $6
                             `, [
-                                estrato.nombre || estrato.descripcion,
-                                estrato.descripcion,
-                                prof_ini,
-                                prof_fin,
-                                index + 1,
-                                estratoId
-                            ]);
-                            estratosToKeepIds.add(estratoId);
-                        } else {
-                            const newEstratoResult = await client.query(`
+                                    estrato.nombre || estrato.descripcion,
+                                    estrato.descripcion,
+                                    prof_ini,
+                                    prof_fin,
+                                    index + 1,
+                                    estratoId
+                                ]);
+                                estratosToKeepIds.add(estratoId);
+                            } else {
+                                const newEstratoResult = await client.query(`
                                 INSERT INTO estratos (parent_type, parent_id, nombre, descripcion, cota_inicial, cota_final, orden)
                                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
                             `, [
-                                'progresiva',
-                                currentChildDbId,
-                                estrato.nombre || estrato.descripcion,
-                                estrato.descripcion,
-                                prof_ini,
-                                prof_fin,
-                                index + 1
-                            ]);
-                            estratosToKeepIds.add(newEstratoResult.rows[0].id);
+                                    'progresiva',
+                                    currentChildDbId,
+                                    estrato.nombre || estrato.descripcion,
+                                    estrato.descripcion,
+                                    prof_ini,
+                                    prof_fin,
+                                    index + 1
+                                ]);
+                                estratosToKeepIds.add(newEstratoResult.rows[0].id);
+                            }
                         }
                     }
-                }
 
-                // --- Eliminar estratos obsoletos ---
-                for (const existingEstrato of existingEstratos) {
-                    const eId = Number(existingEstrato.id);
-                    if (!estratosToKeepIds.has(eId)) {
-                        // Crucial: delete essays before estratos to avoid FK violation
-                        console.log(`[DEBUG] updateProgresiva: Eliminando estrato obsoleto ID ${eId}`);
-                        await client.query('DELETE FROM ensayos WHERE estrato_id = $1', [eId]);
-                        await client.query('DELETE FROM estratos WHERE id = $1', [eId]);
+                    // --- Eliminar estratos obsoletos ---
+                    for (const existingEstrato of existingEstratos) {
+                        const eId = Number(existingEstrato.id);
+                        if (!estratosToKeepIds.has(eId)) {
+                            // Crucial: delete essays before estratos to avoid FK violation
+                            console.log(`[DEBUG] updateProgresiva: Eliminando estrato obsoleto ID ${eId}`);
+                            await client.query('DELETE FROM ensayos WHERE estrato_id = $1', [eId]);
+                            await client.query('DELETE FROM estratos WHERE id = $1', [eId]);
+                        }
                     }
+                } else {
+                    console.log(`[DEBUG] updateProgresiva: No se recibió 'estratos_perfil' para la hija ${currentChildDbId}. Omitiendo sincronización.`);
                 }
-            } else {
-                 console.log(`[DEBUG] updateProgresiva: No se recibió 'estratos_perfil' para la hija ${currentChildDbId}. Omitiendo sincronización.`);
-            }
             }
 
-        // --- Eliminar progresivas hijas que ya no existen ---
-        for (const existingChild of existingChildren) {
-            if (!childrenToKeepIds.has(existingChild.id)) {
-                // Child is being removed. Before deleting its estratos, we must delete its essays
-                await client.query('DELETE FROM ensayos WHERE estrato_id IN (SELECT id FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1)', [existingChild.id]);
-                await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1', [existingChild.id]);
-                await client.query('DELETE FROM progresivas WHERE id = $1', [existingChild.id]);
-            }
+            // --- Eliminar progresivas hijas que ya no existen ---
+            for (const existingChild of existingChildren) {
+                if (!childrenToKeepIds.has(existingChild.id)) {
+                    // Child is being removed. Before deleting its estratos, we must delete its essays
+                    await client.query('DELETE FROM ensayos WHERE estrato_id IN (SELECT id FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1)', [existingChild.id]);
+                    await client.query('DELETE FROM estratos WHERE parent_type = \'progresiva\' AND parent_id = $1', [existingChild.id]);
+                    await client.query('DELETE FROM progresivas WHERE id = $1', [existingChild.id]);
+                }
             }
         } else {
             console.log(`[DEBUG] updateProgresiva: No se recibió 'generatedChildren'. Omitiendo sincronización de hijos.`);
@@ -1552,14 +1552,14 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
                 codigo = $14
             WHERE id = $15
         `, [
-            nombre, descripcion, estado, lineaIntParent, longitud_total, tipo_via, intervalo_manual, 
-            coordenada_este, coordenada_norte, progresiva_inicial_parent, progresiva_final_parent, 
+            nombre, descripcion, estado, lineaIntParent, longitud_total, tipo_via, intervalo_manual,
+            coordenada_este, coordenada_norte, progresiva_inicial_parent, progresiva_final_parent,
             finalKmlTrazadoId, finalKmlPuntosId, finalCodigo, progresivaId
         ]);
 
         // 3. Insert new children, strata, and assays
         const selectedEstratosSet = new Set(estratosSeleccionados || []);
-        
+
         // Auto-fill coordinates
         const kmlTrackData = await getKmlTrackData(finalKmlTrazadoId);
         const startMeters = parseToMeters(progresiva_inicial_parent);
@@ -1573,7 +1573,7 @@ const updateAndImportConEnsayos = async (progresivaId, { parentProgresiva, gener
 
             let ce = prog.coordenada_este;
             let cn = prog.coordenada_norte;
-            
+
             if ((ce === null || ce === undefined || ce === '') && kmlTrackData) {
                 const interp = interpolateUsingTrack(kmlTrackData, parseToMeters(prog.codigo), startMeters, prog.linea || linea);
                 if (interp) {
@@ -1697,17 +1697,15 @@ const deleteKmlFromProgresiva = async (progresivaId) => {
 // --- MANEJO DE IMAGENES Y DOCX ---
 
 const uploadImage = async (file, userId) => {
-    // Check ENV
-    if (!process.env.BLOB_READ_WRITE_TOKEN_SUELOS && !process.env.BLOB_READ_WRITE_TOKEN) {
-        throw new Error("Falta configurar BLOB_READ_WRITE_TOKEN_SUELOS en variables de entorno.");
+    if (!file?.buffer) {
+        throw new Error('Archivo de imagen inválido para progresiva.');
     }
-    const blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS || process.env.BLOB_READ_WRITE_TOKEN;
 
-    const { url } = await put(`progresivas/${userId}/${file.originalname}`, file.buffer, {
-        access: 'public',
-        token: blobToken
-    });
-    return url;
+    const cleanName = String(file.originalname || 'imagen.jpg').replace(/[^a-zA-Z0-9-._]/g, '_');
+    const finalFilename = `${Date.now()}_${cleanName}`;
+    const targetFolder = `suelos/progresivas/${userId}`;
+
+    return await uploadFileToNAS(file.buffer, targetFolder, finalFilename);
 };
 
 const addImagenToProgresiva = async (progresivaId, imagenUrl, descripcion, nombreArchivo) => {
@@ -1727,19 +1725,17 @@ const getImagenesByProgresivaId = async (progresivaId) => {
 };
 
 const deleteImagenProgresiva = async (imagenId) => {
-    // Primero obtener URL para borrar del blob
+    // Primero obtener URL para borrar del almacenamiento activo
     const imgQuery = 'SELECT imagen_url FROM progresiva_imagenes WHERE id = $1';
     const imgRes = await db.query(imgQuery, [imagenId]);
 
     if (imgRes.rows.length === 0) throw new Error('Imagen no encontrada');
     const { imagen_url } = imgRes.rows[0];
 
-    // Borrar de Vercel Blob (si es posible, requiere token)
     try {
-        const blobToken = process.env.BLOB_READ_WRITE_TOKEN_SUELOS || process.env.BLOB_READ_WRITE_TOKEN;
-        if (blobToken) await del(imagen_url, { token: blobToken });
+        await deleteFileFromNAS(imagen_url);
     } catch (e) {
-        console.warn("No se pudo borrar del blob, posiblemente ya borrado o sin permisos:", e.message);
+        console.warn("No se pudo borrar la imagen del NAS, posiblemente ya no existe o es legacy:", e.message);
     }
 
     // Borrar de DB
@@ -1977,9 +1973,9 @@ const getDatos3DSuelosByProyecto = async (proyectoId) => {
         `, [proyectoId]);
 
         console.log(`[DEBUG 3D] Proyecto ${proyectoId}: Encontradas ${progresivasResult.rows.length} progresivas totales.`);
-        
+
         const progresivaIds = progresivasResult.rows.map(p => p.id);
-        
+
         let estratos = [];
         if (progresivaIds.length > 0) {
             const estratosResult = await db.query(`

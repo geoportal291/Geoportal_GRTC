@@ -17,7 +17,7 @@ FASES DEL PROYECTO
    - Cámara Cenital Inteligente: FlyTo automático a 1200m con vista 90°.
    - Robustez: Sincronización de ciclos de vida del visor y prevención de duplicados.
 
-2. INFRAESTRUCTURA DE ARCHIVOS PESADOS (ESTADO: PENDIENTE - SEMANA PRÓXIMA)
+2. INFRAESTRUCTURA DE ARCHIVOS PESADOS (ESTADO: PENDIENTE - SEMANA PRÓXIMA )
    - Soporte para importación de archivos de gran tamaño (0MB a 500MB).
    - Implementación en servidor físico (pendiente de hardware).
 

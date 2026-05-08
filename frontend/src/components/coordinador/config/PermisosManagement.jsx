@@ -39,7 +39,7 @@ const PermisosManagement = () => {
         }
         try {
             const [rolesRes, usersRes, permsRes, settingsRes] = await Promise.all([
-                axios.get(`${API_BASE_URL}/roles`, getAuthHeaders()),
+                axios.get(`${API_BASE_URL}/api/roles`, getAuthHeaders()),
                 axios.get(`${API_BASE_URL}/api/users/simple`, getAuthHeaders()),
                 axios.get(`${API_BASE_URL}/api/permissions/all`, getAuthHeaders()),
                 axios.get(`${API_BASE_URL}/api/settings/global`, getAuthHeaders())

@@ -49,7 +49,8 @@ export default function EnsayoDetallePanel({
   initialEnsayoDetails = null,
   modalMode = false,
   onClose = null,
-  onSaved = null
+  onSaved = null,
+  onDirtyStateChange = null
 }) {
   const navigate = useNavigate();
 
@@ -65,6 +66,7 @@ export default function EnsayoDetallePanel({
   const [infoGeneral, setInfoGeneral] = useState({});
   const [ensayoDetails, setEnsayoDetails] = useState(initialEnsayoDetails);
   const [activeTab, setActiveTab] = useState('formulario');
+  const [initialFormSnapshot, setInitialFormSnapshot] = useState('{}');
 
   const API_URL = process.env.REACT_APP_API_BASE ?? '';
 
@@ -148,6 +150,7 @@ export default function EnsayoDetallePanel({
           }
         }
         setFormData(formDataObject);
+        setInitialFormSnapshot(JSON.stringify(formDataObject || {}));
 
         if (data.parent_type === 'progresiva') {
           setInfoGeneral({ proyecto: data.proyecto_nombre, tramo: data.tramo_nombre, progresiva: data.progresiva_codigo, estrato: data.estrato_orden });
@@ -190,6 +193,15 @@ export default function EnsayoDetallePanel({
     if (!tableConfig?.general_fields?.length) return;
     setFormData(prev => applyGeneralFieldDefaults(prev, tableConfig));
   }, [tableConfig, applyGeneralFieldDefaults]);
+
+  useEffect(() => {
+    const currentSnapshot = JSON.stringify(formData || {});
+    const isDirty = currentSnapshot !== initialFormSnapshot;
+
+    if (typeof onDirtyStateChange === 'function') {
+      onDirtyStateChange(isDirty);
+    }
+  }, [formData, initialFormSnapshot, onDirtyStateChange]);
 
   useEffect(() => {
     if (!calculationConfig || !formData || Object.keys(formData).length === 0) {
@@ -245,6 +257,11 @@ export default function EnsayoDetallePanel({
 
       await axios.put(`${API_URL}/api/ensayos/full-assay/${ensayoId}`, payload, { headers });
       alertify.success('Ensayo actualizado correctamente.');
+      setInitialFormSnapshot(JSON.stringify(formData || {}));
+
+      if (typeof onDirtyStateChange === 'function') {
+        onDirtyStateChange(false);
+      }
 
       if (typeof onSaved === 'function') {
         onSaved();
@@ -295,18 +312,6 @@ export default function EnsayoDetallePanel({
               {ensayoDetails?.tipo_ensayo_descripcion || ensayoDetails?.tipo_ensayo_nombre || 'Ensayo'}
             </span>
           </div>
-          <div className="ensayo-modal-inline-actions">
-            {ensayoDetails?.tramo_id && (
-              <button onClick={handleGoToGeneral} className="btn btn-info btn-sm">
-                <i className="fas fa-vials"></i> Ensayos Generales
-              </button>
-            )}
-            {typeof onClose === 'function' && (
-              <button onClick={onClose} className="btn btn-secondary btn-sm">
-                <i className="fas fa-times"></i> Cerrar
-              </button>
-            )}
-          </div>
         </div>
       )}
 
@@ -340,44 +345,38 @@ export default function EnsayoDetallePanel({
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <ul className="nav nav-tabs card-header-tabs">
-            <li className="nav-item"><button className={`nav-link ${activeTab === 'formulario' ? 'active' : ''}`} onClick={() => setActiveTab('formulario')}>Formulario</button></li>
-            <li className="nav-item"><button className={`nav-link ${activeTab === 'resultados' ? 'active' : ''}`} onClick={() => setActiveTab('resultados')}>Resultados</button></li>
-            <li className="nav-item"><button className={`nav-link ${activeTab === 'graficos' ? 'active' : ''}`} onClick={() => setActiveTab('graficos')}>Gráficos</button></li>
-          </ul>
-        </div>
-        <div className="card-body">
-          <div className="tab-content-container">
-            <div className="tab-content-slider" style={{ transform: `translateX(-${activeTab === 'resultados' ? 100 : activeTab === 'graficos' ? 200 : 0}%)` }}>
-              <div className="tab-panel">
-                {formConfig && (
-                  <EnsayoFormulario
-                    data={formData}
-                    onInputChange={handleInputChange}
-                    resultados={resultados}
-                    formConfig={formConfig}
-                    tableConfig={tableConfig}
-                  />
-                )}
-              </div>
-              <div className="tab-panel"><VisorResultados config={resultsConfig} data={resultados} /></div>
-              <div className="tab-panel">
-                <VisorGraficos
-                  graficosConfig={graficosConfig}
-                  resultados={resultados}
-                  formData={formData}
-                  tableConfig={tableConfig}
-                />
-              </div>
-            </div>
-          </div>
+      <div className="ensayo-internal-tabs">
+        <div className="ensayo-tab-buttons">
+          <button type="button" className={`ensayo-tab-btn ${activeTab === 'formulario' ? 'active' : ''}`} onClick={() => setActiveTab('formulario')}>Datos del Ensayo</button>
+          <button type="button" className={`ensayo-tab-btn ${activeTab === 'resultados' ? 'active' : ''}`} onClick={() => setActiveTab('resultados')}>Resultados Calculados</button>
+          <button type="button" className={`ensayo-tab-btn ${activeTab === 'graficos' ? 'active' : ''}`} onClick={() => setActiveTab('graficos')}>Gráficos</button>
         </div>
       </div>
+      <div className="ensayo-tab-content-area">
+        {activeTab === 'formulario' && formConfig && (
+          <EnsayoFormulario
+            data={formData}
+            onInputChange={handleInputChange}
+            resultados={resultados}
+            formConfig={formConfig}
+            tableConfig={tableConfig}
+          />
+        )}
+        {activeTab === 'resultados' && (
+          <VisorResultados config={resultsConfig} data={resultados} />
+        )}
+        {activeTab === 'graficos' && (
+          <VisorGraficos
+            graficosConfig={graficosConfig}
+            resultados={resultados}
+            formData={formData}
+            tableConfig={tableConfig}
+          />
+        )}
+      </div>
 
-      <div className={`d-grid mt-3 ${modalMode ? 'p-0' : 'p-3'}`}>
-        <button type="button" className="btn btn-success" onClick={handleSaveEnsayo}>
+      <div className={modalMode ? 'ensayo-detail-savebar' : 'd-grid mt-3 p-3'}>
+        <button type="button" className="btn btn-success ensayo-detail-savebtn" onClick={handleSaveEnsayo}>
           <i className="fas fa-save me-1"></i> Actualizar Ensayo
         </button>
       </div>

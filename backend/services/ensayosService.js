@@ -1267,7 +1267,7 @@ const importarEnsayos = async (proyectoId, tramoId, excelBuffer, user, isSimulat
             datos_formulario: draft.datos_formulario,
             codigo_ensayo: normalizedCodigo,
             identificador: normalizedIdentificador || null,
-            estado: 'pendiente'
+            estado: (draft.datos_formulario && Object.keys(draft.datos_formulario).length > 0) ? 'completado' : 'pendiente'
         };
 
         if (existing) {
@@ -1583,14 +1583,22 @@ const getEnsayoDetailsById = async (id) => {
 
 const createOrUpdateFullAssay = async (id, data) => {
     console.log(`[DEBUG] createOrUpdateFullAssay ID=${id}`);
+    
+    let autoEstado = data.estado;
+    const datos = data.datos_formulario ?? data.datos_ensayo;
+    const hasDataForm = datos && Object.keys(datos).length > 0;
+    if ((!autoEstado || autoEstado.toLowerCase() === 'pendiente') && hasDataForm) {
+        autoEstado = 'completado';
+    }
+
     const normalizedData = {
         estrato_id: data.estrato_id,
         tipo_ensayo: data.tipo_ensayo ?? data.tipo_ensayo_id,
         nombre_ensayo: data.nombre_ensayo,
         fecha: data.fecha,
         resultado: data.resultado,
-        estado: data.estado,
-        datos_formulario: data.datos_formulario ?? data.datos_ensayo,
+        estado: autoEstado,
+        datos_formulario: datos,
         codigo_ensayo: data.codigo_ensayo,
         identificador: normalizeIdentificadorInput(data.identificador)
     };

@@ -162,7 +162,7 @@ const SeccionTablaDinamica = ({ seccion, data, onInputChange, resultados, tableC
   };
 
   return (
-    <div className="table-responsive" key={seccion.titulo}>
+    <div className={`table-responsive ensayo-dynamic-table ${isTransposed ? 'is-transposed' : 'is-standard'}`} key={seccion.titulo}>
       <h3 className="info-section-header">{seccion.titulo}</h3>
 
       {/* Renderizado de Campos de Cabecera Específicos de la Tabla (si existen) */}

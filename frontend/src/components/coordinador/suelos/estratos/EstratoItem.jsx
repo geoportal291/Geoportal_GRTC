@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import './EstratoItem.css';
-import { useNavigate } from 'react-router-dom';
 import alertify from 'alertifyjs';
 
 const EstratoItem = React.memo(React.forwardRef(({
@@ -22,8 +21,6 @@ const EstratoItem = React.memo(React.forwardRef(({
     handleViewGraficos,
     selectedProgresivaId
 }, ref) => {
-    const navigate = useNavigate();
-
     // Determinar si estamos renderizando una Progresiva (modo fila) o un Estrato (modo detalle)
     const isProgresivaRow = !!progresiva && !estrato;
     const itemData = estrato || progresiva;
@@ -209,7 +206,7 @@ const EstratoItem = React.memo(React.forwardRef(({
                                 <button
                                     type="button"
                                     className="action-btn go"
-                                    onClick={() => navigate(`/coordinador/suelos/ensayos/${selectedEnsayo?.id}`)}
+                                    onClick={() => handleViewEnsayo(selectedEnsayo, Array.isArray(estrato?.ensayos) ? estrato.ensayos : [])}
                                 >
                                     Ir a Ensayo
                                 </button>
