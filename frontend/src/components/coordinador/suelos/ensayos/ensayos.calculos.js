@@ -168,6 +168,75 @@ function calcularMaximoCuadratico(xInput, yInput) {
     }
 }
 
+/**
+ * Realiza una regresión lineal sobre el logaritmo de X: y = m * log10(x) + b
+ * Específicamente diseñada para la Curva de Fluidez (Casagrande).
+ */
+function calcularRegresionLinealLog(xInput, yInput) {
+    const xArr = xInput && typeof xInput.toArray === 'function' ? xInput.toArray() : xInput;
+    const yArr = yInput && typeof yInput.toArray === 'function' ? yInput.toArray() : yInput;
+
+    if (!Array.isArray(xArr) || !Array.isArray(yArr)) return { m: 0, b: 0, error: "Inputs must be arrays" };
+
+    const validX = [];
+    const validY = [];
+    for (let i = 0; i < Math.min(xArr.length, yArr.length); i++) {
+        const vx = Number(xArr[i]);
+        const vy = Number(yArr[i]);
+        if (Number.isFinite(vx) && vx > 0 && Number.isFinite(vy) && vy > 0) {
+            validX.push(Math.log10(vx));
+            validY.push(vy);
+        }
+    }
+
+    console.log("[CALC] Datos para regresión:", {
+        recibido_x: xArr,
+        recibido_y: yArr,
+        puntos_validos: validX.length
+    });
+
+    if (validX.length < 2) {
+        return { 
+            m: 0, b: 0, ll_25: 0, puntos_recta: [], 
+            error: "Se necesitan al menos 2 puntos válidos" 
+        };
+    }
+
+    try {
+        // Regresión lineal simple por mínimos cuadrados
+        const n = validX.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        for (let i = 0; i < n; i++) {
+            sumX += validX[i];
+            sumY += validY[i];
+            sumXY += validX[i] * validY[i];
+            sumXX += validX[i] * validX[i];
+        }
+
+        const denominator = (n * sumXX - sumX * sumX);
+        if (Math.abs(denominator) < 1e-12) return { m: 0, b: 0, error: "Puntos verticales en escala log" };
+
+        const m = (n * sumXY - sumX * sumY) / denominator;
+        const b = (sumY - m * sumX) / n;
+
+        // Calculamos el LL exacto a los 25 golpes usando la recta
+        const ll_25 = m * Math.log10(25) + b;
+
+        return {
+            m,
+            b,
+            ll_25: Math.round(ll_25 * 100) / 100,
+            // Puntos para dibujar la recta de extremo a extremo (10 a 50 golpes)
+            puntos_recta: [
+                { x: 10, y: Math.round((m * Math.log10(10) + b) * 100) / 100 },
+                { x: 50, y: Math.round((m * Math.log10(50) + b) * 100) / 100 }
+            ]
+        };
+    } catch (err) {
+        return { m: 0, b: 0, error: err.message };
+    }
+}
+
 function topologicalSort(formulas) {
     const graph = new Map();
     const allNodes = Object.keys(formulas);
@@ -341,7 +410,8 @@ math.import({
     values: Object.values,
     safeDivide,
     firstPositive,
-    regresion_cuadratica: calcularMaximoCuadratico // Exponemos con nombre amigable para las fórmulas DB
+    regresion_cuadratica: calcularMaximoCuadratico,
+    regresion_log: calcularRegresionLinealLog
 }, {
     override: true
 });

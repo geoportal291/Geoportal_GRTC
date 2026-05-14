@@ -5024,6 +5024,7 @@ app.post('/api/trafico/exportar-shapefile', authenticateToken, async (req, res) 
             features: geojsonData.features
         }, {
             folder: 'geoportal_export',
+            outputType: 'nodebuffer',
             types: {
                 point: 'mypoints',
                 polygon: 'mypolygons',
@@ -5035,8 +5036,8 @@ app.post('/api/trafico/exportar-shapefile', authenticateToken, async (req, res) 
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="geoportal_shapefiles_${uniqueExportId}.zip"`);
 
-        // Enviar el Buffer directamente (shpWrite.zip resuelve con un ArrayBuffer)
-        res.send(Buffer.from(zipBuffer));
+        // Enviar el ZIP binario real para evitar archivos corruptos.
+        res.send(zipBuffer);
         console.log('INFO: Archivo Shapefile (ZIP) generado y enviado correctamente.');
 
     } catch (error) {
@@ -6194,6 +6195,192 @@ const ensureFeatureCollection = (value) => {
     return value;
 };
 
+const DG_COORDINATE_PRECISION = 6;
+const DG_GEOJSON_WARN_BYTES = 12 * 1024 * 1024;
+const DG_GEOJSON_MAX_BYTES = 20 * 1024 * 1024;
+
+const roundCoordinateValue = (value) => {
+    if (!Number.isFinite(value)) return null;
+    return Number(value.toFixed(DG_COORDINATE_PRECISION));
+};
+
+const reducePointSequence = (points, maxPoints, closeRing = false) => {
+    if (!Array.isArray(points) || points.length <= maxPoints) return points;
+
+    const stride = Math.ceil(points.length / maxPoints);
+    const reduced = points.filter((_, index) => index === 0 || index === points.length - 1 || index % stride === 0);
+
+    if (closeRing && reduced.length > 2) {
+        const firstPoint = JSON.stringify(reduced[0]);
+        const lastPoint = JSON.stringify(reduced[reduced.length - 1]);
+        if (firstPoint !== lastPoint) {
+            reduced.push(reduced[0]);
+        }
+    }
+
+    return reduced;
+};
+
+const compactCoordinates = (coordinates, geometryType) => {
+    if (!Array.isArray(coordinates)) return coordinates;
+
+    if (geometryType === 'Point') {
+        const point = coordinates
+            .slice(0, 3)
+            .map((value) => roundCoordinateValue(Number(value)));
+
+        return point.length >= 2 && point[0] !== null && point[1] !== null ? point : null;
+    }
+
+    if (geometryType === 'MultiPoint' || geometryType === 'LineString') {
+        return reducePointSequence(
+            coordinates
+                .map((point) => compactCoordinates(point, 'Point'))
+                .filter(Boolean),
+            geometryType === 'LineString' ? 5000 : 8000
+        );
+    }
+
+    if (geometryType === 'MultiLineString') {
+        return coordinates
+            .map((line) => compactCoordinates(line, 'LineString'))
+            .filter((line) => Array.isArray(line) && line.length >= 2);
+    }
+
+    if (geometryType === 'Polygon') {
+        return coordinates
+            .map((ring) => reducePointSequence(
+                ring
+                    .map((point) => compactCoordinates(point, 'Point'))
+                    .filter(Boolean),
+                4000,
+                true
+            ))
+            .filter((ring) => Array.isArray(ring) && ring.length >= 4);
+    }
+
+    if (geometryType === 'MultiPolygon') {
+        return coordinates
+            .map((polygon) => compactCoordinates(polygon, 'Polygon'))
+            .filter((polygon) => Array.isArray(polygon) && polygon.length > 0);
+    }
+
+    return coordinates;
+};
+
+const compactFeatureForStorage = (feature) => {
+    if (!feature || feature.type !== 'Feature') return null;
+
+    const geometryType = feature.geometry?.type;
+    if (!geometryType) return null;
+
+    const compactedCoordinates = compactCoordinates(feature.geometry.coordinates, geometryType);
+    if (!compactedCoordinates) return null;
+
+    return {
+        type: 'Feature',
+        properties: feature.properties || {},
+        geometry: {
+            type: geometryType,
+            coordinates: compactedCoordinates
+        }
+    };
+};
+
+const compactGeojsonForStorage = (geojsonData) => {
+    const normalized = ensureFeatureCollection(geojsonData);
+
+    return {
+        type: 'FeatureCollection',
+        features: normalized.features
+            .map((feature) => compactFeatureForStorage(feature))
+            .filter(Boolean)
+    };
+};
+
+const applyDenseLayerStyling = (featureCollection) => {
+    const normalized = ensureFeatureCollection(featureCollection);
+
+    return {
+        ...normalized,
+        dg_meta: {
+            ...(normalized.dg_meta || {}),
+            denseVisualMode: true
+        },
+        features: normalized.features.map((feature) => {
+            const geometryType = feature?.geometry?.type || '';
+            const properties = { ...(feature?.properties || {}) };
+
+            if (geometryType.includes('Point')) {
+                properties.dg_marker_size = 8;
+            } else if (geometryType.includes('Line')) {
+                properties['stroke-width'] = Math.min(Number(properties['stroke-width']) || 4, 1);
+                properties['stroke-opacity'] = Math.min(Number(properties['stroke-opacity'] ?? 1), 0.45);
+            } else if (geometryType.includes('Polygon')) {
+                properties['stroke-width'] = Math.min(Number(properties['stroke-width']) || 3, 1);
+                properties['stroke-opacity'] = Math.min(Number(properties['stroke-opacity'] ?? 1), 0.35);
+                properties['fill-opacity'] = Math.min(Number(properties['fill-opacity'] ?? 0.35), 0.08);
+            }
+
+            return {
+                ...feature,
+                properties
+            };
+        })
+    };
+};
+
+const splitFeatureCollectionBySize = (featureCollection, maxBytes) => {
+    const normalized = ensureFeatureCollection(featureCollection);
+    const features = normalized.features || [];
+    const prefix = '{"type":"FeatureCollection","features":[';
+    const suffix = ']}';
+    const prefixBytes = Buffer.byteLength(prefix, 'utf8');
+    const suffixBytes = Buffer.byteLength(suffix, 'utf8');
+
+    const chunks = [];
+    let currentFeatures = [];
+    let currentBytes = prefixBytes + suffixBytes;
+
+    for (const feature of features) {
+        const featureString = JSON.stringify(feature);
+        const featureBytes = Buffer.byteLength(featureString, 'utf8');
+        const separatorBytes = currentFeatures.length > 0 ? 1 : 0;
+
+        if (prefixBytes + suffixBytes + featureBytes > maxBytes) {
+            return {
+                chunks: [],
+                oversizedFeature: true
+            };
+        }
+
+        if (currentBytes + separatorBytes + featureBytes > maxBytes && currentFeatures.length > 0) {
+            chunks.push({
+                type: 'FeatureCollection',
+                features: currentFeatures
+            });
+            currentFeatures = [feature];
+            currentBytes = prefixBytes + suffixBytes + featureBytes;
+            continue;
+        }
+
+        currentFeatures.push(feature);
+        currentBytes += separatorBytes + featureBytes;
+    }
+
+    if (currentFeatures.length > 0 || chunks.length === 0) {
+        chunks.push({
+            type: 'FeatureCollection',
+            features: currentFeatures
+        });
+    }
+
+    return {
+        chunks,
+        oversizedFeature: false
+    };
+};
+
 app.post('/api/proyectos/:id/diseno-geometrico-capas/blank', authenticateToken, authorizeDisenoGeometricoManage, async (req, res) => {
     try {
         await ensureDisenoGeometricoCapasTable();
@@ -6252,20 +6439,31 @@ app.post('/api/proyectos/:id/diseno-geometrico-capas', authenticateToken, author
         const ext = path.extname(file.originalname).toLowerCase();
 
         if (ext === '.rar' || ext === '.zip') {
-            const formData = new FormData();
-            formData.append('file', file.buffer, { filename: file.originalname });
+            try {
+                const formData = new FormData();
+                formData.append('file', file.buffer, { filename: file.originalname });
 
-            const pythonRes = await axios.post('http://127.0.0.1:8000/convert-shapefile', formData, {
-                headers: formData.getHeaders(),
-                maxContentLength: Infinity,
-                maxBodyLength: Infinity,
-                timeout: 300000
-            });
+                const pythonRes = await axios.post('http://127.0.0.1:8000/convert-shapefile', formData, {
+                    headers: formData.getHeaders(),
+                    maxContentLength: Infinity,
+                    maxBodyLength: Infinity,
+                    timeout: 300000
+                });
 
-            if (pythonRes.data?.status === 'ok' && pythonRes.data?.geojson) {
-                geojsonData = pythonRes.data.geojson;
-            } else {
-                throw new Error(`Respuesta invalida del conversor de shapefiles: ${JSON.stringify(pythonRes.data)}`);
+                if (pythonRes.data?.status === 'ok' && pythonRes.data?.geojson) {
+                    geojsonData = pythonRes.data.geojson;
+                } else {
+                    throw new Error(`Respuesta invalida del conversor de shapefiles: ${JSON.stringify(pythonRes.data)}`);
+                }
+            } catch (pythonError) {
+                const workerStatus = pythonError.response?.status || 502;
+                const workerDetail = pythonError.response?.data?.detail
+                    || pythonError.response?.data?.message
+                    || pythonError.message;
+                return res.status(workerStatus).json({
+                    status: 'error',
+                    message: `No se pudo procesar el shapefile: ${workerDetail}`
+                });
             }
         } else if (ext === '.kml' || ext === '.kmz') {
             let kmlText = '';
@@ -6297,21 +6495,87 @@ app.post('/api/proyectos/:id/diseno-geometrico-capas', authenticateToken, author
             }
         }
 
-        const savedName = displayName || file.originalname;
-        const result = await db.query(`
-            INSERT INTO diseno_geometrico_capas (proyecto_id, tab_name, file_url, file_name, geojson_data)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (proyecto_id, tab_name) DO UPDATE
-            SET file_url = EXCLUDED.file_url,
-                file_name = EXCLUDED.file_name,
-                geojson_data = EXCLUDED.geojson_data,
-                uploaded_at = CURRENT_TIMESTAMP
-            RETURNING *;
-        `, [proyectoId, tabName, blob.url, savedName, geojsonData ? JSON.stringify(geojsonData) : null]);
+        let geojsonPayload = null;
+        let payloadCollections = [];
+        if (geojsonData) {
+            let compactedGeojson = compactGeojsonForStorage(geojsonData);
+            geojsonPayload = JSON.stringify(compactedGeojson);
+            let payloadBytes = Buffer.byteLength(geojsonPayload, 'utf8');
 
-        res.status(200).json({ status: 'success', data: result.rows[0] });
+            console.log(`[Diseno Geometrico] GeoJSON compactado para ${file.originalname}: ${payloadBytes} bytes.`);
+
+            if (payloadBytes > DG_GEOJSON_WARN_BYTES) {
+                console.warn(`[Diseno Geometrico] GeoJSON grande detectado (${payloadBytes} bytes) para ${file.originalname}.`);
+                compactedGeojson = applyDenseLayerStyling(compactedGeojson);
+                geojsonPayload = JSON.stringify(compactedGeojson);
+                payloadBytes = Buffer.byteLength(geojsonPayload, 'utf8');
+            }
+
+            if (payloadBytes > DG_GEOJSON_MAX_BYTES) {
+                const splitResult = splitFeatureCollectionBySize(compactedGeojson, DG_GEOJSON_MAX_BYTES);
+
+                if (splitResult.oversizedFeature || !splitResult.chunks.length) {
+                    return res.status(413).json({
+                        status: 'error',
+                        message: 'La capa es demasiado pesada incluso despues de compactarla. Intenta simplificar el shapefile en origen.'
+                    });
+                }
+
+                payloadCollections = splitResult.chunks;
+                console.warn(`[Diseno Geometrico] La capa ${file.originalname} se dividira automaticamente en ${payloadCollections.length} partes.`);
+            } else {
+                payloadCollections = [compactedGeojson];
+            }
+        }
+
+        const savedName = displayName || file.originalname;
+        const savedLayers = [];
+
+        await db.query('BEGIN');
+        try {
+            await db.query(`
+                DELETE FROM diseno_geometrico_capas
+                WHERE proyecto_id = $1
+                  AND (tab_name = $2 OR tab_name LIKE $3);
+            `, [proyectoId, tabName, `${tabName}__part_%`]);
+
+            for (let index = 0; index < payloadCollections.length; index += 1) {
+                const partNumber = index + 1;
+                const layerTabName = index === 0 ? tabName : `${tabName}__part_${partNumber}`;
+                const layerDisplayName = payloadCollections.length > 1
+                    ? `${savedName} (Parte ${partNumber}/${payloadCollections.length})`
+                    : savedName;
+                const layerPayload = payloadCollections[index] ? JSON.stringify(payloadCollections[index]) : null;
+
+                const layerResult = await db.query(`
+                    INSERT INTO diseno_geometrico_capas (proyecto_id, tab_name, file_url, file_name, geojson_data)
+                    VALUES ($1, $2, $3, $4, $5)
+                    RETURNING *;
+                `, [proyectoId, layerTabName, blob.url, layerDisplayName, layerPayload]);
+
+                savedLayers.push(layerResult.rows[0]);
+            }
+
+            await db.query('COMMIT');
+        } catch (dbError) {
+            await db.query('ROLLBACK');
+            throw dbError;
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: payloadCollections.length === 1 ? savedLayers[0] : savedLayers,
+            split: payloadCollections.length > 1,
+            parts: payloadCollections.length
+        });
     } catch (err) {
         console.error('Error en Diseno Geometrico POST /capas:', err);
+        if (String(err.message || '').includes('Connection terminated unexpectedly')) {
+            return res.status(413).json({
+                status: 'error',
+                message: 'La capa convertida sigue siendo demasiado grande para guardarse. Intenta dividir el shapefile o reducir su detalle.'
+            });
+        }
         res.status(500).json({ status: 'error', message: err.message });
     }
 });

@@ -1,298 +1,493 @@
 import { useMemo, useState } from 'react';
-import TraficoV2Layout from './TraficoV2Layout';
-import TrafficExternalMap from './components/TrafficExternalMap';
-import TrafficInsightPanel from './components/TrafficInsightPanel';
-import TrafficMapPanel from './components/TrafficMapPanel';
+import ReactDOM from 'react-dom';
 import {
-  TOP_LEVEL_TABS,
-  PROCESSING_SUBTABS,
-  REPORT_SUBTABS,
-  MODULE_CONFIG,
-  REPORT_TAB_TO_MODULE,
+  LayersControl,
+  MapContainer,
+  Marker,
+  Polyline,
+  Popup,
+  TileLayer,
+  useMap,
+  useMapEvents
+} from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import '../invvial/ExternalView.css';
+import {
   enrichEntitiesWithMapData,
   formatDate,
-  getEntityModuleAssets,
-  getEntityStats
+  MODULE_CONFIG,
+  PROCESSING_SUBTABS
 } from './trafficV2Utils';
 
-const EXTERNAL_SUMMARY_SUBTABS = [
-  { id: 'panorama', label: 'Panorama General' },
-  { id: 'estaciones', label: 'Estaciones en mapa' },
-  { id: 'tramos', label: 'Tramos en mapa' }
-];
+/* ── Leaflet Icons ── */
+const stationIcon = new L.DivIcon({
+  className: '',
+  html: `<div style="position:relative;width:32px;height:32px;">
+    <div style="width:32px;height:32px;background:#1d4ed8;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 0 0 2px #1d4ed8,0 4px 14px rgba(0,0,0,0.45);"></div>
+    <div style="position:absolute;top:6px;left:6px;font-size:14px;">📍</div>
+  </div>`,
+  iconSize: [32, 38],
+  iconAnchor: [16, 38],
+  popupAnchor: [0, -40]
+});
 
-const defaultExternalSubtab = {
-  resumen: EXTERNAL_SUMMARY_SUBTABS[0].id,
-  procesamiento: PROCESSING_SUBTABS[0].id,
-  reporte: REPORT_SUBTABS[0].id
-};
+const sectionIcon = new L.DivIcon({
+  className: '',
+  html: `<div style="position:relative;width:28px;height:28px;">
+    <div style="width:28px;height:28px;background:#f97316;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2.5px solid white;box-shadow:0 0 0 2px #f97316,0 4px 12px rgba(0,0,0,0.35);"></div>
+    <div style="position:absolute;top:5px;left:5px;font-size:12px;">🔶</div>
+  </div>`,
+  iconSize: [28, 34],
+  iconAnchor: [14, 34],
+  popupAnchor: [0, -36]
+});
 
-const TrafficSummaryCard = ({ label, value, helper }) => (
-  <article className="traffic-v2-kpi-card">
-    <span className="traffic-v2-kpi-label">{label}</span>
-    <strong className="traffic-v2-kpi-value">{value}</strong>
-    {helper ? <small className="traffic-v2-kpi-hint">{helper}</small> : null}
-  </article>
-);
-
-const TrafficExternalLegend = ({ stations, sections, activeTopTab, activeSubTab }) => {
-  const mappedStations = stations.filter((item) => item.mapPosition);
-  const mappedSections = sections.filter((item) => item.mapPosition);
-  const missingStations = stations.filter((item) => !item.mapPosition);
-  const missingSections = sections.filter((item) => !item.mapPosition);
-  const pendingEntities = [...missingStations, ...missingSections].slice(0, 6);
-  const lastRecord = [...stations, ...sections]
-    .map((entity) => entity.lastUpload)
-    .filter(Boolean)
-    .sort((a, b) => new Date(b) - new Date(a))[0];
-
+/* ── Map Helpers ── */
+const CoordsBar = () => {
+  const [info, setInfo] = useState(null);
+  useMapEvents({
+    mousemove(e) {
+      const { lat, lng } = e.latlng;
+      setInfo({ lat: lat.toFixed(5), lng: lng.toFixed(5) });
+    }
+  });
+  if (!info) return null;
   return (
-    <section className="traffic-v2-panel traffic-v2-span-4">
-      <div className="traffic-v2-panel-header">
-        <div>
-          <h3>Lectura territorial</h3>
-          <p>Resumen geoespacial para la vista externa del proyecto.</p>
-        </div>
-      </div>
-
-      <div className="traffic-v2-legend-list">
-        <article className="traffic-v2-legend-item">
-          <strong>Modo actual</strong>
-          <span>{activeTopTab === 'resumen' ? 'Resumen General' : activeTopTab === 'procesamiento' ? 'Recolección y procesamiento de datos' : 'Reporte Final'}</span>
-        </article>
-        <article className="traffic-v2-legend-item">
-          <strong>Subvista</strong>
-          <span>{activeSubTab}</span>
-        </article>
-        <article className="traffic-v2-legend-item">
-          <strong>Estaciones georreferenciadas</strong>
-          <span>{mappedStations.length}</span>
-        </article>
-        <article className="traffic-v2-legend-item">
-          <strong>Tramos georreferenciados</strong>
-          <span>{mappedSections.length}</span>
-        </article>
-        <article className="traffic-v2-legend-item">
-          <strong>Último registro</strong>
-          <span>{formatDate(lastRecord)}</span>
-        </article>
-        <article className="traffic-v2-legend-item">
-          <strong>Mapas base</strong>
-          <span>OSM, Topográfico y Satélite</span>
-        </article>
-      </div>
-
-      {pendingEntities.length ? (
-        <div className="traffic-v2-legend-pending">
-          <div className="traffic-v2-panel-header">
-            <div>
-              <h3>Pendientes de georreferenciación</h3>
-              <p>Entidades visibles que aún no cuentan con coordenadas utilizables.</p>
-            </div>
-          </div>
-
-          <div className="traffic-v2-legend-pending-list">
-            {pendingEntities.map((entity) => (
-              <article key={entity.id} className="traffic-v2-legend-pending-item">
-                <strong>{entity.nombre || entity.id}</strong>
-                <span>{entity.ubicacion || 'Ubicación no registrada'}</span>
-              </article>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </section>
+    <div className="coords-display">
+      LAT: {info.lat} &nbsp;|&nbsp; LNG: {info.lng}
+    </div>
   );
 };
 
+const FitBounds = ({ bounds }) => {
+  const map = useMap();
+  useMemo(() => {
+    if (bounds && bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
+    }
+  }, [bounds, map]);
+  return null;
+};
+
+const FlyToMarker = ({ position }) => {
+  const map = useMap();
+  if (position) {
+    map.flyTo(position, 15, { animate: true, duration: 1.2 });
+  }
+  return null;
+};
+
+/* ── Popup Content ── */
+const StationPopup = ({ entity, type }) => {
+  const lastAsset = entity.assets?.[entity.assets.length - 1];
+  const hasImage = lastAsset?.image_url && /\.(jpg|jpeg|png|webp|gif)$/i.test(lastAsset.image_url);
+
+  return (
+    <div className="invvial-map-popup-card">
+      <div className="popup-header">
+        {type === 'station' ? 'ESTACIÓN DE CONTROL' : 'TRAMO HOMOGÉNEO'}
+      </div>
+      <div className="popup-content">
+        {hasImage && (
+          <div className="popup-image-container">
+            <div className="popup-img-wrapper">
+              <img src={lastAsset.image_url} alt="Última foto" />
+            </div>
+          </div>
+        )}
+        <div className="popup-details-grid">
+          <div className="detail-row">
+            <span className="label">NOMBRE:</span>
+            <span className="value">{entity.nombre || entity.id}</span>
+          </div>
+          <div className="detail-row">
+            <span className="label">UBICACIÓN:</span>
+            <span className="value">{entity.ubicacion || '---'}</span>
+          </div>
+          <div className="detail-row">
+            <span className="label">COORDENADA:</span>
+            <span className="value" style={{ lineHeight: '1.2' }}>
+              {entity.mapPosition
+                ? `${entity.mapPosition.lng.toFixed(5)} E / ${entity.mapPosition.lat.toFixed(5)} N`
+                : '---'
+              }
+            </span>
+          </div>
+          <div className="detail-row">
+            <span className="label">REGISTROS:</span>
+            <span className="value">{entity.totalUploads}</span>
+          </div>
+          <div className="detail-row">
+            <span className="label">ÚLTIMO:</span>
+            <span className="value">{formatDate(entity.lastUpload)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── Sidebar Content ── */
+const SidebarLeft = ({
+  isOpen,
+  onClose,
+  searchText,
+  onSearchChange,
+  filterType,
+  onFilterTypeChange,
+  totalStations,
+  totalSections,
+  totalRecords
+}) => (
+  <aside className={`external-sidebar sidebar-left ${isOpen ? 'active' : ''}`}>
+    <div className="ext-sidebar-header">
+      <span>Tráfico V2</span>
+      <button className="ext-close-btn" onClick={onClose}>
+        <i className="fa-solid fa-chevron-left" />
+      </button>
+    </div>
+    <div className="ext-panel-content">
+      <div className="ext-form-group" style={{ position: 'relative' }}>
+        <i className="fa-solid fa-search" style={{
+          position: 'absolute', right: '15px', top: '50%',
+          transform: 'translateY(-50%)', color: '#999', zIndex: 2, pointerEvents: 'none'
+        }} />
+        <input
+          type="text"
+          className="ext-input"
+          placeholder="Buscar estación, tramo..."
+          value={searchText}
+          onChange={(e) => onSearchChange(e.target.value)}
+          style={{ paddingRight: '40px' }}
+        />
+      </div>
+
+      <div className="ext-form-group">
+        <label>Tipo de Entidad</label>
+        <select className="ext-select" value={filterType} onChange={(e) => onFilterTypeChange(e.target.value)}>
+          <option value="all">Todas</option>
+          <option value="station">Solo Estaciones</option>
+          <option value="section">Solo Tramos</option>
+        </select>
+      </div>
+
+      <div className="ext-form-group">
+        <label>Módulos disponibles</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+          {PROCESSING_SUBTABS.map((sub) => (
+            <div key={sub.id} style={{
+              padding: '8px 12px', borderRadius: '8px', background: '#f0f6ff',
+              fontSize: '0.84rem', color: '#173a68', fontWeight: 600
+            }}>
+              {sub.label}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="ext-stats-card">
+        <p style={{ margin: '0 0 6px' }}><strong>Estaciones:</strong> {totalStations}</p>
+        <p style={{ margin: '0 0 6px' }}><strong>Tramos:</strong> {totalSections}</p>
+        <p style={{ margin: 0 }}><strong>Total registros:</strong> {totalRecords}</p>
+      </div>
+    </div>
+  </aside>
+);
+
+const SidebarRight = ({
+  isOpen,
+  onClose,
+  mappedStations,
+  mappedSections,
+  missingEntities,
+  lastRecord
+}) => (
+  <aside className={`external-sidebar sidebar-right ${isOpen ? 'active' : ''}`}>
+    <div className="ext-sidebar-header right-header">
+      <span>Leyenda</span>
+      <button className="ext-close-btn" onClick={onClose}>
+        <i className="fa-solid fa-chevron-right" />
+      </button>
+    </div>
+    <div className="ext-panel-content">
+      <div className="ext-layer-group">
+        <div className="ext-layer-title expanded">
+          <i className="fa-solid fa-map-pin" style={{ color: '#1d4ed8' }} />
+          Marcadores
+        </div>
+        <div className="ext-layer-list-wrapper expanded">
+          <div className="ext-layer-list">
+            <div className="ext-layer-item">
+              <div style={{
+                width: '18px', height: '18px', borderRadius: '50%',
+                background: '#1d4ed8', border: '2px solid white', boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+              }} />
+              <span>Estaciones ({mappedStations})</span>
+            </div>
+            <div className="ext-layer-item">
+              <div style={{
+                width: '14px', height: '14px', borderRadius: '50%',
+                background: '#f97316', border: '2px solid white', boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+              }} />
+              <span>Tramos ({mappedSections})</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="ext-layer-group" style={{ marginTop: '14px' }}>
+        <div className="ext-layer-title expanded">
+          <i className="fa-solid fa-layer-group" style={{ color: '#3b82f6' }} />
+          Capas Base
+        </div>
+        <div className="ext-layer-list-wrapper expanded">
+          <div className="ext-layer-list">
+            <div className="ext-layer-item"><span>OpenStreetMap (Estándar)</span></div>
+            <div className="ext-layer-item"><span>Topográfico</span></div>
+            <div className="ext-layer-item"><span>Satélite (Esri)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="ext-stats-card" style={{ marginTop: '18px' }}>
+        <p style={{ margin: '0 0 6px' }}><strong>Último registro:</strong></p>
+        <p style={{ margin: 0, color: '#64748b', fontSize: '0.88rem' }}>{lastRecord}</p>
+      </div>
+
+      {missingEntities.length > 0 && (
+        <div style={{ marginTop: '18px' }}>
+          <div style={{
+            fontSize: '0.82rem', fontWeight: 700, color: '#b66b00',
+            marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.4px'
+          }}>
+            Pendientes de georref. ({missingEntities.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {missingEntities.slice(0, 5).map((ent) => (
+              <div key={ent.id} style={{
+                padding: '8px 10px', borderRadius: '8px', background: '#fff7e8',
+                border: '1px solid rgba(217,151,18,0.18)', fontSize: '0.82rem', color: '#8a6521'
+              }}>
+                <strong style={{ display: 'block', marginBottom: '2px' }}>{ent.nombre || ent.id}</strong>
+                <span>{ent.ubicacion || 'Ubicación no registrada'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  </aside>
+);
+
+/* ── Main Component ── */
 const TraficoV2External = ({ projectName, dataset, isLoading, error, onBack, onSwitchMode }) => {
-  const [activeTopTab, setActiveTopTab] = useState('resumen');
-  const [activeSubTab, setActiveSubTab] = useState(defaultExternalSubtab.resumen);
+  const [leftOpen, setLeftOpen] = useState(false);
+  const [rightOpen, setRightOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [filterType, setFilterType] = useState('all');
 
   const stations = useMemo(() => enrichEntitiesWithMapData(dataset.stations), [dataset.stations]);
   const sections = useMemo(() => enrichEntitiesWithMapData(dataset.sections), [dataset.sections]);
 
-  const currentSubTabs = useMemo(() => {
-    if (activeTopTab === 'procesamiento') return PROCESSING_SUBTABS;
-    if (activeTopTab === 'reporte') return REPORT_SUBTABS;
-    return EXTERNAL_SUMMARY_SUBTABS;
-  }, [activeTopTab]);
-
-  const handleTopTabChange = (nextTopTab) => {
-    setActiveTopTab(nextTopTab);
-    setActiveSubTab(defaultExternalSubtab[nextTopTab]);
-  };
-
-  const modeOptions = [
-    {
-      id: 'internal',
-      label: 'Gestión Interna',
-      active: false,
-      onClick: onSwitchMode
-    },
-    {
-      id: 'external',
-      label: 'Vista Externa',
-      active: true,
-      onClick: onSwitchMode
+  const filteredStations = useMemo(() => {
+    if (filterType === 'section') return [];
+    let result = stations;
+    if (searchText) {
+      const lower = searchText.toLowerCase();
+      result = result.filter((s) =>
+        (s.nombre || '').toLowerCase().includes(lower) ||
+        (s.ubicacion || '').toLowerCase().includes(lower)
+      );
     }
-  ];
+    return result;
+  }, [stations, filterType, searchText]);
 
-  const filteredData = useMemo(() => {
-    if (activeTopTab === 'resumen') {
-      if (activeSubTab === 'estaciones') {
-        return {
-          stations,
-          sections: [],
-          mapTitle: 'Mapa de estaciones de control',
-          mapDescription: 'Vista pública de los puntos de control disponibles para lectura territorial.'
-        };
-      }
-
-      if (activeSubTab === 'tramos') {
-        return {
-          stations: [],
-          sections,
-          mapTitle: 'Mapa de tramos homogéneos',
-          mapDescription: 'Vista espacial de los segmentos priorizados para seguimiento vial.'
-        };
-      }
-
-      return {
-        stations,
-        sections,
-        mapTitle: 'Panorama general del proyecto',
-        mapDescription: 'Visor geográfico principal con estaciones, tramos y cobertura del proyecto.'
-      };
+  const filteredSections = useMemo(() => {
+    if (filterType === 'station') return [];
+    let result = sections;
+    if (searchText) {
+      const lower = searchText.toLowerCase();
+      result = result.filter((s) =>
+        (s.nombre || '').toLowerCase().includes(lower) ||
+        (s.ubicacion || '').toLowerCase().includes(lower)
+      );
     }
+    return result;
+  }, [sections, filterType, searchText]);
 
-    if (activeTopTab === 'procesamiento') {
-      const moduleConfig = MODULE_CONFIG[activeSubTab];
-      const stationRows = stations.filter((item) => getEntityModuleAssets(item, activeSubTab).length > 0);
-      const sectionRows = sections.filter((item) => getEntityModuleAssets(item, activeSubTab).length > 0);
+  const mappedStations = filteredStations.filter((s) => s.mapPosition);
+  const mappedSections = filteredSections.filter((s) => s.mapPosition);
+  const allMapped = [...mappedStations, ...mappedSections];
 
-      return {
-        stations: moduleConfig?.entityType === 'station' ? stationRows : [],
-        sections: moduleConfig?.entityType === 'section' ? sectionRows : [],
-        mapTitle: `${moduleConfig?.label || 'Módulo'} en mapa`,
-        mapDescription: 'Visualiza solo las entidades con evidencias cargadas y disponibles en NAS para este módulo.'
-      };
-    }
+  const missingEntities = useMemo(
+    () => [...stations, ...sections].filter((e) => !e.mapPosition),
+    [stations, sections]
+  );
 
-    const reportModuleKey = REPORT_TAB_TO_MODULE[activeSubTab];
-    const moduleConfig = MODULE_CONFIG[reportModuleKey];
-    const toRank = moduleConfig?.entityType === 'section' ? sections : stations;
-    const rankedEntities = [...toRank]
-      .map((entity) => ({
-        ...entity,
-        reportStats: getEntityStats(entity, reportModuleKey)
-      }))
-      .filter((entity) => entity.reportStats.totalUploads > 0)
-      .sort((a, b) => {
-        if (b.reportStats.totalUploads !== a.reportStats.totalUploads) {
-          return b.reportStats.totalUploads - a.reportStats.totalUploads;
-        }
-        return b.reportStats.fileCount + b.reportStats.excelCount - (a.reportStats.fileCount + a.reportStats.excelCount);
-      });
+  const totalRecords = useMemo(
+    () => [...stations, ...sections].reduce((acc, e) => acc + (e.totalUploads || 0), 0),
+    [stations, sections]
+  );
 
-    return {
-      stations: moduleConfig?.entityType === 'station' ? rankedEntities.slice(0, 8) : [],
-      sections: moduleConfig?.entityType === 'section' ? rankedEntities.slice(0, 8) : [],
-      mapTitle: `Lectura territorial de ${moduleConfig?.label || 'reporte'}`,
-      mapDescription: 'Visor espacial de las entidades con mayor soporte documental y analítico.'
-    };
-  }, [activeSubTab, activeTopTab, sections, stations]);
+  const lastRecord = useMemo(() => {
+    const dates = [...stations, ...sections]
+      .map((e) => e.lastUpload)
+      .filter(Boolean)
+      .sort((a, b) => new Date(b) - new Date(a));
+    return formatDate(dates[0]);
+  }, [stations, sections]);
 
-  const topStation = [...filteredData.stations].sort((a, b) => b.totalUploads - a.totalUploads)[0] || null;
-  const topSection = [...filteredData.sections].sort((a, b) => b.totalUploads - a.totalUploads)[0] || null;
+  const mapBounds = useMemo(() => {
+    if (allMapped.length === 0) return null;
+    const latLngs = allMapped.map((e) => [e.mapPosition.lat, e.mapPosition.lng]);
+    return L.latLngBounds(latLngs);
+  }, [allMapped]);
 
-  const renderBody = () => {
-    if (isLoading) return <div className="traffic-v2-loader">Cargando vista externa de Tráfico V2...</div>;
-    if (error) return <div className="traffic-v2-error-box">{error}</div>;
+  const center = allMapped.length > 0
+    ? [allMapped[0].mapPosition.lat, allMapped[0].mapPosition.lng]
+    : [-12.5, -72.5];
 
-    return (
-      <div className="traffic-v2-grid">
-        <div className="traffic-v2-main-column traffic-v2-span-8">
-          <TrafficExternalMap
-            stations={filteredData.stations}
-            sections={filteredData.sections}
-            mode={activeTopTab}
-            title={filteredData.mapTitle}
-            description={filteredData.mapDescription}
-            summaryCards={[
-              {
-                label: 'Estaciones',
-                value: filteredData.stations.length
-              },
-              {
-                label: 'Tramos',
-                value: filteredData.sections.length
-              },
-              {
-                label: 'Cobertura',
-                value: `${dataset.summary.moduleCoverage}/6`
-              },
-              {
-                label: 'Líder',
-                value: topStation?.nombre || topSection?.nombre || 'Sin data'
-              }
-            ]}
-          />
-
-          <section className="traffic-v2-panel">
-            <div className="traffic-v2-panel-header">
-              <div>
-                <h3>Indicadores territoriales</h3>
-                <p>Lectura rápida para priorizar revisión espacial y cobertura del proyecto.</p>
-              </div>
-            </div>
-
-            <div className="traffic-v2-kpi-grid traffic-v2-kpi-grid-compact">
-              <TrafficSummaryCard label="Estaciones visibles" value={filteredData.stations.length} />
-              <TrafficSummaryCard label="Tramos visibles" value={filteredData.sections.length} />
-              <TrafficSummaryCard label="Cobertura" value={`${dataset.summary.moduleCoverage}/6`} />
-              <TrafficSummaryCard label="Entidad líder" value={topStation?.nombre || topSection?.nombre || 'Sin data'} />
-            </div>
-          </section>
-
-          <TrafficMapPanel
-            title={activeTopTab === 'reporte' ? 'Entidades priorizadas en la lectura final' : 'Cobertura visible en la capa'}
-            entities={[...filteredData.stations, ...filteredData.sections].slice(0, 8)}
-            emptyText="No hay entidades visibles para esta selección."
-            description="Resumen corto de las entidades visibles en la capa activa."
-          />
+  if (isLoading) {
+    return ReactDOM.createPortal(
+      <div className="external-view-container">
+        <div className="invvial-loading-overlay" style={{ zIndex: 11000 }}>
+          <div className="loader-spinner-large" />
+          <div className="invvial-loading-text">Cargando Vista Externa de Tráfico V2...</div>
         </div>
-
-        <div className="traffic-v2-sidebar traffic-v2-span-4">
-          <TrafficExternalLegend
-            stations={filteredData.stations}
-            sections={filteredData.sections}
-            activeTopTab={activeTopTab}
-            activeSubTab={currentSubTabs.find((item) => item.id === activeSubTab)?.label || activeSubTab}
-          />
-
-          <TrafficInsightPanel className="traffic-v2-sidebar-card" stations={filteredData.stations} sections={filteredData.sections} />
-        </div>
-      </div>
+      </div>,
+      document.body
     );
-  };
+  }
 
-  return (
-    <TraficoV2Layout
-      title="Área de Tráfico"
-      projectName={projectName}
-      topTabs={TOP_LEVEL_TABS}
-      activeTopTab={activeTopTab}
-      onTopTabChange={handleTopTabChange}
-      subTabs={currentSubTabs}
-      activeSubTab={activeSubTab}
-      onSubTabChange={setActiveSubTab}
-      modeLabel="Vista Externa"
-      onBack={onBack}
-      modeOptions={modeOptions}
-    >
-      {renderBody()}
-    </TraficoV2Layout>
+  return ReactDOM.createPortal(
+    <div className="external-view-container">
+      {/* Left Sidebar */}
+      <SidebarLeft
+        isOpen={leftOpen}
+        onClose={() => setLeftOpen(false)}
+        searchText={searchText}
+        onSearchChange={setSearchText}
+        filterType={filterType}
+        onFilterTypeChange={setFilterType}
+        totalStations={stations.length}
+        totalSections={sections.length}
+        totalRecords={totalRecords}
+      />
+
+      {/* Map Area */}
+      <div className="external-map-container">
+        {/* Toggle Left */}
+        <button
+          className="ext-toggle-btn toggle-left"
+          style={{ display: !leftOpen ? 'flex' : 'none' }}
+          onClick={() => setLeftOpen(true)}
+        >
+          <i className="fa-solid fa-bars" />
+        </button>
+
+        {/* Toggle Right */}
+        <button
+          className="ext-toggle-btn"
+          style={{
+            display: !rightOpen ? 'flex' : 'none',
+            right: '20px', top: '20px', position: 'absolute', zIndex: 2000
+          }}
+          onClick={() => setRightOpen(true)}
+        >
+          <i className="fa-solid fa-layer-group" />
+        </button>
+
+        {/* Back Button */}
+        <button className="ext-back-btn" onClick={onBack}>
+          <i className="fa-solid fa-arrow-left" /> Salir / Volver
+        </button>
+
+        {/* Error banner */}
+        {error && (
+          <div style={{
+            position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)',
+            zIndex: 2000, background: '#fee2e2', color: '#991b1b',
+            padding: '10px 20px', borderRadius: '12px', fontWeight: 700,
+            border: '1px solid #fca5a5', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Map */}
+        <MapContainer center={center} zoom={11} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+          <LayersControl position="topright">
+            <LayersControl.BaseLayer checked name="Estándar">
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution="&copy; OpenStreetMap contributors"
+              />
+            </LayersControl.BaseLayer>
+            <LayersControl.BaseLayer name="Topográfico">
+              <TileLayer
+                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+                attribution="&copy; OpenTopoMap"
+              />
+            </LayersControl.BaseLayer>
+            <LayersControl.BaseLayer name="Satélite">
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                attribution="Tiles &copy; Esri"
+              />
+            </LayersControl.BaseLayer>
+          </LayersControl>
+
+          {mapBounds && <FitBounds bounds={mapBounds} />}
+          <CoordsBar />
+
+          {/* Station markers */}
+          {mappedStations.map((entity) => (
+            <Marker
+              key={`station-${entity.id}`}
+              position={[entity.mapPosition.lat, entity.mapPosition.lng]}
+              icon={stationIcon}
+            >
+              <Popup maxWidth={320} minWidth={280}>
+                <StationPopup entity={entity} type="station" />
+              </Popup>
+            </Marker>
+          ))}
+
+          {/* Section markers */}
+          {mappedSections.map((entity) => (
+            <Marker
+              key={`section-${entity.id}`}
+              position={[entity.mapPosition.lat, entity.mapPosition.lng]}
+              icon={sectionIcon}
+            >
+              <Popup maxWidth={320} minWidth={280}>
+                <StationPopup entity={entity} type="section" />
+              </Popup>
+            </Marker>
+          ))}
+
+          {/* Section polyline */}
+          {mappedSections.length > 1 && (
+            <Polyline
+              positions={mappedSections.map((s) => [s.mapPosition.lat, s.mapPosition.lng])}
+              pathOptions={{ color: '#f97316', weight: 3, opacity: 0.65, dashArray: '10 8' }}
+            />
+          )}
+        </MapContainer>
+      </div>
+
+      {/* Right Sidebar */}
+      <SidebarRight
+        isOpen={rightOpen}
+        onClose={() => setRightOpen(false)}
+        mappedStations={mappedStations.length}
+        mappedSections={mappedSections.length}
+        missingEntities={missingEntities}
+        lastRecord={lastRecord}
+      />
+    </div>,
+    document.body
   );
 };
 

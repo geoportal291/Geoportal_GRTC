@@ -19,6 +19,9 @@ import './DisenoGeometrico.css';
 const ACCEPTED_FILE_TYPES = '.zip,.rar,.kml,.kmz';
 const AUTO_SAVE_DELAY_MS = 1500;
 const DG_MAX_MAP_ZOOM = 30;
+const DG_TABLE_PAGE_SIZE = 25;
+const DG_POINT_LABEL_MAX_VISIBLE = 140;
+const DG_POINT_LABEL_MIN_ZOOM = 16;
 const MAPTILER_KEY = process.env.REACT_APP_MAPTILER_KEY || '';
 const BASEMAPS = {
   street: {
@@ -30,6 +33,7 @@ const BASEMAPS = {
     maxNativeZoom: 19,
     maxZoom: DG_MAX_MAP_ZOOM
   },
+  /*
   ortho: {
     key: 'ortho',
     label: 'Ortofoto',
@@ -42,7 +46,7 @@ const BASEMAPS = {
       : 'Tiles &copy; Esri',
     maxNativeZoom: MAPTILER_KEY ? 22 : 19,
     maxZoom: DG_MAX_MAP_ZOOM
-  },
+  },*/
   hybrid: {
     key: 'hybrid',
     label: 'Hibrido',
@@ -77,6 +81,7 @@ const ATTRIBUTE_COLOR_PALETTE = [
   '#4f46e5',
   '#65a30d'
 ];
+const DG_SELECTION_HIGHLIGHT_CANDIDATES = ['#111827', '#ff00a8', '#00c2ff', '#facc15', '#fb7185', '#14b8a6'];
 const ATTRIBUTE_COLOR_OPTIONS = [
   { value: 'descript', label: 'Descript', aliases: ['descript', 'descrip', 'description', 'descripcion'] },
   { value: 'offset', label: 'Offset', aliases: ['offset', 'offsets'] },
@@ -155,6 +160,25 @@ const getRemoteFileExtension = (value) => {
 
 const parseKmlTextToFeatureCollection = (xmlText) =>
   ensureDisplayFeatureCollection(kml(new DOMParser().parseFromString(typeof xmlText === 'string' ? xmlText : '', 'text/xml')));
+
+const formatFileSize = (bytes) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / (1024 ** unitIndex);
+
+  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
+};
+
+const formatRemainingTime = (seconds) => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 'Calculando...';
+  if (seconds < 60) return `${Math.ceil(seconds)} s`;
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.ceil(seconds % 60);
+  return `${minutes} min ${remainingSeconds.toString().padStart(2, '0')} s`;
+};
 
 const canParseStoredKmlText = (value) => {
   if (typeof value !== 'string') return false;
@@ -251,6 +275,100 @@ const getFeatureCount = (layer) => {
   return Array.isArray(geojson.features) ? geojson.features.length : 0;
 };
 
+const getLayerGroupKey = (tabName) => String(tabName || '').replace(/__part_\d+$/i, '');
+
+const getLayerGroupLabel = (layer) =>
+  String(layer?.file_name || layer?.tab_name || 'Sin nombre')
+    .replace(/\s*\(Parte\s+\d+\/\d+\)\s*$/i, '')
+    .trim();
+
+const getPointLabelConfig = (collection) => {
+  const meta = collection?.dg_meta && typeof collection.dg_meta === 'object' ? collection.dg_meta : {};
+  const fields = Array.isArray(meta.pointLabelFields)
+    ? meta.pointLabelFields.filter(Boolean)
+    : (meta.pointLabelField ? [meta.pointLabelField] : []);
+  const modes = Array.isArray(meta.pointLabelModes)
+    ? meta.pointLabelModes.filter(Boolean)
+    : (meta.pointLabelMode ? [meta.pointLabelMode] : ['none']);
+
+  return {
+    field: fields[0] || '',
+    mode: modes[0] || 'none',
+    fields,
+    modes
+  };
+};
+
+const isPointFeature = (feature) => feature?.geometry?.type?.includes('Point');
+const isLineFeature = (feature) => feature?.geometry?.type?.includes('Line');
+
+const countPointFeatures = (collection) =>
+  Array.isArray(collection?.features)
+    ? collection.features.reduce((total, feature) => (
+      isPointFeature(feature) ? total + 1 : total
+    ), 0)
+    : 0;
+
+const resolveEffectivePointLabelConfig = (collection, labelConfig, mapZoom) => {
+  if (!labelConfig?.fields?.length || !labelConfig?.modes?.length || labelConfig.modes.includes('none')) {
+    return labelConfig;
+  }
+
+  const pointCount = countPointFeatures(collection);
+  const shouldReduceLabels = pointCount > DG_POINT_LABEL_MAX_VISIBLE && mapZoom < DG_POINT_LABEL_MIN_ZOOM;
+
+  if (!shouldReduceLabels || labelConfig.modes.includes('tagged')) {
+    return labelConfig;
+  }
+
+  return {
+    ...labelConfig,
+    mode: 'selected',
+    modes: labelConfig.modes.includes('hover') ? ['selected', 'hover'] : ['selected']
+  };
+};
+
+const resolveLabelValuesFromFields = (feature, fields) => {
+  if (!Array.isArray(fields) || !fields.length) return [];
+
+  const properties = feature?.properties || {};
+  return fields
+    .map((field) => {
+      const rawValue = properties[field];
+      if (rawValue === null || rawValue === undefined || rawValue === '') return '';
+      return String(rawValue);
+    })
+    .filter(Boolean);
+};
+
+const resolvePointLabelText = (feature, labelConfig, isSelected) => {
+  if (!isPointFeature(feature)) return '';
+  const values = resolveLabelValuesFromFields(feature, labelConfig?.fields);
+  if (!values.length) return '';
+
+  if (labelConfig.modes?.includes('all')) {
+    return values.join(' | ');
+  }
+
+  if (labelConfig.modes?.includes('selected') && isSelected) {
+    return values.join(' | ');
+  }
+
+  if (labelConfig.modes?.includes('tagged') && (feature?.properties || {}).dg_label_pinned) {
+    return values.join(' | ');
+  }
+
+  return '';
+};
+
+const resolveLineLabelText = (feature, labelConfig, isSelected) => {
+  if (!isLineFeature(feature)) return '';
+  if (!isSelected) return '';
+
+  const values = resolveLabelValuesFromFields(feature, labelConfig?.fields);
+  return values.join(' | ');
+};
+
 const normalizeAttributeToken = (value) =>
   String(value || '')
     .normalize('NFD')
@@ -284,6 +402,26 @@ const getDefaultStyleByType = (featureType) => {
   }
 
   return { stroke: '#22c55e', 'stroke-width': 3, 'stroke-opacity': 1, fill: '#86efac', 'fill-opacity': 0.35 };
+};
+
+const normalizeColorToken = (value) => String(value || '').trim().toLowerCase();
+
+const resolveSelectionHighlightColor = (collection) => {
+  const usedColors = new Set();
+
+  if (Array.isArray(collection?.features)) {
+    collection.features.forEach((feature) => {
+      const properties = feature?.properties || {};
+      if (properties.stroke) {
+        usedColors.add(normalizeColorToken(properties.stroke));
+      }
+      if (properties.fill) {
+        usedColors.add(normalizeColorToken(properties.fill));
+      }
+    });
+  }
+
+  return DG_SELECTION_HIGHLIGHT_CANDIDATES.find((color) => !usedColors.has(normalizeColorToken(color))) || '#111827';
 };
 
 const syncCircleProperties = (feature) => {
@@ -355,13 +493,21 @@ const normalizeFeatureCollection = (value) => {
   return normalizedCollection;
 };
 
-const createPointIcon = (feature, isSelected) => {
+const createPointIcon = (feature, isSelected, labelConfig = null) => {
   const color = feature?.properties?.fill || feature?.properties?.stroke || '#ef4444';
+  const markerSize = Math.max(8, Number(feature?.properties?.dg_marker_size) || 14);
+  const selectedBorder = isSelected ? 4 : 3;
+  const iconSize = markerSize + selectedBorder * 2;
+  const iconAnchor = iconSize / 2;
+  const labelText = resolvePointLabelText(feature, labelConfig, isSelected);
   return L.divIcon({
     className: 'dg-point-icon',
-    html: `<span style="background:${color}; border:${isSelected ? '4px' : '3px'} solid #ffffff; box-shadow:${isSelected ? '0 0 0 4px rgba(37,99,235,0.22)' : '0 8px 16px rgba(15,23,42,0.22)'};"></span>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10]
+    html: `<div class="dg-point-icon-body">
+      <span style="width:${markerSize}px; height:${markerSize}px; background:${color}; border:${selectedBorder}px solid #ffffff; box-shadow:${isSelected ? '0 0 0 4px rgba(37,99,235,0.22)' : '0 8px 16px rgba(15,23,42,0.22)'};"></span>
+      ${labelText ? `<em class="dg-point-icon-label">${labelText}</em>` : ''}
+    </div>`,
+    iconSize: [Math.max(iconSize, 84), labelText ? iconSize + 24 : iconSize],
+    iconAnchor: [iconAnchor, iconAnchor]
   });
 };
 
@@ -398,38 +544,85 @@ const getProjectReferenceStyle = (feature) => {
   };
 };
 
-const getVectorStyle = (feature, isSelected) => {
+const getVectorStyle = (feature, isSelected, selectionHighlightColor = '#111827') => {
   const properties = feature?.properties || {};
-  const strokeWidth = Number(properties['stroke-width']) || 3;
+  const strokeWidth = Math.max(1, Number(properties['stroke-width']) || 3);
   const strokeOpacity = Number(properties['stroke-opacity'] ?? 1);
   const fillOpacity = Number(properties['fill-opacity'] ?? 0.35);
+  const isSelectedLine = isSelected && isLineFeature(feature);
 
   return {
-    color: properties.stroke || '#1e88e5',
-    weight: isSelected ? strokeWidth + 2 : strokeWidth,
+    color: isSelectedLine ? selectionHighlightColor : (properties.stroke || '#1e88e5'),
+    weight: isSelected ? Math.max(strokeWidth + (isSelectedLine ? 2 : 1), 3) : strokeWidth,
     opacity: isSelected ? 1 : strokeOpacity,
     fillColor: properties.fill || properties.stroke || '#86efac',
     fillOpacity: feature?.geometry?.type?.includes('Polygon') ? (isSelected ? Math.min(fillOpacity + 0.12, 0.7) : fillOpacity) : 0,
-    dashArray: isSelected ? '8 6' : null
+    dashArray: isSelectedLine ? '12 8' : (isSelected ? '8 6' : null)
   };
 };
 
-const applyLayerStyle = (layer, feature, isSelected) => {
+const applyLayerStyle = (layer, feature, isSelected, labelConfig = null, selectionHighlightColor = '#111827') => {
   if (!layer || !feature) return;
 
   if (typeof layer.setStyle === 'function') {
-    layer.setStyle(getVectorStyle(feature, isSelected));
+    layer.setStyle(getVectorStyle(feature, isSelected, selectionHighlightColor));
   }
 
   if (typeof layer.setIcon === 'function' && typeof layer.getLatLng === 'function') {
-    layer.setIcon(createPointIcon(feature, isSelected));
+    layer.setIcon(createPointIcon(feature, isSelected, labelConfig));
     if (typeof layer.setZIndexOffset === 'function') {
       layer.setZIndexOffset(isSelected ? 1000 : 0);
+    }
+
+    const hoverLabelText = labelConfig?.modes?.includes('hover')
+      ? resolveLabelValuesFromFields(feature, labelConfig?.fields).join(' | ')
+      : '';
+
+    if (hoverLabelText) {
+      const tooltipOptions = {
+        permanent: false,
+        direction: 'top',
+        className: 'dg-point-hover-tooltip',
+        opacity: 0.96
+      };
+
+      if (layer.getTooltip()) {
+        layer.setTooltipContent(hoverLabelText);
+      } else {
+        layer.bindTooltip(hoverLabelText, tooltipOptions);
+      }
+    } else if (layer.getTooltip()) {
+      layer.closeTooltip();
+      layer.unbindTooltip();
+    }
+  }
+
+  if (typeof layer.bindTooltip === 'function' && !layer.getLatLng && isLineFeature(feature)) {
+    const lineLabelText = resolveLineLabelText(feature, labelConfig, isSelected);
+
+    if (lineLabelText) {
+      const tooltipOptions = {
+        permanent: true,
+        direction: 'center',
+        className: 'dg-line-label-tooltip',
+        opacity: 0.96
+      };
+
+      if (layer.getTooltip()) {
+        layer.setTooltipContent(lineLabelText);
+      } else {
+        layer.bindTooltip(lineLabelText, tooltipOptions);
+      }
+
+      layer.openTooltip();
+    } else if (layer.getTooltip()) {
+      layer.closeTooltip();
+      layer.unbindTooltip();
     }
   }
 
   if (typeof layer.eachLayer === 'function' && !layer.getLatLng && !layer.setStyle) {
-    layer.eachLayer((childLayer) => applyLayerStyle(childLayer, feature, isSelected));
+    layer.eachLayer((childLayer) => applyLayerStyle(childLayer, feature, isSelected, labelConfig, selectionHighlightColor));
   }
 };
 
@@ -546,6 +739,16 @@ const findFeatureAttributeEntry = (feature, aliases = []) => {
 const getFeatureAttributeValue = (feature, aliases = []) => {
   const match = findFeatureAttributeEntry(feature, aliases);
   return match ? match[1] : '';
+};
+
+const getFeatureAttributeValueByRule = (feature, selectedLayerColorOption) => {
+  if (!selectedLayerColorOption) return '';
+
+  if ('aliases' in selectedLayerColorOption) {
+    return getFeatureAttributeValue(feature, selectedLayerColorOption.aliases);
+  }
+
+  return feature?.properties?.[selectedLayerColorOption.key] || '';
 };
 
 const featureToPopupHtml = (feature) => {
@@ -721,7 +924,6 @@ const MaptilerTerrainMap = React.memo(function MaptilerTerrainMap({
           'circle-stroke-color': '#ffffff',
           'circle-stroke-width': 1.5
         });
-
         ensureLayer('dg-project-reference-line', 'dg-project-reference', 'line', {
           'line-color': '#f97316',
           'line-width': 2.5,
@@ -732,6 +934,8 @@ const MaptilerTerrainMap = React.memo(function MaptilerTerrainMap({
           activeGeojson,
           showProjectReference ? projectReferenceGeojson : null
         );
+
+
 
         if (boundsCollection.features.length) {
           const [minX, minY, maxX, maxY] = turf.bbox(boundsCollection);
@@ -762,7 +966,9 @@ const MaptilerTerrainMap = React.memo(function MaptilerTerrainMap({
   }, []);
 
   useEffect(() => {
+
     const map = mapRef.current;
+
     if (!map || !map.isStyleLoaded()) return;
 
     const activeData = createMaptilerDataset(activeGeojson);
@@ -829,6 +1035,71 @@ function MapLifecycle({ mapRef, measurementLayerRef }) {
       }
     };
   }, [map, mapRef, measurementLayerRef]);
+
+  useEffect(() => {
+    if (!map) return undefined;
+
+    const container = map.getContainer();
+    let frameId = null;
+    let timeoutId = null;
+
+    const syncMapSize = () => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+
+      frameId = requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false, animate: false });
+      });
+    };
+
+    syncMapSize();
+    timeoutId = window.setTimeout(syncMapSize, 280);
+
+    let resizeObserver = null;
+    if (typeof ResizeObserver !== 'undefined' && container) {
+      resizeObserver = new ResizeObserver(() => {
+        syncMapSize();
+      });
+      resizeObserver.observe(container);
+      if (container.parentElement) {
+        resizeObserver.observe(container.parentElement);
+      }
+    }
+
+    window.addEventListener('resize', syncMapSize);
+
+    return () => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+      window.removeEventListener('resize', syncMapSize);
+    };
+  }, [map]);
+
+  return null;
+}
+
+function MapZoomTracker({ onZoomChange }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return undefined;
+
+    const syncZoom = () => onZoomChange(map.getZoom());
+    syncZoom();
+    map.on('zoomend', syncZoom);
+
+    return () => {
+      map.off('zoomend', syncZoom);
+    };
+  }, [map, onZoomChange]);
 
   return null;
 }
@@ -1145,11 +1416,13 @@ export default function DisenoGeometrico() {
   const [visibleTabs, setVisibleTabs] = useState({});
   const [selectedTabName, setSelectedTabName] = useState('');
   const [selectedFeatureId, setSelectedFeatureId] = useState('');
+  const [featureTablePage, setFeatureTablePage] = useState(1);
   const [activeTool, setActiveTool] = useState('select');
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadName, setUploadName] = useState('');
   const [uploadFile, setUploadFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [newLayerName, setNewLayerName] = useState('');
   const [saveStateByTab, setSaveStateByTab] = useState({});
   const [measurementSummary, setMeasurementSummary] = useState({
@@ -1157,6 +1430,8 @@ export default function DisenoGeometrico() {
     areaHa: 0,
     perimeterKm: 0
   });
+  const [mapZoom, setMapZoom] = useState(6);
+  const [manualColorAttributeInput, setManualColorAttributeInput] = useState('');
   const [baseMapKey, setBaseMapKey] = useState('street');
   const [isThreeDMode, setIsThreeDMode] = useState(false);
   const [showProjectReference, setShowProjectReference] = useState(false);
@@ -1187,6 +1462,10 @@ export default function DisenoGeometrico() {
   useEffect(() => {
     selectedFeatureIdRef.current = selectedFeatureId;
   }, [selectedFeatureId]);
+
+  useEffect(() => {
+    setFeatureTablePage(1);
+  }, [selectedTabName]);
 
   useEffect(() => {
     setPageTitle('Diseno Geometrico');
@@ -1234,10 +1513,49 @@ export default function DisenoGeometrico() {
     () => layers.find((layer) => layer.tab_name === selectedTabName) || null,
     [layers, selectedTabName]
   );
+  const groupedLayers = useMemo(() => {
+    const groups = new Map();
+
+    layers.forEach((layer) => {
+      const groupKey = getLayerGroupKey(layer.tab_name);
+      const currentGroup = groups.get(groupKey) || {
+        key: groupKey,
+        label: getLayerGroupLabel(layer),
+        layers: [],
+        totalFeatures: 0,
+        swatchColor: getLayerSwatchColor(layer)
+      };
+
+      currentGroup.layers.push(layer);
+      currentGroup.totalFeatures += getFeatureCount(layer);
+      groups.set(groupKey, currentGroup);
+    });
+
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      isSplit: group.layers.length > 1
+    }));
+  }, [layers]);
+  const selectedLayerGroupKey = useMemo(
+    () => getLayerGroupKey(selectedTabName),
+    [selectedTabName]
+  );
 
   const activeFeatureCollection = useMemo(
     () => normalizeFeatureCollection(selectedLayer?.geojson_data || EMPTY_FEATURE_COLLECTION),
     [selectedLayer]
+  );
+  const pointLabelConfig = useMemo(
+    () => getPointLabelConfig(activeFeatureCollection),
+    [activeFeatureCollection]
+  );
+  const effectivePointLabelConfig = useMemo(
+    () => resolveEffectivePointLabelConfig(activeFeatureCollection, pointLabelConfig, mapZoom),
+    [activeFeatureCollection, mapZoom, pointLabelConfig]
+  );
+  const selectionHighlightColor = useMemo(
+    () => resolveSelectionHighlightColor(activeFeatureCollection),
+    [activeFeatureCollection]
   );
 
   const activeFeatures = useMemo(
@@ -1249,6 +1567,14 @@ export default function DisenoGeometrico() {
     () => activeFeatures.find((feature) => getFeatureId(feature) === selectedFeatureId) || null,
     [activeFeatures, selectedFeatureId]
   );
+  const totalFeatureTablePages = useMemo(
+    () => Math.max(1, Math.ceil(activeFeatures.length / DG_TABLE_PAGE_SIZE)),
+    [activeFeatures.length]
+  );
+  const paginatedActiveFeatures = useMemo(() => {
+    const startIndex = (featureTablePage - 1) * DG_TABLE_PAGE_SIZE;
+    return activeFeatures.slice(startIndex, startIndex + DG_TABLE_PAGE_SIZE);
+  }, [activeFeatures, featureTablePage]);
 
   const selectedFeatureMetrics = useMemo(() => getFeatureMetrics(selectedFeature), [selectedFeature]);
   const selectedFeatureCoordinates = useMemo(() => getFeatureCoordinates(selectedFeature), [selectedFeature]);
@@ -1256,6 +1582,7 @@ export default function DisenoGeometrico() {
   const selectedFeatureSupportsFill = selectedFeatureType === 'polygon' || selectedFeatureType === 'rectangle' || selectedFeatureType === 'circle';
   const selectedFeatureSourceAttributes = useMemo(() => getFeatureSourceAttributes(selectedFeature), [selectedFeature]);
   const selectedLayerColorRule = selectedLayer?.geojson_data?.dg_meta?.colorByAttribute || '';
+  const selectedLayerColorKey = selectedLayer?.geojson_data?.dg_meta?.colorByAttributeKey || '';
   const selectedLayerStatus = selectedTabName ? (saveStateByTab[selectedTabName] || 'saved') : 'saved';
   const activeFeatureSummary = useMemo(() => {
     return activeFeatures.reduce((summary, feature) => {
@@ -1271,6 +1598,35 @@ export default function DisenoGeometrico() {
 
       return summary;
     }, { points: 0, lines: 0, areas: 0 });
+  }, [activeFeatures]);
+  const availableAttributeFields = useMemo(() => {
+    const keyMap = new Map();
+
+    activeFeatures.forEach((feature) => {
+      getFeatureSourceAttributes(feature).forEach(([key, value]) => {
+        if (!keyMap.has(key)) {
+          keyMap.set(key, {
+            key,
+            count: 0,
+            distinctValues: new Set()
+          });
+        }
+
+        const item = keyMap.get(key);
+        item.count += 1;
+        if (value !== null && value !== undefined && value !== '') {
+          item.distinctValues.add(String(value));
+        }
+      });
+    });
+
+    return Array.from(keyMap.values())
+      .map((item) => ({
+        key: item.key,
+        count: item.count,
+        valueCount: item.distinctValues.size
+      }))
+      .sort((left, right) => left.key.localeCompare(right.key, 'es'));
   }, [activeFeatures]);
   const availableAttributeColorOptions = useMemo(() => ATTRIBUTE_COLOR_OPTIONS.map((option) => {
     const actualKey = activeFeatures
@@ -1293,24 +1649,81 @@ export default function DisenoGeometrico() {
     };
   }).filter(Boolean), [activeFeatures]);
   const selectedLayerColorOption = useMemo(
-    () => availableAttributeColorOptions.find((option) => option.value === selectedLayerColorRule) || null,
-    [availableAttributeColorOptions, selectedLayerColorRule]
+    () => (
+      availableAttributeColorOptions.find((option) => option.actualKey === selectedLayerColorKey)
+      || availableAttributeFields.find((option) => option.key === selectedLayerColorKey)
+      || null
+    ),
+    [availableAttributeFields, availableAttributeColorOptions, selectedLayerColorKey]
+  );
+  const selectedLayerColorPalette = useMemo(
+    () => (
+      selectedLayer?.geojson_data?.dg_meta?.colorByAttributePalette
+        && typeof selectedLayer.geojson_data.dg_meta.colorByAttributePalette === 'object'
+        ? selectedLayer.geojson_data.dg_meta.colorByAttributePalette
+        : {}
+    ),
+    [selectedLayer]
+  );
+  const selectedLayerLegendEnabledOnMap = Boolean(selectedLayer?.geojson_data?.dg_meta?.showLegendOnMap);
+  const selectedLayerLegendVisibleValues = useMemo(
+    () => Array.isArray(selectedLayer?.geojson_data?.dg_meta?.visibleLegendValues)
+      ? selectedLayer.geojson_data.dg_meta.visibleLegendValues.map((value) => String(value))
+      : [],
+    [selectedLayer]
   );
   const selectedLayerColorLegend = useMemo(() => {
     if (!selectedLayerColorOption) return [];
 
     const distinctValues = [...new Set(
       activeFeatures
-        .map((feature) => getFeatureAttributeValue(feature, selectedLayerColorOption.aliases))
+        .map((feature) => getFeatureAttributeValueByRule(feature, selectedLayerColorOption))
         .filter((value) => value !== null && value !== undefined && value !== '')
         .map((value) => String(value))
     )];
 
     return distinctValues.map((value, index) => ({
       value,
-      color: ATTRIBUTE_COLOR_PALETTE[index % ATTRIBUTE_COLOR_PALETTE.length]
+      color: selectedLayerColorPalette[value] || ATTRIBUTE_COLOR_PALETTE[index % ATTRIBUTE_COLOR_PALETTE.length]
     }));
-  }, [activeFeatures, selectedLayerColorOption]);
+  }, [activeFeatures, selectedLayerColorOption, selectedLayerColorPalette]);
+  const selectedPresetColorRule = useMemo(
+    () => availableAttributeColorOptions.some((option) => option.value === selectedLayerColorRule) ? selectedLayerColorRule : '',
+    [availableAttributeColorOptions, selectedLayerColorRule]
+  );
+  const visibleLegendItemsOnMap = useMemo(() => {
+    if (!selectedLayerLegendEnabledOnMap) return [];
+
+    const allowedValues = selectedLayerLegendVisibleValues.length
+      ? new Set(selectedLayerLegendVisibleValues)
+      : new Set(selectedLayerColorLegend.map((item) => String(item.value)));
+
+    return selectedLayerColorLegend.filter((item) => allowedValues.has(String(item.value)));
+  }, [selectedLayerColorLegend, selectedLayerLegendEnabledOnMap, selectedLayerLegendVisibleValues]);
+
+  useEffect(() => {
+    setManualColorAttributeInput(selectedLayerColorKey || '');
+  }, [selectedLayerColorKey]);
+  const availablePointLabelFields = useMemo(() => {
+    const keyMap = new Map();
+
+    activeFeatures
+      .filter((feature) => isPointFeature(feature) || isLineFeature(feature))
+      .forEach((feature) => {
+        getFeatureSourceAttributes(feature).forEach(([key]) => {
+          if (!keyMap.has(key)) {
+            keyMap.set(key, {
+              key,
+              count: 1
+            });
+          } else {
+            keyMap.get(key).count += 1;
+          }
+        });
+      });
+
+    return Array.from(keyMap.values()).sort((left, right) => left.key.localeCompare(right.key, 'es'));
+  }, [activeFeatures]);
   const activeBaseMap = BASEMAPS[baseMapKey] || BASEMAPS.street;
   const isThreeDToolLocked = isThreeDMode;
   const projectReferenceHasFeatures = useMemo(
@@ -1355,7 +1768,11 @@ export default function DisenoGeometrico() {
 
   const fitBounds = useCallback((bounds) => {
     if (bounds && mapRef.current) {
-      mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      mapRef.current.fitBounds(bounds, {
+        padding: [50, 50],
+        animate: true,
+        duration: 0.55
+      });
     }
   }, []);
 
@@ -1364,8 +1781,19 @@ export default function DisenoGeometrico() {
     if (!feature) return;
 
     const bounds = getLayerBounds(feature);
-    if (bounds) {
-      fitBounds(bounds);
+    if (bounds && mapRef.current) {
+      const map = mapRef.current;
+
+      if (typeof map.flyToBounds === 'function') {
+        map.flyToBounds(bounds, {
+          padding: [72, 72],
+          duration: 0.65,
+          maxZoom: isLineFeature(feature) ? Math.max(map.getZoom(), 17) : undefined
+        });
+      } else {
+        fitBounds(bounds);
+      }
+
       return;
     }
 
@@ -1393,11 +1821,12 @@ export default function DisenoGeometrico() {
     leafletLayer.on('click', () => {
       setSelectedFeatureId(featureId);
       setActiveTool('select');
+      focusFeatureById(featureId);
     });
 
-    applyLayerStyle(leafletLayer, normalizedFeature, featureId === selectedFeatureIdRef.current);
+    applyLayerStyle(leafletLayer, normalizedFeature, featureId === selectedFeatureIdRef.current, effectivePointLabelConfig, selectionHighlightColor);
     layerRegistryRef.current[featureId] = leafletLayer;
-  }, []);
+  }, [effectivePointLabelConfig, focusFeatureById, selectionHighlightColor]);
 
   const rebuildEditableGroup = useCallback((geojsonData) => {
     const editableGroup = editableGroupRef.current;
@@ -1408,9 +1837,9 @@ export default function DisenoGeometrico() {
 
     const normalized = normalizeFeatureCollection(geojsonData);
     const geoJsonLayer = L.geoJSON(normalized, {
-      style: (feature) => getVectorStyle(feature, getFeatureId(feature) === selectedFeatureIdRef.current),
+      style: (feature) => getVectorStyle(feature, getFeatureId(feature) === selectedFeatureIdRef.current, selectionHighlightColor),
       pointToLayer: (feature, latlng) => L.marker(latlng, {
-        icon: createPointIcon(feature, getFeatureId(feature) === selectedFeatureIdRef.current)
+        icon: createPointIcon(feature, getFeatureId(feature) === selectedFeatureIdRef.current, effectivePointLabelConfig)
       }),
       onEachFeature: (feature, leafletLayer) => {
         leafletLayer.bindPopup(featureToPopupHtml(feature));
@@ -1426,7 +1855,7 @@ export default function DisenoGeometrico() {
     if (selectedFeatureIdRef.current && !activeIds.includes(selectedFeatureIdRef.current)) {
       setSelectedFeatureId(activeIds[0] || '');
     }
-  }, [attachEditableLayer]);
+  }, [attachEditableLayer, effectivePointLabelConfig, selectionHighlightColor]);
 
   const extractFeatureCollection = useCallback(() => {
     const editableGroup = editableGroupRef.current;
@@ -1722,9 +2151,9 @@ export default function DisenoGeometrico() {
 
   useEffect(() => {
     Object.entries(layerRegistryRef.current).forEach(([featureId, leafletLayer]) => {
-      applyLayerStyle(leafletLayer, leafletLayer.feature, featureId === selectedFeatureId);
+      applyLayerStyle(leafletLayer, leafletLayer.feature, featureId === selectedFeatureId, effectivePointLabelConfig, selectionHighlightColor);
     });
-  }, [selectedFeatureId]);
+  }, [effectivePointLabelConfig, selectedFeatureId, selectionHighlightColor]);
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -1757,6 +2186,11 @@ export default function DisenoGeometrico() {
     setSelectedFeatureId('');
     setSelectedTabName(tabName);
   }, [flushLayerIfDirty]);
+  const handleSelectLayerGroup = useCallback(async (group) => {
+    const targetTabName = group?.layers?.[0]?.tab_name;
+    if (!targetTabName) return;
+    await handleSelectLayer(targetTabName);
+  }, [handleSelectLayer]);
 
   const handleCreateLayer = async (event) => {
     event.preventDefault();
@@ -1830,7 +2264,15 @@ export default function DisenoGeometrico() {
       return;
     }
 
+    const uploadStartedAt = Date.now();
     setIsUploading(true);
+    setUploadProgress({
+      loadedBytes: 0,
+      totalBytes: uploadFile.size || 0,
+      percentage: 0,
+      remainingSeconds: null,
+      bytesPerSecond: 0
+    });
     try {
       const formData = new FormData();
       formData.append('archivo', uploadFile);
@@ -1840,76 +2282,117 @@ export default function DisenoGeometrico() {
       const response = await axiosInstance.post(
         `/api/proyectos/${projectId}/diseno-geometrico-capas`,
         formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (progressEvent) => {
+            const loadedBytes = progressEvent.loaded || 0;
+            const totalBytes = progressEvent.total || uploadFile.size || 0;
+            const elapsedSeconds = Math.max((Date.now() - uploadStartedAt) / 1000, 0.001);
+            const bytesPerSecond = loadedBytes / elapsedSeconds;
+            const remainingBytes = Math.max(totalBytes - loadedBytes, 0);
+            const remainingSeconds = remainingBytes > 0 && bytesPerSecond > 0
+              ? remainingBytes / bytesPerSecond
+              : null;
+
+            setUploadProgress({
+              loadedBytes,
+              totalBytes,
+              percentage: totalBytes > 0 ? Math.min(100, Math.round((loadedBytes / totalBytes) * 100)) : 0,
+              remainingSeconds,
+              bytesPerSecond
+            });
+          }
+        }
       );
 
-      const uploadedLayer = {
-        ...(response.data?.data || {}),
-        geojson_data: normalizeFeatureCollection(parseGeojson(response.data?.data?.geojson_data))
-      };
+      const uploadedLayers = (Array.isArray(response.data?.data) ? response.data.data : [response.data?.data])
+        .filter(Boolean)
+        .map((layer) => ({
+          ...layer,
+          geojson_data: normalizeFeatureCollection(parseGeojson(layer?.geojson_data))
+        }));
 
       setLayers((current) => {
-        const withoutPrevious = current.filter((layer) => layer.tab_name !== tabName);
-        return [uploadedLayer, ...withoutPrevious];
+        const withoutPrevious = current.filter((layer) => (
+          layer.tab_name !== tabName && !layer.tab_name?.startsWith(`${tabName}__part_`)
+        ));
+        return [...uploadedLayers, ...withoutPrevious];
       });
-      setVisibleTabs((current) => ({
-        ...current,
-        [tabName]: true
-      }));
-      ensureHistory(tabName, uploadedLayer.geojson_data);
-      setSaveStateByTab((current) => ({
-        ...current,
-        [tabName]: 'saved'
-      }));
+      setVisibleTabs((current) => {
+        const nextState = { ...current };
+        uploadedLayers.forEach((layer) => {
+          nextState[layer.tab_name] = true;
+        });
+        return nextState;
+      });
+      setSaveStateByTab((current) => {
+        const nextState = { ...current };
+        uploadedLayers.forEach((layer) => {
+          nextState[layer.tab_name] = 'saved';
+        });
+        return nextState;
+      });
+      uploadedLayers.forEach((layer) => {
+        ensureHistory(layer.tab_name, layer.geojson_data);
+      });
+      setUploadProgress(null);
       setUploadName('');
       setUploadFile(null);
-      setSelectedTabName(tabName);
-      alertify.success('Capa subida correctamente');
+      setSelectedTabName(uploadedLayers[0]?.tab_name || tabName);
+      alertify.success(response.data?.split
+        ? `Capa subida y dividida en ${response.data?.parts || uploadedLayers.length} partes`
+        : 'Capa subida correctamente');
     } catch (error) {
       console.error('Error al subir capa geometrica:', error);
-      alertify.error(error.response?.data?.message || 'No se pudo subir la capa');
+      alertify.error(error.response?.data?.message || error.response?.data?.detail || 'No se pudo subir la capa');
     } finally {
       setIsUploading(false);
+      setUploadProgress(null);
     }
   };
 
-  const handleDeleteLayer = async (tabName) => {
+  const handleDeleteLayerGroup = async (group) => {
+    if (!group?.layers?.length) return;
     if (!projectId || !canManage) return;
-
-    const layer = layers.find((item) => item.tab_name === tabName);
-    if (!layer) return;
 
     alertify.confirm(
       'Eliminar capa',
-      `Se eliminara la capa "${layer.file_name || layer.tab_name}".`,
+      `Se eliminara la capa "${group.label}"${group.layers.length > 1 ? ` y sus ${group.layers.length} partes internas` : ''}.`,
       async () => {
         try {
-          await axiosInstance.delete(`/api/proyectos/${projectId}/diseno-geometrico-capas/${tabName}`);
+          for (const layer of group.layers) {
+            // eslint-disable-next-line no-await-in-loop
+            await axiosInstance.delete(`/api/proyectos/${projectId}/diseno-geometrico-capas/${layer.tab_name}`);
+            clearSaveTimer(layer.tab_name);
+            delete dirtyTabsRef.current[layer.tab_name];
+            delete historyRef.current[layer.tab_name];
+          }
 
-          clearSaveTimer(tabName);
-          delete dirtyTabsRef.current[tabName];
-          delete historyRef.current[tabName];
           setSaveStateByTab((current) => {
             const nextState = { ...current };
-            delete nextState[tabName];
+            group.layers.forEach((layer) => {
+              delete nextState[layer.tab_name];
+            });
             return nextState;
           });
           setVisibleTabs((current) => {
             const nextState = { ...current };
-            delete nextState[tabName];
+            group.layers.forEach((layer) => {
+              delete nextState[layer.tab_name];
+            });
             return nextState;
           });
-          setLayers((current) => current.filter((item) => item.tab_name !== tabName));
+          setLayers((current) => current.filter((item) => !group.layers.some((layer) => layer.tab_name === item.tab_name)));
 
-          if (selectedTabRef.current === tabName) {
-            const remainingLayers = layers.filter((item) => item.tab_name !== tabName);
+          if (group.layers.some((layer) => layer.tab_name === selectedTabRef.current)) {
+            const remainingLayers = layersRef.current.filter((item) => !group.layers.some((layer) => layer.tab_name === item.tab_name));
             setSelectedTabName(remainingLayers[0]?.tab_name || '');
             setSelectedFeatureId('');
           }
 
-          alertify.success('Capa eliminada');
+          alertify.success(group.layers.length > 1 ? 'Capa agrupada eliminada' : 'Capa eliminada');
         } catch (error) {
-          console.error('Error al eliminar capa:', error);
+          console.error('Error al eliminar grupo de capas:', error);
           alertify.error('No se pudo eliminar la capa');
         }
       },
@@ -1917,16 +2400,23 @@ export default function DisenoGeometrico() {
     ).set('labels', { ok: 'Eliminar', cancel: 'Cancelar' });
   };
 
-  const toggleLayerVisibility = (tabName) => {
-    if (selectedTabName === tabName) {
+  const toggleLayerGroupVisibility = (group) => {
+    if (!group?.layers?.length) return;
+
+    const hasActiveLayer = group.layers.some((layer) => layer.tab_name === selectedTabName);
+    if (hasActiveLayer) {
       alertify.message('La capa activa siempre permanece visible durante la edicion');
       return;
     }
 
-    setVisibleTabs((current) => ({
-      ...current,
-      [tabName]: !(current[tabName] ?? true)
-    }));
+    const shouldShow = group.layers.some((layer) => !(visibleTabs[layer.tab_name] ?? true));
+    setVisibleTabs((current) => {
+      const nextState = { ...current };
+      group.layers.forEach((layer) => {
+        nextState[layer.tab_name] = shouldShow;
+      });
+      return nextState;
+    });
   };
 
   const handleSaveCurrentLayer = async () => {
@@ -1959,6 +2449,77 @@ export default function DisenoGeometrico() {
     } catch (error) {
       console.error('Error al exportar KML:', error);
       alertify.error('No se pudo exportar la capa activa');
+    }
+  };
+  const extractStylesForExport = (featureGroup) => {
+    const features = [];
+    if (!featureGroup) return features;
+
+    featureGroup.eachLayer(layer => {
+      if (layer.toGeoJSON) {
+        const geojson = layer.toGeoJSON();
+
+        const processFeature = (f, l) => {
+          f.properties = f.properties || {};
+          // Ensure it has a name for tokml
+          if (!f.properties.nombre && !f.properties.name) {
+            f.properties.nombre = f.properties._layer_name || f.properties.layer || 'Elemento';
+          }
+
+          if (l.options) {
+            if (l.options.color) f.properties.stroke = l.options.color;
+            if (l.options.weight) f.properties['stroke-width'] = l.options.weight;
+            if (l.options.opacity !== undefined) f.properties['stroke-opacity'] = l.options.opacity;
+            if (l.options.fillColor) f.properties.fill = l.options.fillColor;
+            if (l.options.fillOpacity !== undefined) f.properties['fill-opacity'] = l.options.fillOpacity;
+
+            if (f.geometry?.type === 'Point' && l.options.icon && l.options.icon.options?.html) {
+              const html = l.options.icon.options.html;
+              const match = html.match(/background-color:\s*([^;]+);/);
+              if (match) f.properties['marker-color'] = match[1].trim();
+            }
+          }
+          return f;
+        };
+
+        if (geojson.type === 'FeatureCollection') {
+          geojson.features.forEach((f, i) => {
+            const childLayer = layer.getLayers ? layer.getLayers()[i] : null;
+            if (childLayer) features.push(processFeature(f, childLayer));
+            else features.push(f);
+          });
+        } else {
+          features.push(processFeature(geojson, layer));
+        }
+      }
+    });
+    return features;
+  };
+  const handleExportshape = async () => {
+    const drawnFeatures = extractStylesForExport(editableGroupRef.current);
+    const measuredFeatures = extractStylesForExport(measurementLayerRef.current);
+
+    const geoJsonToExport = {
+      type: 'FeatureCollection',
+      features: [...drawnFeatures, ...measuredFeatures]
+
+    };
+
+    if (geoJsonToExport.features.length === 0) {
+      alertify.error("no ahi elemetos dibujados o cargados para exportar");
+      return;
+    };
+    try {
+      alertify.message('exportando a shapefile');
+      const response = await axiosInstance.post('/api/trafico/exportar-shapefile', geoJsonToExport, {
+        responseType: 'blob',
+      });
+      saveAs(response.data, 'geoportal_export.zip');
+      alertify.success('Exportacion a shape completada');
+
+    } catch (error) {
+      console.error("error interno al exportar:", error);
+      alertify.error("Ocurrio un error durante la exportacion");
     }
   };
 
@@ -1998,7 +2559,7 @@ export default function DisenoGeometrico() {
     workingLayer.feature = normalizedFeature;
     workingLayer.bindPopup(featureToPopupHtml(normalizedFeature));
     attachEditableLayer(workingLayer, normalizedFeature);
-    applyLayerStyle(workingLayer, normalizedFeature, true);
+    applyLayerStyle(workingLayer, normalizedFeature, true, effectivePointLabelConfig, selectionHighlightColor);
     editableGroup.addLayer(workingLayer);
 
     const nextCollection = extractFeatureCollection();
@@ -2006,7 +2567,7 @@ export default function DisenoGeometrico() {
       selectedFeatureId: getFeatureId(normalizedFeature)
     });
     setActiveTool('select');
-  }, [activeFeatures.length, attachEditableLayer, commitActiveCollection, extractFeatureCollection]);
+  }, [activeFeatures.length, attachEditableLayer, commitActiveCollection, effectivePointLabelConfig, extractFeatureCollection, selectionHighlightColor]);
 
   const handleFeaturesEdited = useCallback(() => {
     const nextCollection = extractFeatureCollection();
@@ -2049,54 +2610,126 @@ export default function DisenoGeometrico() {
     const layer = layerRegistryRef.current[selectedFeatureId];
     if (layer && updatedFeature) {
       layer.feature = updatedFeature;
-      applyLayerStyle(layer, updatedFeature, true);
+      applyLayerStyle(layer, updatedFeature, true, effectivePointLabelConfig, selectionHighlightColor);
       if (layer.getPopup()) {
         layer.setPopupContent(featureToPopupHtml(updatedFeature));
       }
     }
 
     commitActiveCollection(nextCollection, { selectedFeatureId });
-  }, [activeFeatureCollection, commitActiveCollection, selectedFeatureId, selectedLayer]);
+  }, [activeFeatureCollection, commitActiveCollection, effectivePointLabelConfig, selectedFeatureId, selectedLayer, selectionHighlightColor]);
+
+  const updatePointLabelSettings = useCallback((patch) => {
+    if (!selectedLayer) return;
+
+    const nextCollection = cloneGeojson(activeFeatureCollection);
+    const currentFields = Array.isArray(pointLabelConfig.fields) ? pointLabelConfig.fields : [];
+    const currentModes = Array.isArray(pointLabelConfig.modes) ? pointLabelConfig.modes : [];
+    const nextFields = patch.fields !== undefined ? patch.fields : currentFields;
+    const nextModes = patch.modes !== undefined ? patch.modes : currentModes;
+    const nextMeta = {
+      ...(nextCollection.dg_meta && typeof nextCollection.dg_meta === 'object' ? nextCollection.dg_meta : {}),
+      pointLabelField: nextFields[0] || '',
+      pointLabelFields: nextFields,
+      pointLabelMode: nextModes[0] || 'none',
+      pointLabelModes: nextModes.length ? nextModes : ['none']
+    };
+
+    if (!nextMeta.pointLabelFields.length) {
+      nextMeta.pointLabelMode = 'none';
+      nextMeta.pointLabelModes = ['none'];
+    }
+
+    nextCollection.dg_meta = nextMeta;
+    commitActiveCollection(nextCollection, { selectedFeatureId: selectedFeatureIdRef.current });
+  }, [activeFeatureCollection, commitActiveCollection, pointLabelConfig.fields, pointLabelConfig.modes, selectedLayer]);
+
+  const toggleSelectedPointLabelPin = useCallback(() => {
+    if (selectedFeatureType !== 'point' || !selectedFeatureId) return;
+
+    updateSelectedFeature({
+      dg_label_pinned: !selectedFeature?.properties?.dg_label_pinned
+    });
+  }, [selectedFeature?.properties?.dg_label_pinned, selectedFeatureId, selectedFeatureType, updateSelectedFeature]);
+
+  const handleTogglePointLabelField = useCallback((fieldKey) => {
+    const nextFields = pointLabelConfig.fields.includes(fieldKey)
+      ? pointLabelConfig.fields.filter((item) => item !== fieldKey)
+      : [...pointLabelConfig.fields, fieldKey];
+
+    updatePointLabelSettings({ fields: nextFields });
+  }, [pointLabelConfig.fields, updatePointLabelSettings]);
+
+  const handleTogglePointLabelMode = useCallback((modeKey) => {
+    let nextModes = pointLabelConfig.modes.includes(modeKey)
+      ? pointLabelConfig.modes.filter((item) => item !== modeKey)
+      : [...pointLabelConfig.modes.filter((item) => item !== 'none'), modeKey];
+
+    if (!nextModes.length) {
+      nextModes = ['none'];
+    }
+
+    if (nextModes.includes('none') && nextModes.length > 1) {
+      nextModes = nextModes.filter((item) => item !== 'none');
+    }
+
+    updatePointLabelSettings({ modes: nextModes });
+  }, [pointLabelConfig.modes, updatePointLabelSettings]);
 
   const handleApplyBorderColorsByAttribute = useCallback((attributeName) => {
     if (!selectedLayer) return;
 
+    const normalizedAttributeName = String(attributeName || '').trim();
     const nextCollection = cloneGeojson(activeFeatureCollection);
     const nextMeta = {
       ...(nextCollection.dg_meta && typeof nextCollection.dg_meta === 'object' ? nextCollection.dg_meta : {})
     };
 
-    if (!attributeName) {
+    if (!normalizedAttributeName) {
       nextMeta.colorByAttribute = '';
       nextMeta.colorByAttributeKey = '';
+      nextMeta.colorByAttributePalette = {};
       nextCollection.dg_meta = nextMeta;
       commitActiveCollection(nextCollection, { selectedFeatureId: selectedFeatureIdRef.current });
       alertify.success('Coloreo automatico desactivado');
       return;
     }
 
-    const selectedOption = availableAttributeColorOptions.find((option) => option.value === attributeName);
-    if (!selectedOption) {
+    const selectedPresetOption = availableAttributeColorOptions.find((option) => option.value === normalizedAttributeName);
+    const selectedManualField = availableAttributeFields.find((option) => option.key === normalizedAttributeName);
+
+    if (!selectedPresetOption && !selectedManualField) {
       alertify.warning('Ese atributo no esta disponible en la capa activa');
       return;
     }
 
+    const selectedActualKey = selectedPresetOption?.actualKey || selectedManualField?.key || '';
+    const selectedLabel = selectedPresetOption?.label || selectedManualField?.key || normalizedAttributeName;
+
     const distinctValues = [...new Set(
       activeFeatures
-        .map((feature) => getFeatureAttributeValue(feature, selectedOption.aliases))
+        .map((feature) => {
+          if (selectedPresetOption?.aliases) {
+            return getFeatureAttributeValue(feature, selectedPresetOption.aliases);
+          }
+
+          return feature?.properties?.[selectedActualKey];
+        })
         .filter((value) => value !== null && value !== undefined && value !== '')
         .map((value) => String(value))
     )];
     const colorMap = new Map(
       distinctValues.map((value, index) => [
         value,
-        ATTRIBUTE_COLOR_PALETTE[index % ATTRIBUTE_COLOR_PALETTE.length]
+        selectedLayerColorPalette[value] || ATTRIBUTE_COLOR_PALETTE[index % ATTRIBUTE_COLOR_PALETTE.length]
       ])
     );
 
     nextCollection.features = nextCollection.features.map((feature) => {
       const nextFeature = normalizeFeature(feature);
-      const attributeValue = getFeatureAttributeValue(nextFeature, selectedOption.aliases);
+      const attributeValue = selectedPresetOption?.aliases
+        ? getFeatureAttributeValue(nextFeature, selectedPresetOption.aliases)
+        : nextFeature?.properties?.[selectedActualKey];
 
       if (attributeValue === null || attributeValue === undefined || attributeValue === '') {
         return nextFeature;
@@ -2106,8 +2739,9 @@ export default function DisenoGeometrico() {
       return nextFeature;
     });
 
-    nextMeta.colorByAttribute = selectedOption.value;
-    nextMeta.colorByAttributeKey = selectedOption.actualKey;
+    nextMeta.colorByAttribute = selectedPresetOption?.value || 'manual';
+    nextMeta.colorByAttributeKey = selectedActualKey;
+    nextMeta.colorByAttributePalette = Object.fromEntries(colorMap.entries());
     nextCollection.dg_meta = nextMeta;
 
     nextCollection.features.forEach((feature) => {
@@ -2116,15 +2750,88 @@ export default function DisenoGeometrico() {
       if (!layer) return;
 
       layer.feature = feature;
-      applyLayerStyle(layer, feature, featureId === selectedFeatureIdRef.current);
+      applyLayerStyle(layer, feature, featureId === selectedFeatureIdRef.current, effectivePointLabelConfig, selectionHighlightColor);
       if (layer.getPopup()) {
         layer.setPopupContent(featureToPopupHtml(feature));
       }
     });
 
     commitActiveCollection(nextCollection, { selectedFeatureId: selectedFeatureIdRef.current });
-    alertify.success(`Bordes coloreados por ${selectedOption.label}`);
-  }, [activeFeatureCollection, activeFeatures, availableAttributeColorOptions, commitActiveCollection, selectedLayer]);
+    alertify.success(`Bordes coloreados por ${selectedLabel}`);
+  }, [activeFeatureCollection, activeFeatures, availableAttributeColorOptions, availableAttributeFields, commitActiveCollection, effectivePointLabelConfig, selectedLayer, selectedLayerColorPalette, selectionHighlightColor]);
+
+  const handleLegendColorChange = useCallback((legendValue, nextColor) => {
+    if (!selectedLayer || !selectedLayerColorOption || !legendValue || !nextColor) return;
+
+    const nextCollection = cloneGeojson(activeFeatureCollection);
+    const nextMeta = {
+      ...(nextCollection.dg_meta && typeof nextCollection.dg_meta === 'object' ? nextCollection.dg_meta : {}),
+      colorByAttributePalette: {
+        ...(selectedLayerColorPalette || {}),
+        [legendValue]: nextColor
+      }
+    };
+
+    nextCollection.features = nextCollection.features.map((feature) => {
+      const nextFeature = normalizeFeature(feature);
+      const attributeValue = getFeatureAttributeValueByRule(nextFeature, selectedLayerColorOption);
+
+      if (String(attributeValue || '') !== String(legendValue)) {
+        return nextFeature;
+      }
+
+      nextFeature.properties.stroke = nextColor;
+      return nextFeature;
+    });
+
+    nextCollection.dg_meta = nextMeta;
+
+    nextCollection.features.forEach((feature) => {
+      const featureId = getFeatureId(feature);
+      const layer = layerRegistryRef.current[featureId];
+      if (!layer) return;
+
+      layer.feature = feature;
+      applyLayerStyle(layer, feature, featureId === selectedFeatureIdRef.current, effectivePointLabelConfig, selectionHighlightColor);
+      if (layer.getPopup()) {
+        layer.setPopupContent(featureToPopupHtml(feature));
+      }
+    });
+
+    commitActiveCollection(nextCollection, { selectedFeatureId: selectedFeatureIdRef.current });
+  }, [activeFeatureCollection, commitActiveCollection, effectivePointLabelConfig, selectedLayer, selectedLayerColorOption, selectedLayerColorPalette, selectionHighlightColor]);
+
+  const updateLegendVisibilitySettings = useCallback((patch) => {
+    if (!selectedLayer) return;
+
+    const nextCollection = cloneGeojson(activeFeatureCollection);
+    const nextMeta = {
+      ...(nextCollection.dg_meta && typeof nextCollection.dg_meta === 'object' ? nextCollection.dg_meta : {}),
+      showLegendOnMap: patch.showLegendOnMap !== undefined ? patch.showLegendOnMap : selectedLayerLegendEnabledOnMap,
+      visibleLegendValues: patch.visibleLegendValues !== undefined ? patch.visibleLegendValues : selectedLayerLegendVisibleValues
+    };
+
+    nextCollection.dg_meta = nextMeta;
+    commitActiveCollection(nextCollection, { selectedFeatureId: selectedFeatureIdRef.current });
+  }, [activeFeatureCollection, commitActiveCollection, selectedLayer, selectedLayerLegendEnabledOnMap, selectedLayerLegendVisibleValues]);
+
+  const toggleLegendValueOnMap = useCallback((legendValue) => {
+    if (!selectedLayer) return;
+
+    const normalizedValue = String(legendValue);
+    const currentValues = selectedLayerLegendVisibleValues.length
+      ? selectedLayerLegendVisibleValues
+      : selectedLayerColorLegend.map((item) => String(item.value));
+
+    const nextValues = currentValues.includes(normalizedValue)
+      ? currentValues.filter((value) => value !== normalizedValue)
+      : [...currentValues, normalizedValue];
+
+    updateLegendVisibilitySettings({
+      showLegendOnMap: true,
+      visibleLegendValues: nextValues
+    });
+  }, [selectedLayer, selectedLayerColorLegend, selectedLayerLegendVisibleValues, updateLegendVisibilitySettings]);
 
   const handleDeleteFeature = (featureId) => {
     const layer = layerRegistryRef.current[featureId];
@@ -2288,7 +2995,7 @@ export default function DisenoGeometrico() {
             <div className="dg-panel-head">
               <div>
                 <h2>Capas</h2>
-                <p>{isLoading ? 'Cargando capas...' : `${layers.length} registradas`}</p>
+                <p>{isLoading ? 'Cargando capas...' : `${groupedLayers.length} registradas`}</p>
               </div>
             </div>
 
@@ -2300,35 +3007,42 @@ export default function DisenoGeometrico() {
               </button>
             </form>
 
-            {!layers.length ? (
+            {!groupedLayers.length ? (
               <div className="dg-empty-box">Todavia no hay capas para este proyecto.</div>
             ) : (
               <div className="dg-layer-list">
-                {layers.map((layer) => {
-                  const isActive = layer.tab_name === selectedTabName;
-                  const isVisible = isActive ? true : (visibleTabs[layer.tab_name] ?? true);
+                {groupedLayers.map((group) => {
+                  const isActive = group.key === selectedLayerGroupKey;
+                  const isVisible = isActive ? true : group.layers.some((layer) => visibleTabs[layer.tab_name] ?? true);
+                  const groupBounds = getLayerBounds({
+                    type: 'FeatureCollection',
+                    features: group.layers.flatMap((layer) => parseGeojson(layer.geojson_data)?.features || [])
+                  });
 
                   return (
-                    <div key={layer.tab_name} className={`dg-layer-row ${isActive ? 'active' : ''}`}>
-                      <button type="button" className="dg-layer-main" onClick={() => handleSelectLayer(layer.tab_name)}>
+                    <div key={group.key} className={`dg-layer-row ${isActive ? 'active' : ''}`}>
+                      <button type="button" className="dg-layer-main" onClick={() => handleSelectLayerGroup(group)}>
                         <span
                           className={`dg-layer-swatch ${isActive ? 'active' : ''}`}
-                          style={{ background: getLayerSwatchColor(layer) }}
+                          style={{ background: group.swatchColor }}
                         ></span>
                         <div>
-                          <strong>{layer.file_name || layer.tab_name}</strong>
-                          <small>{getFeatureCount(layer)} elementos</small>
+                          <strong>{group.label}</strong>
+                          <small>
+                            {group.totalFeatures} elementos
+                            {group.isSplit ? ` · ${group.layers.length} partes internas` : ''}
+                          </small>
                         </div>
                       </button>
 
                       <div className="dg-layer-actions">
-                        <button type="button" title={isVisible ? 'Ocultar capa' : 'Mostrar capa'} onClick={() => toggleLayerVisibility(layer.tab_name)}>
+                        <button type="button" title={isVisible ? 'Ocultar capa' : 'Mostrar capa'} onClick={() => toggleLayerGroupVisibility(group)}>
                           <i className={`fas ${isVisible ? 'fa-eye' : 'fa-eye-slash'}`}></i>
                         </button>
-                        <button type="button" title="Zoom a capa" onClick={() => fitBounds(getLayerBounds(layer.geojson_data))}>
+                        <button type="button" title="Zoom a capa" onClick={() => fitBounds(groupBounds)}>
                           <i className="fas fa-expand"></i>
                         </button>
-                        <button type="button" title="Eliminar capa" disabled={!canManage} onClick={() => handleDeleteLayer(layer.tab_name)}>
+                        <button type="button" title="Eliminar capa" disabled={!canManage} onClick={() => handleDeleteLayerGroup(group)}>
                           <i className="fas fa-trash"></i>
                         </button>
                       </div>
@@ -2343,7 +3057,7 @@ export default function DisenoGeometrico() {
             <div className="dg-panel-head">
               <div>
                 <h2>Subir shapefile</h2>
-                <p>ZIP, RAR, KML o KMZ</p>
+                <p>  ZIP, RAR, KML o KMZ</p>
               </div>
             </div>
 
@@ -2358,9 +3072,26 @@ export default function DisenoGeometrico() {
                 <input type="file" accept={ACCEPTED_FILE_TYPES} onChange={(event) => setUploadFile(event.target.files?.[0] || null)} disabled={!projectId || !canManage} />
               </label>
 
+              {isUploading && uploadProgress && (
+                <div className="dg-upload-progress" aria-live="polite">
+                  <div className="dg-upload-progress-head">
+                    <strong>Subiendo archivo</strong>
+                    <span>{uploadProgress.percentage}%</span>
+                  </div>
+                  <div className="dg-upload-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={uploadProgress.percentage}>
+                    <span style={{ width: `${uploadProgress.percentage}%` }}></span>
+                  </div>
+                  <div className="dg-upload-progress-meta">
+                    <span>{formatFileSize(uploadProgress.loadedBytes)} / {formatFileSize(uploadProgress.totalBytes)}</span>
+                    <span>{uploadProgress.bytesPerSecond > 0 ? `${formatFileSize(uploadProgress.bytesPerSecond)}/s` : 'Calculando velocidad...'}</span>
+                    <span>{uploadProgress.percentage >= 100 ? 'Procesando en servidor...' : `Faltan ${formatRemainingTime(uploadProgress.remainingSeconds)}`}</span>
+                  </div>
+                </div>
+              )}
+
               <button type="submit" disabled={!projectId || !canManage || isUploading}>
                 <i className="fas fa-upload"></i>
-                <span>{isUploading ? 'Subiendo...' : 'Publicar capa'}</span>
+                <span>{isUploading && uploadProgress ? `Subiendo ${uploadProgress.percentage}%` : 'Publicar capa'}</span>
               </button>
             </form>
           </section>
@@ -2415,6 +3146,7 @@ export default function DisenoGeometrico() {
                   <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer || !canManage || isThreeDToolLocked} icon="fa-floppy-disk" label="Guardar" onClick={handleSaveCurrentLayer} />
                   <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer} icon="fa-file-export" label="GeoJSON" onClick={handleExportGeojson} />
                   <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer} icon="fa-earth-americas" label="KML" onClick={handleExportKml} />
+                  <ToolbarButton active={false} compact disabled={!projectId || !selectedLayer} icon="fa-file" label="Shapefile" onClick={handleExportshape} />
                 </div>
               </div>
             </div>
@@ -2464,6 +3196,7 @@ export default function DisenoGeometrico() {
                     zoom={6}
                     zoomControl={false}
                     doubleClickZoom
+                    preferCanvas
                     maxZoom={activeBaseMap.maxZoom || DG_MAX_MAP_ZOOM}
                     zoomSnap={0.25}
                     zoomDelta={0.5}
@@ -2479,6 +3212,7 @@ export default function DisenoGeometrico() {
                     <ZoomControl position="topleft" />
                     <ScaleControl position="bottomleft" />
                     <MapLifecycle mapRef={mapRef} measurementLayerRef={measurementLayerRef} />
+                    <MapZoomTracker onZoomChange={setMapZoom} />
                     <ActiveToolController
                       activeTool={activeTool}
                       editableGroupRef={editableGroupRef}
@@ -2518,8 +3252,19 @@ export default function DisenoGeometrico() {
                         <GeoJSON
                           key={layer.tab_name}
                           data={layer.geojson_data}
-                          style={(feature) => getVectorStyle(feature, false)}
-                          pointToLayer={(feature, latlng) => L.marker(latlng, { icon: createPointIcon(feature, false) })}
+                          style={(feature) => getVectorStyle(feature, false, selectionHighlightColor)}
+                          pointToLayer={(feature, latlng) => {
+                            const pointColor = feature?.properties?.fill || feature?.properties?.stroke || '#ef4444';
+                            const pointRadius = Math.max(4, Math.min(8, (Number(feature?.properties?.dg_marker_size) || 14) / 2.1));
+
+                            return L.circleMarker(latlng, {
+                              radius: pointRadius,
+                              color: '#ffffff',
+                              weight: 2,
+                              fillColor: pointColor,
+                              fillOpacity: 0.95
+                            });
+                          }}
                           onEachFeature={(feature, leafletLayer) => {
                             leafletLayer.bindPopup(featureToPopupHtml(feature));
                           }}
@@ -2528,6 +3273,18 @@ export default function DisenoGeometrico() {
 
                     <FeatureGroup ref={editableGroupRef}></FeatureGroup>
                   </MapContainer>
+                )}
+
+                {visibleLegendItemsOnMap.length > 0 && (
+                  <div className="dg-map-inline-legend">
+                    <div className="dg-map-inline-legend-title">Leyenda</div>
+                    {visibleLegendItemsOnMap.map((item) => (
+                      <div key={item.value} className="dg-map-inline-legend-row">
+                        <span className="dg-map-inline-legend-swatch" style={{ background: item.color }}></span>
+                        <span className="dg-map-inline-legend-label">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </>
             ) : (
@@ -2563,7 +3320,7 @@ export default function DisenoGeometrico() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeFeatures.map((feature) => {
+                    {paginatedActiveFeatures.map((feature) => {
                       const featureId = getFeatureId(feature);
                       const metrics = getFeatureMetrics(feature);
                       const isSelected = selectedFeatureId === featureId;
@@ -2574,6 +3331,7 @@ export default function DisenoGeometrico() {
                             <button type="button" className="dg-feature-link" onClick={() => {
                               setSelectedFeatureId(featureId);
                               focusFeatureById(featureId);
+                              setActiveTool('select');
                             }}>
                               {feature.properties?.dg_name || 'Sin nombre'}
                             </button>
@@ -2605,6 +3363,26 @@ export default function DisenoGeometrico() {
                     })}
                   </tbody>
                 </table>
+                {activeFeatures.length > DG_TABLE_PAGE_SIZE && (
+                  <div className="dg-table-pagination">
+                    <span className="dg-table-pagination-status">
+                      Mostrando {((featureTablePage - 1) * DG_TABLE_PAGE_SIZE) + 1}
+                      {' '}a {Math.min(featureTablePage * DG_TABLE_PAGE_SIZE, activeFeatures.length)}
+                      {' '}de {activeFeatures.length}
+                    </span>
+                    <div className="dg-table-pagination-actions">
+                      <button type="button" className="dg-secondary-btn" disabled={featureTablePage <= 1} onClick={() => setFeatureTablePage((current) => Math.max(1, current - 1))}>
+                        <i className="fas fa-chevron-left"></i>
+                        <span>Anterior</span>
+                      </button>
+                      <span className="dg-table-pagination-page">Pagina {featureTablePage} / {totalFeatureTablePages}</span>
+                      <button type="button" className="dg-secondary-btn" disabled={featureTablePage >= totalFeatureTablePages} onClick={() => setFeatureTablePage((current) => Math.min(totalFeatureTablePages, current + 1))}>
+                        <span>Siguiente</span>
+                        <i className="fas fa-chevron-right"></i>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -2654,9 +3432,9 @@ export default function DisenoGeometrico() {
 
             <div className="dg-property-stack">
               <label>
-                Campo para colorear
+                Sugerencias automaticas
                 <select
-                  value={selectedLayerColorRule}
+                  value={selectedPresetColorRule}
                   onChange={(event) => handleApplyBorderColorsByAttribute(event.target.value)}
                   disabled={!canManage || !selectedLayer || !availableAttributeColorOptions.length}
                 >
@@ -2669,26 +3447,116 @@ export default function DisenoGeometrico() {
                 </select>
               </label>
 
+              <label>
+                Campo manual
+                <input
+                  type="text"
+                  list="dg-color-attribute-options"
+                  value={manualColorAttributeInput}
+                  onChange={(event) => setManualColorAttributeInput(event.target.value)}
+                  placeholder="Escribe o elige el nombre exacto del atributo"
+                  disabled={!canManage || !selectedLayer || !availableAttributeFields.length}
+                />
+                <datalist id="dg-color-attribute-options">
+                  {availableAttributeFields.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {`${option.key} (${option.valueCount} valores)`}
+                    </option>
+                  ))}
+                </datalist>
+              </label>
+
+              <button
+                type="button"
+                className="dg-secondary-btn dg-full-btn"
+                onClick={() => handleApplyBorderColorsByAttribute(manualColorAttributeInput)}
+                disabled={!canManage || !selectedLayer || !manualColorAttributeInput.trim()}
+              >
+                <i className="fas fa-palette"></i>
+                <span>Aplicar campo manual</span>
+              </button>
+
+              {!!availableAttributeFields.length && (
+                <div className="dg-attribute-chip-list">
+                  {availableAttributeFields.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`dg-attribute-chip ${selectedLayerColorKey === option.key ? 'active' : ''}`}
+                      onClick={() => {
+                        setManualColorAttributeInput(option.key);
+                        handleApplyBorderColorsByAttribute(option.key);
+                      }}
+                      disabled={!canManage || !selectedLayer}
+                    >
+                      {option.key}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="dg-property-item">
                 <span>Estado</span>
                 <strong>
                   {selectedLayerColorOption
-                    ? `Activo por ${selectedLayerColorOption.actualKey}`
+                    ? `Activo por ${selectedLayerColorKey || selectedLayerColorOption.actualKey || selectedLayerColorOption.key}`
                     : 'Sin regla automatica'}
                 </strong>
               </div>
+
+              {!!availableAttributeFields.length && (
+                <div className="dg-property-item">
+                  <span>Atributos detectados</span>
+                  <strong>{availableAttributeFields.length} disponibles</strong>
+                </div>
+              )}
+
+              {selectedLayerColorLegend.length > 0 && (
+                <div className="dg-property-item">
+                  <span>Leyenda en el mapa</span>
+                  <button
+                    type="button"
+                    className={`dg-legend-toggle-btn ${selectedLayerLegendEnabledOnMap ? 'active' : ''}`}
+                    onClick={() => updateLegendVisibilitySettings({
+                      showLegendOnMap: !selectedLayerLegendEnabledOnMap,
+                      visibleLegendValues: selectedLayerLegendVisibleValues.length
+                        ? selectedLayerLegendVisibleValues
+                        : selectedLayerColorLegend.map((item) => String(item.value))
+                    })}
+                    disabled={!canManage || !selectedLayer}
+                  >
+                    {selectedLayerLegendEnabledOnMap ? 'Habilitada' : 'Habilitar'}
+                  </button>
+                </div>
+              )}
 
               {selectedLayerColorLegend.length ? (
                 <div className="dg-color-legend">
                   {selectedLayerColorLegend.map((item) => (
                     <div key={item.value} className="dg-color-legend-row">
-                      <span className="dg-color-legend-swatch" style={{ background: item.color }}></span>
+                      <label className="dg-color-legend-swatch-button" title={`Cambiar color de ${item.value}`}>
+                        <span className="dg-color-legend-swatch" style={{ background: item.color }}></span>
+                        <input
+                          type="color"
+                          value={item.color}
+                          onChange={(event) => handleLegendColorChange(item.value, event.target.value)}
+                          disabled={!canManage || !selectedLayer}
+                        />
+                      </label>
                       <span className="dg-color-legend-label">{item.value}</span>
+                      <button
+                        type="button"
+                        className={`dg-legend-visibility-btn ${visibleLegendItemsOnMap.some((legendItem) => String(legendItem.value) === String(item.value)) ? 'active' : ''}`}
+                        onClick={() => toggleLegendValueOnMap(item.value)}
+                        disabled={!canManage || !selectedLayer}
+                      >
+                        {visibleLegendItemsOnMap.some((legendItem) => String(legendItem.value) === String(item.value)) ? 'Se muestra' : 'Oculta'}
+                      </button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="dg-empty-box">Selecciona un campo como `Descript`, `Offset`, `Eje` o `Daylight` para repartir colores automaticamente.</div>
+                <div className="dg-empty-box">Elige una sugerencia o escribe el nombre exacto de cualquier atributo detectado en la capa para repartir colores automaticamente.</div>
               )}
             </div>
           </section>
@@ -2698,6 +3566,7 @@ export default function DisenoGeometrico() {
               <div>
                 <h2>Propiedades</h2>
                 <p>{selectedFeature ? 'Geometria seleccionada' : 'Selecciona una geometria'}</p>
+
               </div>
             </div>
 
@@ -2797,6 +3666,84 @@ export default function DisenoGeometrico() {
             ) : (
               <div className="dg-empty-box">No hay una geometria seleccionada.</div>
             )}
+          </section>
+
+          <section className="dg-panel">
+            <div className="dg-panel-head">
+              <div>
+                <h2>Etiquetas</h2>
+                <p>Muestra un campo sobre puntos y tambien sobre lineas seleccionadas.</p>
+              </div>
+            </div>
+
+            <div className="dg-property-stack">
+              <label>
+                Campo a mostrar
+                <div className="dg-option-chip-list">
+                  {availablePointLabelFields.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`dg-option-chip ${pointLabelConfig.fields.includes(option.key) ? 'active' : ''}`}
+                      onClick={() => handleTogglePointLabelField(option.key)}
+                      disabled={!canManage || !selectedLayer || !availablePointLabelFields.length}
+                    >
+                      {option.key} ({option.count} puntos)
+                    </button>
+                  ))}
+                </div>
+              </label>
+
+              <label>
+                Donde mostrar
+                <div className="dg-option-chip-list">
+                  {[
+                    { key: 'none', label: 'No mostrar' },
+                    { key: 'selected', label: 'Geometria seleccionada' },
+                    { key: 'tagged', label: 'Puntos marcados' },
+                    { key: 'all', label: 'Todos los puntos' },
+                    { key: 'hover', label: 'Al pasar el cursor' }
+                  ].map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`dg-option-chip ${pointLabelConfig.modes.includes(option.key) ? 'active' : ''}`}
+                      onClick={() => handleTogglePointLabelMode(option.key)}
+                      disabled={!canManage || !selectedLayer || !pointLabelConfig.fields.length}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </label>
+
+              <div className="dg-property-item">
+                <span>Estado</span>
+                <strong>
+                  {!pointLabelConfig.fields.length
+                    ? 'Sin campo activo'
+                    : pointLabelConfig.modes.includes('none')
+                      ? 'Etiquetas desactivadas'
+                      : `${pointLabelConfig.fields.length} campo(s) y ${pointLabelConfig.modes.length} ubicacion(es) activas`}
+                </strong>
+              </div>
+
+              <div className="dg-property-item">
+                <span>Comportamiento en lineas</span>
+                <strong>Usa los mismos campos y se muestra al seleccionar la linea</strong>
+              </div>
+
+              {selectedFeatureType === 'point' && pointLabelConfig.modes.includes('tagged') && (
+                <button type="button" className="dg-secondary-btn dg-full-btn" disabled={!canManage || !selectedFeature} onClick={toggleSelectedPointLabelPin}>
+                  <i className={`fas ${selectedFeature?.properties?.dg_label_pinned ? 'fa-tag' : 'fa-thumbtack'}`}></i>
+                  <span>{selectedFeature?.properties?.dg_label_pinned ? 'Quitar marca de etiqueta' : 'Marcar punto para etiqueta'}</span>
+                </button>
+              )}
+
+              {!availablePointLabelFields.length && (
+                <div className="dg-empty-box">La capa activa no tiene atributos disponibles en puntos o lineas para etiquetar.</div>
+              )}
+            </div>
           </section>
 
           <section className="dg-panel">

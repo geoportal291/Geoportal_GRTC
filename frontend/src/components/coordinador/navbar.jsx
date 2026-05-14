@@ -86,6 +86,18 @@ export default function Navbar({ onToggle, isCollapsed }) {
     if (onToggle) onToggle(!isCollapsed);
   };
 
+  const handleNavClickCapture = (event) => {
+    const targetLink = event.target.closest('a');
+    if (!targetLink) return;
+
+    const href = targetLink.getAttribute('href') || '';
+    if (!href || href === '#!') return;
+
+    if (onToggle && !isCollapsed) {
+      onToggle(true);
+    }
+  };
+
   const toggleSubmenu = (menu) => {
     setOpenMenu((prev) => {
       const nextValue = !prev[menu];
@@ -188,7 +200,7 @@ export default function Navbar({ onToggle, isCollapsed }) {
         </button>
       </div>
 
-      <nav>
+      <nav onClickCapture={handleNavClickCapture}>
         <ul>
           {isNavItemVisible('/coordinador/cordinadords') && (
             <li className={isActiveLink('/coordinador/dashboardprincipal') ? 'active' : ''}>

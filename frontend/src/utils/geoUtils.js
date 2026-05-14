@@ -81,7 +81,47 @@ export const getUtmZoneFromLon = (lon) => {
 };
 
 /**
+ * Espera a que el terrainProvider esté listo (ready) antes de usarlo.
+ * Hace polling cada 100ms con un timeout máximo de 15 segundos.
+ * @param {object} terrainProvider 
+ * @returns {Promise<boolean>} true si está listo, false si agotó el timeout
+ */
+export const waitForTerrainReady = (terrainProvider) => {
+    return new Promise((resolve) => {
+        if (!terrainProvider) { resolve(false); return; }
+
+        // API moderna de Cesium: terrainProvider es una Promise o tiene .ready
+        if (terrainProvider.ready === true) { resolve(true); return; }
+
+        // Si ready ya es false pero tiene readyPromise (API antigua), esperarla
+        if (terrainProvider.readyPromise) {
+            terrainProvider.readyPromise
+                .then(() => resolve(true))
+                .catch(() => resolve(false));
+            return;
+        }
+
+        // Polling para providers que no exponen readyPromise
+        const maxWaitMs = 15_000;
+        const intervalMs = 100;
+        let elapsed = 0;
+        const timer = setInterval(() => {
+            elapsed += intervalMs;
+            if (terrainProvider.ready === true) {
+                clearInterval(timer);
+                resolve(true);
+            } else if (elapsed >= maxWaitMs) {
+                clearInterval(timer);
+                console.warn('[geoUtils] waitForTerrainReady: timeout esperando terrainProvider.');
+                resolve(false);
+            }
+        }, intervalMs);
+    });
+};
+
+/**
  * Divide una petición masiva de muestreo de terreno en porciones (chunks) para evitar timeouts.
+ * Espera automáticamente a que el terrainProvider esté listo antes de muestrear.
  * @param {object} Cesium - Globals
  * @param {object} terrainProvider 
  * @param {Array} cartographics 
@@ -89,15 +129,23 @@ export const getUtmZoneFromLon = (lon) => {
  */
 export const chunkedSampleTerrain = async (Cesium, terrainProvider, cartographics, chunkSize = 1000) => {
     if (!Cesium || !cartographics || cartographics.length === 0) return [];
-    
-    // Si no hay proveedor, devolvemos los puntos con altura 0
+
+    const zeroHeights = (cartos) => cartos.map(c => {
+        const cloned = Cesium.Cartographic.clone(c);
+        cloned.height = 0;
+        return cloned;
+    });
+
+    // Sin proveedor: devolver ceros directamente (sin warning redundante)
     if (!terrainProvider) {
-        console.warn("[geoUtils] No terrainProvider provided to chunkedSampleTerrain. Returning zero heights.");
-        return cartographics.map(c => {
-            const cloned = Cesium.Cartographic.clone(c);
-            cloned.height = 0;
-            return cloned;
-        });
+        return zeroHeights(cartographics);
+    }
+
+    // Esperar a que el terrainProvider esté listo
+    const isReady = await waitForTerrainReady(terrainProvider);
+    if (!isReady) {
+        console.warn('[geoUtils] chunkedSampleTerrain: terrainProvider no se preparó a tiempo. Usando alturas 0.');
+        return zeroHeights(cartographics);
     }
 
     const results = [];

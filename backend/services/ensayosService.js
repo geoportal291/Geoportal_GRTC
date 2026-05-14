@@ -118,6 +118,76 @@ const deepMergeForExport = (base = {}, incoming = {}) => {
     return output;
 };
 
+const hasMeaningfulValue = (value) =>
+    value !== undefined && value !== null && value !== '';
+
+const normalizeCompletionPath = (path, scope = 'general_fields') => {
+    if (!path) return '';
+    const normalized = String(path);
+    return normalized.includes('.') ? normalized : `${scope}.${normalized}`;
+};
+
+const collectCompletionExcludedPaths = (tableConfig) => {
+    const excluded = new Set();
+
+    const collect = (fields = [], scope = 'general_fields') => {
+        fields.forEach((field) => {
+            const shouldExclude =
+                field?.exclude_from_completion === true
+                || field?.input_config?.exclude_from_completion === true;
+
+            if (!shouldExclude) return;
+            excluded.add(normalizeCompletionPath(field.path || field.key, scope));
+        });
+    };
+
+    if (Array.isArray(tableConfig?.general_fields)) {
+        collect(tableConfig.general_fields, 'general_fields');
+    }
+
+    if (Array.isArray(tableConfig?.fields)) {
+        collect(tableConfig.fields, 'fields');
+    }
+
+    return excluded;
+};
+
+const hasMeaningfulLeafValue = (value, excludedPaths, currentPath = '') => {
+    if (!hasMeaningfulValue(value)) return false;
+    if (excludedPaths.has(currentPath)) return false;
+
+    if (Array.isArray(value)) {
+        return value.some((item, index) =>
+            hasMeaningfulLeafValue(item, excludedPaths, `${currentPath}.${index}`));
+    }
+
+    if (value && typeof value === 'object') {
+        return Object.entries(value).some(([key, child]) => {
+            const childPath = currentPath ? `${currentPath}.${key}` : key;
+            return hasMeaningfulLeafValue(child, excludedPaths, childPath);
+        });
+    }
+
+    return true;
+};
+
+const hasMeaningfulFormData = (formData, tableConfig) => {
+    if (!formData || typeof formData !== 'object') return false;
+    const excludedPaths = collectCompletionExcludedPaths(tableConfig);
+    return hasMeaningfulLeafValue(formData, excludedPaths, '');
+};
+
+const getTipoEnsayoTableConfig = async (tipoEnsayoId, pool = db) => {
+    if (!tipoEnsayoId) return null;
+
+    const result = await pool.query(
+        'SELECT config_tabla FROM tipo_ensayo WHERE id = $1',
+        [tipoEnsayoId]
+    );
+
+    return result.rows[0]?.config_tabla || null;
+};
+
 const normalizeIdentificadorInput = (value) => {
     if (value === null || value === undefined) return null;
     const trimmed = String(value).trim();
@@ -393,13 +463,16 @@ const resolveEnsayoIdentifier = (ensayo, flattenedData = {}) => {
         || '';
 };
 
-const getStandardMetadataHeaders = (isCantera = false) => [
-    { header: 'CÓDIGO ENSAYO', key: 'metadata.codigo_ensayo', width: 20 },
-    { header: 'Fecha', key: 'metadata.fecha', width: 15 },
-    { header: isCantera ? 'Cantera' : 'Progresiva', key: isCantera ? 'metadata.cantera' : 'metadata.progresiva', width: 20 },
-    { header: 'Estrato', key: 'metadata.estrato', width: 10 },
-    { header: 'Identificador', key: 'metadata.identificador', width: 15 }
-];
+const getStandardMetadataHeaders = (isCantera = false) => {
+    console.log(`[DEBUG] Generando encabezados estándar. isCantera: ${isCantera}`);
+    return [
+        { header: 'CÓDIGO ENSAYO', key: 'metadata.codigo_ensayo', width: 20 },
+        { header: 'Fecha', key: 'metadata.fecha', width: 15 },
+        { header: isCantera ? 'Cantera' : 'Progresiva', key: isCantera ? 'metadata.cantera' : 'metadata.progresiva', width: 20 },
+        { header: 'Calicata', key: 'metadata.identificador', width: 15 },
+        { header: 'Estrato', key: 'metadata.estrato', width: 10 }
+    ];
+};
 
 const normalizeConfiguredKey = (rawValue, normalizationConfig = {}) => {
     if (rawValue === null || rawValue === undefined) return '';
@@ -834,7 +907,29 @@ const findHeaderRowIndex = (rows) => {
     );
 };
 
-const extractDataBlocksFromSheet = (rows, config) => {
+const getImportSheetConfig = (tipoConfig = {}, worksheetName = '', exportSheetName = '') => {
+    const importSheets = tipoConfig?.config_importacion?.sheets;
+    if (!importSheets || typeof importSheets !== 'object') return {};
+
+    const candidates = [worksheetName, exportSheetName].filter(Boolean);
+
+    for (const candidate of candidates) {
+        if (candidate && importSheets[candidate]) return importSheets[candidate];
+    }
+
+    const normalizedCandidates = candidates.map((candidate) =>
+        normalizeConfiguredKey(candidate, tipoConfig?.config_normalizacion || {})
+    );
+
+    const matchedEntry = Object.entries(importSheets).find(([sheetKey]) => {
+        const normalizedSheetKey = normalizeConfiguredKey(sheetKey, tipoConfig?.config_normalizacion || {});
+        return normalizedCandidates.includes(normalizedSheetKey);
+    });
+
+    return matchedEntry?.[1] || {};
+};
+
+const extractDataBlocksFromSheet = (rows, config, importSheetConfig = {}) => {
     const mappedTables = buildKeysMapFromExportConfig(config, false);
     const blocks = [];
     let cursor = 0;
@@ -847,7 +942,11 @@ const extractDataBlocksFromSheet = (rows, config) => {
         const absoluteHeaderIndex = cursor + localHeaderIndex;
         const allHeaders = [...getStandardMetadataHeaders(false), ...(mappedTable.tabla?.headers || [])];
         const hasSubheaders = allHeaders.some((header) => header?.subheaders && header.subheaders.length > 0);
-        const dataStartIndex = absoluteHeaderIndex + (hasSubheaders ? 2 : 1);
+        const configuredHeaderRows = Number(importSheetConfig?.header_rows);
+        const headerRows = Number.isFinite(configuredHeaderRows) && configuredHeaderRows > 0
+            ? configuredHeaderRows
+            : (hasSubheaders ? 2 : 1);
+        const dataStartIndex = absoluteHeaderIndex + headerRows;
 
         const dataRows = [];
         for (let i = dataStartIndex; i < rows.length; i++) {
@@ -1186,7 +1285,8 @@ const importarEnsayos = async (proyectoId, tramoId, excelBuffer, user, isSimulat
 
             const worksheet = workbook.Sheets[worksheetName];
             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
-            const blocks = extractDataBlocksFromSheet(rows, config);
+            const importSheetConfig = getImportSheetConfig(tipo, worksheetName, config.sheetName);
+            const blocks = extractDataBlocksFromSheet(rows, config, importSheetConfig);
 
             blocks.forEach((block) => {
                 block.dataRows.forEach((row) => {
@@ -1235,7 +1335,7 @@ const importarEnsayos = async (proyectoId, tramoId, excelBuffer, user, isSimulat
     const ensayosParaCrear = [];
     const ensayosParaActualizar = [];
 
-    drafts.forEach((draft) => {
+    for (const draft of drafts) {
         const progresivaKey = normalizeProgresivaForLookup(draft.progresiva);
         const estratoOrden = String(draft.estrato || '').trim();
         const ubicacion = progresivaMap.get(`${progresivaKey}::${estratoOrden}`);
@@ -1256,8 +1356,11 @@ const importarEnsayos = async (proyectoId, tramoId, excelBuffer, user, isSimulat
                 sheet: draft.sheetName,
                 error: `No se encontró la progresiva/estrato para el ensayo ${draft.codigo_ensayo} (${draft.progresiva || 'sin progresiva'} / estrato ${draft.estrato || 'sin estrato'}).`
             });
-            return;
+            continue;
         }
+
+        const tableConfig = await getTipoEnsayoTableConfig(draft.tipo_ensayo);
+        const hasMeaningfulData = hasMeaningfulFormData(draft.datos_formulario, tableConfig);
 
         const payload = {
             estrato_id: targetEstratoId,
@@ -1267,7 +1370,7 @@ const importarEnsayos = async (proyectoId, tramoId, excelBuffer, user, isSimulat
             datos_formulario: draft.datos_formulario,
             codigo_ensayo: normalizedCodigo,
             identificador: normalizedIdentificador || null,
-            estado: (draft.datos_formulario && Object.keys(draft.datos_formulario).length > 0) ? 'completado' : 'pendiente'
+            estado: hasMeaningfulData ? 'completado' : 'pendiente'
         };
 
         if (existing) {
@@ -1275,25 +1378,19 @@ const importarEnsayos = async (proyectoId, tramoId, excelBuffer, user, isSimulat
         } else {
             ensayosParaCrear.push({ payload, codigo_ensayo: normalizedCodigo });
         }
-    });
+    }
 
     const summary = {
         ensayosParaCrear: ensayosParaCrear.length,
         ensayosParaActualizar: ensayosParaActualizar.length
     };
 
-    if (validationErrors.length > 0) {
-        const error = new Error('Se encontraron errores de validación al procesar el archivo Excel.');
-        error.validationErrors = validationErrors;
-        throw error;
-    }
-
     if (isSimulation) {
         return {
             summary,
             created: 0,
             updated: 0,
-            errors: [],
+            errors: validationErrors,
             log: [`Simulación completada: ${summary.ensayosParaCrear} por crear, ${summary.ensayosParaActualizar} por actualizar.`]
         };
     }
@@ -1315,7 +1412,7 @@ const importarEnsayos = async (proyectoId, tramoId, excelBuffer, user, isSimulat
         summary,
         created,
         updated,
-        errors: [],
+        errors: validationErrors,
         log: [`Importación completada: ${created} creados, ${updated} actualizados.`]
     };
 };
@@ -1583,12 +1680,16 @@ const getEnsayoDetailsById = async (id) => {
 
 const createOrUpdateFullAssay = async (id, data) => {
     console.log(`[DEBUG] createOrUpdateFullAssay ID=${id}`);
-    
+
     let autoEstado = data.estado;
     const datos = data.datos_formulario ?? data.datos_ensayo;
-    const hasDataForm = datos && Object.keys(datos).length > 0;
-    if ((!autoEstado || autoEstado.toLowerCase() === 'pendiente') && hasDataForm) {
-        autoEstado = 'completado';
+    const effectiveTipoEnsayoForStatus = data.tipo_ensayo ?? data.tipo_ensayo_id;
+    const tableConfig = await getTipoEnsayoTableConfig(effectiveTipoEnsayoForStatus);
+    const hasDataForm = hasMeaningfulFormData(datos, tableConfig);
+    const normalizedEstado = String(autoEstado || '').toLowerCase();
+
+    if (!autoEstado || normalizedEstado === 'pendiente' || normalizedEstado === 'completado') {
+        autoEstado = hasDataForm ? 'completado' : 'pendiente';
     }
 
     const normalizedData = {

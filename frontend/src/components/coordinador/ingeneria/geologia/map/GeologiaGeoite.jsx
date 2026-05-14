@@ -20,21 +20,21 @@ import { saveAs } from 'file-saver';
 // legendColor = color sólido para mostrar en la leyenda (los patrones SVG no funcionan en CSS background de div)
 // fill = referencia al patrón SVG para el relleno de polígonos en el mapa Leaflet
 const UNIDAD_GEO_STYLES = {
-    'Fm. Ananea':            { fill: 'url(#geol-pattern-ananea)',        color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
-    'Fm San gaban':          { fill: 'url(#geol-pattern-sangaban)',       color: '#d4af37', legendColor: '#fffbe6', legendStroke: '#d4af37', legendPattern: 'sangaban' },
-    'Dique de Diorita':      { fill: 'url(#geol-pattern-diorite)',        color: '#8b0000', legendColor: '#f7a7a3', legendStroke: '#8b0000', legendPattern: 'diorite' },
-    'Deposito Coluvial':     { fill: 'url(#geol-pattern-coluvial)',       color: '#4a4a4a', legendColor: '#a8a8a8', legendStroke: '#333333', legendPattern: 'coluvial' },
-    'Deposito Aluvio-Coluvial': { fill: 'url(#geol-pattern-aluvio)',     color: '#666666', legendColor: '#d3d3d3', legendStroke: '#555555', legendPattern: 'aluvio' },
-    'Deposito Eluvio-Coluvial': { fill: 'url(#geol-pattern-eluvio)',     color: '#999999', legendColor: '#f0f0f0', legendStroke: '#999999', legendPattern: 'eluvio' },
-    'Deposito. Eluvial':     { fill: 'url(#geol-pattern-eluvial-dep)',   color: '#8b4513', legendColor: '#ffff00', legendStroke: '#8b4513', legendPattern: 'eluvial-dep' },
+    'Fm. Ananea': { fill: 'url(#geol-pattern-ananea)', color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
+    'Fm San gaban': { fill: 'url(#geol-pattern-sangaban)', color: '#d4af37', legendColor: '#fffbe6', legendStroke: '#d4af37', legendPattern: 'sangaban' },
+    'Dique de Diorita': { fill: 'url(#geol-pattern-diorite)', color: '#8b0000', legendColor: '#f7a7a3', legendStroke: '#8b0000', legendPattern: 'diorite' },
+    'Deposito Coluvial': { fill: 'url(#geol-pattern-coluvial)', color: '#4a4a4a', legendColor: '#a8a8a8', legendStroke: '#333333', legendPattern: 'coluvial' },
+    'Deposito Aluvio-Coluvial': { fill: 'url(#geol-pattern-aluvio)', color: '#666666', legendColor: '#d3d3d3', legendStroke: '#555555', legendPattern: 'aluvio' },
+    'Deposito Eluvio-Coluvial': { fill: 'url(#geol-pattern-eluvio)', color: '#999999', legendColor: '#f0f0f0', legendStroke: '#999999', legendPattern: 'eluvio' },
+    'Deposito. Eluvial': { fill: 'url(#geol-pattern-eluvial-dep)', color: '#8b4513', legendColor: '#ffff00', legendStroke: '#8b4513', legendPattern: 'eluvial-dep' },
     // Fallbacks
-    'Fm. Sandia':   { fill: 'url(#geol-pattern-ananea)', color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
+    'Fm. Sandia': { fill: 'url(#geol-pattern-ananea)', color: '#8b4513', legendColor: '#fce4b3', legendStroke: '#8b4513', legendPattern: 'ananea' },
     'Dep. Morrenico': { fill: 'url(#geol-pattern-eluvio)', color: '#999999', legendColor: '#f0f0f0', legendStroke: '#999999', legendPattern: 'eluvio' },
-    'Cuaternario':  { fill: '#ffff00', color: '#cccc00', legendColor: '#ffff00', legendStroke: '#cccc00' },
-    'Ambo':         { fill: '#6b8e23', color: '#556b2f', legendColor: '#6b8e23', legendStroke: '#556b2f' },
-    'Tarma':        { fill: '#4682b4', color: '#27408b', legendColor: '#4682b4', legendStroke: '#27408b' },
-    'Copacabana':   { fill: '#00ced1', color: '#008b8b', legendColor: '#00ced1', legendStroke: '#008b8b' },
-    'Mitu':         { fill: '#cd5c5c', color: '#8b3a3a', legendColor: '#cd5c5c', legendStroke: '#8b3a3a' }
+    'Cuaternario': { fill: '#ffff00', color: '#cccc00', legendColor: '#ffff00', legendStroke: '#cccc00' },
+    'Ambo': { fill: '#6b8e23', color: '#556b2f', legendColor: '#6b8e23', legendStroke: '#556b2f' },
+    'Tarma': { fill: '#4682b4', color: '#27408b', legendColor: '#4682b4', legendStroke: '#27408b' },
+    'Copacabana': { fill: '#00ced1', color: '#008b8b', legendColor: '#00ced1', legendStroke: '#008b8b' },
+    'Mitu': { fill: '#cd5c5c', color: '#8b3a3a', legendColor: '#cd5c5c', legendStroke: '#8b3a3a' }
 };
 
 const UNIDAD_GEOMORFO_STYLES = {
@@ -848,7 +848,7 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
 
             // 3. Efecto visual de resaltado (flash dorado)
             const originalStyle = layer.options.style ? layer.options.style(layer.feature) : null;
-            
+
             if (layer.setStyle) {
                 // Para Polígonos y Líneas
                 layer.setStyle({ color: '#fbbf24', weight: 8, opacity: 1, fillOpacity: 0.8 });
@@ -985,16 +985,16 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                 };
 
                 const upperActiveFilters = activeLayersFilter.map(f => normalize(f));
-                
+
                 filteredFeatures = filteredFeatures.filter(f => {
                     const rawName = f.properties?._layer_name || 'Otros';
                     const rawTab = f.properties?._layer_tab || '';
-                    
+
                     const normName = normalize(rawName);
                     const normTab = normalize(rawTab);
-                    
+
                     // Match si el nombre del filtro está contenido en el nombre de la capa o viceversa
-                    return upperActiveFilters.some(filter => 
+                    return upperActiveFilters.some(filter =>
                         normName.includes(filter) || filter.includes(normName) ||
                         normTab.includes(filter) || filter.includes(normTab)
                     );
@@ -1170,30 +1170,30 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                         );
                         if (false) {
 
-                        // Campos técnicos a omitir en el popup visual
-                        const excludedKeys = [
-                            '_LAYER_NAME', 'OBJECTID', 'OBJECTID_1', 'ZONA', 'FECHA', 'UTM_E', 'UTM_N',
-                            'LATITUD', 'LONGITUD', 'LAT', 'LON', 'CODHOJA', 'CUADRANTE', 'COMISION', 'TIPO_POG',
-                            'GEOLOGO', 'SHAPE_LENG', 'SHAPE_AREA', 'STYLEURL', 'STYLEHASH', 'VISIBILITY',
-                            'FILL', 'STROKE', 'MARKER-COLOR', 'STROKE-WIDTH', 'STROKE-OPACITY', 'FILL-OPACITY', 'ICON',
-                            'GLOBALID', 'SHAPE', 'ID'
-                        ];
+                            // Campos técnicos a omitir en el popup visual
+                            const excludedKeys = [
+                                '_LAYER_NAME', 'OBJECTID', 'OBJECTID_1', 'ZONA', 'FECHA', 'UTM_E', 'UTM_N',
+                                'LATITUD', 'LONGITUD', 'LAT', 'LON', 'CODHOJA', 'CUADRANTE', 'COMISION', 'TIPO_POG',
+                                'GEOLOGO', 'SHAPE_LENG', 'SHAPE_AREA', 'STYLEURL', 'STYLEHASH', 'VISIBILITY',
+                                'FILL', 'STROKE', 'MARKER-COLOR', 'STROKE-WIDTH', 'STROKE-OPACITY', 'FILL-OPACITY', 'ICON',
+                                'GLOBALID', 'SHAPE', 'ID'
+                            ];
 
-                        const propEntries = Object.entries(props).filter(([k, v]) => {
-                            const upperK = k.toUpperCase();
-                            return !excludedKeys.includes(upperK) && v !== null && v !== undefined && v !== '' && String(v).trim() !== '';
-                        });
+                            const propEntries = Object.entries(props).filter(([k, v]) => {
+                                const upperK = k.toUpperCase();
+                                return !excludedKeys.includes(upperK) && v !== null && v !== undefined && v !== '' && String(v).trim() !== '';
+                            });
 
-                        if (propEntries.length === 0) {
-                            html += `<div style="font-size:12px;color:#6b7280;font-style:italic;padding:10px 0;">Sin datos adicionales</div>`;
-                        } else {
-                            html += `<table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+                            if (propEntries.length === 0) {
+                                html += `<div style="font-size:12px;color:#6b7280;font-style:italic;padding:10px 0;">Sin datos adicionales</div>`;
+                            } else {
+                                html += `<table style="width:100%; border-collapse:collapse; table-layout:fixed;">
                                 <tbody>`;
-                            
-                            propEntries.forEach(([k, v], index) => {
-                                const label = k.replace(/_/g, ' ').toUpperCase();
-                                const isLast = index === propEntries.length - 1;
-                                html += `<tr style="border-bottom:${isLast ? 'none' : '1px solid #f1f5f9'};">
+
+                                propEntries.forEach(([k, v], index) => {
+                                    const label = k.replace(/_/g, ' ').toUpperCase();
+                                    const isLast = index === propEntries.length - 1;
+                                    html += `<tr style="border-bottom:${isLast ? 'none' : '1px solid #f1f5f9'};">
                                     <td style="padding: 8px 0; vertical-align:top; width:90px; overflow:hidden;">
                                         <div style="font-weight:700; color:#64748b; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; line-height:1.2; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;" title="${label}">${label}</div>
                                     </td>
@@ -1201,11 +1201,11 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                                         <div style="color:#0f172a; font-size:12px; word-break:break-word; font-weight:500; line-height:1.3;">${v}</div>
                                     </td>
                                 </tr>`;
-                            });
-                            
-                            html += `</tbody></table>`;
-                        }
-                        html += '</div></div>';
+                                });
+
+                                html += `</tbody></table>`;
+                            }
+                            html += '</div></div>';
                         }
                         layer.bindPopup(html, { className: 'geolpopup-main-container', maxWidth: 460, minWidth: 360, autoPan: false });
 
@@ -1250,10 +1250,10 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                 // Esto evita que actualizaciones menores o re-renders por selección disparen el fitBounds general
                 const dataId = `${geologiaGeojsonData.features?.length || 0}_${activeLayersFilter?.length || 0}`;
                 const currentDataStr = JSON.stringify(geologiaGeojsonData);
-                
+
                 if (prevGeoJsonDataStrRef.current !== currentDataStr) {
                     prevGeoJsonDataStrRef.current = currentDataStr;
-                    
+
                     // Solo hacemos fitBounds si el usuario NO está navegando activamente
                     // y si NO hay un elemento siendo enfocado activamente
                     if (!focusedFeature && !userNavigatingRef.current) {
@@ -1520,7 +1520,7 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                         const div = L.DomUtil.create('div', 'leaflet-control');
                         div.id = 'geol-kml-tramos-legend';
                         div.style.cssText = 'background:#f1f5f9;border:3px solid #000;padding:12px 18px;font-family:Inter,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,0.3);';
-                        
+
                         const isGeomorfo = tabName?.toLowerCase().includes('geomorfologia');
                         const isEstructural = tabName?.toLowerCase().includes('estructural');
 
@@ -1528,7 +1528,7 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                         const isGeotecniaCanteras = tabName?.toLowerCase().includes('geotecnia_canteras');
 
                         if (isEstructural) {
-                            
+
                             div.innerHTML = `
                                 <div style="font-weight:900; color:#000; font-size:15px; text-transform:uppercase; text-align:center; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:10px; letter-spacing:1px;">Simbología</div>
                                 <div style="display:flex; flex-direction:column; gap:8px;">
@@ -2159,25 +2159,25 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
         const extractStylesForExport = (featureGroup) => {
             const features = [];
             if (!featureGroup) return features;
-            
+
             featureGroup.eachLayer(layer => {
                 if (layer.toGeoJSON) {
                     const geojson = layer.toGeoJSON();
-                    
+
                     const processFeature = (f, l) => {
                         f.properties = f.properties || {};
                         // Ensure it has a name for tokml
                         if (!f.properties.nombre && !f.properties.name) {
                             f.properties.nombre = f.properties._layer_name || f.properties.layer || 'Elemento';
                         }
-                        
+
                         if (l.options) {
                             if (l.options.color) f.properties.stroke = l.options.color;
                             if (l.options.weight) f.properties['stroke-width'] = l.options.weight;
                             if (l.options.opacity !== undefined) f.properties['stroke-opacity'] = l.options.opacity;
                             if (l.options.fillColor) f.properties.fill = l.options.fillColor;
                             if (l.options.fillOpacity !== undefined) f.properties['fill-opacity'] = l.options.fillOpacity;
-                            
+
                             if (f.geometry?.type === 'Point' && l.options.icon && l.options.icon.options?.html) {
                                 const html = l.options.icon.options.html;
                                 const match = html.match(/background-color:\s*([^;]+);/);
@@ -2221,7 +2221,7 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                 const response = await axiosInstance.post('/api/trafico/exportar-kml', geoJsonToExport, {
                     responseType: 'blob',
                 });
-                saveAs(response.data, 'geoportal_export.kml');
+                saveAs(response.data, 'geoportal_export.zip');
                 alertify.success('Exportación KML completada.');
             } catch (error) {
                 console.error('Error al exportar a KML:', error);
@@ -2528,9 +2528,9 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                 alertify.success('Archivo subido correctamente.');
 
                 // Persist the new URL to the project
-                await axiosInstance.post(`/api/proyectos/${projectIdRef.current}/kml`, { 
-                    url: newUrl, 
-                    section: sectionRef.current 
+                await axiosInstance.post(`/api/proyectos/${projectIdRef.current}/kml`, {
+                    url: newUrl,
+                    section: sectionRef.current
                 });
                 alertify.message('Asociando KML con el proyecto.');
 
@@ -2887,7 +2887,7 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                 if (!isVisible) {
                     setIsLayerPanelOpen(true);
                     capasGeolBtn.classList.add('active');
-                    
+
                     // Posicionamiento dinámico similar a toggleMenu
                     setTimeout(() => {
                         const menu = document.getElementById('geolmap-menu-capas-geologia');
@@ -4343,7 +4343,7 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                 } catch (e) { /* ignore bounds errors */ }
             }
             console.log(`[ClasMat] ${placed}/${mapData.data.length} marcadores de materiales colocados en el mapa`);
-            
+
             // --- LEYENDA DE MATERIALES ---
             const existingMatLegend = document.getElementById('geol-mat-legend');
             if (existingMatLegend) existingMatLegend.remove();
@@ -4498,10 +4498,10 @@ const GeologiaGeoite = ({ tabName, projectId, section = 'geologia', onTramoSelec
         const fetchCapa = async () => {
             if (!projectId) return;
             try {
-                const url = tabName 
-                    ? `/api/proyectos/${projectId}/geologia-capas/${tabName}` 
+                const url = tabName
+                    ? `/api/proyectos/${projectId}/geologia-capas/${tabName}`
                     : `/api/proyectos/${projectId}/geologia-capas`;
-                
+
                 const res = await axiosInstance.get(url);
                 // Si viene del endpoint por tabName, data es un objeto único o null.
                 // Si viene del endpoint general, data es un array.
@@ -4572,25 +4572,25 @@ const GeologiaGeoite = ({ tabName, projectId, section = 'geologia', onTramoSelec
             <MapContainer center={center} zoom={6} maxZoom={16} zoomControl={false} style={{ height: '100%', width: '100%' }}>
                 <LayersControl position="topright" key="layers-v2">
                     <LayersControl.BaseLayer name="Estándar">
-                        <TileLayer 
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' 
+                        <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                             maxNativeZoom={19}
                             maxZoom={16}
                         />
                     </LayersControl.BaseLayer>
                     <LayersControl.BaseLayer checked name="Topográfico">
-                        <TileLayer 
-                            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" 
-                            attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)' 
+                        <TileLayer
+                            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+                            attribution='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/30/">CC-BY-SA</a>)'
                             maxNativeZoom={17}
                             maxZoom={16}
                         />
                     </LayersControl.BaseLayer>
                     <LayersControl.BaseLayer name="Satélite">
-                        <TileLayer 
-                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
-                            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' 
+                        <TileLayer
+                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
                             maxNativeZoom={14}
                             maxZoom={16}
                         />

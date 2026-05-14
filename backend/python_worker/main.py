@@ -38,10 +38,7 @@ async def process_image_endpoint(file: UploadFile = File(...)):
         contents = await file.read()
         result = ocr_service.process_image_from_bytes(contents)
         
-        # We return the processed image binary, but we also want to send the metadata (index)
-        # We can send metadata in headers or return a multipart response.
-        # Simplest for Node.js axios: Return JSON with base64 OR 
-        # return binary with custom headers for metadata.
+        
         
         headers = {
             "X-Detected-Index": str(result["detected_index"]) if result["detected_index"] else "null",
@@ -61,10 +58,10 @@ async def extract_metadata_endpoint(file: UploadFile = File(...)):
         contents = await file.read()
         result = ocr_service.process_image_from_bytes(contents)
         
-        # Correctly access the nested metadata dictionary
+        
         meta = result.get("metadata", {})
 
-        # Return JSON directly for bulk processing
+        
         return {
             "status": "ok",
             "metadata": {
@@ -82,12 +79,84 @@ async def extract_metadata_endpoint(file: UploadFile = File(...)):
         print(f"Error in /extract-metadata: {e}")
         return {"status": "error", "message": str(e)}
 
-# --- NEW ENDPOINT FOR SHAPEFILE CONVERSION ---
+
 import shapefile
 import rarfile
 import zipfile
 import tempfile
 import glob
+import math
+from datetime import date, datetime
+from decimal import Decimal
+
+
+def sanitize_json_value(value):
+    if isinstance(value, (str, int, bool)) or value is None:
+        return value
+    if isinstance(value, (float, Decimal)):
+        numeric_value = float(value)
+        return numeric_value if math.isfinite(numeric_value) else None
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            return value.decode('utf-8')
+        except Exception:
+            return str(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, (list, tuple)):
+        return [sanitize_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): sanitize_json_value(item) for key, item in value.items()}
+    return str(value)
+
+
+def sanitize_coordinates(value):
+    if isinstance(value, (list, tuple)):
+        return [sanitize_coordinates(item) for item in value]
+    if isinstance(value, (float, Decimal)):
+        numeric_value = float(value)
+        return numeric_value if math.isfinite(numeric_value) else None
+    return value
+
+
+def sanitize_geometry(geometry):
+    if not isinstance(geometry, dict):
+        return None
+
+    geometry_type = geometry.get('type')
+    coordinates = geometry.get('coordinates')
+
+    if geometry_type == 'GeometryCollection':
+        return {
+            'type': geometry_type,
+            'geometries': [
+                sanitized
+                for sanitized in (sanitize_geometry(item) for item in geometry.get('geometries', []))
+                if sanitized
+            ]
+        }
+
+    if coordinates is None:
+        return None
+
+    return {
+        'type': geometry_type,
+        'coordinates': sanitize_coordinates(coordinates)
+    }
+
+
+def find_companion_file(shp_path, extension):
+    root, _ = os.path.splitext(shp_path)
+    target_extension = extension.lower()
+    directory = os.path.dirname(shp_path)
+    base_name = os.path.basename(root).lower()
+
+    for candidate in os.listdir(directory):
+        candidate_root, candidate_ext = os.path.splitext(candidate)
+        if candidate_root.lower() == base_name and candidate_ext.lower() == target_extension:
+            return os.path.join(directory, candidate)
+
+    return root + extension
 
 @app.post("/convert-shapefile")
 async def convert_shapefile_endpoint(file: UploadFile = File(...)):
@@ -102,7 +171,7 @@ async def convert_shapefile_endpoint(file: UploadFile = File(...)):
         with tempfile.TemporaryDirectory() as tmpdir:
             archive_path = os.path.join(tmpdir, file.filename)
             
-            # Save uploaded file
+            
             with open(archive_path, 'wb') as f:
                 f.write(contents)
             
@@ -119,7 +188,7 @@ async def convert_shapefile_endpoint(file: UploadFile = File(...)):
             else:
                 raise HTTPException(status_code=400, detail="Formato no soportado. Use RAR o ZIP.")
             
-            # Find all .shp files recursively (case-insensitive for Linux)
+            
             extracted_files = []
             for root, dirs, files in os.walk(extract_dir):
                 for file in files:
@@ -130,11 +199,14 @@ async def convert_shapefile_endpoint(file: UploadFile = File(...)):
             shp_files = [f for f in extracted_files if f.lower().endswith('.shp')]
             print(f"📦 [Geoite] Shapefiles detectados: {[os.path.basename(f) for f in shp_files]}")
             
-            # Identify SRS (Spatial Reference System) if .prj exists
+            if not shp_files:
+                raise HTTPException(status_code=400, detail="El archivo comprimido no contiene ningun .shp legible.")
+
+
             from pyproj import Transformer, CRS
             
             def get_transformer(shp_path):
-                prj_path = shp_path.replace('.shp', '.prj')
+                prj_path = find_companion_file(shp_path, '.prj')
                 source_crs = None
                 if os.path.exists(prj_path):
                     try:
@@ -145,7 +217,6 @@ async def convert_shapefile_endpoint(file: UploadFile = File(...)):
                     except Exception as e:
                         print(f"⚠️ Error leyendo .prj: {e}")
                 
-                # Default fallback if no valid PRJ: UTM Zone 18S (Peru)
                 if not source_crs:
                     print(f"ℹ️ [Geoite] No se detectó SRS válido. Usando UTM Zona 18S (EPSG:32718) como fallback.")
                     source_crs = CRS.from_epsg(32718)
@@ -163,11 +234,10 @@ async def convert_shapefile_endpoint(file: UploadFile = File(...)):
                     with shapefile.Reader(shp_path) as reader:
                         fields = [f[0] for f in reader.fields[1:]]
                         
-                        # Peek at first record to see if we need projection
                         needs_projection = False
                         if reader.numRecords > 0:
                             first_shape = reader.shape(0)
-                            # Diferenciar entre Puntos (que no tienen bbox) y otras geometrías
+                           
                             if hasattr(first_shape, 'bbox'):
                                 if abs(first_shape.bbox[0]) > 180 or abs(first_shape.bbox[1]) > 90:
                                     needs_projection = True
@@ -181,9 +251,11 @@ async def convert_shapefile_endpoint(file: UploadFile = File(...)):
                                 print(f"📍 [Geoite] Capa {layer_name} detectada con coordenadas en metros (>180/90). Reproyectando...")
 
                         for sr in reader.shapeRecords():
-                            geom = sr.shape.__geo_interface__
+                            geom = sanitize_geometry(sr.shape.__geo_interface__)
+                            if not geom:
+                                continue
                             
-                            # Perform Reprojection if needed
+                     
                             if needs_projection and transformer:
                                 try:
                                     if geom['type'] == 'Point':
@@ -210,19 +282,15 @@ async def convert_shapefile_endpoint(file: UploadFile = File(...)):
                                             new_polys.append(new_rings)
                                         geom['coordinates'] = new_polys
                                 except Exception as trans_err:
-                                    # print(f"Error proyectando feature: {trans_err}")
+                                   
                                     pass
 
-                            props = dict(zip(fields, sr.record))
+                            geom = sanitize_geometry(geom)
+                            if not geom:
+                                continue
+
+                            props = sanitize_json_value(dict(zip(fields, sr.record)))
                             props['_layer_name'] = layer_name
-                            
-                            for k, v in props.items():
-                                if isinstance(v, (bytes, bytearray)):
-                                    try:
-                                        props[k] = v.decode('utf-8')
-                                    except:
-                                        props[k] = str(v)
-                            
                             feature = {
                                 "type": "Feature",
                                 "geometry": geom,

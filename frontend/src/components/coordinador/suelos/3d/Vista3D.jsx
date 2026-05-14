@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
-import { utmToWgs84, processCoordinates, getUtmZoneFromLon, chunkedSampleTerrain } from '../../../../utils/geoUtils';
+import { utmToWgs84, processCoordinates, getUtmZoneFromLon, chunkedSampleTerrain, waitForTerrainReady } from '../../../../utils/geoUtils';
 import { FullTramoEngine } from './FullTramoEngine';
+import { applyDioramaCameraMode, clampDioramaCamera, getDioramaLocalMaxHeight } from './DioramaCameraController';
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import useProgresivasData from '../../../../hooks/useProgresivasData';
+import useModelLoader from './useModelLoader';
 import './Vista3D.css';
 
 const Cesium = window.Cesium;
@@ -21,7 +23,7 @@ export default function Vista3D() {
         PerInstanceColorAppearance, ColorGeometryInstanceAttribute, Color,
         MaterialAppearance, Material, GeometryInstance, IonImageryProvider,
         ArcGisMapServerImageryProvider, UrlTemplateImageryProvider,
-        sampleTerrainMostDetailed, EllipsoidTerrainProvider,
+        sampleTerrainMostDetailed, EllipsoidTerrainProvider, ClippingPolygon, ClippingPolygonCollection,
         KmlDataSource, LabelStyle, VerticalOrigin, Cartesian2
     } = Cesium;
 
@@ -50,6 +52,7 @@ export default function Vista3D() {
     const [selectedProgressiva3D, setSelectedProgressiva3D] = useState(null);
     const [dioramaSize, setDioramaSize] = useState(500);
     const [cameraMode, setCameraMode] = useState('orbit');
+    const [modelMeshVersion, setModelMeshVersion] = useState(0);
 
     // --- DERIVADOS Y HELPERS PARA UI ---
     const statusMessage = isUploading
@@ -83,18 +86,25 @@ export default function Vista3D() {
     const isApplyingDioramaClampRef = useRef(false);
     const isDioramaTransitioningRef = useRef(false);
     const dioramaAnchorRef = useRef(null);
+    const dioramaMaskPolygonRef = useRef(null);
     const progressivaAnchorsRef = useRef(new Map());
-    const movementKeysRef = useRef({
-        forward: false,
-        backward: false,
-        left: false,
-        right: false,
-        up: false,
-        down: false
-    });
+    const selectedProgressivaRef = useRef(null);
+    const pendingDioramaFocusRef = useRef(null);
+    const hasInitialAutoCenterRef = useRef(false);
+    const localRoadEntityRef = useRef(null);
+    const localEstratosRef = useRef([]);
+    const localMarkerEntityRef = useRef(null);
+    const localOverlayEntitiesRef = useRef([]);
 
     // --- MOTOR DE PROGRESIVAS ---
     useProgresivasData();
+
+    // --- CARGADOR DE MODELOS (Web Worker) ---
+    const { loadModel, cancelLoad } = useModelLoader({
+        userToken: user?.token,
+        processCoordinates,
+        utmToWgs84,
+    });
 
     // --- FUNCIONES CORE (Definidas antes que los efectos para evitar ReferenceError) ---
 
@@ -104,7 +114,6 @@ export default function Vista3D() {
     const renderFinalMesh = useCallback((verticesInfo, elevationData, minZ, maxZ, indicesTriangulos, indicesBoundary, indicesBordesFull) => {
         const viewer = viewerRef.current;
         if (!viewer || viewer.isDestroyed() || !verticesInfo || verticesInfo.length === 0) {
-            console.warn("[Vista3D] renderFinalMesh abortado: viewer inválido o sin vértices.");
             return;
         }
 
@@ -112,6 +121,7 @@ export default function Vista3D() {
         const showHipsoSurface = mapStyle === 'hipso' || mapStyle === 'estratos' || isDioramaActive;
         const showMeshOverlay = mapStyle === 'malla';
         const showBoundaryLines = mapStyle !== 'malla' && !isDioramaActive;
+        const surfaceAlpha = isDioramaActive ? 150 : 255;
 
         const midZ = minZ + (maxZ - minZ) / 2.0;
 
@@ -142,7 +152,7 @@ export default function Vista3D() {
             colors8[i * 4] = vColor.red * 255;
             colors8[i * 4 + 1] = vColor.green * 255;
             colors8[i * 4 + 2] = vColor.blue * 255;
-            colors8[i * 4 + 3] = 255;
+            colors8[i * 4 + 3] = surfaceAlpha;
         }
 
         // --- GEOMETRÍA SÓLIDA ---
@@ -171,7 +181,7 @@ export default function Vista3D() {
         // --- PRIMITIVOS ---
         const solidPrimitiveHipso = new Primitive({
             geometryInstances: new GeometryInstance({ geometry: solidGeometryHipso }),
-            appearance: new PerInstanceColorAppearance({ flat: false, translucent: false, closed: false }),
+            appearance: new PerInstanceColorAppearance({ flat: false, translucent: isDioramaActive, closed: false }),
             asynchronous: false,
             show: showHipsoSurface
         });
@@ -237,8 +247,60 @@ export default function Vista3D() {
         dioramaBoxEntitiesRef.current = [];
     }, []);
 
+    const clearLocalOverlays = useCallback(() => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed()) return;
+        localOverlayEntitiesRef.current.forEach((entity) => viewer.entities.remove(entity));
+        localOverlayEntitiesRef.current = [];
+        localRoadEntityRef.current = null;
+        localEstratosRef.current = [];
+        localMarkerEntityRef.current = null;
+    }, []);
+
+    const clearDioramaTerrainMask = useCallback(() => {
+        const viewer = viewerRef.current;
+        dioramaMaskPolygonRef.current = null;
+        if (!viewer || viewer.isDestroyed() || !viewer.scene?.globe) return;
+        viewer.scene.globe.clippingPolygons = undefined;
+    }, []);
+
+    const applyDioramaTerrainMask = useCallback((roundedRectLonLat) => {
+        const viewer = viewerRef.current;
+        if (
+            !viewer ||
+            viewer.isDestroyed() ||
+            !viewer.scene?.globe ||
+            !ClippingPolygon ||
+            !ClippingPolygonCollection ||
+            !Array.isArray(roundedRectLonLat) ||
+            roundedRectLonLat.length < 3
+        ) {
+            return;
+        }
+
+        if (!ClippingPolygonCollection.isSupported(viewer.scene)) {
+            return;
+        }
+
+        const positions = roundedRectLonLat.map(({ lon, lat }) => (
+            Cartesian3.fromDegrees(lon, lat, 0)
+        ));
+
+        const polygon = new ClippingPolygon({ positions });
+        const clippingPolygons = new ClippingPolygonCollection({
+            polygons: [polygon],
+            inverse: false,
+            enabled: true,
+            quality: 1.0
+        });
+
+        viewer.scene.globe.clippingPolygons = clippingPolygons;
+        dioramaMaskPolygonRef.current = polygon;
+    }, [Cartesian3, ClippingPolygon, ClippingPolygonCollection]);
+
     const disableDioramaConstraints = useCallback(() => {
         dioramaConstraintRef.current = null;
+        clearDioramaTerrainMask();
         const viewer = viewerRef.current;
         if (!viewer || viewer.isDestroyed()) return;
         const controller = viewer.scene?.screenSpaceCameraController;
@@ -255,7 +317,7 @@ export default function Vista3D() {
             viewer.scene.globe.translucency.enabled = false;
             viewer.scene.globe.undergroundColor = Color.BLACK.withAlpha(0.0);
         }
-    }, []);
+    }, [clearDioramaTerrainMask]);
 
     const applyCameraMode = useCallback((mode) => {
         const viewer = viewerRef.current;
@@ -263,43 +325,7 @@ export default function Vista3D() {
 
         const controller = viewer.scene?.screenSpaceCameraController;
         if (!controller) return;
-        movementKeysRef.current = {
-            forward: false,
-            backward: false,
-            left: false,
-            right: false,
-            up: false,
-            down: false
-        };
-
-        if (mode === 'firstPerson') {
-            controller.enableInputs = true;
-            controller.enableLook = true;
-            controller.enableTilt = true;
-            controller.enableTranslate = false;
-            controller.enableRotate = true;
-            controller.enableZoom = false;
-            controller.inertiaSpin = 0.0;
-            controller.inertiaTranslate = 0.0;
-            controller.inertiaZoom = 0.0;
-            controller.minimumZoomDistance = 1.0;
-            controller.maximumZoomDistance = Math.max(420, dioramaSize * 1.8);
-            return;
-        }
-
-        controller.enableInputs = true;
-        controller.enableLook = true;
-        controller.enableTilt = true;
-        controller.enableTranslate = true;
-        controller.enableRotate = true;
-        controller.enableZoom = true;
-        controller.inertiaSpin = 0.7;
-        controller.inertiaTranslate = 0.7;
-        controller.inertiaZoom = 0.7;
-        controller.minimumZoomDistance = mode === 'diorama' ? 1.0 : 1;
-        controller.maximumZoomDistance = mode === 'diorama'
-            ? Math.max(250, dioramaSize * 1.35)
-            : Number.POSITIVE_INFINITY;
+        applyDioramaCameraMode({ controller, mode, dioramaSize });
     }, [dioramaSize]);
 
     const getSceneCamera = useCallback((viewer) => {
@@ -307,7 +333,6 @@ export default function Vista3D() {
         try {
             return viewer.scene?.camera || null;
         } catch (e) {
-            console.warn("[Vista3D] No se pudo resolver scene.camera.", e);
             return null;
         }
     }, []);
@@ -316,9 +341,7 @@ export default function Vista3D() {
         if (!camera || typeof camera.lookAtTransform !== 'function' || !Cesium.Matrix4?.IDENTITY) return;
         try {
             camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-        } catch (e) {
-            console.warn("[Vista3D][FP] No se pudo resetear el transform de la camara.", e);
-        }
+        } catch (e) { }
     }, []);
 
     const isViewerStable = useCallback((viewer) => {
@@ -387,7 +410,7 @@ export default function Vista3D() {
     const enforceDioramaCameraBounds = useCallback(() => {
         const viewer = viewerRef.current;
         const constraint = dioramaConstraintRef.current;
-        if (!viewer || viewer.isDestroyed() || !constraint || isApplyingDioramaClampRef.current || isDioramaTransitioningRef.current || cameraMode === 'firstPerson') return;
+        if (!viewer || viewer.isDestroyed() || !constraint || isApplyingDioramaClampRef.current || isDioramaTransitioningRef.current || cameraMode === 'orbit') return;
 
         const camera = getSceneCamera(viewer);
         if (!camera || !camera._scene) return;
@@ -396,56 +419,24 @@ export default function Vista3D() {
         try {
             cameraCartographic = camera.positionCartographic;
         } catch (e) {
-            console.warn("[Vista3D] No se pudo leer positionCartographic durante el clamp del diorama.", e);
             return;
         }
 
         if (!cameraCartographic) return;
 
-        const currentLon = Cesium.Math.toDegrees(cameraCartographic.longitude);
-        const currentLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
-        const currentHeight = cameraCartographic.height || 0;
-        const metersPerLon = 111320 * Math.cos(Cesium.Math.toRadians(constraint.centerLat)) || 1;
-        const deltaLonMeters = (currentLon - constraint.centerLon) * metersPerLon;
-        const deltaLatMeters = (currentLat - constraint.centerLat) * 110540;
-        let clampedLonMeters = Math.min(Math.max(deltaLonMeters, -constraint.halfWidthMeters), constraint.halfWidthMeters);
-        let clampedLatMeters = Math.min(Math.max(deltaLatMeters, -constraint.halfDepthMeters), constraint.halfDepthMeters);
-
-        const normalizedX = clampedLonMeters / Math.max(constraint.halfWidthMeters, 1);
-        const normalizedY = clampedLatMeters / Math.max(constraint.halfDepthMeters, 1);
-        const ellipseFactor = Math.sqrt((normalizedX ** 2) + (normalizedY ** 2));
-        if (ellipseFactor > 1) {
-            clampedLonMeters /= ellipseFactor;
-            clampedLatMeters /= ellipseFactor;
-        }
-
-        const clampedHeight = Math.min(Math.max(currentHeight, constraint.minHeight), constraint.maxHeight);
-
-        if (clampedLonMeters === deltaLonMeters && clampedLatMeters === deltaLatMeters && clampedHeight === currentHeight) {
+        const clampResult = clampDioramaCamera({ Cesium, camera, constraint });
+        if (!clampResult) {
             return;
-        }
-
-        const targetLon = constraint.centerLon + (clampedLonMeters / metersPerLon);
-        const targetLat = constraint.centerLat + (clampedLatMeters / 110540);
-        if (cameraMode === 'firstPerson') {
-            console.log("[Vista3D][FP] clamp", {
-                current: {
-                    lon: currentLon,
-                    lat: currentLat,
-                    height: currentHeight
-                },
-                target: {
-                    lon: targetLon,
-                    lat: targetLat,
-                    height: clampedHeight
-                }
-            });
         }
 
         isApplyingDioramaClampRef.current = true;
         try {
             camera.setView({
-                destination: Cartesian3.fromDegrees(targetLon, targetLat, clampedHeight),
+                destination: Cartesian3.fromDegrees(
+                    clampResult.destination.lon,
+                    clampResult.destination.lat,
+                    clampResult.destination.height
+                ),
                 orientation: {
                     heading: camera.heading,
                     pitch: camera.pitch,
@@ -457,74 +448,55 @@ export default function Vista3D() {
         }
     }, [Cartesian3, cameraMode, getSceneCamera]);
 
-    const updateFirstPersonMovement = useCallback(() => {
+    const flyToGlobalContext = useCallback(() => {
         const viewer = viewerRef.current;
-        const constraint = dioramaConstraintRef.current;
-        if (!viewer || viewer.isDestroyed() || cameraMode !== 'firstPerson' || !constraint || isDioramaTransitioningRef.current) {
-            return;
+        if (!viewer || viewer.isDestroyed() || selectedProgressivaRef.current || pendingDioramaFocusRef.current) {
+            return false;
         }
 
-        const keys = movementKeysRef.current;
-        if (!Object.values(keys).some(Boolean)) return;
-
-        const camera = getSceneCamera(viewer);
-        if (!camera || !camera._scene) return;
-        const step = Math.max(0.75, dioramaSize / 220);
-        const verticalStep = Math.max(0.35, step * 0.45);
-        console.log("[Vista3D][FP] movement tick", {
-            keys,
-            step,
-            verticalStep,
-            before: {
-                heading: camera.heading,
-                pitch: camera.pitch,
-                roll: camera.roll
-            }
-        });
-
-        if (keys.forward) camera.moveForward(step);
-        if (keys.backward) camera.moveBackward(step);
-        if (keys.left) camera.moveLeft(step);
-        if (keys.right) camera.moveRight(step);
-        if (keys.up) camera.moveUp(verticalStep);
-        if (keys.down) camera.moveDown(verticalStep);
-
-        let cameraCartographic;
-        try {
-            cameraCartographic = camera.positionCartographic;
-        } catch (e) {
-            return;
+        if (kmlDataSourcesRef.current.length > 0) {
+            viewer.flyTo(kmlDataSourcesRef.current[0], {
+                duration: 2.0,
+                offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
+            });
+            return true;
         }
-        if (cameraCartographic) {
-            const currentLon = Cesium.Math.toDegrees(cameraCartographic.longitude);
-            const currentLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
-            const currentHeight = cameraCartographic.height || 0;
-            const metersPerLon = 111320 * Math.cos(Cesium.Math.toRadians(constraint.centerLat)) || 1;
-            let deltaLonMeters = (currentLon - constraint.centerLon) * metersPerLon;
-            let deltaLatMeters = (currentLat - constraint.centerLat) * 110540;
-            deltaLonMeters = Math.min(Math.max(deltaLonMeters, -constraint.halfWidthMeters), constraint.halfWidthMeters);
-            deltaLatMeters = Math.min(Math.max(deltaLatMeters, -constraint.halfDepthMeters), constraint.halfDepthMeters);
-            const clampedHeight = Math.min(Math.max(currentHeight, constraint.minHeight), constraint.maxHeight);
-            const targetLon = constraint.centerLon + (deltaLonMeters / metersPerLon);
-            const targetLat = constraint.centerLat + (deltaLatMeters / 110540);
-            camera.setView({
-                destination: Cartesian3.fromDegrees(targetLon, targetLat, clampedHeight),
+
+        if (currentModelDataRef.current?.activeVerticesInfo?.length) {
+            const { activeVerticesInfo, activeMinZ, activeMaxZ } = currentModelDataRef.current;
+            const midZ = activeMinZ + (activeMaxZ - activeMinZ) / 2.0;
+            let sumLon = 0;
+            let sumLat = 0;
+            activeVerticesInfo.forEach((vertex) => {
+                sumLon += vertex.lon;
+                sumLat += vertex.lat;
+            });
+            const centerLon = sumLon / activeVerticesInfo.length;
+            const centerLat = sumLat / activeVerticesInfo.length;
+            const sceneCamera = getSceneCamera(viewer);
+            if (!sceneCamera) return false;
+            sceneCamera.flyTo({
+                destination: Cartesian3.fromDegrees(centerLon, centerLat, midZ + 1500),
+                duration: 2.0,
                 orientation: {
-                    heading: camera.heading,
-                    pitch: camera.pitch,
+                    heading: 0,
+                    pitch: Cesium.Math.toRadians(-90),
                     roll: 0
                 }
             });
+            return true;
         }
 
-        console.log("[Vista3D][FP] movement result", {
-            after: {
-                heading: camera.heading,
-                pitch: camera.pitch,
-                roll: camera.roll
-            }
-        });
-    }, [cameraMode, dioramaSize, getSceneCamera]);
+        if (soilEntitiesRef.current.length > 0) {
+            viewer.flyTo(soilEntitiesRef.current, {
+                duration: 2.0,
+                offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
+            });
+            return true;
+        }
+
+        return false;
+    }, [Cartesian3, getSceneCamera]);
 
     const buildEdgeIndices = useCallback((triangleIndices) => {
         const edgeIndices = [];
@@ -587,6 +559,8 @@ export default function Vista3D() {
         const topZ = Math.max(Number.isFinite(maxZ) ? maxZ + 25 : surfaceReferenceZ + 2000, surfaceReferenceZ + 2000);
         const halfWidth = Math.max(90, sizeMeters * 0.58);
         const halfDepth = Math.max(50, sizeMeters * 0.34);
+        const clampHalfWidth = Math.max(halfWidth * 0.82, sizeMeters * 0.42);
+        const clampHalfDepth = Math.max(halfDepth * 0.82, sizeMeters * 0.26);
         const centerLon = anchor.lon;
         const centerLat = anchor.lat;
         const roundedRectLonLat = [];
@@ -672,10 +646,14 @@ export default function Vista3D() {
             centerLat,
             halfWidthMeters: halfWidth,
             halfDepthMeters: halfDepth,
+            clampHalfWidthMeters: clampHalfWidth,
+            clampHalfDepthMeters: clampHalfDepth,
             minHeight: surfaceReferenceZ + 1.8,
             maxHeight: surfaceReferenceZ + 2000,
+            localMaxHeight: getDioramaLocalMaxHeight({ surfaceReferenceZ, sizeMeters, maxZ }),
             surfaceHeight: surfaceReferenceZ
         };
+        applyDioramaTerrainMask(roundedRectLonLat);
 
         const controller = viewer.scene?.screenSpaceCameraController;
         if (controller) {
@@ -687,7 +665,168 @@ export default function Vista3D() {
             viewer.scene.globe.translucency.enabled = false;
             viewer.scene.globe.undergroundColor = Color.BLACK.withAlpha(0.0);
         }
-    }, [Cartesian3, Color, clearDioramaBox, projectZone, resolveProgressivaAnchor]);
+    }, [Cartesian3, Color, applyDioramaTerrainMask, clearDioramaBox, resolveProgressivaAnchor]);
+
+    const buildLocalRoadPositions = useCallback((anchor) => {
+        if (!anchor || !kmlDataSourcesRef.current.length) return [];
+
+        const sampleTime = Cesium.JulianDate.now();
+        const anchorPosition = Cartesian3.fromDegrees(anchor.lon, anchor.lat, anchor.surfaceZ);
+        let bestPolylinePositions = null;
+        let bestNearestIndex = -1;
+        let bestDistance = Number.POSITIVE_INFINITY;
+
+        kmlDataSourcesRef.current.forEach((ds) => {
+            ds?.entities?.values?.forEach((entity) => {
+                if (!entity?.polyline?.positions) return;
+                let positions = entity.polyline.positions;
+                if (typeof positions.getValue === 'function') {
+                    positions = positions.getValue(sampleTime);
+                }
+                if (!Array.isArray(positions) || positions.length < 2) return;
+
+                let nearestIndex = -1;
+                let nearestDistance = Number.POSITIVE_INFINITY;
+                positions.forEach((position, index) => {
+                    const distance = Cartesian3.distance(position, anchorPosition);
+                    if (distance < nearestDistance) {
+                        nearestDistance = distance;
+                        nearestIndex = index;
+                    }
+                });
+
+                if (nearestIndex >= 0 && nearestDistance < bestDistance) {
+                    bestDistance = nearestDistance;
+                    bestNearestIndex = nearestIndex;
+                    bestPolylinePositions = positions;
+                }
+            });
+        });
+
+        if (!bestPolylinePositions || bestNearestIndex < 0) {
+            return [];
+        }
+
+        const maxSegmentDistance = Math.max(140, dioramaSize * 0.95);
+        let startIndex = bestNearestIndex;
+        let endIndex = bestNearestIndex;
+        let backwardDistance = 0;
+        let forwardDistance = 0;
+
+        while (startIndex > 0 && backwardDistance < maxSegmentDistance) {
+            backwardDistance += Cartesian3.distance(
+                bestPolylinePositions[startIndex],
+                bestPolylinePositions[startIndex - 1]
+            );
+            startIndex -= 1;
+        }
+
+        while (endIndex < bestPolylinePositions.length - 1 && forwardDistance < maxSegmentDistance) {
+            forwardDistance += Cartesian3.distance(
+                bestPolylinePositions[endIndex],
+                bestPolylinePositions[endIndex + 1]
+            );
+            endIndex += 1;
+        }
+
+        return bestPolylinePositions.slice(startIndex, endIndex + 1).map((position) => {
+            const carto = Cartographic.fromCartesian(position);
+            return Cartesian3.fromDegrees(
+                Cesium.Math.toDegrees(carto.longitude),
+                Cesium.Math.toDegrees(carto.latitude),
+                Math.max(anchor.surfaceZ + 2.5, (carto.height || 0) + 1.5)
+            );
+        });
+    }, [Cartesian3, Cartographic, dioramaSize]);
+
+    const renderLocalOverlay = useCallback((progressiva) => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed()) return;
+
+        clearLocalOverlays();
+
+        if (!progressiva) {
+            viewer.scene.requestRender();
+            return;
+        }
+
+        const anchor = dioramaAnchorRef.current || resolveProgressivaAnchor(progressiva);
+        if (!anchor) return;
+
+        const overlayEntities = [];
+        const localRoadPositions = buildLocalRoadPositions(anchor);
+        if (localRoadPositions.length >= 2) {
+            const roadEntity = viewer.entities.add({
+                id: `local-road-${progressiva.id}`,
+                polyline: {
+                    positions: localRoadPositions,
+                    width: 10,
+                    clampToGround: false,
+                    material: Color.CYAN.withAlpha(0.95),
+                    depthFailMaterial: Color.WHITE.withAlpha(0.98)
+                }
+            });
+            localRoadEntityRef.current = roadEntity;
+            overlayEntities.push(roadEntity);
+        }
+
+        const markerEntity = viewer.entities.add({
+            id: `local-prog-marker-${progressiva.id}`,
+            name: `Progresiva activa: ${progressiva.nombre}`,
+            position: Cartesian3.fromDegrees(anchor.lon, anchor.lat, anchor.surfaceZ + 2.0),
+            point: {
+                pixelSize: 14,
+                color: Color.CYAN,
+                outlineColor: Color.WHITE,
+                outlineWidth: 2,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY
+            },
+            label: {
+                text: progressiva.nombre,
+                font: '16pt Outfit, sans-serif',
+                fillColor: Color.WHITE,
+                outlineColor: Color.BLACK,
+                outlineWidth: 3,
+                style: LabelStyle.FILL_AND_OUTLINE,
+                verticalOrigin: VerticalOrigin.BOTTOM,
+                pixelOffset: new Cartesian2(0, -18),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY
+            }
+        });
+        localMarkerEntityRef.current = markerEntity;
+        overlayEntities.push(markerEntity);
+
+        let cumulativeDepth = 0;
+        const estratoEntities = [];
+        if (progressiva.estratos?.length) {
+            progressiva.estratos.forEach((estrato, index) => {
+                const thickness = Math.abs(estrato.cota_final - estrato.cota_inicial) || 0.5;
+                const centerDepth = cumulativeDepth + (thickness / 2);
+                const estratoEntity = viewer.entities.add({
+                    id: `local-estrato-${progressiva.id}-${index}`,
+                    name: `Estrato activo: ${estrato.nombre || 'Estrato'}`,
+                    description: `Profundidad: ${estrato.cota_inicial}m - ${estrato.cota_final}m<br/>${estrato.descripcion || ''}`,
+                    position: Cartesian3.fromDegrees(anchor.lon, anchor.lat, anchor.surfaceZ - centerDepth),
+                    cylinder: {
+                        length: thickness,
+                        topRadius: 2.6,
+                        bottomRadius: 2.6,
+                        material: Color.fromCssColorString(estrato.nlp_color_hex || '#60a5fa').withAlpha(0.96),
+                        outline: true,
+                        outlineColor: Color.WHITE.withAlpha(0.92),
+                        outlineWidth: 1
+                    }
+                });
+                estratoEntities.push(estratoEntity);
+                overlayEntities.push(estratoEntity);
+                cumulativeDepth += thickness;
+            });
+        }
+        localEstratosRef.current = estratoEntities;
+        localOverlayEntitiesRef.current = overlayEntities;
+
+        viewer.scene.requestRender();
+    }, [Cartesian2, Cartesian3, Color, LabelStyle, VerticalOrigin, buildLocalRoadPositions, clearLocalOverlays, resolveProgressivaAnchor]);
 
     const renderModelChunk = useCallback((modelData, progressiva = null) => {
         if (!modelData?.rawVertices?.length || !modelData?.rawIndicesTriangulos?.length) {
@@ -754,7 +893,6 @@ export default function Vista3D() {
 
         if (!selectedTriangles.length) {
             if (isChunkMode) {
-                console.warn("[Vista3D] El chunk LandXML no encontró triángulos para la progresiva seleccionada.");
                 currentModelDataRef.current = {
                     ...modelData,
                     activeVertices: [],
@@ -894,64 +1032,6 @@ export default function Vista3D() {
         }
     }, [selectedProjectId, user?.token]);
 
-    const enterFirstPerson = useCallback(() => {
-        const viewer = viewerRef.current;
-        const constraint = dioramaConstraintRef.current;
-        if (!viewer || viewer.isDestroyed() || !selectedProgressiva3D || !constraint) return;
-        const camera = getSceneCamera(viewer);
-        if (!camera || !camera._scene) return;
-        const anchor = dioramaAnchorRef.current || resolveProgressivaAnchor(selectedProgressiva3D, constraint.surfaceHeight);
-        if (!anchor) return;
-        console.log("[Vista3D][FP] enter", {
-            progresivaId: selectedProgressiva3D.id,
-            nombre: selectedProgressiva3D.nombre,
-            anchor,
-            constraint,
-            before: {
-                heading: camera.heading,
-                pitch: camera.pitch,
-                roll: camera.roll
-            }
-        });
-
-        isDioramaTransitioningRef.current = true;
-        const heading = Cesium.Math.toRadians(18);
-        camera.setView({
-            destination: Cartesian3.fromDegrees(
-                anchor.lon,
-                anchor.lat,
-                Math.max(anchor.surfaceZ + 25, constraint.minHeight + 20)
-            ),
-            orientation: {
-                heading,
-                pitch: Cesium.Math.toRadians(-12),
-                roll: 0
-            }
-        });
-        console.log("[Vista3D][FP] setView applied", {
-            destination: {
-                lon: anchor.lon,
-                lat: anchor.lat,
-                height: Math.max(anchor.surfaceZ + 25, constraint.minHeight + 20)
-            },
-            after: {
-                heading: camera.heading,
-                pitch: camera.pitch,
-                roll: camera.roll
-            }
-        });
-        isDioramaTransitioningRef.current = false;
-        setCameraMode('firstPerson');
-    }, [Cartesian3, getSceneCamera, resolveProgressivaAnchor, selectedProgressiva3D]);
-
-    const exitFirstPerson = useCallback(() => {
-        if (!selectedProgressiva3D) {
-            setCameraMode('orbit');
-            return;
-        }
-        setCameraMode('diorama');
-    }, [selectedProgressiva3D]);
-
     const focusOnSelectedProgressiva = useCallback(() => {
         const viewer = viewerRef.current;
         const camera = getSceneCamera(viewer);
@@ -961,15 +1041,16 @@ export default function Vista3D() {
 
         isDioramaTransitioningRef.current = true;
         try {
+            resetCameraTransform(camera);
             camera.setView({
                 destination: Cartesian3.fromDegrees(
                     anchor.lon,
                     anchor.lat,
-                    Math.max(anchor.surfaceZ + Math.max(85, dioramaSize * 0.24), constraint.minHeight + 25)
+                    Math.max(anchor.surfaceZ + Math.max(80, dioramaSize * 0.3), constraint.minHeight + 20)
                 ),
                 orientation: {
-                    heading: Cesium.Math.toRadians(18),
-                    pitch: Cesium.Math.toRadians(-10),
+                    heading: Cesium.Math.toRadians(22),
+                    pitch: Cesium.Math.toRadians(-35),  // Antes: -4° (muy rasante) → -35° (perspectiva cómoda)
                     roll: 0
                 }
             });
@@ -978,15 +1059,18 @@ export default function Vista3D() {
                 isDioramaTransitioningRef.current = false;
             }, 0);
         }
-    }, [Cartesian3, dioramaSize, getSceneCamera]);
+    }, [Cartesian3, dioramaSize, getSceneCamera, resetCameraTransform]);
 
     const flyToProgressive = useCallback(async (p) => {
         if (!viewerRef.current) return;
         const viewer = viewerRef.current;
-        const camera = getSceneCamera(viewer);
-        if (!camera || !camera._scene) return;
+        selectedProgressivaRef.current = p;
+        pendingDioramaFocusRef.current = p.id;
         setSelectedProgressiva3D(p);
-        setCameraMode('diorama');
+        const hasRawMesh = !!currentModelDataRef.current?.rawVertices?.length;
+        if (hasRawMesh) {
+            renderModelChunk(currentModelDataRef.current, p);
+        }
         const initialAnchor = resolveProgressivaAnchor(p);
         if (!initialAnchor) return;
         let { lon, lat } = initialAnchor;
@@ -1007,35 +1091,18 @@ export default function Vista3D() {
         }
 
         dioramaAnchorRef.current = { lon, lat, surfaceZ };
-
-        const cameraHeight = Math.max(80, dioramaSize * 0.22);
-        isDioramaTransitioningRef.current = true;
-        try {
-            camera.setView({
-                destination: Cartesian3.fromDegrees(lon, lat, surfaceZ + cameraHeight),
-                orientation: {
-                    heading: Cesium.Math.toRadians(18),
-                    pitch: Cesium.Math.toRadians(-10),
-                    roll: 0
-                }
-            });
-        } finally {
-            window.setTimeout(() => {
-                isDioramaTransitioningRef.current = false;
-            }, 0);
-        }
-    }, [Cartesian3, Cartographic, dioramaSize, getSceneCamera, resolveProgressivaAnchor]);
+    }, [Cartographic, renderModelChunk, resolveProgressivaAnchor]);
 
     // --- EFECTO: RENDERIZADO DE SUELOS Y TRAZADOS (INTELIGENTE: Auto-Zona y Elevación Real) ---
     useEffect(() => {
         const viewer = viewerRef.current;
         if (!isViewerStable(viewer) || !soilData || !isViewerReady) {
-            console.warn("[Vista3D] Renderizado de suelos en espera: Visor no listo, destruido o sin datos.");
             return;
         }
         progressivaAnchorsRef.current = new Map();
 
         // 1. Limpiar previos
+        clearLocalOverlays();
         kmlDataSourcesRef.current.forEach(ds => viewer.dataSources.remove(ds));
         kmlDataSourcesRef.current = [];
         soilEntitiesRef.current.forEach(ent => viewer.entities.remove(ent));
@@ -1046,7 +1113,6 @@ export default function Vista3D() {
             if (!isViewerStable(viewer)) return;
 
             if (!soilData.tracks || soilData.tracks.length === 0) {
-                console.warn("[Vista3D] ⚠️ No hay tracks en soilData.tracks");
                 return;
             }
 
@@ -1079,10 +1145,6 @@ export default function Vista3D() {
 
                     const entities = ds.entities.values;
 
-                    if (entities.length === 0) {
-                        console.warn(`[Vista3D] ⚠️ El KML '${track.nombre}' no tiene entidades válidas (Puntos/Líneas).`);
-                    }
-
                     // DETECCIÓN AUTOMÁTICA DE ZONA UTM DESDE EL KML
                     if (!zoneDetected && entities.length > 0) {
                         const firstEnt = entities.find(e => e.position);
@@ -1101,25 +1163,19 @@ export default function Vista3D() {
 
                     entities.forEach(entity => {
                         if (entity.polyline) {
-                            // Cambiamos el color a Azul (DodgerBlue) para coincidir con la estética de la página
+                            // El trazado debe seguir visible incluso dentro del diorama local.
                             entity.polyline.material = Color.DODGERBLUE.withAlpha(0.9);
+                            entity.polyline.depthFailMaterial = Color.CYAN.withAlpha(0.95);
                             entity.polyline.width = 8.0;
                             entity.polyline.clampToGround = true;
                             entity.polyline.arcType = Cesium.ArcType.GEODESIC;
+                            entity.polyline.zIndex = 20;
                             entity.polyline.show = true;
                         }
                     });
 
                     viewer.dataSources.add(ds);
                     kmlDataSourcesRef.current.push(ds);
-
-                    // AUTO-ENFOQUE: Volar al primer trazado cargado para validación visual
-                    if (!zoneDetected) {
-                        viewer.flyTo(ds, {
-                            duration: 2,
-                            offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
-                        });
-                    }
 
                 } catch (e) {
                     console.error(`[Vista3D] ❌ Error crítico cargando track ${track.nombre}:`, e);
@@ -1144,10 +1200,12 @@ export default function Vista3D() {
             let sampledMap = {};
             if (cartographicsToSample.length > 0) {
                 if (!isViewerStable(viewer)) return;
-                // Cesium 1.104+ usa scene.terrainProvider. El getter viewer.terrainProvider puede ser undefined.
                 const scene = viewer.scene;
                 if (!scene) return;
                 const tProvider = scene.terrainProvider || viewer.terrainProvider;
+
+                // ── Esperar a que el terreno esté listo antes de muestrear ──────
+                await waitForTerrainReady(tProvider);
 
                 try {
                     const sampled = await chunkedSampleTerrain(Cesium, tProvider, cartographicsToSample);
@@ -1155,7 +1213,7 @@ export default function Vista3D() {
                         sampledMap[`${c.longitude}_${c.latitude}`] = sampled[idx]?.height || 0;
                     });
                 } catch (sampleErr) {
-                    console.error("[Vista3D] Error crítico en muestreo de terreno:", sampleErr);
+                    console.error('[Vista3D] Error en muestreo de terreno:', sampleErr);
                 }
             }
 
@@ -1187,7 +1245,8 @@ export default function Vista3D() {
                                 pixelSize: 10,
                                 color: Color.CYAN,
                                 outlineColor: Color.BLACK,
-                                outlineWidth: 2
+                                outlineWidth: 2,
+                                disableDepthTestDistance: Number.POSITIVE_INFINITY
                             },
                             label: {
                                 text: p.nombre,
@@ -1198,7 +1257,8 @@ export default function Vista3D() {
                                 style: Cesium.LabelStyle.FILL_AND_OUTLINE,
                                 verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
                                 pixelOffset: new Cesium.Cartesian2(0, -20),
-                                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3000)
+                                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3000),
+                                disableDepthTestDistance: Number.POSITIVE_INFINITY
                             }
                         });
                         soilEntitiesRef.current.push(markerEntity);
@@ -1256,16 +1316,34 @@ export default function Vista3D() {
         const initialize3D = async () => {
             await loadTracks();
             await renderHoles();
+            if (selectedProgressivaRef.current) {
+                renderLocalOverlay(selectedProgressivaRef.current);
+                return;
+            }
+            if (!hasInitialAutoCenterRef.current) {
+                window.setTimeout(() => {
+                    if (hasInitialAutoCenterRef.current || selectedProgressivaRef.current || pendingDioramaFocusRef.current) return;
+                    hasInitialAutoCenterRef.current = flyToGlobalContext();
+                }, 0);
+            }
         };
 
         initialize3D();
-    }, [getSceneCamera, isViewerStable, soilData, isViewerReady, projectZone]);
+    }, [clearLocalOverlays, flyToGlobalContext, getSceneCamera, isViewerStable, renderLocalOverlay, soilData, isViewerReady, projectZone]);
 
     const fetchAllData = useCallback(async () => {
         setIsGlobalLoading(true);
         await Promise.all([fetchModelos(), fetchSoilData()]);
         setIsGlobalLoading(false);
     }, [fetchModelos, fetchSoilData]);
+
+    useEffect(() => {
+        selectedProgressivaRef.current = selectedProgressiva3D;
+    }, [selectedProgressiva3D]);
+
+    useEffect(() => {
+        hasInitialAutoCenterRef.current = false;
+    }, [selectedProjectId, selectedModelo?.id]);
 
     // --- EFECTO DE CARGA INICIAL ---
     useEffect(() => {
@@ -1335,9 +1413,7 @@ export default function Vista3D() {
                         // API Antigua
                         terrainProviderOption = { terrainProvider: Cesium.createWorldTerrain({ requestVertexNormals: true }) };
                     }
-                } catch (terrainErr) {
-                    console.warn("[Vista3D] No se pudo cargar terreno global, usando elipsoide por defecto.", terrainErr);
-                }
+                } catch { }
 
                 viewer = new Viewer(containerRef.current, {
                     ...terrainProviderOption,
@@ -1376,7 +1452,6 @@ export default function Vista3D() {
                         imageryLayers.addImageryProvider(ionLayer);
                     }
                 } catch (e) {
-                    console.warn("[Vista3D] Falló Sentinel-2 Ion, usando ESRI como fallback.");
                     if (isMounted.current && !viewer.isDestroyed()) {
                         imageryLayers.addImageryProvider(new ArcGisMapServerImageryProvider({
                             url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
@@ -1401,19 +1476,24 @@ export default function Vista3D() {
 
                 const controller = viewer.scene.screenSpaceCameraController;
                 if (controller) {
-                    controller.inertiaSpin = 0.7;
-                    controller.inertiaTranslate = 0.7;
-                    controller.inertiaZoom = 0.7;
+                    // --- CONFIGURACIÓN GLOBAL DE MOVILIDAD MEJORADA ---
+                    controller.inertiaSpin = 0.06;          // Rotación muy directa
+                    controller.inertiaTranslate = 0.06;     // Pan directo sin "resbalar"
+                    controller.inertiaZoom = 0.06;          // Zoom que para donde quieres
                     controller.enableLook = true;
                     controller.enableTilt = true;
                     controller.enableTranslate = true;
                     controller.enableRotate = true;
                     controller.enableZoom = true;
+                    // Sensibilidad de rueda del mouse: mucho más alta para zoom cómodo
+                    if ('zoomFactor' in controller) {
+                        controller.zoomFactor = 10.0;
+                    }
+                    // Evita que la cámara se atasque dentro del terreno al inclinarse
+                    controller.enableCollisionDetection = false;
                 }
 
                 viewer.scene.preRender.addEventListener(enforceDioramaCameraBounds);
-                viewer.scene.preRender.addEventListener(updateFirstPersonMovement);
-
                 if (isMounted.current) {
                     viewerRef.current = viewer;
                     setIsViewerReady(true); // DIPARAR RENDERIZADO DE DATOS
@@ -1435,13 +1515,12 @@ export default function Vista3D() {
             if (viewer && !viewer.isDestroyed()) {
                 try {
                     viewer.scene.preRender.removeEventListener(enforceDioramaCameraBounds);
-                    viewer.scene.preRender.removeEventListener(updateFirstPersonMovement);
                 } catch (e) { }
                 viewer.destroy();
             }
             viewerRef.current = null;
         };
-    }, [disableDioramaConstraints, enforceDioramaCameraBounds, updateFirstPersonMovement]);
+    }, [disableDioramaConstraints, enforceDioramaCameraBounds]);
 
 
     // --- MANEJO DE ARCHIVOS ---
@@ -1638,9 +1717,12 @@ export default function Vista3D() {
 
         // CASO ESPECIAL: Si es un Tramo Maestro (Streaming), no hay malla fija que procesar
         if (selectedModelo.url_archivo === 'STREAMING_LOCAL_SIN_MALLA') {
+            currentModelDataRef.current = null;
+            setModelMeshVersion(0);
             setCameraMode('orbit');
             disableDioramaConstraints();
             clearDioramaBox();
+            clearLocalOverlays();
             if (selectedModelo.metadata && selectedModelo.metadata.centro_utm) {
                 const { x, y } = selectedModelo.metadata.centro_utm;
                 const wgs = utmToWgs84(x, y, projectZone);
@@ -1653,8 +1735,6 @@ export default function Vista3D() {
                     destination: Cartesian3.fromDegrees(wgs.lon, wgs.lat, 1200), // Vista más amplia para tramos
                     duration: 1.5
                 });
-            } else {
-                console.warn("[Vista3D] El modelo streaming no tiene metadatos de centro_utm:", selectedModelo.metadata);
             }
             setIsGlobalLoading(false);
             return;
@@ -1663,6 +1743,8 @@ export default function Vista3D() {
         // CASO NORMAL: Procesamiento de malla OBJ
         (async () => {
             try {
+                currentModelDataRef.current = null;
+                setModelMeshVersion(0);
                 // VALIDACIÓN CRÍTICA: Si el modelo está pendiente, no intentar fetch (evita cargar index.html como OBJ)
                 if (selectedModelo.url_archivo === 'PENDIENTE' || !selectedModelo.url_archivo) {
                     setIsGlobalLoading(false);
@@ -1678,117 +1760,158 @@ export default function Vista3D() {
                 }
 
                 setIsGlobalLoading(true);
-                let objData = null;
 
-                if (selectedModelo.url_archivo === 'DB_EMBEDDED_OBJ') {
-                    objData = selectedModelo.metadata?.obj_content;
-                    if (!objData) throw new Error("No se encontró el contenido OBJ en los metadatos de la DB.");
-                } else {
-                    const proxyUrl = `${API_BASE}/api/modelos-3d/${selectedModelo.id}/obj`;
-                    const resp = await fetch(proxyUrl, {
-                        headers: { 'Authorization': `Bearer ${user?.token}` }
-                    });
-                    if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
-                    objData = await resp.text();
-                }
+                // ── PARSEO VÍA WEB WORKER (sin freeze) ───────────────────────
+                // loadModel descarga el OBJ y lo parsea en un Worker separado.
+                // onProgress actualiza uploadProgress para que la barra de carga
+                // sea real en lugar de indeterminada.
+                const parsedModelData = await loadModel(
+                    selectedModelo,
+                    projectZone,
+                    (percent) => setUploadProgress(percent)
+                );
 
-                if (objData === 'PENDIENTE') {
-                    throw new Error("El modelo aún está siendo procesado por el servidor.");
-                }
+                const { rawVertices, rawMinZ, rawMaxZ } = parsedModelData;
 
-                if (!objData || objData.trim().startsWith('<!DOCTYPE html>') || objData.trim().startsWith('<html')) {
-                    throw new Error("El servidor devolvió una página HTML en lugar de un objeto 3D o el archivo no se generó correctamente.");
-                }
-
-                const rawVertices = [];
-                const indicesTriangulos = [];
-                let minZ = Infinity, maxZ = -Infinity;
+                // Calcular centro para el vuelo inicial
                 let sumLon = 0, sumLat = 0;
+                rawVertices.forEach(v => { sumLon += v.lon; sumLat += v.lat; });
 
-                const lines = objData.split('\n');
-                const len = lines.length;
-
-                for (let i = 0; i < len; i++) {
-                    const line = lines[i];
-                    if (line.startsWith('v ')) {
-                        const parts = line.trim().split(/\s+/);
-                        const vx = parseFloat(parts[2]), vy = parseFloat(parts[1]), vz = parseFloat(parts[3]);
-                        const processedCoords = processCoordinates(vx, vy, projectZone);
-                        const { lon, lat } = utmToWgs84(processedCoords.x, processedCoords.y, projectZone);
-
-                        rawVertices.push({ x: processedCoords.x, y: processedCoords.y, z: vz, lon, lat });
-                        sumLon += lon; sumLat += lat;
-
-                        if (vz < minZ) minZ = vz; if (vz > maxZ) maxZ = vz;
-                    } else if (line.startsWith('f ')) {
-                        const parts = line.trim().split(/\s+/);
-                        if (parts.length >= 4) {
-                            const v1 = parseInt(parts[1]) - 1, v2 = parseInt(parts[2]) - 1, v3 = parseInt(parts[3]) - 1;
-                            indicesTriangulos.push(v1, v2, v3);
-                        }
-                    }
-
-                    if (i % 15000 === 0 && i > 0) await new Promise(resolve => setTimeout(resolve, 0));
-                }
-
-                const parsedModelData = {
-                    rawVertices,
-                    rawIndicesTriangulos: indicesTriangulos,
-                    rawMinZ: minZ,
-                    rawMaxZ: maxZ
-                };
-
+                const getLatestSelection = () => selectedProgressivaRef.current;
                 currentModelDataRef.current = parsedModelData;
-                renderModelChunk(parsedModelData, selectedProgressiva3D);
+                setModelMeshVersion(prev => prev + 1);
+                renderModelChunk(parsedModelData, getLatestSelection());
 
                 const activeMesh = currentModelDataRef.current;
-                const activeMinZ = activeMesh?.activeMinZ ?? minZ;
-                const activeMaxZ = activeMesh?.activeMaxZ ?? maxZ;
+                const activeMinZ = activeMesh?.activeMinZ ?? rawMinZ;
+                const activeMaxZ = activeMesh?.activeMaxZ ?? rawMaxZ;
                 const activeVerticesInfo = activeMesh?.activeVerticesInfo || rawVertices.map(({ lon, lat, z }) => ({ lon, lat, z }));
                 const midZ = activeMinZ + (activeMaxZ - activeMinZ) / 2.0;
 
                 setIsGlobalLoading(false);
 
                 if (activeVerticesInfo.length > 0) {
-                    const selectedProgressivaCoords = selectedProgressiva3D
-                        ? processCoordinates(selectedProgressiva3D.coordenada_este, selectedProgressiva3D.coordenada_norte, projectZone)
+                    const latestSelection = getLatestSelection();
+                    const selectedProgressivaCoords = latestSelection
+                        ? processCoordinates(latestSelection.coordenada_este, latestSelection.coordenada_norte, projectZone)
                         : null;
-                    const centerLon = selectedProgressiva3D
+                    const centerLon = latestSelection
                         ? utmToWgs84(selectedProgressivaCoords.x, selectedProgressivaCoords.y, projectZone).lon
                         : sumLon / rawVertices.length;
-                    const centerLat = selectedProgressiva3D
+                    const centerLat = latestSelection
                         ? utmToWgs84(selectedProgressivaCoords.x, selectedProgressivaCoords.y, projectZone).lat
                         : sumLat / rawVertices.length;
                     const sceneCamera = getSceneCamera(viewer);
-                    if (!sceneCamera) {
-                        return;
+                    if (!sceneCamera) return;
+
+                    if (latestSelection) {
+                        renderModelChunk(parsedModelData, latestSelection);
+                        renderLocalOverlay(latestSelection);
+                        window.setTimeout(() => {
+                            if (!viewerRef.current || viewerRef.current.isDestroyed()) return;
+                            setCameraMode('diorama');
+                            focusOnSelectedProgressiva();
+                        }, 0);
+                    } else {
+                        window.setTimeout(() => {
+                            if (selectedProgressivaRef.current || pendingDioramaFocusRef.current) return;
+                            const centered = flyToGlobalContext();
+                            hasInitialAutoCenterRef.current = centered;
+                            if (centered) return;
+                            sceneCamera.flyTo({
+                                destination: Cartesian3.fromDegrees(centerLon, centerLat, midZ + 800),
+                                duration: 2.0
+                            });
+                        }, 0);
                     }
-                    sceneCamera.flyTo({
-                        destination: Cartesian3.fromDegrees(centerLon, centerLat, selectedProgressiva3D ? midZ + Math.max(120, dioramaSize * 0.75) : midZ + 800),
-                        duration: 2.0
-                    });
-                } else {
-                    console.warn("[Vista3D] No se encontraron vértices válidos en el OBJ.");
                 }
             } catch (e) {
-                console.error("[Vista3D] Error crítico cargando modelo:", e);
+                // Ignorar errores de abort (usuario cambió de modelo durante la carga)
+                if (e.name !== 'AbortError') {
+                    console.error('[Vista3D] Error crítico cargando modelo:', e);
+                }
                 setIsGlobalLoading(false);
             }
         })();
-    }, [Cartesian3, clearDioramaBox, dioramaSize, disableDioramaConstraints, getSceneCamera, projectZone, renderModelChunk, selectedModelo, selectedProgressiva3D, user?.token]);
+
+        // Cancelar carga si el componente desmonta o el modelo cambia
+        return () => cancelLoad();
+    }, [Cartesian3, cancelLoad, clearDioramaBox, clearLocalOverlays, disableDioramaConstraints, flyToGlobalContext, focusOnSelectedProgressiva, getSceneCamera, loadModel, projectZone, renderLocalOverlay, renderModelChunk, selectedModelo]);
+
 
     useEffect(() => {
-        if (!viewerRef.current || !currentModelDataRef.current?.rawVertices?.length || !selectedModelo) {
+        if (!viewerRef.current || !selectedModelo || modelMeshVersion === 0 || !currentModelDataRef.current?.rawVertices?.length) {
             return;
         }
 
         if (selectedModelo.url_archivo === 'STREAMING_LOCAL_SIN_MALLA') {
             clearDioramaBox();
+            clearLocalOverlays();
             return;
         }
 
         renderModelChunk(currentModelDataRef.current, selectedProgressiva3D);
-    }, [clearDioramaBox, dioramaSize, renderModelChunk, selectedModelo, selectedProgressiva3D]);
+    }, [clearDioramaBox, clearLocalOverlays, dioramaSize, modelMeshVersion, renderModelChunk, selectedModelo, selectedProgressiva3D]);
+
+    useEffect(() => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed() || !selectedModelo || modelMeshVersion === 0 || !currentModelDataRef.current?.rawVertices?.length) {
+            return;
+        }
+
+        if (!selectedProgressiva3D) {
+            pendingDioramaFocusRef.current = null;
+            clearLocalOverlays();
+            return;
+        }
+
+        renderLocalOverlay(selectedProgressiva3D);
+
+        if (!dioramaConstraintRef.current || !dioramaAnchorRef.current) {
+            return;
+        }
+
+        pendingDioramaFocusRef.current = null;
+        setCameraMode('diorama');
+        focusOnSelectedProgressiva();
+    }, [clearLocalOverlays, focusOnSelectedProgressiva, modelMeshVersion, renderLocalOverlay, selectedModelo, selectedProgressiva3D]);
+
+    useEffect(() => {
+        const isLocalMode = selectedProgressiva3D?.id != null;
+        const showGlobalEstratos = showEstratosLayer && mapOpacity < 0.1;
+
+        soilEntitiesRef.current.forEach((entity) => {
+            if (!entity) return;
+            const entityId = entity.id;
+
+            if (typeof entityId === 'string' && entityId.startsWith('prog-marker-')) {
+                entity.show = !isLocalMode;
+                return;
+            }
+
+            if (typeof entityId === 'string' && (entityId.startsWith('estrato-') || entityId.startsWith('calicata-empty-'))) {
+                entity.show = isLocalMode
+                    ? false
+                    : showGlobalEstratos;
+            }
+        });
+
+        kmlDataSourcesRef.current.forEach((ds) => {
+            if (!ds?.entities?.values) return;
+            ds.show = !isLocalMode;
+            ds.entities.values.forEach((entity) => {
+                if (!entity.polyline) return;
+                entity.polyline.show = !isLocalMode;
+                entity.polyline.width = isLocalMode ? 12.0 : 8.0;
+                entity.polyline.material = isLocalMode
+                    ? Color.CYAN.withAlpha(0.98)
+                    : Color.DODGERBLUE.withAlpha(0.9);
+                entity.polyline.depthFailMaterial = Color.CYAN.withAlpha(0.95);
+                entity.polyline.clampToGround = true;
+                entity.polyline.zIndex = isLocalMode ? 40 : 20;
+            });
+        });
+    }, [mapOpacity, selectedProgressiva3D, showEstratosLayer]);
 
     useEffect(() => {
         applyCameraMode(cameraMode);
@@ -1797,103 +1920,12 @@ export default function Vista3D() {
     useEffect(() => {
         if (!selectedProgressiva3D && cameraMode !== 'orbit') {
             setCameraMode('orbit');
-        } else if (selectedProgressiva3D && cameraMode === 'orbit') {
-            setCameraMode('diorama');
         }
     }, [cameraMode, selectedProgressiva3D]);
 
-    useEffect(() => {
-        const handleKeyChange = (event, isPressed) => {
-            if (cameraMode !== 'firstPerson') return;
-
-            const activeTag = document.activeElement?.tagName;
-            if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
-
-            const key = event.key.toLowerCase();
-            const mapping = {
-                w: 'forward',
-                arrowup: 'forward',
-                s: 'backward',
-                arrowdown: 'backward',
-                a: 'left',
-                arrowleft: 'left',
-                d: 'right',
-                arrowright: 'right',
-                q: 'down',
-                e: 'up'
-            };
-
-            const movementKey = mapping[key];
-            if (!movementKey) return;
-            event.preventDefault();
-            movementKeysRef.current[movementKey] = isPressed;
-            console.log("[Vista3D][FP] key", {
-                key,
-                movementKey,
-                isPressed,
-                mode: cameraMode
-            });
-        };
-
-        const handleKeyDown = (event) => handleKeyChange(event, true);
-        const handleKeyUp = (event) => handleKeyChange(event, false);
-
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
-
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('keyup', handleKeyUp);
-        };
-    }, [cameraMode]);
-
     const centerMap = useCallback(() => {
-        const viewer = viewerRef.current;
-        if (!viewer) return;
-
-        // Prioridad 1: Vuelo a la malla LandXML actual
-        if (currentModelDataRef.current && currentModelDataRef.current.activeVerticesInfo && currentModelDataRef.current.activeVerticesInfo.length > 0) {
-            const { activeVerticesInfo, activeMinZ, activeMaxZ } = currentModelDataRef.current;
-            const verticesInfo = activeVerticesInfo;
-            const minZ = activeMinZ;
-            const maxZ = activeMaxZ;
-            const midZ = minZ + (maxZ - minZ) / 2.0;
-            let sumLon = 0, sumLat = 0;
-            verticesInfo.forEach(v => { sumLon += v.lon; sumLat += v.lat; });
-            const centerLon = sumLon / verticesInfo.length;
-            const centerLat = sumLat / verticesInfo.length;
-            const sceneCamera = getSceneCamera(viewer);
-            if (!sceneCamera) return;
-            sceneCamera.flyTo({
-                destination: Cartesian3.fromDegrees(centerLon, centerLat, midZ + 1500),
-                duration: 2.0,
-                orientation: {
-                    heading: 0,
-                    pitch: Cesium.Math.toRadians(-90),
-                    roll: 0
-                }
-            });
-            return;
-        }
-
-        // Prioridad 2: Vuelo a los DataSources KML (Trazados)
-        if (kmlDataSourcesRef.current && kmlDataSourcesRef.current.length > 0) {
-            viewer.flyTo(kmlDataSourcesRef.current[0], {
-                duration: 2.0,
-                offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
-            });
-            return;
-        }
-
-        // Prioridad 3: Vuelo a Sólidos / Calicatas
-        if (soilEntitiesRef.current && soilEntitiesRef.current.length > 0) {
-            viewer.flyTo(soilEntitiesRef.current, {
-                duration: 2.0,
-                offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
-            });
-            return;
-        }
-    }, [Cartesian3, getSceneCamera]);
+        flyToGlobalContext();
+    }, [flyToGlobalContext]);
 
     // --- UI RENDER (dashboardContent y loadingOverlay) ---
     // (Keeping them at the end to ensure all references are initialized)
@@ -2127,7 +2159,7 @@ export default function Vista3D() {
                                 <div className="space-y-4 pt-4 border-t border-cyan-400/10">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Modo de Cámara</label>
-                                        <div className="grid grid-cols-3 gap-2">
+                                        <div className="grid grid-cols-2 gap-2">
                                             {[
                                                 {
                                                     id: 'orbit',
@@ -2144,21 +2176,16 @@ export default function Vista3D() {
                                                         setCameraMode('diorama');
                                                         focusOnSelectedProgressiva();
                                                     }
-                                                },
-                                                { id: 'firstPerson', label: '1ra Persona', action: enterFirstPerson }
+                                                }
                                             ].map(({ id, label, action }) => {
                                                 const isActive = cameraMode === id;
-                                                const isDisabled = (id === 'diorama' || id === 'firstPerson') && !selectedProgressiva3D;
+                                                const isDisabled = id === 'diorama' && !selectedProgressiva3D;
                                                 return (
                                                     <button
                                                         key={id}
                                                         onClick={() => {
                                                             if (isDisabled) return;
-                                                            if (id === 'diorama' && cameraMode === 'firstPerson') {
-                                                                exitFirstPerson();
-                                                            } else {
-                                                                action();
-                                                            }
+                                                            action();
                                                         }}
                                                         className={`px-2 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${isDisabled
                                                             ? 'bg-slate-900/40 border-slate-800 text-slate-600 cursor-not-allowed'
@@ -2172,9 +2199,6 @@ export default function Vista3D() {
                                                 );
                                             })}
                                         </div>
-                                        <p className="text-[9px] text-slate-500 italic leading-relaxed">
-                                            En primera persona usa `W A S D`, `Q`, `E` y el mouse para orientar la vista dentro del diorama.
-                                        </p>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Ventana Local</label>
@@ -2184,6 +2208,28 @@ export default function Vista3D() {
                                     <p className="text-[9px] text-slate-500 italic leading-relaxed">
                                         Al elegir una progresiva, el LandXML se recorta dentro de este chunk para enfocar estratos y superficie local.
                                     </p>
+
+                                    {/* Guía de controles mejorada */}
+                                    <div className="mt-2 p-3 rounded-xl bg-slate-900/70 border border-slate-700/60">
+                                        <p className="text-[8px] font-black text-cyan-400/80 uppercase tracking-widest mb-2.5">
+                                            <i className="fas fa-keyboard mr-1.5"></i>Controles de Navegación
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                                            {[
+                                                ['W / S', 'Avanzar / Retroceder'],
+                                                ['A / D', 'Izquierda / Derecha'],
+                                                ['Q / E', 'Bajar / Subir'],
+                                                ['Scroll ↕', 'Zoom rápido'],
+                                                ['Clic Der.', 'Rotar vista'],
+                                                ['Ctrl+Drag', 'Inclinar terreno'],
+                                            ].map(([key, action]) => (
+                                                <div key={key} className="flex items-center gap-1.5">
+                                                    <span className="text-[7px] font-black bg-slate-800 border border-slate-600 text-cyan-300 px-1.5 py-0.5 rounded shrink-0">{key}</span>
+                                                    <span className="text-[7px] text-slate-500">{action}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

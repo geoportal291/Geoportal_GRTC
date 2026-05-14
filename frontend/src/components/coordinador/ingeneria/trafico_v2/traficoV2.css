@@ -1277,3 +1277,342 @@
     min-height: 540px;
   }
 }
+
+/* ========== DYNAMIC FILE MANAGER - Section Tabs ========== */
+.tv2-section-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid rgba(22, 50, 79, 0.06);
+  padding-bottom: 12px;
+}
+
+.tv2-section-tab {
+  border: none;
+  background: transparent;
+  color: #5d6c80;
+  padding: 10px 16px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tv2-section-tab:hover {
+  background: #f0f6ff;
+  color: #173a68;
+}
+
+.tv2-section-tab.active {
+  background: #2d80d8;
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(45, 128, 216, 0.22);
+}
+
+.tv2-section-tab i {
+  font-size: 0.9rem;
+}
+
+/* ========== File Section Container ========== */
+.tv2-file-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.tv2-file-section::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tv2-file-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tv2-file-section::-webkit-scrollbar-thumb {
+  background: rgba(45, 128, 216, 0.22);
+  border-radius: 999px;
+}
+
+/* ========== File Group ========== */
+.tv2-file-group {
+  border: 1px solid rgba(22, 50, 79, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+  background: #f9fbfd;
+  transition: border-color 0.2s ease;
+}
+
+.tv2-file-group:hover {
+  border-color: rgba(45, 128, 216, 0.2);
+}
+
+.tv2-file-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(22, 50, 79, 0.06);
+}
+
+.tv2-file-group-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tv2-file-group-info strong {
+  color: #173a68;
+  font-size: 0.92rem;
+}
+
+.tv2-file-group-info span {
+  color: #60718a;
+  font-size: 0.8rem;
+}
+
+.tv2-delete-group-btn {
+  border: none;
+  background: #fff1ef;
+  color: #b93b2d;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tv2-delete-group-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.22);
+}
+
+/* ========== Photo Grid ========== */
+.tv2-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.tv2-photo-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(22, 50, 79, 0.08);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tv2-photo-thumb:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px rgba(20, 48, 79, 0.14);
+}
+
+.tv2-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tv2-photo-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.85);
+  color: #ffffff;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.tv2-photo-thumb:hover .tv2-photo-delete {
+  opacity: 1;
+}
+
+/* ========== Document List ========== */
+.tv2-doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tv2-doc-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid rgba(22, 50, 79, 0.06);
+  transition: all 0.2s ease;
+}
+
+.tv2-doc-item:hover {
+  background: #f0f6ff;
+  border-color: rgba(45, 128, 216, 0.18);
+}
+
+.tv2-doc-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #dbeafe, #eff6ff);
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.tv2-doc-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tv2-doc-info strong {
+  color: #173a68;
+  font-size: 0.86rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv2-doc-info span {
+  color: #60718a;
+  font-size: 0.78rem;
+}
+
+.tv2-doc-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tv2-doc-action {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.tv2-doc-action.open {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.tv2-doc-action.open:hover {
+  background: #0369a1;
+  color: #ffffff;
+}
+
+.tv2-doc-action.delete {
+  background: #fff1ef;
+  color: #b93b2d;
+}
+
+.tv2-doc-action.delete:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+/* ========== Lightbox ========== */
+.tv2-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 16, 28, 0.88);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2500;
+  padding: 40px;
+  cursor: pointer;
+}
+
+.tv2-lightbox img {
+  max-width: 92%;
+  max-height: 90vh;
+  border-radius: 16px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.5);
+  cursor: default;
+  object-fit: contain;
+}
+
+.tv2-lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.tv2-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ========== Responsive adjustments ========== */
+@media (max-width: 860px) {
+  .tv2-section-tabs {
+    flex-wrap: wrap;
+  }
+
+  .tv2-photo-grid {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  }
+
+  .tv2-doc-item {
+    flex-wrap: wrap;
+  }
+
+  .tv2-lightbox {
+    padding: 16px;
+  }
+
+  .tv2-lightbox img {
+    max-width: 98%;
+  }
+}

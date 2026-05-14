@@ -1,23 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
-import alertify from 'alertifyjs';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { useAuth } from '../../../../data/contexts/AuthContext';
-import ResultadosBrevesModal from './ResultadosBrevesModal';
-import EnsayoDetalleModal from './EnsayoDetalleModal';
-import './VistaGeneralEnsayos.css';
-import './ResultadosBrevesModal.css';
-
-const checkIsDone = (e) => {
-  if (e.estado && e.estado.toLowerCase() === 'completado') return true;
-  return e.datos_formulario && Object.keys(e.datos_formulario).length > 0;
-};
-
-const getEnsayoStatus = (e) => {
-  if (e.estado && e.estado.toLowerCase() === 'en proceso') return 'EN PROCESO';
-  return checkIsDone(e) ? 'COMPLETADO' : (e.estado ? e.estado.toUpperCase() : 'PENDIENTE');
-};
+import React, { useState, useEffect, useCallback } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import axios from "axios";
+import alertify from "alertifyjs";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { useAuth } from "../../../../data/contexts/AuthContext";
+import ResultadosBrevesModal from "./ResultadosBrevesModal";
+import EnsayoDetalleModal from "./EnsayoDetalleModal";
+import { getEnsayoCompletionStatus } from "./ensayos.estado.js";
+import VisorGraficos from "./secciones/VisorGraficos.jsx";
+import "./VistaGeneralEnsayos.css";
+import "./ResultadosBrevesModal.css";
 
 // ========== ImportModal ==========
 const ImportModal = ({ isOpen, onClose, onImport, loading, errors }) => {
@@ -25,23 +17,49 @@ const ImportModal = ({ isOpen, onClose, onImport, loading, errors }) => {
   const handleFileChange = (e) => setSelectedFile(e.target.files[0]);
   const handleImportClick = () => {
     if (selectedFile) onImport(selectedFile);
-    else alertify.warning('Por favor, selecciona un archivo Excel.');
+    else alertify.warning("Por favor, selecciona un archivo Excel.");
   };
   if (!isOpen) return null;
   return (
     <div className="import-modal-overlay">
       <div className="import-modal-content">
         <h2>Importar Ensayos</h2>
-        <input type="file" className="form-control" accept=".xlsx" onChange={handleFileChange} />
-        {loading && <div className="loading-spinner-modal"><div className="loading-spinner"></div><p>Validando...</p></div>}
+        <input
+          type="file"
+          className="form-control"
+          accept=".xlsx"
+          onChange={handleFileChange}
+        />
+        {loading && (
+          <div className="loading-spinner-modal">
+            <div className="loading-spinner"></div>
+            <p>Validando...</p>
+          </div>
+        )}
         {errors.length > 0 && (
           <div className="import-errors">
-            {errors.map((err, i) => <div key={i}>Hoja: {err.sheet} - {err.error}</div>)}
+            {errors.map((err, i) => (
+              <div key={i}>
+                Hoja: {err.sheet} - {err.error}
+              </div>
+            ))}
           </div>
         )}
         <div className="modal-actions">
-          <button onClick={onClose} className="btn btn-outline" disabled={loading}>Cancelar</button>
-          <button onClick={handleImportClick} className="btn btn-primary" disabled={loading}>Validar y Subir</button>
+          <button
+            onClick={onClose}
+            className="btn btn-outline"
+            disabled={loading}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleImportClick}
+            className="btn btn-primary"
+            disabled={loading}
+          >
+            Validar y Subir
+          </button>
         </div>
       </div>
     </div>
@@ -49,19 +67,82 @@ const ImportModal = ({ isOpen, onClose, onImport, loading, errors }) => {
 };
 
 // ========== ConfirmationModal ==========
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, summary, loading }) => {
+const ConfirmationModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  summary,
+  loading,
+  errors = [],
+}) => {
   if (!isOpen) return null;
   return (
     <div className="import-modal-overlay">
-      <div className="import-modal-content">
+      <div className="import-modal-content" style={{ maxWidth: "600px" }}>
         <h2>Confirmar Cambios</h2>
         <ul>
-          <li>Crear: {summary?.ensayosParaCrear || 0}</li>
-          <li>Actualizar: {summary?.ensayosParaActualizar || 0}</li>
+          <li>Se crearán: {summary?.ensayosParaCrear || 0} ensayos</li>
+          <li>
+            Se actualizarán: {summary?.ensayosParaActualizar || 0} ensayos
+          </li>
         </ul>
-        <div className="modal-actions">
-          <button onClick={onClose} className="btn btn-outline">Cancelar</button>
-          <button onClick={onConfirm} className="btn btn-primary" disabled={loading}>Confirmar</button>
+        {errors.length > 0 && (
+          <div
+            className="import-errors"
+            style={{
+              marginTop: "15px",
+              maxHeight: "200px",
+              overflowY: "auto",
+              textAlign: "left",
+              backgroundColor: "#f8d7da",
+              padding: "10px",
+              borderRadius: "5px",
+            }}
+          >
+            <p
+              style={{
+                fontWeight: "bold",
+                color: "#721c24",
+                margin: "0 0 10px 0",
+                fontSize: "0.95em",
+              }}
+            >
+              <i className="fas fa-exclamation-triangle"></i> Los siguientes
+              ensayos NO se crearán ni actualizarán por errores en el documento.
+              Corrige el archivo si deseas importarlos, o presiona Confirmar
+              para omitirlos e importar el resto:
+            </p>
+            {errors.map((err, i) => (
+              <div
+                key={i}
+                style={{
+                  fontSize: "0.85em",
+                  color: "#721c24",
+                  borderBottom: "1px solid #f5c6cb",
+                  paddingBottom: "5px",
+                  marginBottom: "5px",
+                }}
+              >
+                <strong>Hoja: {err.sheet}</strong> - {err.error}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="modal-actions" style={{ marginTop: "20px" }}>
+          <button
+            onClick={onClose}
+            className="btn btn-outline"
+            disabled={loading}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="btn btn-primary"
+            disabled={loading}
+          >
+            Confirmar y Omitir Errores
+          </button>
         </div>
       </div>
     </div>
@@ -69,46 +150,262 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, summary, loading }) => 
 };
 
 // ========== EnsayosFullListModal ==========
-const EnsayosFullListModal = ({ isOpen, onClose, grupo, onOpenEnsayo, handleShowResults }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+const hasGroupChartsConfig = (graficosConfig) => {
+  if (!graficosConfig) return false;
+  if (Array.isArray(graficosConfig)) {
+    return graficosConfig.some((chart) => chart?.scope === "group");
+  }
+  if (typeof graficosConfig === "object") {
+    const aggregateCharts = Array.isArray(graficosConfig.aggregate_charts)
+      ? graficosConfig.aggregate_charts
+      : Array.isArray(graficosConfig.list_view_charts)
+        ? graficosConfig.list_view_charts
+        : [];
+    const groupedCharts = Array.isArray(graficosConfig.charts)
+      ? graficosConfig.charts.filter((chart) => chart?.scope === "group")
+      : [];
+    return [...groupedCharts, ...aggregateCharts].length > 0;
+  }
+  return false;
+};
+
+const EnsayosFullListModal = ({
+  isOpen,
+  onClose,
+  grupo,
+  onOpenEnsayo,
+  handleShowResults,
+  getEnsayoStatus,
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [activeTab, setActiveTab] = useState("listado");
+
   if (!isOpen || !grupo) return null;
-  const filtered = grupo.ensayos.filter(e => `${e.nombre_ensayo} ${e.codigo_ensayo} ${e.progresiva_nombre}`.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  const handleSort = (key) => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key)
+      return (
+        <i
+          className="fas fa-sort"
+          style={{ color: "#ccc", marginLeft: "5px" }}
+        ></i>
+      );
+    return sortConfig.direction === "asc" ? (
+      <i className="fas fa-sort-up" style={{ marginLeft: "5px" }}></i>
+    ) : (
+      <i className="fas fa-sort-down" style={{ marginLeft: "5px" }}></i>
+    );
+  };
+
+  const sortedAndFiltered = [...grupo.ensayos]
+    .filter((e) =>
+      `${e.nombre_ensayo} ${e.codigo_ensayo} ${e.progresiva_nombre}`
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()),
+    )
+    .sort((a, b) => {
+      if (!sortConfig.key) return 0;
+
+      let aValue = "";
+      let bValue = "";
+
+      switch (sortConfig.key) {
+        case "nombre":
+          aValue = (a.nombre_ensayo || "").toLowerCase();
+          bValue = (b.nombre_ensayo || "").toLowerCase();
+          break;
+        case "codigo":
+          aValue = (a.codigo_ensayo || a.codigo_generado || "").toLowerCase();
+          bValue = (b.codigo_ensayo || b.codigo_generado || "").toLowerCase();
+          break;
+        case "ubicacion":
+          aValue = (
+            a.progresiva_nombre ||
+            a.cantera_nombre ||
+            ""
+          ).toLowerCase();
+          bValue = (
+            b.progresiva_nombre ||
+            b.cantera_nombre ||
+            ""
+          ).toLowerCase();
+          break;
+        case "estrato":
+          aValue = Number(a.estrato_orden) || 0;
+          bValue = Number(b.estrato_orden) || 0;
+          break;
+        case "estado":
+          aValue = getEnsayoStatus(a).toLowerCase();
+          bValue = getEnsayoStatus(b).toLowerCase();
+          break;
+        default:
+          break;
+      }
+
+      if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+
   return (
     <div className="full-list-modal-overlay" onClick={onClose}>
-      <div className="full-list-modal-content" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="full-list-modal-content"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="full-list-modal-header">
-          <h2><i className="fas fa-list-ul"></i> {grupo.descripcion}</h2>
-          <button className="btn-close-modal" onClick={onClose}>&times;</button>
+          <h2>
+            <i className="fas fa-list-ul"></i> {grupo.descripcion}
+          </h2>
+          <button className="btn-close-modal" onClick={onClose}>
+            &times;
+          </button>
         </div>
-        <div className="modal-search-bar">
-          <input type="text" className="modal-search-input" placeholder="🔍 Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus />
+        <div className="full-list-modal-tabs">
+          <button
+            className={`full-list-tab ${activeTab === "listado" ? "active" : ""}`}
+            onClick={() => setActiveTab("listado")}
+            type="button"
+          >
+            Listado de Ensayos de {grupo.descripcion}
+          </button>
+          {hasGroupChartsConfig(grupo?.graficosConfig) && (
+            <button
+              className={`full-list-tab ${activeTab === "tendencia" ? "active" : ""}`}
+              onClick={() => setActiveTab("tendencia")}
+              type="button"
+            >
+              Gráfico de Tendencia
+            </button>
+          )}
         </div>
-        <div className="full-list-modal-body">
-          <table className="compact-table">
-            <thead>
-              <tr><th>Código</th><th>Ubicación</th><th>Estrato</th><th>Estado</th><th style={{textAlign:'center'}}>Acciones</th></tr>
-            </thead>
-            <tbody>
-              {filtered.map(e => (
-                <tr key={e.id} onClick={() => onOpenEnsayo(e)} style={{cursor:'pointer'}}>
-                  <td className="assay-code">{e.nombre_ensayo || e.codigo_ensayo}</td>
-                  <td>{e.progresiva_nombre || e.cantera_nombre}</td>
-                  <td>E: {e.estrato_orden}</td>
-                  <td>
-                    <span className={`status-badge-pill status-${getEnsayoStatus(e).toLowerCase().replace(' ', '-')}`}>
-                      {getEnsayoStatus(e)}
-                    </span>
-                  </td>
-                  <td style={{textAlign:'center'}}>
-                    <button className="btn-results" onClick={(ev) => { ev.stopPropagation(); handleShowResults(ev, e); }} style={{background:'#f8f9fa', border:'1px solid #ddd', padding:'5px 8px', borderRadius:'4px', cursor: 'pointer'}}>
-                      <i className="fas fa-poll-h"></i>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {activeTab === "tendencia" &&
+          hasGroupChartsConfig(grupo?.graficosConfig) && (
+            <div className="trend-chart-panel">
+              <div className="trend-chart-header">
+                <h3>Tendencia del tipo</h3>
+                <span>{grupo.ensayos.length} ensayos considerados</span>
+              </div>
+              <VisorGraficos
+                graficosConfig={grupo.graficosConfig}
+                tableConfig={grupo.tableConfig}
+                scope="group"
+                groupEnsayos={grupo.ensayos}
+                calculationConfig={grupo.calculationConfig}
+              />
+            </div>
+          )}
+        {activeTab === "listado" && (
+          <>
+            <div className="modal-search-bar">
+              <input
+                type="text"
+                className="modal-search-input"
+                placeholder="🔍 Buscar..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="full-list-modal-body">
+              <table className="compact-table">
+                <thead>
+                  <tr>
+                    <th
+                      onClick={() => handleSort("nombre")}
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                    >
+                      Nombre {getSortIcon("nombre")}
+                    </th>
+                    <th
+                      onClick={() => handleSort("codigo")}
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                    >
+                      Código {getSortIcon("codigo")}
+                    </th>
+                    <th
+                      onClick={() => handleSort("ubicacion")}
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                    >
+                      Ubicación {getSortIcon("ubicacion")}
+                    </th>
+                    <th
+                      onClick={() => handleSort("estrato")}
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                    >
+                      Estrato {getSortIcon("estrato")}
+                    </th>
+                    <th
+                      onClick={() => handleSort("estado")}
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                    >
+                      Estado {getSortIcon("estado")}
+                    </th>
+                    <th style={{ textAlign: "center" }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedAndFiltered.map((e) => (
+                    <tr
+                      key={e.id}
+                      onClick={() => onOpenEnsayo(e)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <td
+                        className="assay-name"
+                        style={{ fontWeight: "500", color: "#0d6efd" }}
+                      >
+                        {e.nombre_ensayo || "Sin nombre"}
+                      </td>
+                      <td
+                        className="assay-code"
+                        style={{ color: "#6c757d", fontSize: "0.9em" }}
+                      >
+                        {e.codigo_ensayo || e.codigo_generado || "-"}
+                      </td>
+                      <td>{e.progresiva_nombre || e.cantera_nombre}</td>
+                      <td>E: {e.estrato_orden}</td>
+                      <td>
+                        <span
+                          className={`status-badge-pill status-${getEnsayoStatus(e).toLowerCase().replace(" ", "-")}`}
+                        >
+                          {getEnsayoStatus(e)}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <button
+                          className="btn-results"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            handleShowResults(ev, e);
+                          }}
+                          style={{
+                            background: "#f8f9fa",
+                            border: "1px solid #ddd",
+                            padding: "5px 8px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <i className="fas fa-poll-h"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -125,6 +422,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const [loading, setLoading] = useState(true);
   const [isImportModalOpen, setImportModalOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [importErrors, setImportErrors] = useState([]);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
@@ -139,9 +437,12 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const fetchTramosList = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/api/progresivas${selectedProjectId ? `?selectedProjectId=${selectedProjectId}` : ''}`, { headers });
+      const res = await axios.get(
+        `${API_URL}/api/progresivas${selectedProjectId ? `?selectedProjectId=${selectedProjectId}` : ""}`,
+        { headers },
+      );
       setTramosList(res.data);
-    } catch (err) { }
+    } catch (err) {}
   }, [API_URL, getAuthHeaders, selectedProjectId]);
 
   const fetchEnsayos = useCallback(async () => {
@@ -149,27 +450,45 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     try {
       setLoading(true);
       const headers = getAuthHeaders();
-      
-      const tiposRes = await axios.get(`${API_URL}/api/tipos-ensayo`, { headers });
-      const ensayosRes = await axios.get(`${API_URL}/api/tramos/${tramoId}/ensayos`, { headers });
-      
+
+      const tiposRes = await axios.get(`${API_URL}/api/tipos-ensayo`, {
+        headers,
+      });
+      const ensayosRes = await axios.get(
+        `${API_URL}/api/tramos/${tramoId}/ensayos`,
+        { headers },
+      );
+
       const allTipos = tiposRes.data;
       const data = ensayosRes.data || {};
-      const ensayosList = data.ensayos || data.ensayosList || [];
+      let ensayosList = data.ensayos || data.ensayosList || [];
       const tramoInfo = data.tramo || data.tramoInfo || {};
+
+      // Ordenar ensayos por progresiva y estrato
+      ensayosList.sort((a, b) => {
+        const progA = (a.progresiva_nombre || "").localeCompare(
+          b.progresiva_nombre || "",
+        );
+        if (progA !== 0) return progA;
+        return (Number(a.estrato_orden) || 0) - (Number(b.estrato_orden) || 0);
+      });
 
       const agrupados = allTipos.reduce((acc, tipo) => {
         const key = tipo.config_key || tipo.id;
-        const filtrados = ensayosList.filter(e => {
+        const filtrados = ensayosList.filter((e) => {
           const eKey = e.config_key || e.tipo_ensayo_id;
           return eKey == key || e.tipo_ensayo == tipo.id; // Flexibilidad en el match
         });
-        
+
         acc[key] = {
           ensayos: filtrados,
           tipoEnsayoId: tipo.id,
           descripcion: tipo.descripcion,
-          configKey: tipo.config_key
+          configKey: tipo.config_key,
+          tableConfig: tipo.config_tabla || tipo.tableConfig || null,
+          graficosConfig: tipo.config_graficos || tipo.graficosConfig || null,
+          calculationConfig:
+            tipo.config_calculos || tipo.calculationConfig || null,
         };
         return acc;
       }, {});
@@ -177,14 +496,32 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       setEnsayosAgrupados(agrupados);
       setTramo(tramoInfo);
       if (setLastTramoId) setLastTramoId(tramoId);
-      sessionStorage.setItem('lastSelectedTramoId', tramoId);
-    } catch (err) { 
-    } finally { 
-      setLoading(false); 
+      sessionStorage.setItem("lastSelectedTramoId", tramoId);
+    } catch (err) {
+    } finally {
+      setLoading(false);
     }
   }, [tramoId, API_URL, getAuthHeaders, setLastTramoId]);
 
-  useEffect(() => { tramoId ? fetchEnsayos() : fetchTramosList(); }, [tramoId, fetchEnsayos, fetchTramosList]);
+  const getEnsayoStatus = useCallback(
+    (ensayo) => {
+      const grupo =
+        ensayosAgrupados[
+          ensayo.config_key || ensayo.tipo_ensayo_id || ensayo.tipo_ensayo
+        ] || {};
+      return getEnsayoCompletionStatus(ensayo, grupo.tableConfig);
+    },
+    [ensayosAgrupados],
+  );
+
+  const isDone = useCallback(
+    (ensayo) => getEnsayoStatus(ensayo) === "COMPLETADO",
+    [getEnsayoStatus],
+  );
+
+  useEffect(() => {
+    tramoId ? fetchEnsayos() : fetchTramosList();
+  }, [tramoId, fetchEnsayos, fetchTramosList]);
 
   const handleImportFile = async (file) => {
     setImporting(true);
@@ -192,21 +529,34 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     try {
       const headers = getAuthHeaders();
       const formData = new FormData();
-      formData.append('file', file);
-      if (currentTargetType) formData.append('configKey', currentTargetType);
-      formData.append('isSimulation', true);
-      const res = await axios.post(`${API_URL}/api/proyectos/${selectedProjectId}/tramos/${tramoId}/ensayos/importar`, formData, { 
-        headers: { ...headers, 'Content-Type': 'multipart/form-data' },
-        params: { isSimulation: 'true' }
-      });
+      formData.append("file", file);
+      if (currentTargetType) formData.append("configKey", currentTargetType);
+      formData.append("isSimulation", true);
+      const res = await axios.post(
+        `${API_URL}/api/proyectos/${selectedProjectId}/tramos/${tramoId}/ensayos/importar`,
+        formData,
+        {
+          headers: { ...headers, "Content-Type": "multipart/form-data" },
+          params: { isSimulation: "true" },
+        },
+      );
       setImportSummary(res.data.summary);
+      setImportErrors(res.data.errors || []);
       setFileToImport(file);
       setImportModalOpen(false);
       setShowConfirmationModal(true);
-    } catch (err) { 
-      setImportErrors(err.response?.data?.details || [{ error: 'Error de validación.' }]); 
+    } catch (err) {
+      setImportErrors(
+        err.response?.data?.details || [
+          {
+            sheet: "General",
+            error: "Error de validación al procesar el archivo.",
+          },
+        ],
+      );
+    } finally {
+      setImporting(false);
     }
-    finally { setImporting(false); }
   };
 
   const confirmImport = async () => {
@@ -214,56 +564,86 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     try {
       const headers = getAuthHeaders();
       const formData = new FormData();
-      formData.append('file', fileToImport);
-      if (currentTargetType) formData.append('configKey', currentTargetType);
-      
-      await axios.post(`${API_URL}/api/proyectos/${selectedProjectId}/tramos/${tramoId}/ensayos/importar`, formData, { 
-        headers: { ...headers, 'Content-Type': 'multipart/form-data' },
-        params: { isSimulation: 'false' }
-      });
-      alertify.success('Importación exitosa.');
+      formData.append("file", fileToImport);
+      if (currentTargetType) formData.append("configKey", currentTargetType);
+
+      await axios.post(
+        `${API_URL}/api/proyectos/${selectedProjectId}/tramos/${tramoId}/ensayos/importar`,
+        formData,
+        {
+          headers: { ...headers, "Content-Type": "multipart/form-data" },
+          params: { isSimulation: "false" },
+        },
+      );
+      alertify.success("Importación exitosa.");
       setShowConfirmationModal(false);
-      fetchEnsayos();
-    } catch (err) { alertify.error('Error al importar.'); }
-    finally { setImporting(false); }
+      await fetchEnsayos();
+    } catch (err) {
+      alertify.error("Error al importar.");
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleExportByType = async (e, tipoEnsayoId, descripcion) => {
     e.stopPropagation();
-    console.log(`[EXPORT DEBUG] Exportando tipo ${tipoEnsayoId} para tramo ${tramoId}. URL: ${API_URL}/api/tramos/${tramoId}/ensayos/export-excel/${tipoEnsayoId}`);
+    setExporting(true);
+    console.log(
+      `[EXPORT DEBUG] Exportando tipo ${tipoEnsayoId} para tramo ${tramoId}. URL: ${API_URL}/api/tramos/${tramoId}/ensayos/export-excel/${tipoEnsayoId}`,
+    );
     try {
-      const resp = await axios.get(`${API_URL}/api/tramos/${tramoId}/ensayos/export-excel/${tipoEnsayoId}`, { 
-        headers: getAuthHeaders(), 
-        responseType: 'blob' 
-      });
-      console.log(`[EXPORT DEBUG] Recibido blob de tamaño: ${resp.data.size} bytes`);
+      const resp = await axios.get(
+        `${API_URL}/api/tramos/${tramoId}/ensayos/export-excel/${tipoEnsayoId}`,
+        {
+          headers: getAuthHeaders(),
+          responseType: "blob",
+        },
+      );
+      console.log(
+        `[EXPORT DEBUG] Recibido blob de tamaño: ${resp.data.size} bytes`,
+      );
       const url = window.URL.createObjectURL(new Blob([resp.data]));
-      const link = document.createElement('a'); 
-      link.href = url; 
-      link.setAttribute('download', `${descripcion.replace(/ /g, '_')}_Tramo_${tramoId}.xlsx`); 
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `${descripcion.replace(/ /g, "_")}_Tramo_${tramoId}.xlsx`,
+      );
       link.click();
       alertify.success(`Exportando ${descripcion}...`);
-    } catch (err) { 
-      alertify.error('Error al exportar este tipo de ensayo.'); 
+    } catch (err) {
+      alertify.error("Error al exportar este tipo de ensayo.");
+    } finally {
+      setExporting(false);
     }
   };
 
   const handleExportAll = async () => {
-    console.log(`[EXPORT DEBUG] Exportando todos los ensayos para tramo ${tramoId}`);
+    console.log(
+      `[EXPORT DEBUG] Exportando todos los ensayos para tramo ${tramoId}`,
+    );
+    setExporting(true);
     try {
-      const resp = await axios.get(`${API_URL}/api/tramos/${tramoId}/ensayos/export-excel`, { 
-        headers: getAuthHeaders(), 
-        responseType: 'blob' 
-      });
-      console.log(`[EXPORT DEBUG] Recibido blob total de tamaño: ${resp.data.size} bytes`);
+      const resp = await axios.get(
+        `${API_URL}/api/tramos/${tramoId}/ensayos/export-excel`,
+        {
+          headers: getAuthHeaders(),
+          responseType: "blob",
+        },
+      );
+      console.log(
+        `[EXPORT DEBUG] Recibido blob total de tamaño: ${resp.data.size} bytes`,
+      );
       const url = window.URL.createObjectURL(new Blob([resp.data]));
-      const link = document.createElement('a'); 
-      link.href = url; 
-      link.setAttribute('download', `Todos_los_Ensayos_Tramo_${tramoId}.xlsx`); 
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Todos_los_Ensayos_Tramo_${tramoId}.xlsx`);
       link.click();
-      alertify.success('Exportando todos los ensayos...');
-    } catch (err) { 
-      alertify.error('Error al exportar todos los ensayos.'); 
+      alertify.success("Exportando todos los ensayos...");
+    } catch (err) {
+      alertify.error("Error al exportar todos los ensayos.");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -277,12 +657,34 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     setSelectedAssayForDetail(assay);
   };
 
-  if (!tramoId) return <div className="loading-spinner">Seleccione un tramo...</div>;
-  if (loading) return <div className="loading-overlay"><div className="loading-spinner"></div><p>Cargando Dashboard...</p></div>;
+  if (!tramoId)
+    return <div className="loading-spinner">Seleccione un tramo...</div>;
+  if (loading)
+    return (
+      <div className="loading-overlay">
+        <div className="loading-spinner"></div>
+        <p>Cargando Dashboard...</p>
+      </div>
+    );
 
-  const total = Object.values(ensayosAgrupados).reduce((a, g) => a + g.ensayos.length, 0);
-  const done = Object.values(ensayosAgrupados).reduce((a, g) => a + g.ensayos.filter(e => checkIsDone(e)).length, 0);
-  const colors = ['#54a0ca', '#28a745', '#fd7e14', '#6f42c1', '#17a2b8', '#dc3545', '#6610f2', '#e83e8c'];
+  const total = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.length,
+    0,
+  );
+  const done = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.filter((e) => isDone(e)).length,
+    0,
+  );
+  const colors = [
+    "#54a0ca",
+    "#28a745",
+    "#fd7e14",
+    "#6f42c1",
+    "#17a2b8",
+    "#dc3545",
+    "#6610f2",
+    "#e83e8c",
+  ];
 
   return (
     <div className="vista-general-ensayos-container">
@@ -291,29 +693,37 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
           <i className="fas fa-microscope main-icon"></i>
           <div className="title-text">
             <h1>Panel de Control de Ensayos</h1>
-            <p>Monitoreo analítico: <span className="tramo-highlight">{tramo?.nombre_tramo || 'Tramo Principal'}</span></p>
+            <p>
+              Monitoreo analítico:{" "}
+              <span className="tramo-highlight">
+                {tramo?.nombre_tramo || "Tramo Principal"}
+              </span>
+            </p>
           </div>
         </div>
         <div className="header-actions">
-          <button 
-            className="btn-main-action import btn-expandable-premium" 
-            onClick={() => { setCurrentTargetType(null); setImportModalOpen(true); }}
+          <button
+            className="btn-main-action import btn-expandable-premium"
+            onClick={() => {
+              setCurrentTargetType(null);
+              setImportModalOpen(true);
+            }}
             title="Importar todos los ensayos (XLSX)"
           >
             <i className="fas fa-file-import"></i>
             <span className="btn-text">Importar Todo</span>
           </button>
-          <button 
-            className="btn-main-action export btn-expandable-premium" 
+          <button
+            className="btn-main-action export btn-expandable-premium"
             onClick={handleExportAll}
             title="Exportar todos los ensayos a Excel"
           >
             <i className="fas fa-file-excel"></i>
             <span className="btn-text">Exportar Todo</span>
           </button>
-          <button 
-            className="btn-main-action back btn-expandable-premium" 
-            onClick={() => navigate(-1)} 
+          <button
+            className="btn-main-action back btn-expandable-premium"
+            onClick={() => navigate(-1)}
             title="Volver al panel anterior"
           >
             <i className="fas fa-arrow-left"></i>
@@ -326,31 +736,84 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       <div className="resumen-analitico-container">
         <div className="resumen-analitico-layout">
           <div className="analitica-col doughnut-section">
-            <div className="analitica-card-title"><i className="fas fa-chart-pie"></i> Avance General</div>
+            <div className="analitica-card-title">
+              <i className="fas fa-chart-pie"></i> Avance General
+            </div>
             <div className="chart-wrapper">
               <ResponsiveContainer width="100%" height={140}>
-                <PieChart><Pie data={[{name:'Hecho', value:done},{name:'Pend', value:total-done}]} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value"><Cell fill="#28a745" /><Cell fill="#ffc107" /></Pie><Tooltip /></PieChart>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: "Hecho", value: done },
+                      { name: "Pend", value: total - done },
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={60}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    <Cell fill="#28a745" />
+                    <Cell fill="#ffc107" />
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
               </ResponsiveContainer>
               <div className="chart-labels">
-                <div className="label-item"><span className="dot dot-success"></span> {done} Hechos</div>
-                <div className="label-item"><span className="dot dot-warning"></span> {total - done} Pend.</div>
+                <div className="label-item">
+                  <span className="dot dot-success"></span> {done} Hechos
+                </div>
+                <div className="label-item">
+                  <span className="dot dot-warning"></span> {total - done} Pend.
+                </div>
               </div>
             </div>
           </div>
           <div className="analitica-col">
             <div className="stat-card-premium">
-               <div className="stat-header"><span className="stat-label">EFICIENCIA GLOBAL</span><i className="fas fa-bolt stat-icon"></i></div>
-               <div className="stat-value-large">{total > 0 ? ((done/total)*100).toFixed(1) : 0}%</div>
-               <div className="progress-bar-container"><div className="progress-bar-fill" style={{width:`${total>0?(done/total)*100:0}%`}}></div></div>
+              <div className="stat-header">
+                <span className="stat-label">EFICIENCIA GLOBAL</span>
+                <i className="fas fa-bolt stat-icon"></i>
+              </div>
+              <div className="stat-value-large">
+                {total > 0 ? ((done / total) * 100).toFixed(1) : 0}%
+              </div>
+              <div className="progress-bar-container">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
+                ></div>
+              </div>
             </div>
           </div>
           <div className="analitica-col">
             <div className="stat-card-premium milestone-card">
-              <div className="stat-header"><span className="stat-label">PRÓXIMO OBJETIVO</span><i className="fas fa-flag-checkered stat-icon"></i></div>
+              <div className="stat-header">
+                <span className="stat-label">PRÓXIMO OBJETIVO</span>
+                <i className="fas fa-flag-checkered stat-icon"></i>
+              </div>
               <div className="milestone-content">
                 {(() => {
-                  const items = Object.values(ensayosAgrupados).map(g=>({desc:g.descripcion, pend:g.ensayos.length - g.ensayos.filter(e=>checkIsDone(e)).length})).filter(i=>i.pend>0).sort((a,b)=>a.pend-b.pend);
-                  return items[0] ? <><div className="milestone-name">{items[0].desc}</div><div className="milestone-sub">Faltan {items[0].pend} ensayos</div></> : <div className="milestone-name">Meta lograda</div>;
+                  const items = Object.values(ensayosAgrupados)
+                    .map((g) => ({
+                      desc: g.descripcion,
+                      pend:
+                        g.ensayos.length -
+                        g.ensayos.filter((e) => isDone(e)).length,
+                    }))
+                    .filter((i) => i.pend > 0)
+                    .sort((a, b) => a.pend - b.pend);
+                  return items[0] ? (
+                    <>
+                      <div className="milestone-name">{items[0].desc}</div>
+                      <div className="milestone-sub">
+                        Faltan {items[0].pend} ensayos
+                      </div>
+                    </>
+                  ) : (
+                    <div className="milestone-name">Meta lograda</div>
+                  );
                 })()}
               </div>
             </div>
@@ -361,32 +824,51 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       <main className="ensayos-grid">
         {Object.entries(ensayosAgrupados).map(([key, grupo], index) => {
           const accent = colors[index % colors.length];
-          const hechosGrupo = grupo.ensayos.filter(e => checkIsDone(e)).length;
+          const hechosGrupo = grupo.ensayos.filter((e) => isDone(e)).length;
           const totalGrupo = grupo.ensayos.length;
-          const pctGrupo = totalGrupo > 0 ? (hechosGrupo/totalGrupo)*100 : 0;
+          const pctGrupo =
+            totalGrupo > 0 ? (hechosGrupo / totalGrupo) * 100 : 0;
 
           return (
-            <div className="card-ensayo-tipo" key={key} style={{ '--accent-color': accent }}>
+            <div
+              className="card-ensayo-tipo"
+              key={key}
+              style={{ "--accent-color": accent }}
+            >
               <div className="card-header" onClick={() => setModalGrupo(grupo)}>
                 <div className="header-info">
                   <h2>{grupo.descripcion}</h2>
                   <div className="header-subtitle">
-                    <span className="ensayo-count-badge">{totalGrupo} ensayos</span>
-                    <span className="mini-progress-text">{hechosGrupo}/{totalGrupo} completados</span>
+                    <span className="ensayo-count-badge">
+                      {totalGrupo} ensayos
+                    </span>
+                    <span className="mini-progress-text">
+                      {hechosGrupo}/{totalGrupo} completados
+                    </span>
                   </div>
                 </div>
                 <div className="header-actions-main">
                   <div className="action-buttons-group">
-                    <button 
-                      className="btn-card-action import" 
-                      onClick={(e) => { e.stopPropagation(); setCurrentTargetType(key); setImportModalOpen(true); }}
+                    <button
+                      className="btn-card-action import"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentTargetType(key);
+                        setImportModalOpen(true);
+                      }}
                       title="Importar este tipo"
                     >
                       <i className="fas fa-upload"></i>
                     </button>
-                    <button 
-                      className="btn-card-action export" 
-                      onClick={(e) => handleExportByType(e, grupo.tipoEnsayoId, grupo.descripcion)}
+                    <button
+                      className="btn-card-action export"
+                      onClick={(e) =>
+                        handleExportByType(
+                          e,
+                          grupo.tipoEnsayoId,
+                          grupo.descripcion,
+                        )
+                      }
                       title="Exportar este tipo"
                     >
                       <i className="fas fa-download"></i>
@@ -395,45 +877,117 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                   <i className="fas fa-chevron-right arrow-indicator"></i>
                 </div>
               </div>
-              
+
               <div className="card-progress-bar">
-                <div className="card-progress-fill" style={{ width: `${pctGrupo}%` }}></div>
+                <div
+                  className="card-progress-fill"
+                  style={{ width: `${pctGrupo}%` }}
+                ></div>
               </div>
 
               <div className="card-content">
-                {grupo.ensayos.slice(0, 5).map(e => (
-                  <div className="mini-card-ensayo" key={e.id} onClick={() => handleOpenEnsayo(e)}>
+                {grupo.ensayos.slice(0, 5).map((e) => (
+                  <div
+                    className="mini-card-ensayo"
+                    key={e.id}
+                    onClick={() => handleOpenEnsayo(e)}
+                  >
                     <div className="mini-card-horizontal-layout">
                       <div className="mini-card-main-data">
-                        <i className="fas fa-vial" style={{color:accent}}></i>
-                        <span className="mini-assay-code">{e.nombre_ensayo || e.codigo_ensayo}</span>
+                        <i
+                          className="fas fa-vial"
+                          style={{ color: accent }}
+                        ></i>
+                        <span
+                          className="mini-assay-code"
+                          title={e.codigo_ensayo || e.codigo_generado}
+                        >
+                          {e.nombre_ensayo || "Sin nombre"}
+                        </span>
                         <span className="mini-divider">|</span>
-                        <span className="mini-location"><i className="fas fa-road"></i> {e.progresiva_nombre}</span>
+                        <span className="mini-location">
+                          <i className="fas fa-road"></i> {e.progresiva_nombre}
+                        </span>
                         <span className="mini-divider">|</span>
-                        <span className="mini-estrato">E: {e.estrato_orden}</span>
+                        <span className="mini-estrato">
+                          E: {e.estrato_orden}
+                        </span>
                       </div>
                       <div className="mini-card-side-data">
-                        <span className={`status-badge-pill status-${getEnsayoStatus(e).toLowerCase().replace(' ', '-')}`}>
+                        <span
+                          className={`status-badge-pill status-${getEnsayoStatus(e).toLowerCase().replace(" ", "-")}`}
+                        >
                           {getEnsayoStatus(e)}
                         </span>
-                        <button className="btn-results-circle" onClick={(ev) => { ev.stopPropagation(); handleShowResults(ev, e); }} title="Ver Resultados">
+                        <button
+                          className="btn-results-circle"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            handleShowResults(ev, e);
+                          }}
+                          title="Ver Resultados"
+                        >
                           <i className="fas fa-poll-h"></i>
                         </button>
                       </div>
                     </div>
                   </div>
                 ))}
-                {grupo.ensayos.length > 5 && <div className="preview-limit-notice" onClick={() => setModalGrupo(grupo)}>+ {grupo.ensayos.length - 5} más de {grupo.descripcion}</div>}
+                {grupo.ensayos.length > 5 && (
+                  <div
+                    className="preview-limit-notice"
+                    onClick={() => setModalGrupo(grupo)}
+                  >
+                    + {grupo.ensayos.length - 5} más de {grupo.descripcion}
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
       </main>
 
-      <ImportModal isOpen={isImportModalOpen} onClose={()=>setImportModalOpen(false)} onImport={handleImportFile} loading={importing} errors={importErrors} />
-      <ConfirmationModal isOpen={showConfirmationModal} onClose={()=>setShowConfirmationModal(false)} onConfirm={confirmImport} summary={importSummary} loading={importing} />
-      <EnsayosFullListModal isOpen={!!modalGrupo} onClose={()=>setModalGrupo(null)} grupo={modalGrupo} onOpenEnsayo={handleOpenEnsayo} handleShowResults={handleShowResults} />
-      {isResultsModalOpen && <ResultadosBrevesModal isOpen={isResultsModalOpen} onClose={()=>setResultsModalOpen(false)} ensayo={selectedAssayForResults} />}
+      {exporting && (
+        <div className="loading-overlay dark">
+          <div className="loading-spinner white"></div>
+          <p className="loading-text-large">Generando archivo Excel...</p>
+          <p className="loading-text-sub">
+            Esto puede tardar unos segundos dependiendo de la cantidad de
+            ensayos.
+          </p>
+        </div>
+      )}
+
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImport={handleImportFile}
+        loading={importing}
+        errors={importErrors}
+      />
+      <ConfirmationModal
+        isOpen={showConfirmationModal}
+        onClose={() => setShowConfirmationModal(false)}
+        onConfirm={confirmImport}
+        summary={importSummary}
+        loading={importing}
+        errors={importErrors}
+      />
+      <EnsayosFullListModal
+        isOpen={!!modalGrupo}
+        onClose={() => setModalGrupo(null)}
+        grupo={modalGrupo}
+        onOpenEnsayo={handleOpenEnsayo}
+        handleShowResults={handleShowResults}
+        getEnsayoStatus={getEnsayoStatus}
+      />
+      {isResultsModalOpen && (
+        <ResultadosBrevesModal
+          isOpen={isResultsModalOpen}
+          onClose={() => setResultsModalOpen(false)}
+          ensayo={selectedAssayForResults}
+        />
+      )}
       <EnsayoDetalleModal
         isOpen={!!selectedAssayForDetail}
         ensayos={selectedAssayForDetail ? [selectedAssayForDetail] : []}

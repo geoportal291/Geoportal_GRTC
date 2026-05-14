@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import TrafficEntityExplorer from '../components/TrafficEntityExplorer';
 import TrafficProcessingStatus from '../components/TrafficProcessingStatus';
 import TrafficUploadModalV2 from '../components/TrafficUploadModalV2';
+import TrafficInternalGeoMap from '../components/TrafficInternalGeoMap';
 import { MODULE_CONFIG } from '../trafficV2Utils';
+import { useAuth } from '../../../../../data/contexts/AuthContext';
 
 const RecoleccionProcesamientoV2 = ({ activeSubTab, stations, sections, onReload }) => {
+  const { selectedProjectId } = useAuth();
   const moduleConfig = MODULE_CONFIG[activeSubTab];
   const entities = useMemo(
     () => (moduleConfig?.entityType === 'section' ? sections : stations),
@@ -34,25 +37,38 @@ const RecoleccionProcesamientoV2 = ({ activeSubTab, stations, sections, onReload
 
   return (
     <>
+      {/* Map row */}
+      <div className="traffic-v2-grid" style={{ marginBottom: '22px' }}>
+        <TrafficInternalGeoMap
+          className="traffic-v2-span-full"
+          projectId={selectedProjectId}
+          title={`Mapa de ${moduleConfig.label}`}
+          description={`Visor operativo para ubicar ${moduleConfig.entityType === 'section' ? 'tramos homogéneos' : 'estaciones de control'} del módulo de ${moduleConfig.label}.`}
+        />
+      </div>
+
+      {/* Explorer + Processing row */}
       <div className="traffic-v2-grid processing">
         <TrafficEntityExplorer
-          className="traffic-v2-span-5"
+          className="traffic-v2-span-4"
           title={`Explorador de ${moduleConfig.label}`}
           entities={entities}
           selectedEntityId={selectedEntityId}
           onSelectEntity={setSelectedEntityId}
           action={selectedEntity ? (
             <button type="button" className="traffic-v2-action-btn" onClick={() => setIsUploadModalOpen(true)}>
+              <i className="fas fa-upload" style={{ marginRight: '6px' }} />
               Cargar archivos
             </button>
           ) : null}
         />
 
         <TrafficProcessingStatus
-          className="traffic-v2-span-7"
+          className="traffic-v2-span-8"
           entity={selectedEntity}
           moduleKey={moduleConfig.id}
           moduleLabel={moduleConfig.label}
+          onReload={onReload}
         />
       </div>
 
