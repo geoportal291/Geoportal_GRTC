@@ -476,10 +476,13 @@ const buildAssayContext = (
   return {
     data: mergedData,
     resultados: resultados || {},
+    results: resultados || {}, // Alias para compatibilidad
     formData: formData || {},
     tableConfig:
       ensayo?.config_tabla || ensayo?.tableConfig || fallbackTableConfig || {},
     ensayo,
+    // Inyectamos resultados al nivel superior para acceso directo como calculated_values.*
+    ...(resultados || {}),
   };
 };
 
@@ -648,13 +651,14 @@ const buildPointsFromRowSource = (
           context,
           rowContext,
         );
-        const num = Number(filterVal);
+        const numericFilter = toFiniteNumber(filterVal);
+        const EPSILON = 0.00001;
 
         if (
           filterVal === undefined ||
           filterVal === null ||
           filterVal === "" ||
-          (Number.isFinite(num) && num === 0)
+          (numericFilter !== null && Math.abs(numericFilter) < EPSILON)
         ) {
           return null;
         }
@@ -814,12 +818,17 @@ const buildGroupPointsFromEnsayos = (
       );
     }
 
-    return points.map((point) => ({
-      ...point,
-      ensayo_id: ensayo?.id,
-      ensayo_codigo: ensayo?.codigo_ensayo || ensayo?.codigo_generado || "",
-      ensayo_nombre: ensayo?.nombre_ensayo || "",
-    }));
+    return points
+      .filter(Boolean)
+      .filter((point) =>
+        !shouldSkipPointByDatasetRules(point, datasetConfigWithFallbacks),
+      )
+      .map((point) => ({
+        ...point,
+        ensayo_id: ensayo?.id,
+        ensayo_codigo: ensayo?.codigo_ensayo || ensayo?.codigo_generado || "",
+        ensayo_nombre: ensayo?.nombre_ensayo || "",
+      }));
   });
 };
 
@@ -1103,62 +1112,48 @@ const buildDataset = (chartConfig, datasetConfig, context) => {
   };
 };
 
-const buildInteractiveDatasetStyles = (dataset, isMassive = false) => {
+const buildInteractiveDatasetStyles = (dataset) => {
   const baseBorderColor = dataset.borderColor || "#2563eb";
   const baseBackgroundColor = dataset.backgroundColor || "#93c5fd";
   const baseBorderWidth = dataset.borderWidth ?? 2;
   const basePointRadius = dataset.pointRadius ?? 3;
   const basePointHoverRadius = dataset.pointHoverRadius ?? 5;
 
-  // Si hay demasiados datos, simplificamos los estilos interactivos para ganar FPS
-  if (isMassive) {
-    return {
-      ...dataset,
-      borderColor: withAlpha(baseBorderColor, 0.4),
-      backgroundColor: withAlpha(baseBackgroundColor, 0.15),
-      borderWidth: 1.2,
-      pointRadius: 1.5,
-      pointHoverRadius: 4,
-    };
-  }
-
   return {
     ...dataset,
     borderColor: (scriptableContext) => {
-      const activeDatasetIndex =
-        scriptableContext.chart?.$activeDatasetIndex ?? null;
-      const showCurves = scriptableContext.chart?.$showCurves !== false;
+      const chart = scriptableContext.chart;
+      const activeIdx = chart?.$activeDatasetIndex ?? null;
+      const showCurves = chart?.$showCurves !== false;
       if (!showCurves) return withAlpha(baseBorderColor, 0);
-      if (activeDatasetIndex === null) return baseBorderColor;
-      return scriptableContext.datasetIndex === activeDatasetIndex
+      if (activeIdx === null) return baseBorderColor;
+      return scriptableContext.datasetIndex === activeIdx
         ? withAlpha(baseBorderColor, 0.95)
         : withAlpha(baseBorderColor, 0.08);
     },
     backgroundColor: (scriptableContext) => {
-      const activeDatasetIndex =
-        scriptableContext.chart?.$activeDatasetIndex ?? null;
-      const showPoints = scriptableContext.chart?.$showPoints !== false;
+      const chart = scriptableContext.chart;
+      const activeIdx = chart?.$activeDatasetIndex ?? null;
+      const showPoints = chart?.$showPoints !== false;
       if (!showPoints) return withAlpha(baseBackgroundColor, 0);
-      if (activeDatasetIndex === null) return baseBackgroundColor;
-      return scriptableContext.datasetIndex === activeDatasetIndex
+      if (activeIdx === null) return baseBackgroundColor;
+      return scriptableContext.datasetIndex === activeIdx
         ? withAlpha(baseBackgroundColor, 0.82)
         : withAlpha(baseBackgroundColor, 0.1);
     },
     borderWidth: (scriptableContext) => {
-      const activeDatasetIndex =
-        scriptableContext.chart?.$activeDatasetIndex ?? null;
-      const showCurves = scriptableContext.chart?.$showCurves !== false;
-      if (!showCurves) return 0;
-      if (activeDatasetIndex === null) return baseBorderWidth;
-      return scriptableContext.datasetIndex === activeDatasetIndex ? 2.8 : 0.8;
+      const chart = scriptableContext.chart;
+      const activeIdx = chart?.$activeDatasetIndex ?? null;
+      if (chart?.$showCurves === false) return 0;
+      if (activeIdx === null) return baseBorderWidth;
+      return scriptableContext.datasetIndex === activeIdx ? 2.8 : 0.8;
     },
     pointRadius: (scriptableContext) => {
-      const activeDatasetIndex =
-        scriptableContext.chart?.$activeDatasetIndex ?? null;
-      const showPoints = scriptableContext.chart?.$showPoints !== false;
-      if (!showPoints) return 0;
-      if (activeDatasetIndex === null) return basePointRadius;
-      return scriptableContext.datasetIndex === activeDatasetIndex ? 4.8 : 2.2;
+      const chart = scriptableContext.chart;
+      const activeIdx = chart?.$activeDatasetIndex ?? null;
+      if (chart?.$showPoints === false) return 0;
+      if (activeIdx === null) return basePointRadius;
+      return scriptableContext.datasetIndex === activeIdx ? 4.8 : 2.2;
     },
     pointHoverRadius: (scriptableContext) =>
       scriptableContext.chart?.$showPoints === false ? 0 : basePointHoverRadius,
@@ -1233,10 +1228,8 @@ const buildChartDatasets = (chartConfig, context) => {
   // Ahora aplicamos los estilos basándonos en la cantidad total para optimizar
   const baseDatasets = rawDatasets
     .map((dataset) => {
-      const isMassive =
-        dataset?.data?.length > 1000 || rawDatasets.length > 50;
       return dataset?._interactiveSeries
-        ? buildInteractiveDatasetStyles(dataset, isMassive)
+        ? buildInteractiveDatasetStyles(dataset)
         : dataset;
     })
     .filter(Boolean);
