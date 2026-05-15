@@ -357,8 +357,15 @@ const resolveContextValueFromCandidates = (
   options = {},
 ) => {
   const candidates = normalizeCandidatePaths(basePath, extraPaths);
+  
+  // Si hay prefijos, los expandimos combinándolos con el basePath
+  if (options.prefixes?.length > 0) {
+    options.prefixes.forEach(prefix => {
+      candidates.push(`${prefix}.${basePath}`);
+    });
+  }
+
   let fallbackValue = defaultValue;
-  const debugTrail = [];
 
   for (const candidate of candidates) {
     const value = resolveContextValue(
@@ -370,9 +377,6 @@ const resolveContextValueFromCandidates = (
 
     const isPresent = value !== undefined && value !== null && value !== "";
 
-    if (options.debugMeta) {
-      debugTrail.push({ candidate, value });
-    }
 
     if (isPresent) {
       const numericValue = toFiniteNumber(value);
@@ -385,34 +389,19 @@ const resolveContextValueFromCandidates = (
         continue;
       }
 
-      if (options.debugMeta) {
-        console.debug(
-          `[Grafico tendencia] candidato seleccionado ${JSON.stringify({
-            ...options.debugMeta,
-            candidate,
-            value,
-            candidates: debugTrail,
-          })}`,
-        );
-      }
       return value;
     }
   }
 
-  if (options.debugMeta) {
-    console.debug(
-      `[Grafico tendencia] sin candidato util, usando fallback ${JSON.stringify({
-        ...options.debugMeta,
-        fallback: fallbackValue,
-        candidates: debugTrail,
-      })}`,
-    );
-  }
 
   // Si preferimos no-ceros y lo único que encontramos fue un cero, 
   // devolvemos el defaultValue (que suele ser undefined) para que el punto se omita.
   if (options.preferNonZero && toFiniteNumber(fallbackValue) === 0) {
     return defaultValue;
+  }
+
+  if (fallbackValue === undefined && (options.prefixes?.length > 0 || extraPaths.length > 0)) {
+    console.debug(`[Visor] Fallo al resolver "${basePath}" con prefijos:`, options.prefixes, "y extras:", extraPaths);
   }
 
   return fallbackValue;
@@ -423,19 +412,20 @@ const resolveArraySourceItems = (
   chartConfig = {},
   context,
 ) => {
-  const candidateKeys = normalizeCandidatePaths(
-    sourceConfig.data_key || chartConfig.data_key,
+  const dataKey = sourceConfig.data_key || chartConfig.data_key;
+  if (!dataKey) return [];
+
+  // Usamos resolveContextValueFromCandidates para aprovechar los prefijos automáticos (results, resultados, etc.)
+  const dataArray = resolveContextValueFromCandidates(
+    dataKey,
+    context,
+    {},
+    [],
     sourceConfig.data_keys || [],
+    { prefixes: ["results", "resultados", "data"] }
   );
 
-  for (const candidateKey of candidateKeys) {
-    const dataArray = resolveContextValue(candidateKey, context, {}, []);
-    if (Array.isArray(dataArray) && dataArray.length) {
-      return dataArray;
-    }
-  }
-
-  return [];
+  return Array.isArray(dataArray) ? dataArray : [];
 };
 
 const buildAssayContext = (
@@ -444,45 +434,52 @@ const buildAssayContext = (
   fallbackTableConfig = null,
 ) => {
   const formData = ensayo?.datos_formulario || ensayo?.formData || {};
+  
+  // Normalizamos el formData para que el motor de cálculo encuentre las tablas 
+  // incluso si la config usa el prefijo "tables." (estándar de la app)
+  const normalizedFormData = { ...formData };
+  if (!normalizedFormData.tables) {
+    normalizedFormData.tables = { ...formData };
+  }
+
   let resultados = ensayo?.resultado || ensayo?.resultados || {};
 
+  // Prioridad 1: Cálculo con la configuración propia del ensayo
   if (
     (!resultados || !Object.keys(resultados).length) &&
     ensayo?.config_calculos &&
-    formData &&
-    Object.keys(formData).length
+    Object.keys(formData).length > 0
   ) {
     try {
-      resultados = calcularResultados(ensayo.config_calculos, formData) || {};
+      resultados = calcularResultados(ensayo.config_calculos, normalizedFormData) || {};
     } catch (_error) {
+      console.error(`[Visor] Error calculando resultados para ensayo ${ensayo.id}:`, _error);
       resultados = {};
     }
-  } else if (
+  } 
+  // Prioridad 2: Si no tiene config propia, probar con la del tipo de ensayo (fallback)
+  else if (
     (!resultados || !Object.keys(resultados).length) &&
     fallbackCalculationConfig &&
-    formData &&
-    Object.keys(formData).length
+    Object.keys(formData).length > 0
   ) {
     try {
-      resultados =
-        calcularResultados(fallbackCalculationConfig, formData) || {};
+      resultados = calcularResultados(fallbackCalculationConfig, normalizedFormData) || {};
     } catch (_error) {
       resultados = {};
     }
   }
 
-  const mergedData = deepMerge(formData || {}, resultados || {});
-
+  // El contexto ahora expone todo al primer nivel para facilitar las keys cortas
   return {
-    data: mergedData,
+    ...resultados,
+    ...normalizedFormData,
     resultados: resultados || {},
-    results: resultados || {}, // Alias para compatibilidad
-    formData: formData || {},
-    tableConfig:
-      ensayo?.config_tabla || ensayo?.tableConfig || fallbackTableConfig || {},
+    results: resultados || {},
+    formData: normalizedFormData,
+    data: normalizedFormData,
+    tableConfig: ensayo?.config_tabla || ensayo?.tableConfig || fallbackTableConfig || {},
     ensayo,
-    // Inyectamos resultados al nivel superior para acceso directo como calculated_values.*
-    ...(resultados || {}),
   };
 };
 
@@ -602,20 +599,20 @@ const buildPointsFromArraySource = (
       return normalizePoint(
         {
           x: resolveContextValueFromCandidates(
-            datasetConfig.x_key || chartConfig?.x_axis?.key,
+            datasetConfig.x_key || chartConfig?.x_axis?.key || "x",
             context,
             rowContext,
             undefined,
             datasetConfig.x_keys || [],
-            { preferNonZero: datasetConfig.skip_zero_x === true },
+            { preferNonZero: datasetConfig.skip_zero_x === true, extraPaths: ["results.x", "resultados.x", "data.x"] },
           ),
           y: resolveContextValueFromCandidates(
-            datasetConfig.y_key,
+            datasetConfig.y_key || "y",
             context,
             rowContext,
             undefined,
             datasetConfig.y_keys || [],
-            { preferNonZero: datasetConfig.skip_zero_y === true },
+            { preferNonZero: datasetConfig.skip_zero_y === true, extraPaths: ["results.y", "resultados.y", "data.y"] },
           ),
         },
         chartConfig,
@@ -712,19 +709,6 @@ const buildPointsFromRowSource = (
     })
     .filter((point) => {
       const shouldSkip = shouldSkipPointByDatasetRules(point, datasetConfig);
-      if (isTrendDebug && shouldSkip) {
-        console.debug(
-          `[Grafico tendencia] punto omitido por reglas ${JSON.stringify({
-            ensayo:
-              context?.ensayo?.codigo_ensayo ||
-              context?.ensayo?.codigo_generado ||
-              context?.ensayo?.id,
-            point,
-            skip_zero_x: datasetConfig.skip_zero_x,
-            skip_zero_y: datasetConfig.skip_zero_y,
-          })}`,
-        );
-      }
       return !shouldSkip;
     })
     .filter(Boolean);
@@ -798,6 +782,16 @@ const buildGroupPointsFromEnsayos = (
               "tables.granulometria.{row_key}.porc_pasa",
               "tables.granulometria.{row_key}.pasa",
             ],
+            callback: (context) => {
+                const isTrend = isGranulometriaTrendChart(chartConfig);
+                const lines = [];
+                if (isTrend) {
+                const xLabel = chartConfig.x_axis?.label || "X";
+                const yLabel = chartConfig.y_axis?.label || "Y";
+                lines.push(`${xLabel}: ${context.parsed.x}`);
+                lines.push(`${yLabel}: ${context.parsed.y}`);
+              }
+            }
           },
           assayContext,
         );
@@ -818,16 +812,21 @@ const buildGroupPointsFromEnsayos = (
       );
     }
 
+    if (!points.length && (sourceConfig.data_key || "").includes("puntos_recta")) {
+      console.warn(`[Visor] Ensayo ${ensayo.id} (${ensayo.codigo_ensayo}) NO generó puntos para la línea técnica. data_key: ${sourceConfig.data_key}`);
+    }
+
     return points
       .filter(Boolean)
-      .filter((point) =>
-        !shouldSkipPointByDatasetRules(point, datasetConfigWithFallbacks),
-      )
-      .map((point) => ({
-        ...point,
+      .filter((p) => !shouldSkipPointByDatasetRules(p, datasetConfigWithFallbacks))
+      .map((p) => ({
+        ...p,
         ensayo_id: ensayo?.id,
         ensayo_codigo: ensayo?.codigo_ensayo || ensayo?.codigo_generado || "",
         ensayo_nombre: ensayo?.nombre_ensayo || "",
+        progresiva: ensayo?.progresiva_nombre || ensayo?.progresiva_codigo || "-",
+        estrato: hasMeaningfulValue(ensayo?.estrato_orden) ? `E: ${ensayo.estrato_orden}` : "-",
+        identificador: ensayo?.identificador || ensayo?.calicata || "-",
       }));
   });
 };
@@ -838,18 +837,12 @@ const buildGroupSeriesDatasetsFromEnsayos = (
   datasetConfig,
   context,
 ) => {
-  const sourceConfig = datasetConfig.source || chartConfig.source || {};
-  const pointBuilderType = sourceConfig.type;
+  if (!Array.isArray(groupEnsayos)) return [];
+
+  const sourceConfig = datasetConfig.source || {};
 
   return groupEnsayos.flatMap((ensayo, idx) => {
-    // Usar contexto pre-calculado si está disponible para ahorrar CPU
-    const assayContext =
-      context.groupAssayContexts?.[idx] ||
-      buildAssayContext(
-        ensayo,
-        context.calculationConfig,
-        context.tableConfig,
-      );
+    const assayContext = context.groupAssayContexts?.[idx] || buildAssayContext(ensayo, context.calculationConfig, context.tableConfig);
 
     const datasetConfigWithFallbacks = withGranulometriaTrendDatasetFallbacks(
       datasetConfig,
@@ -859,111 +852,45 @@ const buildGroupSeriesDatasetsFromEnsayos = (
 
     let points = [];
 
-    if (pointBuilderType === "group_array") {
-      const dataArray = resolveArraySourceItems(
-        sourceConfig,
-        chartConfig,
-        assayContext,
-      );
-      points = buildPointsFromArraySource(
-        dataArray,
-        chartConfig,
-        datasetConfigWithFallbacks,
-        assayContext,
-      );
-    } else if (pointBuilderType === "group_table_rows") {
+    if (sourceConfig.type === "group_table_rows" || sourceConfig.type === "table_rows") {
       const rows = resolveRowsForSource(sourceConfig, assayContext);
-      points = buildPointsFromRowSource(
-        rows,
-        chartConfig,
-        datasetConfigWithFallbacks,
-        assayContext,
-      );
-    } else if (Array.isArray(datasetConfigWithFallbacks.points)) {
-      points = buildPointsFromInlineConfig(
-        datasetConfigWithFallbacks.points,
-        chartConfig,
-        assayContext,
-      );
+      points = buildPointsFromRowSource(rows, chartConfig, datasetConfigWithFallbacks, assayContext);
+    } else if (sourceConfig.type === "group_array" || sourceConfig.type === "array") {
+      const dataArray = resolveArraySourceItems(sourceConfig, chartConfig, assayContext);
+      points = buildPointsFromArraySource(dataArray, chartConfig, datasetConfigWithFallbacks, assayContext);
+    } else if (Array.isArray(datasetConfig.points)) {
+      points = buildPointsFromInlineConfig(datasetConfig.points, chartConfig, assayContext);
+    }
+
+    if (!points.length && (sourceConfig.data_key || "").includes("puntos_recta")) {
+      console.warn(`[Visor] Ensayo ${ensayo.id} (${ensayo.codigo_ensayo}) NO generó puntos para la línea técnica. data_key: ${sourceConfig.data_key}`);
     }
 
     if (!points.length) return [];
 
-    const sanitizedPoints = points
-      .filter(Boolean)
-      .filter((point) =>
-        !shouldSkipPointByDatasetRules(point, datasetConfigWithFallbacks),
-      )
-      .sort((a, b) => {
-        const xA = toFiniteNumber(a?.x);
-        const xB = toFiniteNumber(b?.x);
-        if (xA === null && xB === null) return 0;
-        if (xA === null) return 1;
-        if (xB === null) return -1;
-        return xB - xA;
-      });
-
-    if (!sanitizedPoints.length) return [];
-
-    if (isGranulometriaTrendChart(chartConfig)) {
-      console.debug(
-        `[Grafico tendencia] resumen por ensayo ${JSON.stringify({
-          ensayo: ensayo?.codigo_ensayo || ensayo?.codigo_generado || ensayo?.id,
-          progresiva: ensayo?.progresiva_nombre || ensayo?.progresiva_codigo,
-          estrato: ensayo?.estrato_orden,
-          identificador: ensayo?.identificador || ensayo?.calicata,
-          totalPointsBeforeSanitize: points.length,
-          totalPointsAfterSanitize: sanitizedPoints.length,
-          zeroLikePointsRemaining: sanitizedPoints.filter(
-            (point) => toFiniteNumber(point?.y) === 0,
-          ).length,
-          points: sanitizedPoints.map((point) => ({
-            x: point?.x,
-            y: point?.y,
-          })),
-        })}`,
-      );
-    }
-
-    const progresiva =
-      ensayo?.progresiva_nombre || ensayo?.progresiva_codigo || "-";
-    const estrato = hasMeaningfulValue(ensayo?.estrato_orden)
-      ? `E: ${ensayo.estrato_orden}`
-      : "-";
-    const identificador = ensayo?.identificador || ensayo?.calicata || "-";
+    const isLine = datasetConfig.showLine !== false;
+    const isRedLine = isLine && (datasetConfig.label || "").toLowerCase().includes("línea");
 
     return [
       {
-        label:
-          datasetConfig.label ||
-          ensayo?.codigo_ensayo ||
-          ensayo?.codigo_generado ||
-          ensayo?.nombre_ensayo ||
-          "Curva granulométrica",
-        data: sanitizedPoints.map((point) => ({
-          ...point,
-          ensayo_id: ensayo?.id,
-          ensayo_codigo: ensayo?.codigo_ensayo || ensayo?.codigo_generado || "",
-          ensayo_nombre: ensayo?.nombre_ensayo || "",
-          progresiva,
-          estrato,
-          identificador,
+        ...datasetConfig,
+        label: `${datasetConfig.label || ""} - ${ensayo.codigo_ensayo || ensayo.id}`,
+        data: points.map(p => ({
+          ...p,
+          ensayo_id: ensayo.id,
+          ensayo_codigo: ensayo.codigo_ensayo || ensayo.codigo_generado || "",
+          progresiva: ensayo.progresiva_nombre || "-",
+          estrato: ensayo.estrato_nombre || "-",
+          identificador: ensayo.identificador || ensayo.calicata || "-",
         })),
-        type: datasetConfig.type || chartConfig.dataset_type || chartConfig.type,
-        borderColor: datasetConfig.borderColor || "#2563eb",
-        backgroundColor:
-          datasetConfig.backgroundColor || "rgba(37, 99, 235, 0.22)",
+        type: datasetConfig.type || chartConfig.type,
+        borderColor: datasetConfig.borderColor || (isRedLine ? "#dc2626" : (isLine ? "#1e40af" : "#2563eb")),
+        backgroundColor: datasetConfig.backgroundColor || (isRedLine ? "rgba(220, 38, 38, 0.15)" : "rgba(37, 99, 235, 0.4)"),
         tension: datasetConfig.tension ?? chartConfig.tension ?? 0,
         fill: datasetConfig.fill ?? false,
-        pointRadius: datasetConfig.pointRadius ?? 3,
-        pointHoverRadius: datasetConfig.pointHoverRadius ?? 5,
-        showLine: datasetConfig.showLine ?? true,
-        pointStyle: datasetConfig.pointStyle,
-        borderDash: datasetConfig.borderDash,
-        borderWidth: datasetConfig.borderWidth ?? 1.6,
-        stepped: datasetConfig.stepped,
-        parsing: false,
-        hidden: datasetConfig.hidden ?? false,
+        pointRadius: datasetConfig.pointRadius ?? (isLine ? 0 : 3),
+        showLine: isLine,
+        borderWidth: datasetConfig.borderWidth || (isLine ? 1.8 : 2),
         _interactiveSeries: true,
       },
     ];
@@ -972,129 +899,55 @@ const buildGroupSeriesDatasetsFromEnsayos = (
 
 const buildPointsFromInlineConfig = (points = [], chartConfig, context) => {
   return points
-    .map((point, index) => {
-      const rowContext = { index, ...point };
-
-      // Filtrado dinámico por clave externa (ej: omitir si el valor es 0 o está vacío)
-      if (point.filter_zero_key) {
-        const filterVal = resolveContextValue(
-          point.filter_zero_key,
+    .map((p) => {
+      const point = {
+        x: resolveContextValueFromCandidates(
+          p.x_key || chartConfig?.x_axis?.key || "x",
           context,
-          rowContext,
-        );
-        const num = Number(filterVal);
-        if (
-          filterVal === undefined ||
-          filterVal === null ||
-          filterVal === "" ||
-          (Number.isFinite(num) && num === 0)
-        ) {
-          return null;
-        }
-      }
-
-      const xValue = point?.x_key
-        ? resolveContextValueFromCandidates(
-          point.x_key,
+          {},
+          p.x,
+          p.x_keys || [],
+          { preferNonZero: p.skip_zero_x === true, prefixes: ["results", "resultados", "data", "metadata"] },
+        ),
+        y: resolveContextValueFromCandidates(
+          p.y_key || "y",
           context,
-          rowContext,
-          undefined,
-          point.x_keys || [],
-          { preferNonZero: point.skip_zero_x === true },
-        )
-        : point?.x;
-      const yValue = point?.y_key
-        ? resolveContextValueFromCandidates(
-          point.y_key,
-          context,
-          rowContext,
-          undefined,
-          point.y_keys || [],
-          { preferNonZero: point.skip_zero_y === true },
-        )
-        : point?.y;
-
-      const normalizedPoint = normalizePoint(
-        {
-          x: xValue,
-          y: yValue,
-        },
-        chartConfig,
-      );
-
-      if (shouldSkipPointByDatasetRules(normalizedPoint, point)) {
-        return null;
-      }
-
-      return normalizedPoint;
+          {},
+          p.y,
+          p.y_keys || [],
+          { preferNonZero: p.skip_zero_y === true, prefixes: ["results", "resultados", "data", "metadata"] },
+        ),
+      };
+      const normalizedPoint = normalizePoint(point, chartConfig);
+      return shouldSkipPointByDatasetRules(normalizedPoint, p) ? null : normalizedPoint;
     })
     .filter(Boolean);
 };
 
 const buildDataset = (chartConfig, datasetConfig, context) => {
   const sourceConfig = datasetConfig.source || chartConfig.source || {};
-  let points = [];
 
-  if (
-    sourceConfig.series_by === "ensayo" &&
-    Array.isArray(context.groupEnsayos)
-  ) {
-    return buildGroupSeriesDatasetsFromEnsayos(
-      context.groupEnsayos,
-      chartConfig,
-      datasetConfig,
-      context,
-    );
+  if (sourceConfig.series_by === "ensayo" && Array.isArray(context.groupEnsayos)) {
+    return buildGroupSeriesDatasetsFromEnsayos(context.groupEnsayos, chartConfig, datasetConfig, context);
   }
 
-  if (
-    (sourceConfig.type === "group_array" ||
-      sourceConfig.type === "group_table_rows") &&
-    Array.isArray(context.groupEnsayos)
-  ) {
-    points = buildGroupPointsFromEnsayos(
-      context.groupEnsayos,
-      chartConfig,
-      datasetConfig,
-      context,
-    );
+  let points = [];
+  if (sourceConfig.type === "group_array" || sourceConfig.type === "group_table_rows") {
+    points = buildGroupPointsFromEnsayos(context.groupEnsayos, chartConfig, datasetConfig, context);
   } else if (Array.isArray(datasetConfig.points)) {
-    points = buildPointsFromInlineConfig(
-      datasetConfig.points,
-      chartConfig,
-      context,
-    );
-  } else if (sourceConfig.type === "array" || chartConfig.data_key) {
-    const dataArray = resolveArraySourceItems(
-      sourceConfig,
-      chartConfig,
-      context,
-    );
-    points = buildPointsFromArraySource(
-      dataArray,
-      chartConfig,
-      datasetConfig,
-      context,
-    );
-  } else if (
-    sourceConfig.type === "table_rows" ||
-    sourceConfig.table_key ||
-    sourceConfig.rows_path ||
-    Array.isArray(sourceConfig.rows)
-  ) {
+    points = buildPointsFromInlineConfig(datasetConfig.points, chartConfig, context);
+  } else if (sourceConfig.type === "array") {
+    const dataArray = resolveArraySourceItems(sourceConfig, chartConfig, context);
+    points = buildPointsFromArraySource(dataArray, chartConfig, datasetConfig, context);
+  } else if (sourceConfig.type === "table_rows" || sourceConfig.table_key) {
     const rows = resolveRowsForSource(sourceConfig, context);
-    points = buildPointsFromRowSource(
-      rows,
-      chartConfig,
-      datasetConfig,
-      context,
-    );
+    points = buildPointsFromRowSource(rows, chartConfig, datasetConfig, context);
   }
 
   if (!points.length) return null;
 
   return {
-    label: datasetConfig.label,
+    ...datasetConfig,
     data: points,
     type: datasetConfig.type || chartConfig.dataset_type,
     borderColor: datasetConfig.borderColor || "#2563eb",
@@ -1102,13 +955,8 @@ const buildDataset = (chartConfig, datasetConfig, context) => {
     tension: datasetConfig.tension ?? chartConfig.tension ?? 0,
     fill: datasetConfig.fill ?? false,
     pointRadius: datasetConfig.pointRadius ?? 3,
-    pointHoverRadius: datasetConfig.pointHoverRadius ?? 5,
     showLine: datasetConfig.showLine ?? true,
-    pointStyle: datasetConfig.pointStyle,
-    borderDash: datasetConfig.borderDash,
     borderWidth: datasetConfig.borderWidth ?? 2,
-    stepped: datasetConfig.stepped,
-    parsing: false,
   };
 };
 
@@ -1126,7 +974,7 @@ const buildInteractiveDatasetStyles = (dataset) => {
       const activeIdx = chart?.$activeDatasetIndex ?? null;
       const showCurves = chart?.$showCurves !== false;
       if (!showCurves) return withAlpha(baseBorderColor, 0);
-      if (activeIdx === null) return baseBorderColor;
+      if (activeIdx === null) return withAlpha(baseBorderColor, 0.5); // Opacidad base visible para ver la tendencia
       return scriptableContext.datasetIndex === activeIdx
         ? withAlpha(baseBorderColor, 0.95)
         : withAlpha(baseBorderColor, 0.08);
@@ -1136,17 +984,17 @@ const buildInteractiveDatasetStyles = (dataset) => {
       const activeIdx = chart?.$activeDatasetIndex ?? null;
       const showPoints = chart?.$showPoints !== false;
       if (!showPoints) return withAlpha(baseBackgroundColor, 0);
-      if (activeIdx === null) return baseBackgroundColor;
+      if (activeIdx === null) return withAlpha(baseBackgroundColor, 0.4);
       return scriptableContext.datasetIndex === activeIdx
-        ? withAlpha(baseBackgroundColor, 0.82)
-        : withAlpha(baseBackgroundColor, 0.1);
+        ? withAlpha(baseBackgroundColor, 0.8)
+        : withAlpha(baseBackgroundColor, 0.05);
     },
     borderWidth: (scriptableContext) => {
       const chart = scriptableContext.chart;
-      const activeIdx = chart?.$activeDatasetIndex ?? null;
-      if (chart?.$showCurves === false) return 0;
-      if (activeIdx === null) return baseBorderWidth;
-      return scriptableContext.datasetIndex === activeIdx ? 2.8 : 0.8;
+      const isCurve = scriptableContext.dataset.showLine === true;
+      if (chart?.$showCurves === false && isCurve) return 0;
+      if (chart?.$showPoints === false && !isCurve) return 0;
+      return baseBorderWidth;
     },
     pointRadius: (scriptableContext) => {
       const chart = scriptableContext.chart;
@@ -1353,7 +1201,7 @@ const buildChartOptions = (chartConfig, datasets = []) => {
         onClick: usesCurvePointToggleLegend
           ? (_event, legendItem, legend) => {
             const chart = legend.chart;
-            if (legendItem.text === "Curvas") {
+            if (legendItem.text === "Líneas") {
               chart.$showCurves = chart.$showCurves === false ? true : false;
             }
             if (legendItem.text === "Puntos") {
@@ -1372,15 +1220,15 @@ const buildChartOptions = (chartConfig, datasets = []) => {
           generateLabels: usesCurvePointToggleLegend
             ? (chart) => [
               {
-                text: "Curvas",
+                text: "Líneas",
                 fillStyle:
                   chart.$showCurves === false
                     ? "rgba(148, 163, 184, 0.35)"
-                    : "#2563eb",
+                    : "#dc2626",
                 strokeStyle:
                   chart.$showCurves === false
                     ? "rgba(148, 163, 184, 0.35)"
-                    : "#2563eb",
+                    : "#dc2626",
                 lineWidth: 2,
                 hidden: chart.$showCurves === false,
                 datasetIndex: 0,
@@ -1423,20 +1271,26 @@ const buildChartOptions = (chartConfig, datasets = []) => {
         displayColors: true,
         callbacks: {
           title: (tooltipItems) => {
-            return "Datos del ensayo";
+            const raw = tooltipItems[0]?.raw || {};
+            return raw.ensayo_codigo ? `Ensayo: ${raw.ensayo_codigo}` : "Datos del ensayo";
           },
           label: (tooltipItem) => {
-            const xLabel = formatNumericLabel(tooltipItem.raw?.x);
-            const yLabel = formatNumericLabel(tooltipItem.raw?.y);
-            return [`Abertura: ${xLabel} mm`, `% que pasa: ${yLabel}`];
+            const chart = tooltipItem.chart;
+            const xLabel = chart.options.scales.x.title.text || "X";
+            const yLabel = chart.options.scales.y.title.text || "Y";
+            
+            const xVal = formatNumericLabel(tooltipItem.raw?.x);
+            const yVal = formatNumericLabel(tooltipItem.raw?.y);
+            
+            return [`${xLabel}: ${xVal}`, `${yLabel}: ${yVal}`];
           },
           afterLabel: (tooltipItem) => {
             const raw = tooltipItem.raw || {};
             const details = [];
-            if (raw.progresiva) details.push(`Progresiva: ${raw.progresiva}`);
-            if (raw.estrato) details.push(`Estrato: ${raw.estrato}`);
-            if (raw.identificador)
-              details.push(`Calicata: ${raw.identificador}`);
+            if (raw.progresiva && raw.progresiva !== "-") details.push(`Progresiva: ${raw.progresiva}`);
+            if (raw.estrato && raw.estrato !== "-") details.push(`Estrato: ${raw.estrato}`);
+            if (raw.identificador && raw.identificador !== "-")
+              details.push(`Muestra/C: ${raw.identificador}`);
             return details;
           },
         },
@@ -1593,6 +1447,14 @@ const VisorGraficos = ({
   // OPTIMIZACIÓN: Pre-calculamos los contextos de todos los ensayos una sola vez
   const groupAssayContexts = useMemo(() => {
     if (!groupEnsayos || !groupEnsayos.length) return [];
+    if (groupEnsayos.length > 0) {
+      console.log("[Visor] DEBUG - Estructura del primer ensayo:", {
+        id: groupEnsayos[0].id,
+        keys_datos_formulario: Object.keys(groupEnsayos[0].datos_formulario || {}),
+        keys_resultado: Object.keys(groupEnsayos[0].resultado || {}),
+        first_assay_raw: groupEnsayos[0]
+      });
+    }
     return groupEnsayos.map((ensayo) =>
       buildAssayContext(ensayo, calculationConfig, tableConfig),
     );
@@ -1619,16 +1481,20 @@ const VisorGraficos = ({
     ],
   );
 
-  const preparedCharts = useMemo(
-    () =>
-      charts
-        .map((chartConfig) => ({
-          chartConfig,
-          datasets: buildChartDatasets(chartConfig, context),
-        }))
-        .filter((entry) => entry.datasets.length > 0),
-    [charts, context],
-  );
+  const preparedCharts = useMemo(() => {
+    const prepared = charts
+      .map((chartConfig) => {
+        const datasets = buildChartDatasets(chartConfig, context);
+        if (datasets.length === 0) {
+          console.warn(`[Visor] Gráfico "${chartConfig.title || chartConfig.id}" descartado: 0 datasets generados.`);
+        }
+        return { chartConfig, datasets };
+      })
+      .filter((entry) => entry.datasets.length > 0);
+
+    console.log(`[Visor] Gráficos finales a renderizar: ${prepared.length}`, prepared.map(p => p.chartConfig.title));
+    return prepared;
+  }, [charts, context]);
 
   useEffect(() => {
     const chartInstances = {};
@@ -1639,34 +1505,6 @@ const VisorGraficos = ({
       const ctx = canvas?.getContext("2d");
       if (!ctx) return;
 
-      if (
-        chartId === "curva_compactacion" ||
-        chartId === "humedad_por_prueba" ||
-        chartId === "densidad_seca_por_prueba"
-      ) {
-        console.log("[VisorGraficos][Proctor] valores relevantes", {
-          chartId,
-          humedad: {
-            m1: getValue(mergedData, "tables.calculo_humedad.m1.humedad"),
-            m2: getValue(mergedData, "tables.calculo_humedad.m2.humedad"),
-            m3: getValue(mergedData, "tables.calculo_humedad.m3.humedad"),
-            m4: getValue(mergedData, "tables.calculo_humedad.m4.humedad"),
-          },
-          densidadSeca: {
-            m1: getValue(mergedData, "tables.calculo_humedad.m1.densidad_seca"),
-            m2: getValue(mergedData, "tables.calculo_humedad.m2.densidad_seca"),
-            m3: getValue(mergedData, "tables.calculo_humedad.m3.densidad_seca"),
-            m4: getValue(mergedData, "tables.calculo_humedad.m4.densidad_seca"),
-          },
-          resultados: {
-            humedad_optima: getValue(mergedData, "results.humedad_optima"),
-            maxima_densidad_seca: getValue(
-              mergedData,
-              "results.maxima_densidad_seca",
-            ),
-          },
-        });
-      }
 
       chartInstances[chartId] = new Chart(ctx, {
         type: chartConfig.type || "line",
@@ -1701,7 +1539,17 @@ const VisorGraficos = ({
   }
 
   return (
-    <div className="container-fluid">
+    <div 
+      className="container-fluid visor-graficos-scroll" 
+      style={{ 
+        height: 'auto',
+        minHeight: '400px',
+        maxHeight: '85vh', 
+        overflowY: 'auto', 
+        padding: '15px 20px',
+        scrollBehavior: 'smooth'
+      }}
+    >
       <div className="row">
         {preparedCharts.map(({ chartConfig }, index) => {
           const chartId = chartConfig.id || `grafico-${index}`;

@@ -189,12 +189,6 @@ function calcularRegresionLinealLog(xInput, yInput) {
         }
     }
 
-    console.log("[CALC] Datos para regresión:", {
-        recibido_x: xArr,
-        recibido_y: yArr,
-        puntos_validos: validX.length
-    });
-
     if (validX.length < 2) {
         return { 
             m: 0, b: 0, ll_25: 0, puntos_recta: [], 

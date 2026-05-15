@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { GeoJSON, MapContainer, ScaleControl, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -9,6 +9,7 @@ import * as turf from '@turf/turf';
 import axiosInstance from '../../../../../api/axios';
 import { useAuth } from '../../../../../data/contexts/AuthContext';
 import './DisenoGeometricoModes.css';
+import './DisenoGeometrico.css';
 
 const DG_EXTERNAL_MAX_MAP_ZOOM = 22;
 const DG_EXTERNAL_BASEMAPS = {
@@ -151,6 +152,146 @@ const getFeatureExternalLabel = (feature, layer) => {
 
   if (properties.dg_name) return String(properties.dg_name);
   return '';
+};
+
+const ATTRIBUTE_COLOR_PALETTE = [
+  '#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed',
+  '#db2777', '#0f766e', '#9333ea', '#ea580c', '#0891b2', '#4f46e5', '#65a30d'
+];
+
+const ATTRIBUTE_COLOR_OPTIONS = [
+  { value: 'descript', label: 'Descript', aliases: ['descript', 'descrip', 'description', 'descripcion'] },
+  { value: 'offset', label: 'Offset', aliases: ['offset', 'offsets'] },
+  { value: 'eje', label: 'Eje', aliases: ['eje', 'axis'] },
+  { value: 'daylight', label: 'Daylight', aliases: ['daylight', 'dylight', 'dylith'] }
+];
+
+const isPointFeature = (feature) => feature?.geometry?.type?.includes('Point');
+const isLineFeature = (feature) => feature?.geometry?.type?.includes('Line');
+
+const normalizeAttributeToken = (value) =>
+  String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const getFeatureSourceAttributes = (feature) => {
+  const properties = feature?.properties || {};
+  const hiddenKeys = new Set(['stroke', 'stroke-width', 'stroke-opacity', 'fill', 'fill-opacity', 'visible', 'nombre', 'name']);
+  return Object.entries(properties).filter(([key, value]) => (
+    !String(key).startsWith('dg_') && !hiddenKeys.has(key) && value !== null && value !== undefined && value !== ''
+  ));
+};
+
+const findFeatureAttributeEntry = (feature, aliases = []) => {
+  if (!aliases.length) return null;
+  const aliasSet = new Set(aliases.map(normalizeAttributeToken));
+  return getFeatureSourceAttributes(feature).find(([key]) => aliasSet.has(normalizeAttributeToken(key))) || null;
+};
+
+const getFeatureAttributeValue = (feature, aliases = []) => {
+  const match = findFeatureAttributeEntry(feature, aliases);
+  return match ? match[1] : '';
+};
+
+const getFeatureAttributeValueByRule = (feature, colorOption) => {
+  if (!colorOption) return '';
+  if ('aliases' in colorOption) return getFeatureAttributeValue(feature, colorOption.aliases);
+  return feature?.properties?.[colorOption.key] || '';
+};
+
+const getPointLabelConfig = (collection) => {
+  const meta = collection?.dg_meta && typeof collection.dg_meta === 'object' ? collection.dg_meta : {};
+  const fields = Array.isArray(meta.pointLabelFields)
+    ? meta.pointLabelFields.filter(Boolean)
+    : (meta.pointLabelField ? [meta.pointLabelField] : []);
+  const modes = Array.isArray(meta.pointLabelModes)
+    ? meta.pointLabelModes.filter(Boolean)
+    : (meta.pointLabelMode ? [meta.pointLabelMode] : ['none']);
+  return { field: fields[0] || '', mode: modes[0] || 'none', fields, modes };
+};
+
+const resolveLabelEntriesFromFields = (feature, fields) => {
+  if (!Array.isArray(fields) || !fields.length) return [];
+  const properties = feature?.properties || {};
+  return fields
+    .map((field) => {
+      const rawValue = properties[field];
+      if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+      return { field, value: String(rawValue) };
+    })
+    .filter(Boolean);
+};
+
+const buildVerticalLabelHtml = (entries) => {
+  if (!entries.length) return '';
+  return entries.map((e) => `<span class="dg-label-row"><b>${e.field}:</b> ${e.value}</span>`).join('');
+};
+
+const resolvePointLabelText = (feature, labelConfig, isSelected) => {
+  if (!isPointFeature(feature)) return '';
+  const entries = resolveLabelEntriesFromFields(feature, labelConfig?.fields);
+  if (!entries.length) return '';
+  if (labelConfig.modes?.includes('all')) return buildVerticalLabelHtml(entries);
+  if (labelConfig.modes?.includes('selected') && isSelected) return buildVerticalLabelHtml(entries);
+  if (labelConfig.modes?.includes('tagged') && (feature?.properties || {}).dg_label_pinned) return buildVerticalLabelHtml(entries);
+  return '';
+};
+
+const resolvePointLabelLineCount = (feature, labelConfig, isSelected) => {
+  if (!isPointFeature(feature)) return 0;
+  const entries = resolveLabelEntriesFromFields(feature, labelConfig?.fields);
+  if (!entries.length) return 0;
+  if (labelConfig.modes?.includes('all')) return entries.length;
+  if (labelConfig.modes?.includes('selected') && isSelected) return entries.length;
+  if (labelConfig.modes?.includes('tagged') && (feature?.properties || {}).dg_label_pinned) return entries.length;
+  return 0;
+};
+
+const createExternalPointIcon = (feature, isSelected, labelConfig, closeFunc = '__dgCloseLabelExternal') => {
+  const color = feature?.properties?.fill || feature?.properties?.stroke || '#ef4444';
+  const markerSize = Math.max(8, Number(feature?.properties?.dg_marker_size) || 14);
+  const selectedBorder = isSelected ? 4 : 3;
+  const iconSize = markerSize + selectedBorder * 2;
+  const labelText = resolvePointLabelText(feature, labelConfig, isSelected);
+  const labelLines = resolvePointLabelLineCount(feature, labelConfig, isSelected);
+  const labelHeight = labelLines > 0 ? 16 + labelLines * 22 : 0;
+  const totalHeight = labelText ? labelHeight + 8 + iconSize : iconSize;
+  const totalWidth = Math.max(iconSize, labelText ? 200 : iconSize);
+  const anchorX = totalWidth / 2;
+  const anchorY = totalHeight - iconSize / 2;
+  const selectedGlow = isSelected
+    ? 'box-shadow: 0 0 0 6px rgba(15,143,149,0.3), 0 0 14px rgba(15,143,149,0.25), 0 0 0 2px #ffffff;'
+    : 'box-shadow: 0 8px 16px rgba(15,23,42,0.22);';
+  return L.divIcon({
+    className: `dg-point-icon${isSelected ? ' dg-point-selected' : ''}`,
+    html: `<div class="dg-point-icon-body">
+      ${labelText ? `<em class="dg-point-icon-label">
+        <button class="dg-label-close-btn" onclick="event.stopPropagation(); window.${closeFunc} &amp;&amp; window.${closeFunc}()" title="Cerrar">&times;</button>
+        ${labelText}
+      </em>` : ''}
+      <span class="dg-point-dot${isSelected ? ' dg-dot-selected' : ''}" style="width:${markerSize}px; height:${markerSize}px; background:${color}; border:${selectedBorder}px solid #ffffff; ${selectedGlow}"></span>
+    </div>`,
+    iconSize: [totalWidth, totalHeight],
+    iconAnchor: [anchorX, anchorY]
+  });
+};
+
+const resolveLayerColorConfig = (layer) => {
+  const meta = getLayerMeta(layer);
+  const colorKey = meta.colorByAttributeKey || '';
+  const palette = meta.colorByAttributePalette && typeof meta.colorByAttributePalette === 'object'
+    ? meta.colorByAttributePalette : {};
+  if (!colorKey) return null;
+
+  const colorOption = ATTRIBUTE_COLOR_OPTIONS.find((opt) => opt.aliases?.some((alias) => normalizeAttributeToken(alias) === normalizeAttributeToken(colorKey)))
+    || { key: colorKey };
+  return { colorKey, colorOption, palette };
+};
+
+const resolveFeatureColorByAttribute = (feature, colorConfig) => {
+  if (!colorConfig) return null;
+  const value = getFeatureAttributeValueByRule(feature, colorConfig.colorOption);
+  if (!value && value !== 0) return null;
+  const key = String(value);
+  return colorConfig.palette[key] || null;
 };
 
 const getFeatureFocusBounds = (feature) => {
@@ -356,6 +497,25 @@ function ExternalMapLifecycle({ onReady }) {
       window.removeEventListener('resize', syncSize);
     };
   }, [map, onReady]);
+
+  return null;
+}
+
+function ExternalMapClickDeselect({ onDeselect, measurementMode }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return undefined;
+
+    const handleMapClick = (e) => {
+      if (measurementMode) return;
+      if (e.originalEvent?._featureClicked) return;
+      onDeselect();
+    };
+
+    map.on('click', handleMapClick);
+    return () => { map.off('click', handleMapClick); };
+  }, [map, onDeselect, measurementMode]);
 
   return null;
 }
@@ -579,6 +739,8 @@ function ExternalMeasurementController({ mode, resetToken, onSummaryChange }) {
 export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canReturnToSelector = true }) {
   const { user, selectedProjectId, selectedProjectName } = useAuth();
   const mapRef = useRef(null);
+  const layerRegistryRef = useRef({});
+  const selectedFeatureIdRef = useRef('');
   const [layers, setLayers] = useState([]);
   const [visibleTabs, setVisibleTabs] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -590,6 +752,21 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
   const [measurementSummary, setMeasurementSummary] = useState(() => buildMeasurementSummary(null));
   const [isLeftSidebarHidden, setIsLeftSidebarHidden] = useState(false);
   const [isRightSidebarHidden, setIsRightSidebarHidden] = useState(false);
+  const [selectedFeatureId, setSelectedFeatureId] = useState('');
+  const [showLabelTable, setShowLabelTable] = useState(true);
+
+  useEffect(() => {
+    selectedFeatureIdRef.current = selectedFeatureId;
+  }, [selectedFeatureId]);
+
+  useEffect(() => {
+    window.__dgCloseLabelExternal = () => { setSelectedFeatureId(''); };
+    return () => { delete window.__dgCloseLabelExternal; };
+  }, []);
+
+  const handleMapDeselect = useCallback(() => {
+    setSelectedFeatureId('');
+  }, []);
 
   useEffect(() => {
     if (!user?.token || !selectedProjectId) {
@@ -668,6 +845,18 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
     () => visibleLayers.reduce((total, layer) => total + getGeojsonFeatures(layer).length, 0),
     [visibleLayers]
   );
+
+  const selectedFeatureInfo = useMemo(() => {
+    if (!selectedFeatureId) return null;
+    for (const layer of visibleLayers) {
+      const features = getGeojsonFeatures(layer);
+      const feature = features.find((f) => f?.properties?.dg_feature_id === selectedFeatureId);
+      if (feature) {
+        return { feature, layer, labelConfig: getPointLabelConfig(layer.geojson_data) };
+      }
+    }
+    return null;
+  }, [selectedFeatureId, visibleLayers]);
 
   useEffect(() => {
     if (!mapRef.current || !visibleLayers.length) return;
@@ -953,67 +1142,104 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
           />
           <ZoomControl position="topleft" />
           <ScaleControl position="bottomleft" />
+          <ExternalMapClickDeselect onDeselect={handleMapDeselect} measurementMode={measurementMode} />
 
-          {visibleLayers.map((layer, index) => (
-            <GeoJSON
-              key={layer.tab_name}
-              data={layer.geojson_data}
-              style={(feature) => {
-                const properties = getFeatureProperties(feature);
-                return {
-                  color: properties.stroke || getLayerColor(layer, index),
-                  weight: Number(properties['stroke-width']) || 3,
-                  opacity: properties['stroke-opacity'] !== undefined ? Number(properties['stroke-opacity']) : 0.95,
-                  fillColor: properties.fill || properties.stroke || getLayerColor(layer, index),
-                  fillOpacity: properties['fill-opacity'] !== undefined ? Number(properties['fill-opacity']) : ((feature?.geometry?.type || '').includes('Polygon') ? 0.2 : 0.9),
-                  dashArray: properties['stroke-dasharray'] || null
-                };
-              }}
-              pointToLayer={(feature, latlng) => {
-                const properties = getFeatureProperties(feature);
-                return L.circleMarker(latlng, {
-                  radius: Math.max(4, Math.min(8, Number(properties.dg_marker_size || 12) / 2)),
-                  color: '#ffffff',
-                  weight: 2,
-                  fillColor: properties.fill || properties.stroke || getLayerColor(layer, index),
-                  fillOpacity: 0.95
-                });
-              }}
-              onEachFeature={(feature, leafletLayer) => {
-                const externalLabel = getFeatureExternalLabel(feature, layer);
+          {visibleLayers.map((layer, index) => {
+            const labelConfig = getPointLabelConfig(layer.geojson_data);
+            const colorConfig = resolveLayerColorConfig(layer);
+            const hasLabelFields = labelConfig.fields.length > 0 && !labelConfig.modes.includes('none');
 
-                leafletLayer.bindPopup(buildFeaturePopupHtml(feature), {
-                  maxWidth: 320
-                });
+            return (
+              <GeoJSON
+                key={`${layer.tab_name}-${selectedFeatureId}`}
+                data={layer.geojson_data}
+                style={(feature) => {
+                  const properties = getFeatureProperties(feature);
+                  const attrColor = resolveFeatureColorByAttribute(feature, colorConfig);
+                  const baseColor = attrColor || properties.stroke || getLayerColor(layer, index);
+                  const baseFill = attrColor || properties.fill || properties.stroke || getLayerColor(layer, index);
+                  return {
+                    color: baseColor,
+                    weight: Number(properties['stroke-width']) || 3,
+                    opacity: properties['stroke-opacity'] !== undefined ? Number(properties['stroke-opacity']) : 0.95,
+                    fillColor: baseFill,
+                    fillOpacity: properties['fill-opacity'] !== undefined ? Number(properties['fill-opacity']) : ((feature?.geometry?.type || '').includes('Polygon') ? 0.2 : 0.9),
+                    dashArray: properties['stroke-dasharray'] || null
+                  };
+                }}
+                pointToLayer={(feature, latlng) => {
+                  const featureId = feature?.properties?.dg_feature_id || '';
+                  const isSelected = featureId && featureId === selectedFeatureId;
 
-                leafletLayer.on('click', () => {
-                  const bounds = getFeatureFocusBounds(feature);
-
-                  if (bounds?.isValid() && mapRef.current) {
-                    mapRef.current.flyToBounds(bounds, {
-                      padding: [72, 72],
-                      duration: 0.65,
-                      maxZoom: 18
+                  if (hasLabelFields) {
+                    return L.marker(latlng, {
+                      icon: createExternalPointIcon(feature, isSelected, labelConfig)
                     });
-                  } else if (feature?.geometry?.type === 'Point' && Array.isArray(feature.geometry.coordinates) && mapRef.current) {
-                    const [longitude, latitude] = feature.geometry.coordinates;
-                    mapRef.current.flyTo([latitude, longitude], Math.max(mapRef.current.getZoom(), 17), { duration: 0.55 });
                   }
 
-                  if (externalLabel) {
-                    const popupNode = leafletLayer.getPopup();
-                    const popupContent = `
-                      <div class="dg-external-popup-label">${escapeHtml(externalLabel)}</div>
-                      ${buildFeaturePopupHtml(feature)}
-                    `;
-                    popupNode?.setContent(popupContent);
+                  const properties = getFeatureProperties(feature);
+                  const attrColor = resolveFeatureColorByAttribute(feature, colorConfig);
+                  return L.circleMarker(latlng, {
+                    radius: Math.max(4, Math.min(8, Number(properties.dg_marker_size || 12) / 2)),
+                    color: '#ffffff',
+                    weight: isSelected ? 3 : 2,
+                    fillColor: attrColor || properties.fill || properties.stroke || getLayerColor(layer, index),
+                    fillOpacity: 0.95
+                  });
+                }}
+                onEachFeature={(feature, leafletLayer) => {
+                  const featureId = feature?.properties?.dg_feature_id || '';
+                  const isSelected = featureId && featureId === selectedFeatureId;
+
+                  leafletLayer.bindPopup(buildFeaturePopupHtml(feature), { maxWidth: 320 });
+
+                  if (!isSelected && hasLabelFields && labelConfig.modes?.includes('hover')) {
+                    const hoverEntries = resolveLabelEntriesFromFields(feature, labelConfig.fields);
+                    if (hoverEntries.length) {
+                      const hoverHtml = `<div class="dg-hover-label-vertical">${hoverEntries.map((e) => `<span><b>${e.field}:</b> ${e.value}</span>`).join('')}</div>`;
+                      leafletLayer.bindTooltip(hoverHtml, {
+                        permanent: false,
+                        direction: 'top',
+                        className: 'dg-point-hover-tooltip',
+                        opacity: 0.96
+                      });
+                    }
                   }
 
-                  leafletLayer.openPopup();
-                });
-              }}
-            />
-          ))}
+                  leafletLayer.on('click', (e) => {
+                    if (e.originalEvent) e.originalEvent._featureClicked = true;
+
+                    const alreadySelected = selectedFeatureIdRef.current === featureId;
+                    if (featureId) {
+                      setSelectedFeatureId(featureId);
+                    }
+
+                    if (!alreadySelected && mapRef.current) {
+                      if (isPointFeature(feature) && Array.isArray(feature.geometry?.coordinates)) {
+                        const currentZoom = mapRef.current.getZoom();
+                        const targetZoom = Math.min(Math.max(currentZoom + 2, 18), 22);
+                        const [longitude, latitude] = feature.geometry.coordinates;
+                        mapRef.current.flyTo([latitude, longitude], targetZoom, { duration: 0.5 });
+                      } else {
+                        const bounds = getFeatureFocusBounds(feature);
+                        if (bounds?.isValid()) {
+                          mapRef.current.flyToBounds(bounds, { padding: [72, 72], duration: 0.65, maxZoom: 18 });
+                        }
+                      }
+                    }
+
+                    if (!hasLabelFields) {
+                      leafletLayer.openPopup();
+                    }
+                  });
+
+                  if (featureId) {
+                    layerRegistryRef.current[featureId] = leafletLayer;
+                  }
+                }}
+              />
+            );
+          })}
         </MapContainer>
 
         {!!visibleLegendGroups.length && (
@@ -1034,6 +1260,52 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
                 ))}
               </div>
             ))}
+          </div>
+        )}
+
+        {showLabelTable && selectedFeatureInfo && isPointFeature(selectedFeatureInfo.feature) && selectedFeatureInfo.labelConfig.fields.length > 0 && (
+          <div className="dg-external-label-table-wrap">
+            <div className="dg-table-card dg-label-table-card" style={{ margin: 0, borderRadius: '0 0 16px 16px' }}>
+              <div className="dg-panel-head" style={{ padding: '10px 16px' }}>
+                <div>
+                  <h2 style={{ fontSize: '0.82rem', margin: 0 }}>
+                    <i className="fas fa-tags" style={{ marginRight: 7, color: '#0f8f95' }}></i>
+                    Etiquetas: {selectedFeatureInfo.feature.properties?.dg_name || 'Punto seleccionado'}
+                  </h2>
+                </div>
+                <button type="button" className="dg-secondary-btn" style={{ padding: '4px 10px', fontSize: '0.68rem' }} onClick={() => setSelectedFeatureId('')}>
+                  <i className="fas fa-xmark"></i>
+                  <span>Cerrar</span>
+                </button>
+              </div>
+              <div className="dg-table-wrap" style={{ padding: '0 12px 12px' }}>
+                <table className="dg-feature-table dg-label-data-table">
+                  <thead>
+                    <tr>
+                      <th className="dg-label-th-name">Punto</th>
+                      {selectedFeatureInfo.labelConfig.fields.map((field) => (
+                        <th key={field}>{field}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="active">
+                      <td className="dg-label-td-name">
+                        <strong>{selectedFeatureInfo.feature.properties?.dg_name || 'Sin nombre'}</strong>
+                      </td>
+                      {selectedFeatureInfo.labelConfig.fields.map((field) => {
+                        const val = selectedFeatureInfo.feature.properties?.[field];
+                        return (
+                          <td key={field}>
+                            {val !== null && val !== undefined && val !== '' ? String(val) : <span style={{ color: '#94a3b8' }}>-</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
       </div>
