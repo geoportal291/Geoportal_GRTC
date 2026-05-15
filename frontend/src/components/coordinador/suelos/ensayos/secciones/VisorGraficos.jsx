@@ -357,11 +357,13 @@ const resolveContextValueFromCandidates = (
   options = {},
 ) => {
   const candidates = normalizeCandidatePaths(basePath, extraPaths);
-  
+
   // Si hay prefijos, los expandimos combinándolos con el basePath
   if (options.prefixes?.length > 0) {
     options.prefixes.forEach(prefix => {
-      candidates.push(`${prefix}.${basePath}`);
+      if (!basePath.startsWith(`${prefix}.`)) {
+        candidates.push(`${prefix}.${basePath}`);
+      }
     });
   }
 
@@ -415,8 +417,30 @@ const resolveArraySourceItems = (
   const dataKey = sourceConfig.data_key || chartConfig.data_key;
   if (!dataKey) return [];
 
-  // Usamos resolveContextValueFromCandidates para aprovechar los prefijos automáticos (results, resultados, etc.)
-  const dataArray = resolveContextValueFromCandidates(
+  let mergedObj = null;
+  // Intentamos un merge profundo si dataKey apunta a una estructura de tabla dividida entre formData y resultados
+  if (context && context.formData && context.resultados) {
+    const formPart = getValue(context.formData, dataKey);
+    const resPart = getValue(context.resultados, dataKey);
+    
+    if (formPart && typeof formPart === "object" && !Array.isArray(formPart)) {
+      mergedObj = { ...formPart };
+      if (resPart && typeof resPart === "object" && !Array.isArray(resPart)) {
+        Object.keys(resPart).forEach(k => {
+          if (typeof resPart[k] === "object" && typeof mergedObj[k] === "object") {
+            mergedObj[k] = { ...mergedObj[k], ...resPart[k] };
+          } else {
+            mergedObj[k] = resPart[k];
+          }
+        });
+      }
+    } else if (resPart && typeof resPart === "object" && !Array.isArray(resPart)) {
+      mergedObj = { ...resPart };
+    }
+  }
+
+  // Usamos el objeto mezclado o resolvemos de forma normal
+  const dataArray = mergedObj && Object.keys(mergedObj).length > 0 ? mergedObj : resolveContextValueFromCandidates(
     dataKey,
     context,
     {},
@@ -425,7 +449,22 @@ const resolveArraySourceItems = (
     { prefixes: ["results", "resultados", "data"] }
   );
 
-  return Array.isArray(dataArray) ? dataArray : [];
+  if (Array.isArray(dataArray)) {
+    return dataArray;
+  }
+  
+  if (dataArray !== undefined && dataArray !== null) {
+    if (typeof dataArray === "object") {
+      const keys = Object.keys(dataArray);
+      const numericKeys = keys.filter(k => !isNaN(k) && typeof dataArray[k] === "object");
+      if (numericKeys.length > 0) {
+        return numericKeys.map(k => ({ ...dataArray[k], rowId: k }));
+      }
+    }
+    return [dataArray];
+  }
+  
+  return [];
 };
 
 const buildAssayContext = (
@@ -434,7 +473,7 @@ const buildAssayContext = (
   fallbackTableConfig = null,
 ) => {
   const formData = ensayo?.datos_formulario || ensayo?.formData || {};
-  
+
   // Normalizamos el formData para que el motor de cálculo encuentre las tablas 
   // incluso si la config usa el prefijo "tables." (estándar de la app)
   const normalizedFormData = { ...formData };
@@ -456,7 +495,7 @@ const buildAssayContext = (
       console.error(`[Visor] Error calculando resultados para ensayo ${ensayo.id}:`, _error);
       resultados = {};
     }
-  } 
+  }
   // Prioridad 2: Si no tiene config propia, probar con la del tipo de ensayo (fallback)
   else if (
     (!resultados || !Object.keys(resultados).length) &&
@@ -783,9 +822,9 @@ const buildGroupPointsFromEnsayos = (
               "tables.granulometria.{row_key}.pasa",
             ],
             callback: (context) => {
-                const isTrend = isGranulometriaTrendChart(chartConfig);
-                const lines = [];
-                if (isTrend) {
+              const isTrend = isGranulometriaTrendChart(chartConfig);
+              const lines = [];
+              if (isTrend) {
                 const xLabel = chartConfig.x_axis?.label || "X";
                 const yLabel = chartConfig.y_axis?.label || "Y";
                 lines.push(`${xLabel}: ${context.parsed.x}`);
@@ -875,6 +914,8 @@ const buildGroupSeriesDatasetsFromEnsayos = (
       {
         ...datasetConfig,
         label: `${datasetConfig.label || ""} - ${ensayo.codigo_ensayo || ensayo.id}`,
+        _baseLabel: datasetConfig.label || `Serie ${datasetConfig.id || idx}`,
+        _datasetGroupId: datasetConfig.id || datasetConfig.label || `group_${idx}`,
         data: points.map(p => ({
           ...p,
           ensayo_id: ensayo.id,
@@ -892,6 +933,7 @@ const buildGroupSeriesDatasetsFromEnsayos = (
         showLine: isLine,
         borderWidth: datasetConfig.borderWidth || (isLine ? 1.8 : 2),
         _interactiveSeries: true,
+        _ensayoId: ensayo.id,
       },
     ];
   });
@@ -969,42 +1011,44 @@ const buildInteractiveDatasetStyles = (dataset) => {
 
   return {
     ...dataset,
+    _baseBorderColor: baseBorderColor,
+    _baseBackgroundColor: baseBackgroundColor,
     borderColor: (scriptableContext) => {
       const chart = scriptableContext.chart;
-      const activeIdx = chart?.$activeDatasetIndex ?? null;
-      const showCurves = chart?.$showCurves !== false;
-      if (!showCurves) return withAlpha(baseBorderColor, 0);
-      if (activeIdx === null) return withAlpha(baseBorderColor, 0.5); // Opacidad base visible para ver la tendencia
-      return scriptableContext.datasetIndex === activeIdx
+      const activeEnsayoId = chart?.$activeEnsayoId ?? null;
+      if (activeEnsayoId === null) return withAlpha(baseBorderColor, 0.5);
+      
+      const thisDataset = chart.data.datasets[scriptableContext.datasetIndex];
+      const thisEnsayoId = thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
+      
+      return thisEnsayoId === activeEnsayoId
         ? withAlpha(baseBorderColor, 0.95)
         : withAlpha(baseBorderColor, 0.08);
     },
     backgroundColor: (scriptableContext) => {
       const chart = scriptableContext.chart;
-      const activeIdx = chart?.$activeDatasetIndex ?? null;
-      const showPoints = chart?.$showPoints !== false;
-      if (!showPoints) return withAlpha(baseBackgroundColor, 0);
-      if (activeIdx === null) return withAlpha(baseBackgroundColor, 0.4);
-      return scriptableContext.datasetIndex === activeIdx
+      const activeEnsayoId = chart?.$activeEnsayoId ?? null;
+      if (activeEnsayoId === null) return withAlpha(baseBackgroundColor, 0.4);
+      
+      const thisDataset = chart.data.datasets[scriptableContext.datasetIndex];
+      const thisEnsayoId = thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
+
+      return thisEnsayoId === activeEnsayoId
         ? withAlpha(baseBackgroundColor, 0.8)
         : withAlpha(baseBackgroundColor, 0.05);
     },
-    borderWidth: (scriptableContext) => {
-      const chart = scriptableContext.chart;
-      const isCurve = scriptableContext.dataset.showLine === true;
-      if (chart?.$showCurves === false && isCurve) return 0;
-      if (chart?.$showPoints === false && !isCurve) return 0;
-      return baseBorderWidth;
-    },
+    borderWidth: baseBorderWidth,
     pointRadius: (scriptableContext) => {
       const chart = scriptableContext.chart;
-      const activeIdx = chart?.$activeDatasetIndex ?? null;
-      if (chart?.$showPoints === false) return 0;
-      if (activeIdx === null) return basePointRadius;
-      return scriptableContext.datasetIndex === activeIdx ? 4.8 : 2.2;
+      const activeEnsayoId = chart?.$activeEnsayoId ?? null;
+      if (activeEnsayoId === null) return basePointRadius;
+      
+      const thisDataset = chart.data.datasets[scriptableContext.datasetIndex];
+      const thisEnsayoId = thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
+
+      return thisEnsayoId === activeEnsayoId ? basePointRadius * 1.5 : basePointRadius * 0.7;
     },
-    pointHoverRadius: (scriptableContext) =>
-      scriptableContext.chart?.$showPoints === false ? 0 : basePointHoverRadius,
+    pointHoverRadius: basePointHoverRadius,
   };
 };
 
@@ -1135,8 +1179,7 @@ const buildChartOptions = (chartConfig, datasets = []) => {
   const hasInteractiveSeries = datasets.some(
     (dataset) => dataset?._interactiveSeries,
   );
-  const usesCurvePointToggleLegend =
-    chartConfig.legend_mode === "curves_points_toggle" && hasInteractiveSeries;
+  const isGroupedLegend = hasInteractiveSeries || chartConfig.legend_mode === "grouped";
 
   return {
     responsive: true,
@@ -1161,12 +1204,16 @@ const buildChartOptions = (chartConfig, datasets = []) => {
       intersect: false,
     },
     onHover: (event, activeElements, chart) => {
-      const nextActiveDatasetIndex = activeElements?.length
-        ? activeElements[0].datasetIndex
+      const activeDataset = activeElements?.length
+        ? chart.data.datasets[activeElements[0].datasetIndex]
         : null;
 
-      if ((chart.$activeDatasetIndex ?? null) !== nextActiveDatasetIndex) {
-        chart.$activeDatasetIndex = nextActiveDatasetIndex;
+      const nextActiveEnsayoId = activeDataset 
+        ? (activeDataset._ensayoId ?? activeElements[0].datasetIndex)
+        : null;
+
+      if ((chart.$activeEnsayoId ?? null) !== nextActiveEnsayoId) {
+        chart.$activeEnsayoId = nextActiveEnsayoId;
         chart.update("none");
       }
 
@@ -1198,16 +1245,17 @@ const buildChartOptions = (chartConfig, datasets = []) => {
       legend: {
         display: chartConfig.show_legend !== false,
         position: chartConfig.legend_position || "top",
-        onClick: usesCurvePointToggleLegend
+        onClick: isGroupedLegend
           ? (_event, legendItem, legend) => {
             const chart = legend.chart;
-            if (legendItem.text === "Líneas") {
-              chart.$showCurves = chart.$showCurves === false ? true : false;
-            }
-            if (legendItem.text === "Puntos") {
-              chart.$showPoints = chart.$showPoints === false ? true : false;
-            }
-            chart.update("none");
+            const groupId = legendItem._group_id;
+            const isVisible = chart.isDatasetVisible(legendItem.datasetIndex);
+            chart.data.datasets.forEach((ds, i) => {
+              if ((ds._datasetGroupId || ds.label) === groupId) {
+                chart.setDatasetVisibility(i, !isVisible);
+              }
+            });
+            chart.update();
           }
           : undefined,
         labels: {
@@ -1217,45 +1265,28 @@ const buildChartOptions = (chartConfig, datasets = []) => {
           color: "#475569",
           font: { size: 12, weight: "600" },
           padding: 16,
-          generateLabels: usesCurvePointToggleLegend
-            ? (chart) => [
-              {
-                text: "Líneas",
-                fillStyle:
-                  chart.$showCurves === false
-                    ? "rgba(148, 163, 184, 0.35)"
-                    : "#dc2626",
-                strokeStyle:
-                  chart.$showCurves === false
-                    ? "rgba(148, 163, 184, 0.35)"
-                    : "#dc2626",
-                lineWidth: 2,
-                hidden: chart.$showCurves === false,
-                datasetIndex: 0,
-                pointStyle: "line",
-              },
-              {
-                text: "Puntos",
-                fillStyle:
-                  chart.$showPoints === false
-                    ? "rgba(148, 163, 184, 0.35)"
-                    : "rgba(37, 99, 235, 0.55)",
-                strokeStyle:
-                  chart.$showPoints === false
-                    ? "rgba(148, 163, 184, 0.35)"
-                    : "rgba(37, 99, 235, 0.9)",
-                lineWidth: 1,
-                hidden: chart.$showPoints === false,
-                datasetIndex: 0,
-                pointStyle: "circle",
-              },
-            ]
+          generateLabels: isGroupedLegend
+            ? (chart) => {
+              const uniqueGroups = new Map();
+              chart.data.datasets.forEach((ds, i) => {
+                const groupId = ds._datasetGroupId || ds.label;
+                if (!uniqueGroups.has(groupId)) {
+                  uniqueGroups.set(groupId, {
+                    text: ds._baseLabel || ds.label,
+                    fillStyle: ds._baseBackgroundColor || (typeof ds.backgroundColor === 'function' ? 'rgba(37, 99, 235, 0.5)' : ds.backgroundColor),
+                    strokeStyle: ds._baseBorderColor || (typeof ds.borderColor === 'function' ? '#2563eb' : ds.borderColor),
+                    lineWidth: typeof ds.borderWidth === 'function' ? 2 : (ds.borderWidth || 2),
+                    hidden: !chart.isDatasetVisible(i),
+                    datasetIndex: i,
+                    _group_id: groupId,
+                    pointStyle: ds.pointStyle || (ds.showLine === false ? 'circle' : 'line'),
+                  });
+                }
+              });
+              return Array.from(uniqueGroups.values());
+            }
             : undefined,
-          filter: (legendItem, chartData) =>
-            legendItem.text !== "" &&
-            (!chartData.datasets?.[legendItem.datasetIndex]
-              ?._interactiveSeries ||
-              usesCurvePointToggleLegend),
+          filter: (legendItem) => legendItem.text !== "",
         },
       },
       tooltip: {
@@ -1278,10 +1309,10 @@ const buildChartOptions = (chartConfig, datasets = []) => {
             const chart = tooltipItem.chart;
             const xLabel = chart.options.scales.x.title.text || "X";
             const yLabel = chart.options.scales.y.title.text || "Y";
-            
+
             const xVal = formatNumericLabel(tooltipItem.raw?.x);
             const yVal = formatNumericLabel(tooltipItem.raw?.y);
-            
+
             return [`${xLabel}: ${xVal}`, `${yLabel}: ${yVal}`];
           },
           afterLabel: (tooltipItem) => {
@@ -1539,13 +1570,13 @@ const VisorGraficos = ({
   }
 
   return (
-    <div 
-      className="container-fluid visor-graficos-scroll" 
-      style={{ 
+    <div
+      className="container-fluid visor-graficos-scroll"
+      style={{
         height: 'auto',
         minHeight: '400px',
-        maxHeight: '85vh', 
-        overflowY: 'auto', 
+        maxHeight: '85vh',
+        overflowY: 'auto',
         padding: '15px 20px',
         scrollBehavior: 'smooth'
       }}

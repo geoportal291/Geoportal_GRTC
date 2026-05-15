@@ -11,7 +11,10 @@ import { useAuth } from '../../../../../data/contexts/AuthContext';
 import './DisenoGeometricoModes.css';
 import './DisenoGeometrico.css';
 
-const DG_EXTERNAL_MAX_MAP_ZOOM = 22;
+const DG_EXTERNAL_MAX_MAP_ZOOM = 30;
+const DG_POINT_LABEL_MAX_VISIBLE = 140;
+const DG_POINT_LABEL_MIN_ZOOM = 16;
+
 const DG_EXTERNAL_BASEMAPS = {
   street: {
     key: 'street',
@@ -245,8 +248,154 @@ const resolvePointLabelLineCount = (feature, labelConfig, isSelected) => {
   return 0;
 };
 
-const createExternalPointIcon = (feature, isSelected, labelConfig, closeFunc = '__dgCloseLabelExternal') => {
-  const color = feature?.properties?.fill || feature?.properties?.stroke || '#ef4444';
+const countPointFeatures = (collection) =>
+  Array.isArray(collection?.features)
+    ? collection.features.reduce((total, feature) => (
+      isPointFeature(feature) ? total + 1 : total
+    ), 0)
+    : 0;
+
+const resolveEffectivePointLabelConfig = (collection, labelConfig, mapZoom) => {
+  if (!labelConfig?.fields?.length || !labelConfig?.modes?.length || labelConfig.modes.includes('none')) {
+    return labelConfig;
+  }
+
+  const pointCount = countPointFeatures(collection);
+  const shouldReduceLabels = pointCount > DG_POINT_LABEL_MAX_VISIBLE && mapZoom < DG_POINT_LABEL_MIN_ZOOM;
+
+  if (!shouldReduceLabels || labelConfig.modes.includes('tagged')) {
+    return labelConfig;
+  }
+
+  return {
+    ...labelConfig,
+    mode: 'selected',
+    modes: labelConfig.modes.includes('hover') ? ['selected', 'hover'] : ['selected']
+  };
+};
+
+const buildVerticalLabelPlainText = (entries) => {
+  if (!entries.length) return '';
+  return entries.map((e) => `${e.field}: ${e.value}`).join('\n');
+};
+
+const resolveLineLabelText = (feature, labelConfig, isSelected) => {
+  if (!isLineFeature(feature)) return '';
+  if (!isSelected) return '';
+
+  const entries = resolveLabelEntriesFromFields(feature, labelConfig?.fields);
+  return buildVerticalLabelPlainText(entries);
+};
+
+const resolveSelectionHighlightColor = (collection) => {
+  const usedColors = new Set();
+  const DG_SELECTION_HIGHLIGHT_CANDIDATES = ['#111827', '#ff00a8', '#00c2ff', '#facc15', '#fb7185', '#14b8a6'];
+
+  if (Array.isArray(collection?.features)) {
+    collection.features.forEach((feature) => {
+      const properties = feature?.properties || {};
+      if (properties.stroke) {
+        usedColors.add(String(properties.stroke).toLowerCase());
+      }
+      if (properties.fill) {
+        usedColors.add(String(properties.fill).toLowerCase());
+      }
+    });
+  }
+
+  return DG_SELECTION_HIGHLIGHT_CANDIDATES.find((color) => !usedColors.has(String(color).toLowerCase())) || '#111827';
+};
+
+const getVectorStyle = (feature, isSelected, selectionHighlightColor = '#111827', fallbackColor = '#32b17e') => {
+  const properties = feature?.properties || {};
+  const strokeWidth = Math.max(1, Number(properties['stroke-width']) || 3);
+  const strokeOpacity = Number(properties['stroke-opacity'] ?? 1);
+  const fillOpacity = Number(properties['fill-opacity'] ?? 0.35);
+  const isSelectedLine = isSelected && isLineFeature(feature);
+
+  return {
+    color: isSelectedLine ? selectionHighlightColor : (properties.stroke || fallbackColor),
+    weight: isSelected ? Math.max(strokeWidth + (isSelectedLine ? 2 : 1), 3) : strokeWidth,
+    opacity: isSelected ? 1 : strokeOpacity,
+    fillColor: properties.fill || properties.stroke || fallbackColor,
+    fillOpacity: feature?.geometry?.type?.includes('Polygon') ? (isSelected ? Math.min(fillOpacity + 0.12, 0.7) : fillOpacity) : 0,
+    dashArray: isSelectedLine ? '12 8' : (isSelected ? '8 6' : null)
+  };
+};
+
+const applyLayerStyle = (layer, feature, isSelected, labelConfig = null, selectionHighlightColor = '#111827', fallbackColor = '#32b17e') => {
+  if (!layer || !feature) return;
+
+  if (typeof layer.setStyle === 'function') {
+    layer.setStyle(getVectorStyle(feature, isSelected, selectionHighlightColor, fallbackColor));
+  }
+
+  if (typeof layer.setIcon === 'function' && typeof layer.getLatLng === 'function') {
+    layer.setIcon(createExternalPointIcon(feature, isSelected, labelConfig));
+    if (typeof layer.setZIndexOffset === 'function') {
+      layer.setZIndexOffset(isSelected ? 1000 : 0);
+    }
+
+    const hoverEntries = (!isSelected && labelConfig?.modes?.includes('hover'))
+      ? resolveLabelEntriesFromFields(feature, labelConfig?.fields)
+      : [];
+    const hoverLabelHtml = hoverEntries.length
+      ? `<div class="dg-hover-label-vertical">${hoverEntries.map((e) => `<span><b>${e.field}:</b> ${e.value}</span>`).join('')}</div>`
+      : '';
+
+    if (isSelected && layer.getTooltip()) {
+      layer.closeTooltip();
+      layer.unbindTooltip();
+    } else if (hoverLabelHtml) {
+      const tooltipOptions = {
+        permanent: false,
+        direction: 'top',
+        className: 'dg-point-hover-tooltip',
+        opacity: 0.96
+      };
+
+      if (layer.getTooltip()) {
+        layer.setTooltipContent(hoverLabelHtml);
+      } else {
+        layer.bindTooltip(hoverLabelHtml, tooltipOptions);
+      }
+    } else if (layer.getTooltip()) {
+      layer.closeTooltip();
+      layer.unbindTooltip();
+    }
+  }
+
+  if (typeof layer.bindTooltip === 'function' && !layer.getLatLng && isLineFeature(feature)) {
+    const lineLabelText = resolveLineLabelText(feature, labelConfig, isSelected);
+
+    if (lineLabelText) {
+      const tooltipOptions = {
+        permanent: true,
+        direction: 'center',
+        className: 'dg-line-label-tooltip',
+        opacity: 0.96
+      };
+
+      if (layer.getTooltip()) {
+        layer.setTooltipContent(lineLabelText);
+      } else {
+        layer.bindTooltip(lineLabelText, tooltipOptions);
+      }
+
+      layer.openTooltip();
+    } else if (layer.getTooltip()) {
+      layer.closeTooltip();
+      layer.unbindTooltip();
+    }
+  }
+
+  if (typeof layer.eachLayer === 'function' && !layer.getLatLng && !layer.setStyle) {
+    layer.eachLayer((childLayer) => applyLayerStyle(childLayer, feature, isSelected, labelConfig, selectionHighlightColor, fallbackColor));
+  }
+};
+
+const createExternalPointIcon = (feature, isSelected, labelConfig, fallbackColor = '#ef4444', closeFunc = '__dgCloseLabelExternal') => {
+  const color = feature?.properties?.fill || feature?.properties?.stroke || fallbackColor;
   const markerSize = Math.max(8, Number(feature?.properties?.dg_marker_size) || 14);
   const selectedBorder = isSelected ? 4 : 3;
   const iconSize = markerSize + selectedBorder * 2;
@@ -497,6 +646,24 @@ function ExternalMapLifecycle({ onReady }) {
       window.removeEventListener('resize', syncSize);
     };
   }, [map, onReady]);
+
+  return null;
+}
+
+function MapZoomTracker({ onZoomChange }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return undefined;
+
+    const syncZoom = () => onZoomChange(map.getZoom());
+    syncZoom();
+    map.on('zoomend', syncZoom);
+
+    return () => {
+      map.off('zoomend', syncZoom);
+    };
+  }, [map, onZoomChange]);
 
   return null;
 }
@@ -754,6 +921,7 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
   const [isRightSidebarHidden, setIsRightSidebarHidden] = useState(false);
   const [selectedFeatureId, setSelectedFeatureId] = useState('');
   const [showLabelTable, setShowLabelTable] = useState(true);
+  const [mapZoom, setMapZoom] = useState(6);
 
   useEffect(() => {
     selectedFeatureIdRef.current = selectedFeatureId;
@@ -1142,49 +1310,37 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
           />
           <ZoomControl position="topleft" />
           <ScaleControl position="bottomleft" />
+          <MapZoomTracker onZoomChange={setMapZoom} />
           <ExternalMapClickDeselect onDeselect={handleMapDeselect} measurementMode={measurementMode} />
 
           {visibleLayers.map((layer, index) => {
-            const labelConfig = getPointLabelConfig(layer.geojson_data);
+            const rawLabelConfig = getPointLabelConfig(layer.geojson_data);
+            const labelConfig = resolveEffectivePointLabelConfig(layer.geojson_data, rawLabelConfig, mapZoom);
             const colorConfig = resolveLayerColorConfig(layer);
             const hasLabelFields = labelConfig.fields.length > 0 && !labelConfig.modes.includes('none');
+            const selectionHighlightColor = resolveSelectionHighlightColor(layer.geojson_data);
+            const layerColor = getLayerColor(layer, index);
 
             return (
               <GeoJSON
-                key={`${layer.tab_name}-${selectedFeatureId}`}
+                key={`${layer.tab_name}-${selectedFeatureId}-${mapZoom}`}
                 data={layer.geojson_data}
                 style={(feature) => {
-                  const properties = getFeatureProperties(feature);
+                  const featureId = feature?.properties?.dg_feature_id || '';
+                  const isSelected = featureId && featureId === selectedFeatureId;
                   const attrColor = resolveFeatureColorByAttribute(feature, colorConfig);
-                  const baseColor = attrColor || properties.stroke || getLayerColor(layer, index);
-                  const baseFill = attrColor || properties.fill || properties.stroke || getLayerColor(layer, index);
-                  return {
-                    color: baseColor,
-                    weight: Number(properties['stroke-width']) || 3,
-                    opacity: properties['stroke-opacity'] !== undefined ? Number(properties['stroke-opacity']) : 0.95,
-                    fillColor: baseFill,
-                    fillOpacity: properties['fill-opacity'] !== undefined ? Number(properties['fill-opacity']) : ((feature?.geometry?.type || '').includes('Polygon') ? 0.2 : 0.9),
-                    dashArray: properties['stroke-dasharray'] || null
-                  };
+                  const fallbackColor = attrColor || layerColor;
+                  return getVectorStyle(feature, isSelected, selectionHighlightColor, fallbackColor);
                 }}
                 pointToLayer={(feature, latlng) => {
                   const featureId = feature?.properties?.dg_feature_id || '';
                   const isSelected = featureId && featureId === selectedFeatureId;
-
-                  if (hasLabelFields) {
-                    return L.marker(latlng, {
-                      icon: createExternalPointIcon(feature, isSelected, labelConfig)
-                    });
-                  }
-
-                  const properties = getFeatureProperties(feature);
+                  
                   const attrColor = resolveFeatureColorByAttribute(feature, colorConfig);
-                  return L.circleMarker(latlng, {
-                    radius: Math.max(4, Math.min(8, Number(properties.dg_marker_size || 12) / 2)),
-                    color: '#ffffff',
-                    weight: isSelected ? 3 : 2,
-                    fillColor: attrColor || properties.fill || properties.stroke || getLayerColor(layer, index),
-                    fillOpacity: 0.95
+                  const fallbackColor = attrColor || layerColor;
+
+                  return L.marker(latlng, {
+                    icon: createExternalPointIcon(feature, isSelected, labelConfig, fallbackColor)
                   });
                 }}
                 onEachFeature={(feature, leafletLayer) => {
@@ -1192,19 +1348,11 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
                   const isSelected = featureId && featureId === selectedFeatureId;
 
                   leafletLayer.bindPopup(buildFeaturePopupHtml(feature), { maxWidth: 320 });
-
-                  if (!isSelected && hasLabelFields && labelConfig.modes?.includes('hover')) {
-                    const hoverEntries = resolveLabelEntriesFromFields(feature, labelConfig.fields);
-                    if (hoverEntries.length) {
-                      const hoverHtml = `<div class="dg-hover-label-vertical">${hoverEntries.map((e) => `<span><b>${e.field}:</b> ${e.value}</span>`).join('')}</div>`;
-                      leafletLayer.bindTooltip(hoverHtml, {
-                        permanent: false,
-                        direction: 'top',
-                        className: 'dg-point-hover-tooltip',
-                        opacity: 0.96
-                      });
-                    }
-                  }
+                  
+                  const attrColor = resolveFeatureColorByAttribute(feature, colorConfig);
+                  const fallbackColor = attrColor || layerColor;
+                  
+                  applyLayerStyle(leafletLayer, feature, isSelected, labelConfig, selectionHighlightColor, fallbackColor);
 
                   leafletLayer.on('click', (e) => {
                     if (e.originalEvent) e.originalEvent._featureClicked = true;
@@ -1226,10 +1374,6 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
                           mapRef.current.flyToBounds(bounds, { padding: [72, 72], duration: 0.65, maxZoom: 18 });
                         }
                       }
-                    }
-
-                    if (!hasLabelFields) {
-                      leafletLayer.openPopup();
                     }
                   });
 
@@ -1263,7 +1407,7 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
           </div>
         )}
 
-        {showLabelTable && selectedFeatureInfo && isPointFeature(selectedFeatureInfo.feature) && selectedFeatureInfo.labelConfig.fields.length > 0 && (
+        {showLabelTable && selectedFeatureInfo && selectedFeatureInfo.labelConfig.fields.length > 0 && (
           <div className="dg-external-label-table-wrap">
             <div className="dg-table-card dg-label-table-card" style={{ margin: 0, borderRadius: '0 0 16px 16px' }}>
               <div className="dg-panel-head" style={{ padding: '10px 16px' }}>
@@ -1282,7 +1426,7 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
                 <table className="dg-feature-table dg-label-data-table">
                   <thead>
                     <tr>
-                      <th className="dg-label-th-name">Punto</th>
+                      <th className="dg-label-th-name">Elemento</th>
                       {selectedFeatureInfo.labelConfig.fields.map((field) => (
                         <th key={field}>{field}</th>
                       ))}

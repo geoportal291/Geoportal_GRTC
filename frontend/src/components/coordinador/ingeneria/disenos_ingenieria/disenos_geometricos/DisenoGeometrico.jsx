@@ -3714,8 +3714,8 @@ export default function DisenoGeometrico() {
             <div className="dg-panel-head">
               <div>
                 <h2>Propiedades</h2>
-                <p>{selectedFeature ? 'Geometria seleccionada' : 'Selecciona una geometria'}</p>
 
+                <p> {selectedFeature ? 'Datos de la geometria seleccionada' : ' Eliga una geometria para poder ver sus propiedades.'} </p>
               </div>
             </div>
 
