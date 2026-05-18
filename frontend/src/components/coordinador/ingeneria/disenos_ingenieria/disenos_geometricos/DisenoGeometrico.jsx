@@ -1543,7 +1543,7 @@ export default function DisenoGeometrico() {
   }, [selectedTabName]);
 
   useEffect(() => {
-    setPageTitle('Diseno Geometrico');
+    setPageTitle('Diseño Geometrico');
     return () => setPageTitle('');
   }, [setPageTitle]);
 
