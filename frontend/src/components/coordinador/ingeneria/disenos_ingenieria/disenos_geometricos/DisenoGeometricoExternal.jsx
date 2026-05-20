@@ -14,6 +14,7 @@ import './DisenoGeometrico.css';
 const DG_EXTERNAL_MAX_MAP_ZOOM = 30;
 const DG_POINT_LABEL_MAX_VISIBLE = 140;
 const DG_POINT_LABEL_MIN_ZOOM = 16;
+const MAPTILER_KEY = process.env.REACT_APP_MAPTILER_KEY;
 
 const DG_EXTERNAL_BASEMAPS = {
   street: {
@@ -402,13 +403,38 @@ const createExternalPointIcon = (feature, isSelected, labelConfig, fallbackColor
   const labelText = resolvePointLabelText(feature, labelConfig, isSelected);
   const labelLines = resolvePointLabelLineCount(feature, labelConfig, isSelected);
   const labelHeight = labelLines > 0 ? 16 + labelLines * 22 : 0;
-  const totalHeight = labelText ? labelHeight + 8 + iconSize : iconSize;
-  const totalWidth = Math.max(iconSize, labelText ? 200 : iconSize);
+  
+  const iconBase64 = feature?.properties?.dg_icon_base64;
+  const iconShape = feature?.properties?.dg_icon_shape;
+  
+  let iconHtml = '';
+  if (iconBase64) {
+    const size = Math.max(markerSize * 2, 24);
+    iconHtml = `<img src="${iconBase64}" class="dg-point-custom-img${isSelected ? ' dg-dot-selected' : ''}" style="width:${size}px; height:${size}px; object-fit:contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));" />`;
+  } else if (iconShape) {
+    const size = Math.max(markerSize * 1.5, 20);
+    let faClass = 'fas fa-circle';
+    if (iconShape === 'square') faClass = 'fas fa-square';
+    else if (iconShape === 'triangle') faClass = 'fas fa-caret-up';
+    else if (iconShape === 'star') faClass = 'fas fa-star';
+    else if (iconShape === 'cross') faClass = 'fas fa-plus';
+    else if (iconShape === 'location') faClass = 'fas fa-map-marker-alt';
+    
+    const shapeColor = feature?.properties?.stroke || color;
+    iconHtml = `<i class="${faClass} dg-point-custom-shape${isSelected ? ' dg-dot-selected' : ''}" style="font-size:${size}px; color:${shapeColor}; text-shadow: 0 2px 4px rgba(0,0,0,0.4); ${isSelected ? 'filter: drop-shadow(0 0 4px #fff);' : ''}"></i>`;
+  } else {
+    const selectedGlow = isSelected
+      ? 'box-shadow: 0 0 0 6px rgba(15,143,149,0.3), 0 0 14px rgba(15,143,149,0.25), 0 0 0 2px #ffffff;'
+      : 'box-shadow: 0 8px 16px rgba(15,23,42,0.22);';
+    iconHtml = `<span class="dg-point-dot${isSelected ? ' dg-dot-selected' : ''}" style="width:${markerSize}px; height:${markerSize}px; background:${color}; border:${selectedBorder}px solid #ffffff; ${selectedGlow}"></span>`;
+  }
+
+  const customSize = iconBase64 ? Math.max(markerSize * 2, 24) : (iconShape ? Math.max(markerSize * 1.5, 20) : iconSize);
+  const totalHeight = labelText ? labelHeight + 8 + customSize : customSize;
+  const totalWidth = Math.max(customSize, labelText ? 200 : customSize);
   const anchorX = totalWidth / 2;
-  const anchorY = totalHeight - iconSize / 2;
-  const selectedGlow = isSelected
-    ? 'box-shadow: 0 0 0 6px rgba(15,143,149,0.3), 0 0 14px rgba(15,143,149,0.25), 0 0 0 2px #ffffff;'
-    : 'box-shadow: 0 8px 16px rgba(15,23,42,0.22);';
+  const anchorY = totalHeight - customSize / 2;
+  
   return L.divIcon({
     className: `dg-point-icon${isSelected ? ' dg-point-selected' : ''}`,
     html: `<div class="dg-point-icon-body">
@@ -416,7 +442,7 @@ const createExternalPointIcon = (feature, isSelected, labelConfig, fallbackColor
         <button class="dg-label-close-btn" onclick="event.stopPropagation(); window.${closeFunc} &amp;&amp; window.${closeFunc}()" title="Cerrar">&times;</button>
         ${labelText}
       </em>` : ''}
-      <span class="dg-point-dot${isSelected ? ' dg-dot-selected' : ''}" style="width:${markerSize}px; height:${markerSize}px; background:${color}; border:${selectedBorder}px solid #ffffff; ${selectedGlow}"></span>
+      ${iconHtml}
     </div>`,
     iconSize: [totalWidth, totalHeight],
     iconAnchor: [anchorX, anchorY]
@@ -572,6 +598,241 @@ const buildMeasurementSummary = (mode, config = {}) => {
     copyText: ''
   };
 };
+
+const createMaptilerDataset = (geojsonData) => {
+  const features = Array.isArray(geojsonData?.features) ? geojsonData.features : [];
+
+  return {
+    points: {
+      type: 'FeatureCollection',
+      features: features.filter((feature) => feature?.geometry?.type?.includes('Point'))
+    },
+    lines: {
+      type: 'FeatureCollection',
+      features: features.filter((feature) => feature?.geometry?.type?.includes('Line'))
+    },
+    polygons: {
+      type: 'FeatureCollection',
+      features: features.filter((feature) => feature?.geometry?.type?.includes('Polygon'))
+    }
+  };
+};
+
+const getCombinedBoundsFeatureCollection = (...collections) => {
+  const features = collections.flatMap((collection) => (
+    Array.isArray(collection?.features) ? collection.features.filter((feature) => feature?.geometry) : []
+  ));
+
+  return {
+    type: 'FeatureCollection',
+    features
+  };
+};
+
+const ExternalMaptilerTerrainMap = React.memo(function ExternalMaptilerTerrainMap({ activeGeojson }) {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const terrainEnabledRef = useRef(false);
+  const sdkRef = useRef(null);
+  const [isThreeDLoading, setIsThreeDLoading] = useState(Boolean(MAPTILER_KEY));
+
+  useEffect(() => {
+    if (!containerRef.current || !MAPTILER_KEY) return undefined;
+
+    let cancelled = false;
+    let localMap = null;
+
+    const setupMap = async () => {
+      setIsThreeDLoading(true);
+      const sdkModule = await import('@maptiler/sdk');
+      await import('@maptiler/sdk/dist/maptiler-sdk.css');
+
+      if (cancelled || !containerRef.current) return;
+
+      const sdk = sdkModule;
+      sdk.config.apiKey = MAPTILER_KEY;
+      sdkRef.current = sdk;
+
+      localMap = new sdk.Map({
+        container: containerRef.current,
+        style: sdk.MapStyle.SATELLITE,
+        center: [-77.0428, -12.0464],
+        zoom: 12,
+        pitch: 0,
+        bearing: 0,
+        maxPitch: 60,
+        terrain: false,
+        hash: false,
+        navigationControl: false,
+        terrainControl: false,
+        geolocateControl: false,
+        scaleControl: false,
+        attributionControl: true,
+        fadeDuration: 0,
+        canvasContextAttributes: {
+          antialias: false,
+          powerPreference: 'low-power'
+        }
+      });
+
+      const ensureLayer = (layerId, sourceId, type, paint) => {
+        if (localMap.getLayer(layerId)) return;
+        localMap.addLayer({
+          id: layerId,
+          type,
+          source: sourceId,
+          paint
+        });
+      };
+
+      const apply3dView = (enabled) => {
+        if (enabled) {
+          localMap.enableTerrain(1.12);
+          localMap.easeTo({ pitch: 54, bearing: 0, duration: 700 });
+        } else {
+          localMap.easeTo({ pitch: 0, bearing: 0, duration: 520 });
+          window.setTimeout(() => {
+            if (mapRef.current === localMap) {
+              localMap.disableTerrain();
+            }
+          }, 540);
+        }
+
+        terrainEnabledRef.current = enabled;
+      };
+
+      const ThreeDToggleControl = function () { };
+      ThreeDToggleControl.prototype.onAdd = function () {
+        const container = document.createElement('div');
+        container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'dg-maptiler-terrain-btn';
+        button.title = 'Alternar vista 3D';
+        button.innerHTML = '<i class="fas fa-layer-group"></i>';
+        button.onclick = () => {
+          const nextEnabled = !terrainEnabledRef.current;
+          apply3dView(nextEnabled);
+          button.classList.toggle('active', nextEnabled);
+        };
+
+        container.appendChild(button);
+        return container;
+      };
+      ThreeDToggleControl.prototype.onRemove = function () { };
+
+      localMap.on('load', () => {
+        localMap.addControl(new sdk.NavigationControl(), 'top-left');
+        localMap.addControl(new ThreeDToggleControl(), 'top-left');
+
+        localMap.addSource('dg-active-points', { type: 'geojson', data: createMaptilerDataset(activeGeojson).points, tolerance: 1.5, maxzoom: 14 });
+        localMap.addSource('dg-active-lines', { type: 'geojson', data: createMaptilerDataset(activeGeojson).lines, tolerance: 2.0, maxzoom: 14 });
+        localMap.addSource('dg-active-polygons', { type: 'geojson', data: createMaptilerDataset(activeGeojson).polygons, tolerance: 2.0, maxzoom: 14 });
+
+        ensureLayer('dg-active-polygon-fill', 'dg-active-polygons', 'fill', {
+          'fill-color': ['coalesce', ['get', 'fill'], ['get', 'stroke'], '#86efac'],
+          'fill-opacity': ['coalesce', ['get', 'fill-opacity'], 0.14]
+        });
+        ensureLayer('dg-active-polygon-line', 'dg-active-polygons', 'line', {
+          'line-color': ['coalesce', ['get', 'stroke'], '#1e88e5'],
+          'line-width': ['coalesce', ['get', 'stroke-width'], 2.5],
+          'line-opacity': ['coalesce', ['get', 'stroke-opacity'], 1]
+        });
+        ensureLayer('dg-active-line', 'dg-active-lines', 'line', {
+          'line-color': ['coalesce', ['get', 'stroke'], '#1e88e5'],
+          'line-width': ['coalesce', ['get', 'stroke-width'], 2.5],
+          'line-opacity': ['coalesce', ['get', 'stroke-opacity'], 1]
+        });
+        ensureLayer('dg-active-point', 'dg-active-points', 'circle', {
+          'circle-radius': 4.5,
+          'circle-color': ['coalesce', ['get', 'fill'], ['get', 'stroke'], '#ef4444'],
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1.5
+        });
+
+        const boundsCollection = getCombinedBoundsFeatureCollection(activeGeojson);
+
+        if (boundsCollection.features.length) {
+          const [minX, minY, maxX, maxY] = turf.bbox(boundsCollection);
+          localMap.fitBounds([[minX, minY], [maxX, maxY]], { padding: 48, duration: 0 });
+        }
+
+        setIsThreeDLoading(false);
+      });
+
+      mapRef.current = localMap;
+    };
+
+    setupMap().catch((error) => {
+      console.error('No se pudo cargar la vista 3D de MapTiler:', error);
+      if (!cancelled) {
+        setIsThreeDLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      terrainEnabledRef.current = false;
+      mapRef.current = null;
+      if (localMap) {
+        localMap.remove();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map || !map.isStyleLoaded()) return;
+
+    const activeData = createMaptilerDataset(activeGeojson);
+
+    const update = () => {
+      const setSourceData = (sourceId, data) => {
+        const source = map.getSource(sourceId);
+        if (source) {
+          source.setData(data);
+        }
+      };
+
+      setSourceData('dg-active-points', activeData.points);
+      setSourceData('dg-active-lines', activeData.lines);
+      setSourceData('dg-active-polygons', activeData.polygons);
+    };
+
+    if (map.loaded()) {
+      update();
+    } else {
+      map.once('load', update);
+    }
+  }, [activeGeojson]);
+
+  if (!MAPTILER_KEY) {
+    return (
+      <div className="dg-map-empty">
+        <div>
+          <h2>Vista 3D no disponible</h2>
+          <p>Configura `REACT_APP_MAPTILER_KEY` para habilitar el modo 3D de MapTiler.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dg-map dg-maptiler-3d">
+      <div ref={containerRef} className="dg-maptiler-3d-canvas"></div>
+      {isThreeDLoading && (
+        <div className="dg-maptiler-loading">
+          <div>
+            <strong>Cargando vista 3D</strong>
+            <span>Optimizando el mapa para esta sesion...</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 const resolveLegendGroups = (visibleLayers) => (
   visibleLayers.map((layer, index) => {
@@ -922,6 +1183,7 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
   const [selectedFeatureId, setSelectedFeatureId] = useState('');
   const [showLabelTable, setShowLabelTable] = useState(true);
   const [mapZoom, setMapZoom] = useState(6);
+  const [isThreeDMode, setIsThreeDMode] = useState(false);
 
   useEffect(() => {
     selectedFeatureIdRef.current = selectedFeatureId;
@@ -1120,6 +1382,13 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
     }
   };
 
+  const combinedGeojson = useMemo(() => {
+    return {
+      type: 'FeatureCollection',
+      features: visibleLayers.flatMap(layer => Array.isArray(layer.geojson_data?.features) ? layer.geojson_data.features : [])
+    };
+  }, [visibleLayers]);
+
   const shellClassName = [
     'dg-mode-shell',
     'dg-external-shell',
@@ -1272,12 +1541,23 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
             <strong>Explora el trazado y las capas activas del proyecto</strong>
           </div>
           <div className="dg-external-basemap-switch" role="group" aria-label="Cambiar mapa base">
+            <button
+              type="button"
+              className={`dg-external-basemap-btn ${isThreeDMode ? 'active' : ''}`}
+              onClick={() => setIsThreeDMode(!isThreeDMode)}
+              title={MAPTILER_KEY ? 'Alternar vista 3D de MapTiler' : 'Configura la key de MapTiler para usar 3D'}
+              disabled={!MAPTILER_KEY}
+            >
+              <i className="fas fa-cube"></i>
+              <span>{isThreeDMode ? 'Volver 2D' : '3D'}</span>
+            </button>
             {Object.values(DG_EXTERNAL_BASEMAPS).map((baseMap) => (
               <button
                 key={baseMap.key}
                 type="button"
-                className={`dg-external-basemap-btn ${baseMapKey === baseMap.key ? 'active' : ''}`}
-                onClick={() => setBaseMapKey(baseMap.key)}
+                className={`dg-external-basemap-btn ${baseMapKey === baseMap.key && !isThreeDMode ? 'active' : ''}`}
+                onClick={() => { setBaseMapKey(baseMap.key); setIsThreeDMode(false); }}
+                disabled={isThreeDMode}
               >
                 <i className={`fas ${baseMap.icon}`}></i>
                 <span>{baseMap.label}</span>
@@ -1286,14 +1566,17 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
           </div>
         </div>
 
-        <MapContainer
-          className="dg-external-map"
-          center={[-12.0464, -77.0428]}
-          zoom={6}
-          zoomControl={false}
-          preferCanvas
-          maxZoom={DG_EXTERNAL_MAX_MAP_ZOOM}
-        >
+        {isThreeDMode ? (
+          <ExternalMaptilerTerrainMap activeGeojson={combinedGeojson} />
+        ) : (
+          <MapContainer
+            className="dg-external-map"
+            center={[-12.0464, -77.0428]}
+            zoom={6}
+            zoomControl={false}
+            preferCanvas
+            maxZoom={DG_EXTERNAL_MAX_MAP_ZOOM}
+          >
           <ExternalMapLifecycle onReady={(mapInstance) => {
             mapRef.current = mapInstance;
           }} />
@@ -1385,6 +1668,7 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
             );
           })}
         </MapContainer>
+        )}
 
         {!!visibleLegendGroups.length && (
           <div className="dg-external-map-legend">

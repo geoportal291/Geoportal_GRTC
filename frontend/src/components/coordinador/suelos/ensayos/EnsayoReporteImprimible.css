@@ -1,0 +1,605 @@
+/* Estilos para el Reporte A4 del Laboratorio Cusco GRTC */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --cusco-blue-dark: #0f1e40;
+  --cusco-blue-medium: #1e3a8a;
+  --cusco-blue-light: #eff6ff;
+  --cusco-gray-dark: #334155;
+  --cusco-gray-light: #cbd5e1;
+  --cusco-accent: #dc2626;
+  --sucs-gold: #f59e0b;
+}
+
+/* Contenedor de pantalla en modo navegador */
+.reporte-a4-page-container {
+  font-family: 'Outfit', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  background-color: #f1f5f9;
+  min-height: 100vh;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--cusco-gray-dark);
+}
+
+/* Barra de acciones flotante superior */
+.reporte-action-bar {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  background: white;
+  padding: 12px 24px;
+  border-radius: 30px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  position: sticky;
+  top: 15px;
+  z-index: 1000;
+}
+
+.btn-reporte {
+  border: none;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-danger-reporte {
+  background-color: #fee2e2;
+  color: #ef4444;
+}
+.btn-danger-reporte:hover {
+  background-color: #fca5a5;
+}
+
+.btn-success-reporte {
+  background-color: #dcfce7;
+  color: #16a34a;
+  box-shadow: 0 4px 10px rgba(22, 163, 74, 0.15);
+}
+.btn-success-reporte:hover {
+  background-color: #bbf7d0;
+  transform: translateY(-1px);
+}
+
+/* Spinner y Pantallas de estado */
+.reporte-loading-screen,
+.reporte-error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  font-family: inherit;
+}
+.reporte-loading-screen .spinner {
+  border: 4px solid rgba(30, 58, 138, 0.1);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border-left-color: var(--cusco-blue-medium);
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* HOJA FISICA A4 */
+.reporte-a4-sheet {
+  background: white;
+  width: 210mm;
+  height: 297mm;
+  padding: 8mm 8mm 6mm 8mm; /* Ajustes de márgenes milimétricos */
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* ENCABEZADO OFICIAL DE CUSCO GRTC */
+.reporte-header-container {
+  display: grid;
+  grid-template-columns: 75px 1fr 75px;
+  align-items: center;
+  border-bottom: 2px solid var(--cusco-blue-dark);
+  padding-bottom: 5px;
+  margin-bottom: 6px;
+}
+
+.header-logo-left, .header-logo-right {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.svg-logo {
+  width: 60px;
+  height: 60px;
+}
+
+.header-text-center {
+  text-align: center;
+}
+.header-text-center h1 {
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0;
+  color: var(--cusco-blue-dark);
+  letter-spacing: 0.5px;
+}
+.header-text-center h2 {
+  font-size: 11px;
+  font-weight: 700;
+  margin: 2px 0 0 0;
+  color: var(--cusco-blue-medium);
+}
+.header-text-center h3 {
+  font-size: 9px;
+  font-weight: 600;
+  margin: 1px 0 0 0;
+  color: var(--cusco-gray-dark);
+}
+.header-text-center h4 {
+  font-size: 9px;
+  font-weight: 600;
+  margin: 1px 0;
+  color: var(--cusco-gray-dark);
+}
+.header-text-center h5 {
+  font-size: 10px;
+  font-weight: 700;
+  margin: 2px 0 0 0;
+  color: var(--cusco-blue-medium);
+  font-style: italic;
+}
+.header-slogan {
+  font-size: 8px;
+  font-weight: 500;
+  color: var(--cusco-gray-dark);
+  margin: 3px 0 0 0;
+}
+
+/* BANNER DE CODIGO */
+.reporte-code-banner {
+  display: flex;
+  border: 1px solid var(--cusco-blue-dark);
+  margin-bottom: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  height: 22px;
+}
+.code-label {
+  background-color: var(--cusco-blue-dark);
+  color: white;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  width: 90px;
+  justify-content: center;
+}
+.code-value {
+  flex-grow: 1;
+  background-color: white;
+  color: var(--cusco-blue-dark);
+  font-weight: 800;
+  font-size: 11px;
+  padding-left: 15px;
+  display: flex;
+  align-items: center;
+}
+
+/* TABLA FICHA TECNICA */
+.reporte-metadata-section {
+  margin-bottom: 8px;
+}
+.table-metadata {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+}
+.table-metadata td {
+  border: 1px solid var(--cusco-blue-dark);
+  padding: 3px 5px;
+  vertical-align: middle;
+}
+.meta-label {
+  font-weight: 700;
+  background-color: var(--cusco-blue-light);
+  color: var(--cusco-blue-dark);
+}
+.meta-sublabel {
+  font-weight: 600;
+  color: var(--cusco-blue-dark);
+  text-align: right;
+  background-color: #fafbfd;
+}
+.meta-value {
+  color: #0f172a;
+}
+.value-highlight {
+  font-weight: 600;
+  color: var(--cusco-blue-dark);
+}
+
+/* SECCION CENTRAL: CUADRICULA */
+.reporte-grid-granulometria {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.section-title-banner {
+  background-color: var(--cusco-blue-medium);
+  color: white;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 3px 3px 0 0;
+  margin-bottom: 4px;
+}
+
+/* TABLA DE PESOS */
+.pesos-assay-container {
+  border: 1px solid var(--cusco-blue-dark);
+  padding: 4px 6px;
+  margin-bottom: 6px;
+  border-radius: 3px;
+}
+.pesos-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--cusco-blue-dark);
+  margin-bottom: 3px;
+  border-bottom: 1px dashed var(--cusco-gray-light);
+}
+.table-pesos {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5px;
+}
+.table-pesos td {
+  padding: 2px 2px;
+}
+.peso-lbl {
+  font-weight: 600;
+  color: var(--cusco-gray-dark);
+  width: 32%;
+}
+.peso-val {
+  font-weight: 700;
+  color: #000;
+  width: 18%;
+  text-align: right;
+}
+.peso-val-highlight {
+  font-weight: 800;
+  color: var(--cusco-blue-medium);
+  width: 18%;
+  text-align: right;
+}
+
+/* TABLA DE TAMICES */
+.table-tamices {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8px;
+}
+.table-tamices th {
+  background-color: var(--cusco-blue-light);
+  color: var(--cusco-blue-dark);
+  font-weight: 700;
+  border: 1px solid var(--cusco-blue-dark);
+  padding: 2px 3px;
+  text-align: center;
+  vertical-align: middle;
+}
+.table-tamices td {
+  border: 1px dashed var(--cusco-gray-light);
+  border-left: 1px solid var(--cusco-blue-dark);
+  border-right: 1px solid var(--cusco-blue-dark);
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+.table-tamices tbody tr:last-child td {
+  border-bottom: 1px solid var(--cusco-blue-dark);
+}
+.table-tamices .row-special td {
+  border-top: 1.5px solid var(--cusco-blue-dark);
+  border-bottom: 1.5px solid var(--cusco-blue-dark);
+  background-color: var(--cusco-blue-light);
+  font-weight: 700;
+}
+.tamiz-name {
+  font-weight: 700;
+  color: var(--cusco-blue-dark);
+}
+.tamiz-mm {
+  color: var(--cusco-gray-dark);
+  text-align: center;
+}
+.tamiz-val {
+  font-weight: 500;
+}
+.tamiz-val-pasa {
+  font-weight: 700;
+  color: #000;
+}
+.align-right {
+  text-align: right;
+}
+
+/* TABLA SUCS DE REFERENCIA (COLUMNA DERECHA) */
+.table-sucs-ref {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 7.2px;
+}
+.table-sucs-ref th {
+  background-color: var(--cusco-blue-light);
+  color: var(--cusco-blue-dark);
+  font-weight: 700;
+  border: 1px solid var(--cusco-blue-dark);
+  padding: 3px;
+  text-align: center;
+}
+.table-sucs-ref td {
+  border: 1px solid var(--cusco-gray-light);
+  padding: 2.2px 4px;
+  vertical-align: middle;
+  line-height: 1.15;
+}
+.sucs-simb {
+  font-weight: 800;
+  color: var(--cusco-blue-dark);
+  text-align: center;
+  background-color: var(--cusco-blue-light);
+  border-right: 1.5px solid var(--cusco-blue-dark) !important;
+}
+.sucs-desc {
+  color: #1e293b;
+}
+
+/* BLOQUE DE CLASIFICACION AASHTO/SUCS */
+.reporte-classification-block {
+  margin-top: 4px;
+}
+.grid-classification-subtables {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.subtable-title {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--cusco-blue-dark);
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+.table-class-res {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8px;
+}
+.table-class-res th {
+  background-color: var(--cusco-blue-light);
+  color: var(--cusco-blue-dark);
+  font-weight: 700;
+  border: 1px solid var(--cusco-blue-dark);
+  padding: 2px 4px;
+  text-align: center;
+}
+.table-class-res td {
+  border: 1px solid var(--cusco-blue-dark);
+  padding: 3px 4px;
+  text-align: center;
+  font-weight: 700;
+  color: #000;
+}
+
+.final-classification-banner {
+  background-color: var(--cusco-blue-dark);
+  color: white;
+  font-weight: 700;
+  font-size: 8.5px;
+  padding: 3px 8px;
+  text-align: center;
+  margin-bottom: 3px;
+  border-radius: 2px;
+}
+.table-final-results {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5px;
+}
+.table-final-results td {
+  border: 1px solid var(--cusco-blue-dark);
+  padding: 3px;
+  text-align: center;
+  vertical-align: middle;
+}
+.lbl-f {
+  font-weight: 700;
+  background-color: var(--cusco-blue-light);
+  color: var(--cusco-blue-dark);
+  text-align: right !important;
+  width: 18%;
+  padding-right: 8px !important;
+}
+.val-f {
+  width: 32%;
+}
+.val-bold {
+  font-weight: 800;
+  font-size: 10px;
+  color: var(--cusco-blue-medium);
+}
+.lbl-f-sm {
+  font-weight: 700;
+  background-color: var(--cusco-blue-light);
+  color: var(--cusco-blue-dark);
+  font-size: 8px;
+}
+.val-f-sm {
+  font-weight: 700;
+  color: #000;
+}
+
+/* CONTENEDOR DEL GRAFICO (CURVA GRANULOMETRICA) */
+.reporte-chart-container-wrapper {
+  border: 1px solid var(--cusco-blue-dark);
+  border-radius: 4px;
+  margin-top: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.chart-header-title {
+  background-color: var(--cusco-blue-medium);
+  color: white;
+  font-weight: 700;
+  font-size: 9px;
+  padding: 3px 0;
+  text-align: center;
+}
+.reporte-chart-body {
+  height: 60mm; /* Dimensiones milimétricas exactas para la hoja A4 */
+  background: white;
+  padding: 2px;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Ocultar elementos innecesarios del VisorGraficos en impresión */
+.reporte-chart-body .chart-card-header,
+.reporte-chart-body .chart-controls,
+.reporte-chart-body .chart-toolbar {
+  display: none !important;
+}
+
+/* Anular estilos en línea del gráfico para impresión */
+.reporte-chart-body .chart-container {
+  min-height: 56mm !important;
+  height: 56mm !important;
+  padding: 4px !important;
+  border-radius: 4px !important;
+  background: white !important;
+  box-shadow: none !important;
+  border: 1px solid var(--cusco-blue-dark) !important;
+}
+
+/* Ocultar el div decorativo absoluto interno de la gráfica */
+.reporte-chart-body .chart-container > div:first-child {
+  display: none !important;
+}
+
+/* Forzar que el canvas sea responsivo en impresión */
+.reporte-chart-body .chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 54mm !important;
+}
+
+/* OBSERVACIONES */
+.reporte-observaciones {
+  border: 1px solid var(--cusco-blue-dark);
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 7.5px;
+  margin-top: 6px;
+}
+.obs-title {
+  font-weight: 700;
+  color: var(--cusco-blue-dark);
+  margin-bottom: 2px;
+}
+.obs-text {
+  color: var(--cusco-gray-dark);
+  font-style: italic;
+  line-height: 1.2;
+}
+
+/* FIRMAS PIE DE PÁGINA */
+.reporte-firmas-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+.firma-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.firma-line {
+  width: 80%;
+  border-top: 1px dashed var(--cusco-blue-dark);
+  margin-bottom: 4px;
+}
+.firma-cargo {
+  font-weight: 700;
+  font-size: 8px;
+  color: var(--cusco-blue-dark);
+  margin-bottom: 4px;
+  text-align: center;
+}
+.firma-subtext {
+  font-size: 7px;
+  color: var(--cusco-gray-dark);
+  width: 100%;
+  text-align: left;
+  padding-left: 10%;
+  margin-bottom: 2px;
+}
+
+/* NORMAS DE IMPRESIÓN FISICA */
+@media print {
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  .reporte-a4-page-container {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    display: block !important;
+  }
+
+  .reporte-a4-sheet {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0mm !important; /* Aprovechamiento de margen físico de impresora */
+    width: 210mm !important;
+    height: 297mm !important;
+    border: none !important;
+    border-radius: 0 !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

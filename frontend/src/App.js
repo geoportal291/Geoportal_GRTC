@@ -37,6 +37,7 @@ import EnsayosSuelos from './components/coordinador/suelos/ensayos/ensayos';
 import DetalleEnsayo from './components/coordinador/suelos/ensayos/DetalleEnsayo'; // NUEVO                                
 import VistaGeneralEnsayos from './components/coordinador/suelos/ensayos/VistaGeneralEnsayos'; // NUEVO
 import EnsayosContainer from './components/coordinador/suelos/ensayos/EnsayosContainer';
+import EnsayoReporteImprimible from './components/coordinador/suelos/ensayos/EnsayoReporteImprimible'; // NUEVO REPORT A4
 //import GestorDeMaterialesContainer from './components/coordinador/suelos/GestorDeMaterialesContainer'; // NUEVO: Importar  
 // Visitante
 
@@ -184,6 +185,7 @@ function AppContent() {
                 <Route path="/gestionar-participantes" element={<RutaPrivada><Layout><GestionarParticipantes /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/proyectos" element={<RutaPrivada><Layout><Proyectos /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/recoleccion-datos/*" element={<RutaPrivada><Layout><SuelosIndex /></Layout></RutaPrivada>} />
+                <Route path="/coordinador/suelos/ensayos/:ensayoId/reporte" element={<RutaPrivada><EnsayoReporteImprimible /></RutaPrivada>} />
                 <Route path="/coordinador/suelos/ensayos/*" element={<RutaPrivada><Layout><EnsayosContainer /></Layout></RutaPrivada>} />
 
 

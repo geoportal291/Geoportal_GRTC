@@ -537,13 +537,38 @@ const createPointIcon = (feature, isSelected, labelConfig = null) => {
   const labelText = resolvePointLabelText(feature, labelConfig, isSelected);
   const labelLines = resolvePointLabelLineCount(feature, labelConfig, isSelected);
   const labelHeight = labelLines > 0 ? 16 + labelLines * 22 : 0;
-  const totalHeight = labelText ? labelHeight + 8 + iconSize : iconSize;
-  const totalWidth = Math.max(iconSize, labelText ? 200 : iconSize);
+  
+  const iconBase64 = feature?.properties?.dg_icon_base64;
+  const iconShape = feature?.properties?.dg_icon_shape;
+  
+  let iconHtml = '';
+  if (iconBase64) {
+    const size = Math.max(markerSize * 2, 24);
+    iconHtml = `<img src="${iconBase64}" class="dg-point-custom-img${isSelected ? ' dg-dot-selected' : ''}" style="width:${size}px; height:${size}px; object-fit:contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));" />`;
+  } else if (iconShape) {
+    const size = Math.max(markerSize * 1.5, 20);
+    let faClass = 'fas fa-circle';
+    if (iconShape === 'square') faClass = 'fas fa-square';
+    else if (iconShape === 'triangle') faClass = 'fas fa-caret-up';
+    else if (iconShape === 'star') faClass = 'fas fa-star';
+    else if (iconShape === 'cross') faClass = 'fas fa-plus';
+    else if (iconShape === 'location') faClass = 'fas fa-map-marker-alt';
+    
+    const shapeColor = feature?.properties?.stroke || color;
+    iconHtml = `<i class="${faClass} dg-point-custom-shape${isSelected ? ' dg-dot-selected' : ''}" style="font-size:${size}px; color:${shapeColor}; text-shadow: 0 2px 4px rgba(0,0,0,0.4); ${isSelected ? 'filter: drop-shadow(0 0 4px #fff);' : ''}"></i>`;
+  } else {
+    const selectedGlow = isSelected
+      ? `box-shadow: 0 0 0 6px rgba(15,143,149,0.3), 0 0 14px rgba(15,143,149,0.25), 0 0 0 2px #ffffff;`
+      : `box-shadow: 0 8px 16px rgba(15,23,42,0.22);`;
+    iconHtml = `<span class="dg-point-dot${isSelected ? ' dg-dot-selected' : ''}" style="width:${markerSize}px; height:${markerSize}px; background:${color}; border:${selectedBorder}px solid #ffffff; ${selectedGlow}"></span>`;
+  }
+
+  const customSize = iconBase64 ? Math.max(markerSize * 2, 24) : (iconShape ? Math.max(markerSize * 1.5, 20) : iconSize);
+  const totalHeight = labelText ? labelHeight + 8 + customSize : customSize;
+  const totalWidth = Math.max(customSize, labelText ? 200 : customSize);
   const anchorX = totalWidth / 2;
-  const anchorY = totalHeight - iconSize / 2;
-  const selectedGlow = isSelected
-    ? `box-shadow: 0 0 0 6px rgba(15,143,149,0.3), 0 0 14px rgba(15,143,149,0.25), 0 0 0 2px #ffffff;`
-    : `box-shadow: 0 8px 16px rgba(15,23,42,0.22);`;
+  const anchorY = totalHeight - customSize / 2;
+  
   return L.divIcon({
     className: `dg-point-icon${isSelected ? ' dg-point-selected' : ''}`,
     html: `<div class="dg-point-icon-body">
@@ -551,7 +576,7 @@ const createPointIcon = (feature, isSelected, labelConfig = null) => {
         <button class="dg-label-close-btn" onclick="event.stopPropagation(); window.__dgCloseLabel &amp;&amp; window.__dgCloseLabel()" title="Cerrar">&times;</button>
         ${labelText}
       </em>` : ''}
-      <span class="dg-point-dot${isSelected ? ' dg-dot-selected' : ''}" style="width:${markerSize}px; height:${markerSize}px; background:${color}; border:${selectedBorder}px solid #ffffff; ${selectedGlow}"></span>
+      ${iconHtml}
     </div>`,
     iconSize: [totalWidth, totalHeight],
     iconAnchor: [anchorX, anchorY]
@@ -2722,6 +2747,90 @@ export default function DisenoGeometrico() {
     commitActiveCollection(nextCollection, { selectedFeatureId });
   }, [activeFeatureCollection, commitActiveCollection, effectivePointLabelConfig, selectedFeatureId, selectedLayer, selectionHighlightColor]);
 
+  const updateFeatureProperties = useCallback((propertyPatch, applyToAll = false) => {
+    if (!selectedLayer || !selectedFeatureId) return;
+
+    const currentFeature = activeFeatureCollection.features.find((f) => getFeatureId(f) === selectedFeatureId);
+    if (!currentFeature) return;
+    const targetType = getFeatureType(currentFeature);
+
+    const nextCollection = cloneGeojson(activeFeatureCollection);
+    nextCollection.features = nextCollection.features.map((feature) => {
+      if (applyToAll) {
+        if (getFeatureType(feature) !== targetType) return feature;
+      } else {
+        if (getFeatureId(feature) !== selectedFeatureId) return feature;
+      }
+
+      const nextFeature = normalizeFeature(feature);
+      nextFeature.properties = {
+        ...nextFeature.properties,
+        ...propertyPatch
+      };
+
+      if (propertyPatch.dg_name && !applyToAll) {
+        nextFeature.properties.nombre = propertyPatch.dg_name;
+      }
+
+      return nextFeature;
+    });
+
+    nextCollection.features.forEach((updatedFeature) => {
+      const featureId = getFeatureId(updatedFeature);
+      if ((applyToAll && getFeatureType(updatedFeature) === targetType) || featureId === selectedFeatureId) {
+        const layer = layerRegistryRef.current[featureId];
+        if (layer && updatedFeature) {
+          layer.feature = updatedFeature;
+          applyLayerStyle(layer, updatedFeature, featureId === selectedFeatureId, effectivePointLabelConfig, selectionHighlightColor);
+          if (layer.getPopup()) {
+            layer.setPopupContent(featureToPopupHtml(updatedFeature));
+          }
+        }
+      }
+    });
+
+    commitActiveCollection(nextCollection, { selectedFeatureId });
+  }, [activeFeatureCollection, commitActiveCollection, effectivePointLabelConfig, selectedFeatureId, selectedLayer, selectionHighlightColor]);
+
+  const handlePointIconUpload = useCallback((event, applyToAll) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 64;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL(file.type || 'image/png');
+        
+        updateFeatureProperties({ dg_icon_base64: dataUrl, dg_icon_shape: null }, applyToAll);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }, [updateFeatureProperties]);
+
   const updatePointLabelSettings = useCallback((patch) => {
     if (!selectedLayer) return;
 
@@ -3749,6 +3858,56 @@ export default function DisenoGeometrico() {
                   </div>
                 )}
 
+                {selectedFeatureType === 'point' && (
+                  <div className="dg-property-stack" style={{ marginTop: '16px', padding: '12px', background: 'var(--dg-bg-secondary)', borderRadius: '8px' }}>
+                    <strong>Apariencia del Punto</strong>
+                    
+                    <label>
+                      Forma
+                      <select 
+                        value={selectedFeature.properties?.dg_icon_shape || 'default'} 
+                        onChange={(event) => updateFeatureProperties({ dg_icon_shape: event.target.value === 'default' ? null : event.target.value, dg_icon_base64: null }, document.getElementById('dg-apply-all-points')?.checked)} 
+                        disabled={!canManage}
+                      >
+                        <option value="default">Punto (Predeterminado)</option>
+                        <option value="square">Cuadrado</option>
+                        <option value="triangle">Triángulo</option>
+                        <option value="star">Estrella</option>
+                        <option value="cross">Cruz</option>
+                        <option value="location">Pin de Ubicación</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      Subir Ícono (Max 64x64)
+                      <input 
+                        type="file" 
+                        accept="image/png, image/jpeg, image/svg+xml" 
+                        onChange={(e) => handlePointIconUpload(e, document.getElementById('dg-apply-all-points')?.checked)} 
+                        disabled={!canManage}
+                        style={{ fontSize: '0.8rem', padding: '4px' }}
+                      />
+                    </label>
+                    
+                    {(selectedFeature.properties?.dg_icon_base64 || selectedFeature.properties?.dg_icon_shape) && (
+                      <button 
+                        type="button" 
+                        className="dg-secondary-btn" 
+                        onClick={() => updateFeatureProperties({ dg_icon_base64: null, dg_icon_shape: null }, document.getElementById('dg-apply-all-points')?.checked)}
+                        disabled={!canManage}
+                        style={{ padding: '6px', fontSize: '0.8rem', width: 'fit-content' }}
+                      >
+                        <i className="fas fa-trash"></i> Restaurar predeterminado
+                      </button>
+                    )}
+
+                    <label className="dg-checkbox-label" style={{ marginTop: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <input type="checkbox" id="dg-apply-all-points" defaultChecked={false} />
+                      Aplicar a todos los puntos de la capa
+                    </label>
+                  </div>
+                )}
+
                 <div className="dg-property-item">
                   <span>Color de borde</span>
                   <label className="dg-color-field">
@@ -3781,16 +3940,51 @@ export default function DisenoGeometrico() {
                   </div>
                 )}
 
-                <label>
-                  Grosor
-                  <select value={selectedFeature.properties?.['stroke-width'] || 3} onChange={(event) => updateSelectedFeature({ 'stroke-width': Number(event.target.value) })} disabled={!canManage}>
-                    <option value={2}>2 px</option>
-                    <option value={3}>3 px</option>
-                    <option value={4}>4 px</option>
-                    <option value={5}>5 px</option>
-                    <option value={6}>6 px</option>
-                  </select>
-                </label>
+                <div className="dg-property-stack" style={{ marginTop: '16px', padding: '12px', background: 'var(--dg-bg-secondary)', borderRadius: '8px' }}>
+                  <strong>Ajustes de Borde</strong>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <label>
+                      Grosor
+                      <select 
+                        value={selectedFeature.properties?.['stroke-width'] || 3} 
+                        onChange={(event) => updateFeatureProperties({ 'stroke-width': Number(event.target.value) }, document.getElementById('dg-apply-all-strokes')?.checked)} 
+                        disabled={!canManage}
+                      >
+                        <option value={2}>2 px</option>
+                        <option value={3}>3 px</option>
+                        <option value={4}>4 px</option>
+                        <option value={5}>5 px</option>
+                        <option value={6}>6 px</option>
+                        <option value={7}>7 px</option>
+                        <option value={8}>8 px</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      Opacidad
+                      <select 
+                        value={selectedFeature.properties?.['stroke-opacity'] ?? 1} 
+                        onChange={(event) => updateFeatureProperties({ 'stroke-opacity': Number(event.target.value) }, document.getElementById('dg-apply-all-strokes')?.checked)} 
+                        disabled={!canManage}
+                      >
+                        <option value={1}>100%</option>
+                        <option value={0.9}>90%</option>
+                        <option value={0.8}>80%</option>
+                        <option value={0.7}>70%</option>
+                        <option value={0.6}>60%</option>
+                        <option value={0.5}>50%</option>
+                        <option value={0.4}>40%</option>
+                        <option value={0.3}>30%</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label className="dg-checkbox-label" style={{ marginTop: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input type="checkbox" id="dg-apply-all-strokes" defaultChecked={false} />
+                    Aplicar a todos los elementos ({getFeatureLabel(selectedFeature).toLowerCase()}s)
+                  </label>
+                </div>
 
                 <div className="dg-attributes-section">
                   <div className="dg-attributes-head">

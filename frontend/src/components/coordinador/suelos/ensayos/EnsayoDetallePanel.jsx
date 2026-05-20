@@ -410,6 +410,12 @@ export default function EnsayoDetallePanel({
     }
   }, [ensayoDetails, navigate]);
 
+  const handleExportarInforme = useCallback(() => {
+    if (ensayoId) {
+      window.open(`/coordinador/suelos/ensayos/${ensayoId}/reporte`, "_blank");
+    }
+  }, [ensayoId]);
+
   useEffect(() => {
     let ignore = false;
 
@@ -640,6 +646,14 @@ export default function EnsayoDetallePanel({
             <i className="fas fa-vials"></i>
             <span className="btn-text">Ensayos Generales</span>
           </button>
+          <button
+            onClick={handleExportarInforme}
+            className="btn btn-primary btn-expandable"
+            style={{ backgroundColor: "#2563eb", borderColor: "#1d4ed8" }}
+          >
+            <i className="fas fa-file-pdf"></i>
+            <span className="btn-text">Exportar Informe</span>
+          </button>
           <h2 className="ensayo-title">
             Detalles del Ensayo: {ensayoDetails?.nombre_ensayo}
           </h2>
@@ -647,7 +661,7 @@ export default function EnsayoDetallePanel({
       )}
 
       {modalMode && (
-        <div className="ensayo-modal-inline-header">
+        <div className="ensayo-modal-inline-header d-flex justify-content-between align-items-center">
           <div className="ensayo-modal-inline-title-group">
             <h2 className="ensayo-title">{ensayoDetails?.nombre_ensayo}</h2>
             <span className="ensayo-modal-inline-subtitle">
@@ -656,6 +670,13 @@ export default function EnsayoDetallePanel({
                 "Ensayo"}
             </span>
           </div>
+          <button
+            onClick={handleExportarInforme}
+            className="btn btn-primary btn-sm ms-auto me-2"
+            style={{ backgroundColor: "#2563eb", borderColor: "#1d4ed8", color: "white" }}
+          >
+            <i className="fas fa-file-pdf me-1"></i> Informe PDF
+          </button>
         </div>
       )}
 

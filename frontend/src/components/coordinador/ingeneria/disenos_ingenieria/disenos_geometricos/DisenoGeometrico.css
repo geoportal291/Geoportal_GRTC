@@ -359,6 +359,16 @@
   box-shadow: 0 0 0 4px rgba(15, 143, 149, 0.12);
 }
 
+.dg-property-stack input[type="checkbox"],
+.dg-checkbox-label input[type="checkbox"] {
+  width: auto !important;
+  min-height: auto !important;
+  padding: 0 !important;
+  margin: 0;
+  cursor: pointer;
+  transform: scale(1.1);
+}
+
 .dg-option-chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -1217,6 +1227,18 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
+}
+
+.dg-point-custom-img {
+  border-radius: 4px;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.dg-point-custom-shape {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, filter 0.2s ease;
 }
 
 .dg-point-dot {
