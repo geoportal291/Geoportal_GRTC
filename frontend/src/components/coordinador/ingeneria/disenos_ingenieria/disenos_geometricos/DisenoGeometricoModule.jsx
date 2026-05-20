@@ -44,29 +44,16 @@ export default function DisenoGeometricoModule() {
     () => roleId === 6 || roleName.includes('VISITANTE'),
     [roleId, roleName]
   );
-  const [viewMode, setViewMode] = useState(() => {
-    const storedValue = window.localStorage.getItem(STORAGE_KEY);
-    return storedValue || null;
-  });
+  
+  const [viewMode, setViewMode] = useState(null);
 
   useEffect(() => {
     if (isForcedExternalUser) {
       setViewMode('external');
-      return;
+    } else {
+      setViewMode(null);
     }
-
-    const storedValue = window.localStorage.getItem(STORAGE_KEY);
-    setViewMode(storedValue || null);
   }, [isForcedExternalUser]);
-
-  useEffect(() => {
-    if (!viewMode) {
-      window.localStorage.removeItem(STORAGE_KEY);
-      return;
-    }
-
-    window.localStorage.setItem(STORAGE_KEY, viewMode);
-  }, [viewMode]);
 
   if (viewMode === 'external') {
     return (
@@ -81,13 +68,7 @@ export default function DisenoGeometricoModule() {
   if (viewMode === 'internal') {
     return (
       <div className="dg-internal-mode-wrap">
-        {!isForcedExternalUser && (
-          <button type="button" className="dg-floating-mode-switch" onClick={() => setViewMode(null)}>
-            <i className="fas fa-repeat"></i>
-            <span>Cambiar vista</span>
-          </button>
-        )}
-        <DisenoGeometrico />
+        <DisenoGeometrico onSwitchMode={setViewMode} />
       </div>
     );
   }

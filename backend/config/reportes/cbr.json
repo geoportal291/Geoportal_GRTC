@@ -1,0 +1,131 @@
+{
+  "config_key": "cbr",
+  "document": {
+    "title": "Ensayo Valor de Soporte de Suelos - CBR",
+    "subtitle": "Norma MTC E 132 / ASTM D1883",
+    "orientation": "portrait",
+    "paperSize": "A4"
+  },
+  "header": {
+    "title": "GOBIERNO REGIONAL CUSCO",
+    "subtitle": "Gerencia Regional de Transportes y Comunicaciones Cusco",
+    "subsubtitle": "SUB GERENCIA DE COBERTURA Y COMUNICACIONES",
+    "department": "UNIDAD FUNCIONAL ESTUDIOS Y PROYECTOS",
+    "laboratory": "Laboratorio de Mecánica de Suelos, Materiales y Pavimentos",
+    "slogan": "«Año de la recuperación y consolidación de la economía peruana»",
+    "logo_left_url": "/assets/logo_grtc.png",
+    "logo_right_url": "/assets/logo_cusco.png"
+  },
+  "metadataFields": [
+    { "label": "Proyecto", "source": "proyecto_nombre", "colSpan": 8, "highlight": true },
+    { "label": "Ubicación", "fields": [
+        { "sublabel": "Lugar", "source": "tramo_nombre", "width": "20%" },
+        { "sublabel": "Distrito", "source": "distrito", "width": "15%" },
+        { "sublabel": "Provincia", "source": "provincia", "width": "15%" },
+        { "sublabel": "Dpto", "source": "departamento", "width": "10%" }
+      ]
+    },
+    { "label": "Solicitante", "source": "solicitante", "colSpan": 3 },
+    { "label": "Coordenadas", "fields": [
+        { "sublabel": "E", "source": "longitud", "width": "25%" },
+        { "sublabel": "N", "source": "latitud", "width": "25%" }
+      ]
+    },
+    { "label": "Datos de Muestra", "fields": [
+        { "sublabel": "Exploración", "source": "calicata", "width": "12%" },
+        { "sublabel": "Progresiva", "source": "progresiva_codigo", "width": "15%", "format": "progresiva" },
+        { "sublabel": "Estrato", "source": "estrato_orden", "width": "12%" },
+        { "sublabel": "Lado", "source": "lado", "width": "12%" }
+      ]
+    },
+    { "label": "Profundidad", "source": "profundidad", "colSpan": 3 },
+    { "label": "Fecha Muestreo", "source": "fecha_muestreo", "colSpan": 3, "format": "fecha" }
+  ],
+  "signatures": [
+    { "role": "ESP. ENSAYOS GEOTECNICOS" },
+    { "role": "ESP. SUELOS Y PAVIMENTOS" },
+    { "role": "SUPERVISOR" }
+  ],
+  "pages": [
+    {
+      "layout": {
+        "type": "grid",
+        "columns": [
+          {
+            "width": "35%",
+            "components": [
+              {
+                "type": "section_title",
+                "text": "Datos del Molde"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "datos_molde"
+              },
+              {
+                "type": "section_title",
+                "text": "Datos de Compactación"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "datos_compactacion"
+              },
+              {
+                "type": "section_title",
+                "text": "Cápsula N° (Humedad)"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "capsula_humedad"
+              },
+              {
+                "type": "section_title",
+                "text": "Datos de Absorción"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "datos_absorcion"
+              },
+              {
+                "type": "section_title",
+                "text": "Cte. Dial Expansión"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "expansion"
+              }
+            ]
+          },
+          {
+            "width": "65%",
+            "components": [
+              {
+                "type": "section_title",
+                "text": "Penetración",
+                "align": "center"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "penetracion"
+              }
+            ]
+          }
+        ]
+      },
+      "charts": [
+        {
+          "chartConfigKey": "cbr_esfuerzo_penetracion",
+          "title": "Curva de Esfuerzo a la Penetración",
+          "height": "65mm",
+          "position": "after_layout"
+        },
+        {
+          "chartConfigKey": "cbr_densidad_cbr",
+          "title": "Gráfica del C.B.R.",
+          "height": "65mm",
+          "position": "after_layout"
+        }
+      ]
+    }
+  ]
+}

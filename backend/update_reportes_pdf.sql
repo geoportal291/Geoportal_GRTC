@@ -1,0 +1,578 @@
+
+UPDATE tipo_ensayo SET config_reporte_pdf = '{
+  "config_key": "granulometria",
+  "document": {
+    "title": "Granulometría por tamizado",
+    "subtitle": "Norma MTC E 107 / ASTM D422",
+    "orientation": "portrait",
+    "paperSize": "A4"
+  },
+  "header": {
+    "title": "GOBIERNO REGIONAL CUSCO",
+    "subtitle": "Gerencia Regional de Transportes y Comunicaciones Cusco",
+    "subsubtitle": "SUB GERENCIA DE COBERTURA Y COMUNICACIONES",
+    "department": "UNIDAD FUNCIONAL ESTUDIOS Y PROYECTOS",
+    "laboratory": "Laboratorio de Mecánica de Suelos, Materiales y Pavimentos",
+    "slogan": "«Año de la recuperación y consolidación de la economía peruana»",
+    "logo_left_url": "/assets/logo_grtc.png",
+    "logo_right_url": "/assets/logo_cusco.png"
+  },
+  "metadataFields": [
+    { "label": "Proyecto", "source": "proyecto_nombre", "colSpan": 8, "highlight": true },
+    { "label": "Ubicación", "fields": [
+        { "sublabel": "Lugar", "source": "tramo_nombre", "width": "20%" },
+        { "sublabel": "Distrito", "source": "distrito", "width": "15%" },
+        { "sublabel": "Provincia", "source": "provincia", "width": "15%" },
+        { "sublabel": "Dpto", "source": "departamento", "width": "10%" }
+      ]
+    },
+    { "label": "Solicitante", "source": "solicitante", "colSpan": 3 },
+    { "label": "Coordenadas", "fields": [
+        { "sublabel": "E", "source": "longitud", "width": "25%" },
+        { "sublabel": "N", "source": "latitud", "width": "25%" }
+      ]
+    },
+    { "label": "Datos de Muestra", "fields": [
+        { "sublabel": "Exploración", "source": "calicata", "width": "12%" },
+        { "sublabel": "Progresiva", "source": "progresiva_codigo", "width": "15%", "format": "progresiva" },
+        { "sublabel": "Estrato", "source": "estrato_orden", "width": "12%" },
+        { "sublabel": "Lado", "source": "lado", "width": "12%" }
+      ]
+    },
+    { "label": "Profundidad", "source": "profundidad", "colSpan": 3 },
+    { "label": "Fecha Muestreo", "source": "fecha_muestreo", "colSpan": 3, "format": "fecha" }
+  ],
+  "pages": [
+    {
+      "layout": {
+        "type": "grid",
+        "columns": [
+          {
+            "width": "60%",
+            "components": [
+              {
+                "type": "section_title",
+                "text": "Granulometría por tamizado - MTC E 107"
+              },
+              {
+                "type": "table_pesos",
+                "fields": [
+                  { "label": "Peso Total =", "source": "formData.peso_total", "format": "0.1", "suffix": " g" },
+                  { "label": "Peso de muestra lavada =", "source": "formData.peso_muestra_lavada", "format": "0.1", "suffix": " g" },
+                  { "label": "Peso de la Fracción Gruesa =", "source": "formData.peso_fraccion_gruesa", "format": "0.1", "suffix": " g" },
+                  { "label": "Peso de fracción Fina =", "source": "resultados.peso_fina_calculado", "format": "0.1", "suffix": " g", "highlight": true },
+                  { "label": "Peso de la fracción Fina =", "source": "formData.peso_fraccion_fina", "format": "0.1", "suffix": " g" },
+                  { "label": "Coeficiente =", "source": "resultados.coeficiente", "format": "0.02", "suffix": "" }
+                ]
+              },
+              {
+                "type": "table_tamices",
+                "sourceTable": "granulometria",
+                "columns": [
+                  { "header": "Tamiz", "field": "label", "type": "label" },
+                  { "header": "mm.", "field": "mm", "type": "number", "format": "0.000" },
+                  { "header": "Masa (g)", "field": "masa", "type": "input", "format": "0.2" },
+                  { "header": "% Ret Parcial", "field": "porcentaje_retenido", "type": "calculated", "format": "0.1", "result_config": { "path": "tables.granulometria.{row_key}.porcentaje_retenido" } },
+                  { "header": "% Ret Acum.", "field": "acum_retenido_porcentaje", "type": "calculated", "format": "0.1", "result_config": { "path": "tables.granulometria.{row_key}.acum_retenido_porcentaje" } },
+                  { "header": "% que Pasa", "field": "pasa", "type": "calculated", "format": "0.1", "highlight": true, "result_config": { "path": "tables.granulometria.{row_key}.pasa" } },
+                  { "header": "Especificaciones", "field": "especificacion", "type": "spec" }
+                ]
+              }
+            ]
+          },
+          {
+            "width": "40%",
+            "components": [
+              {
+                "type": "table_static",
+                "title": "Tabla de clasificación SUCS",
+                "widths": ["20%", "80%"],
+                "headers": ["Simb", "NOMBRES TÍPICOS"],
+                "rows": [
+                  ["GW", "Gravas bien graduadas, mezclas grava-arena, pocos finos o sin finos."],
+                  ["GP", "Gravas mal graduadas, mezclas grava-arena, pocos finos o sin finos."],
+                  ["GM", "Gravas limosas, mezclas grava-arena-limo."],
+                  ["GC", "Gravas arcillosas, mezclas grava-arena-arcilla."],
+                  ["SW", "Arenas bien graduadas, arenas con grava, pocos finos o sin finos."],
+                  ["SP", "Arenas mal graduadas, arenas con grava, pocos finos o sin finos."],
+                  ["SM", "Arenas limosas, mezclas de arena y limo."],
+                  ["SC", "Arenas arcillosas, mezclas de arena y arcilla."],
+                  ["ML", "Limos inorgánicos y arenas muy finas, limos limpios, arenas finas, limosas o arcillosas, o limos arcillosos con ligera plasticidad."],
+                  ["CL", "Arcillas inorgánicas de plasticidad baja a media, arcillas con grava, arcillas arenosas, arcillas limosas."],
+                  ["OL", "Limos orgánicos y arcillas orgánicas limosas de baja plasticidad."],
+                  ["MH", "Limos inorgánicos, suelos arenosos finos o limosos con mica o diatomeas, limos elásticos."],
+                  ["CH", "Arcillas inorgánicas de plasticidad alta."],
+                  ["OH", "Arcillas orgánicas de plasticidad media a elevada; limos orgánicos."],
+                  ["PT", "Turba y otros suelos de alto contenido orgánico."]
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "classificationBlock": {
+        "subtables": [
+          {
+            "title": "Datos para la clasificación AASHTO",
+            "fields": [
+              { "header": "T.M. Nominal", "source": "resultados.calculated_values.sucs.tm_nominal" },
+              { "header": "% pasa malla N° 10", "source": "resultados.calculated_values.sucs.pasa_10", "format": "0.1" },
+              { "header": "% pasa malla N° 40", "source": "resultados.calculated_values.sucs.pasa_40", "format": "0.1" },
+              { "header": "% pasa malla N° 200", "source": "resultados.calculated_values.sucs.pasa_200", "format": "0.1" }
+            ]
+          },
+          {
+            "title": "Datos para la clasificación SUCS",
+            "fields": [
+              { "header": "% Grava", "source": "resultados.calculated_values.sucs.porcentaje_grava", "format": "0.1" },
+              { "header": "% Arena", "source": "resultados.calculated_values.sucs.porcentaje_arena", "format": "0.1" },
+              { "header": "% Finos", "source": "resultados.calculated_values.sucs.porcentaje_finos", "format": "0.1" }
+            ]
+          }
+        ],
+        "finalClassification": {
+          "banner": "ASTM D2487-17 y AASHTO M145-2000",
+          "results": [
+            { "label": "Clasificación SUCS:", "source": "resultados.calculated_values.sucs.clasificacion_sucs", "highlight": true },
+            { "label": "Clasificación AASHTO:", "source": "resultados.calculated_values.aashto.clasificacion_aashto", "highlight": true }
+          ],
+          "coefficients": [
+            { "label": "D 10", "source": "resultados.calculated_values.sucs.d10", "format": "0.02" },
+            { "label": "D 30", "source": "resultados.calculated_values.sucs.d30", "format": "0.02" },
+            { "label": "D 50", "source": "resultados.calculated_values.sucs.d50", "format": "0.02" },
+            { "label": "D 60", "source": "resultados.calculated_values.sucs.d60", "format": "0.02" },
+            { "label": "Cu", "source": "resultados.calculated_values.sucs.cu", "format": "0.02" },
+            { "label": "Cc", "source": "resultados.calculated_values.sucs.cc", "format": "0.02" },
+            { "label": "L. L.", "source": "resultados.calculated_values.sucs.ll", "format": "0" },
+            { "label": "I. P.", "source": "resultados.calculated_values.sucs.ip", "format": "0" }
+          ]
+        }
+      }
+    },
+    {
+      "charts": [
+        {
+          "chartConfigKey": "granulometria_tendencia",
+          "height": "95mm",
+          "position": "after_layout"
+        }
+      ]
+    }
+  ],
+  "signatures": [
+    { "role": "ESP. ENSAYOS GEOTECNICOS" },
+    { "role": "ESP. SUELOS Y PAVIMENTOS" },
+    { "role": "SUPERVISOR" }
+  ]
+}
+' WHERE config_key = 'granulometria';
+
+UPDATE tipo_ensayo SET config_reporte_pdf = '{
+  "config_key": "limites",
+  "document": {
+    "title": "Límites de Consistencia y Contenido de Humedad",
+    "subtitle": "Norma MTC E 110 / ASTM D4318",
+    "orientation": "portrait",
+    "paperSize": "A4"
+  },
+  "header": {
+    "title": "GOBIERNO REGIONAL CUSCO",
+    "subtitle": "Gerencia Regional de Transportes y Comunicaciones Cusco",
+    "subsubtitle": "SUB GERENCIA DE COBERTURA Y COMUNICACIONES",
+    "department": "UNIDAD FUNCIONAL ESTUDIOS Y PROYECTOS",
+    "laboratory": "Laboratorio de Mecánica de Suelos, Materiales y Pavimentos",
+    "slogan": "«Año de la recuperación y consolidación de la economía peruana»",
+    "logo_left_url": "/assets/logo_grtc.png",
+    "logo_right_url": "/assets/logo_cusco.png"
+  },
+  "metadataFields": [
+    { "label": "Proyecto", "source": "proyecto_nombre", "colSpan": 8, "highlight": true },
+    { "label": "Ubicación", "fields": [
+        { "sublabel": "Lugar", "source": "tramo_nombre", "width": "20%" },
+        { "sublabel": "Distrito", "source": "distrito", "width": "15%" },
+        { "sublabel": "Provincia", "source": "provincia", "width": "15%" },
+        { "sublabel": "Dpto", "source": "departamento", "width": "10%" }
+      ]
+    },
+    { "label": "Solicitante", "source": "solicitante", "colSpan": 3 },
+    { "label": "Coordenadas", "fields": [
+        { "sublabel": "E", "source": "longitud", "width": "25%" },
+        { "sublabel": "N", "source": "latitud", "width": "25%" }
+      ]
+    },
+    { "label": "Datos de Muestra", "fields": [
+        { "sublabel": "Exploración", "source": "calicata", "width": "12%" },
+        { "sublabel": "Progresiva", "source": "progresiva_codigo", "width": "15%", "format": "progresiva" },
+        { "sublabel": "Estrato", "source": "estrato_orden", "width": "12%" },
+        { "sublabel": "Lado", "source": "lado", "width": "12%" }
+      ]
+    },
+    { "label": "Profundidad", "source": "profundidad", "colSpan": 3 },
+    { "label": "Fecha Muestreo", "source": "fecha_muestreo", "colSpan": 3, "format": "fecha" }
+  ],
+  "signatures": [
+    { "role": "ESP. ENSAYOS GEOTECNICOS" },
+    { "role": "ESP. SUELOS Y PAVIMENTOS" },
+    { "role": "SUPERVISOR" }
+  ],
+  "pages": [
+    {
+      "document": {
+        "title": "Límites de Consistencia",
+        "subtitle": "Norma MTC E 110 / ASTM D4318"
+      },
+      "layout": {
+        "type": "grid",
+        "columns": [
+          {
+            "width": "50%",
+            "components": [
+              {
+                "type": "section_title",
+                "text": "DETERMINACIÓN DEL LÍMITE LÍQUIDO",
+                "align": "center"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "TablaLimiteLiquido"
+              },
+              {
+                 "type": "table_pesos",
+                 "fields": [
+                   { "label": "Límite Líquido (LL)", "source": "resultados.limite_liquido", "format": "0.1", "suffix": " %", "highlight": true }
+                 ]
+              }
+            ]
+          },
+          {
+            "width": "50%",
+            "components": [
+              {
+                "type": "section_title",
+                "text": "DETERMINACIÓN DEL LÍMITE PLÁSTICO",
+                "align": "center"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "TablaLimitePlastico"
+              },
+              {
+                 "type": "table_pesos",
+                 "fields": [
+                   { "label": "Límite Plástico (LP)", "source": "resultados.limite_plastico", "format": "0.1", "suffix": " %", "highlight": true },
+                   { "label": "Índice de Plasticidad (IP)", "source": "resultados.indice_plasticidad", "format": "0.1", "suffix": " %", "highlight": true }
+                 ]
+              }
+            ]
+          }
+        ]
+      },
+      "charts": [
+        {
+          "chartConfigKey": "curva_fluidez",
+          "title": "Curva de Fluidez (Límite Líquido)",
+          "height": "75mm",
+          "position": "after_layout"
+        },
+        {
+          "chartConfigKey": "carta_plasticidad",
+          "title": "Carta de Plasticidad de Casagrande",
+          "height": "75mm",
+          "position": "after_layout"
+        }
+      ]
+    },
+    {
+      "document": {
+        "title": "Contenido de Humedad",
+        "subtitle": "Norma MTC E 108 / ASTM D2216"
+      },
+      "layout": {
+        "type": "grid",
+        "columns": [
+          {
+            "width": "100%",
+            "components": [
+              {
+                "type": "section_title",
+                "text": "ENSAYO DE CONTENIDO DE HUMEDAD NATURAL",
+                "align": "center"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "TablaHumedad"
+              },
+              {
+                 "type": "table_pesos",
+                 "fields": [
+                   { "label": "Humedad Natural Promedio", "source": "resultados.humedad_natural", "format": "0.1", "suffix": " %", "highlight": true }
+                 ]
+              }
+            ]
+          }
+        ]
+      },
+      "charts": [
+        {
+          "chartConfigKey": "humedad_barras",
+          "title": "Gráfico de Contenido de Humedad",
+          "height": "90mm",
+          "position": "after_layout"
+        }
+      ]
+    }
+  ]
+}
+' WHERE config_key = 'limites';
+
+UPDATE tipo_ensayo SET config_reporte_pdf = '{
+  "config_key": "cbr",
+  "document": {
+    "title": "Ensayo Valor de Soporte de Suelos - CBR",
+    "subtitle": "Norma MTC E 132 / ASTM D1883",
+    "orientation": "portrait",
+    "paperSize": "A4"
+  },
+  "header": {
+    "title": "GOBIERNO REGIONAL CUSCO",
+    "subtitle": "Gerencia Regional de Transportes y Comunicaciones Cusco",
+    "subsubtitle": "SUB GERENCIA DE COBERTURA Y COMUNICACIONES",
+    "department": "UNIDAD FUNCIONAL ESTUDIOS Y PROYECTOS",
+    "laboratory": "Laboratorio de Mecánica de Suelos, Materiales y Pavimentos",
+    "slogan": "«Año de la recuperación y consolidación de la economía peruana»",
+    "logo_left_url": "/assets/logo_grtc.png",
+    "logo_right_url": "/assets/logo_cusco.png"
+  },
+  "metadataFields": [
+    { "label": "Proyecto", "source": "proyecto_nombre", "colSpan": 8, "highlight": true },
+    { "label": "Ubicación", "fields": [
+        { "sublabel": "Lugar", "source": "tramo_nombre", "width": "20%" },
+        { "sublabel": "Distrito", "source": "distrito", "width": "15%" },
+        { "sublabel": "Provincia", "source": "provincia", "width": "15%" },
+        { "sublabel": "Dpto", "source": "departamento", "width": "10%" }
+      ]
+    },
+    { "label": "Solicitante", "source": "solicitante", "colSpan": 3 },
+    { "label": "Coordenadas", "fields": [
+        { "sublabel": "E", "source": "longitud", "width": "25%" },
+        { "sublabel": "N", "source": "latitud", "width": "25%" }
+      ]
+    },
+    { "label": "Datos de Muestra", "fields": [
+        { "sublabel": "Exploración", "source": "calicata", "width": "12%" },
+        { "sublabel": "Progresiva", "source": "progresiva_codigo", "width": "15%", "format": "progresiva" },
+        { "sublabel": "Estrato", "source": "estrato_orden", "width": "12%" },
+        { "sublabel": "Lado", "source": "lado", "width": "12%" }
+      ]
+    },
+    { "label": "Profundidad", "source": "profundidad", "colSpan": 3 },
+    { "label": "Fecha Muestreo", "source": "fecha_muestreo", "colSpan": 3, "format": "fecha" }
+  ],
+  "signatures": [
+    { "role": "ESP. ENSAYOS GEOTECNICOS" },
+    { "role": "ESP. SUELOS Y PAVIMENTOS" },
+    { "role": "SUPERVISOR" }
+  ],
+  "pages": [
+    {
+      "layout": {
+        "type": "grid",
+        "columns": [
+          {
+            "width": "35%",
+            "components": [
+              {
+                "type": "section_title",
+                "text": "Datos del Molde"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "datos_molde"
+              },
+              {
+                "type": "section_title",
+                "text": "Datos de Compactación"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "datos_compactacion"
+              },
+              {
+                "type": "section_title",
+                "text": "Cápsula N° (Humedad)"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "capsula_humedad"
+              },
+              {
+                "type": "section_title",
+                "text": "Datos de Absorción"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "datos_absorcion"
+              },
+              {
+                "type": "section_title",
+                "text": "Cte. Dial Expansión"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "expansion"
+              }
+            ]
+          },
+          {
+            "width": "65%",
+            "components": [
+              {
+                "type": "section_title",
+                "text": "Penetración",
+                "align": "center"
+              },
+              {
+                "type": "table_generic",
+                "sourceTable": "penetracion"
+              }
+            ]
+          }
+        ]
+      },
+      "charts": [
+        {
+          "chartConfigKey": "cbr_esfuerzo_penetracion",
+          "title": "Curva de Esfuerzo a la Penetración",
+          "height": "65mm",
+          "position": "after_layout"
+        },
+        {
+          "chartConfigKey": "cbr_densidad_cbr",
+          "title": "Gráfica del C.B.R.",
+          "height": "65mm",
+          "position": "after_layout"
+        }
+      ]
+    }
+  ]
+}
+' WHERE config_key = 'cbr';
+
+UPDATE tipo_ensayo SET config_reporte_pdf = '{
+  "config_key": "proctor",
+  "document": {
+    "title": "Ensayo de Proctor Modificado",
+    "subtitle": "Norma MTC E 115",
+    "orientation": "portrait",
+    "paperSize": "A4"
+  },
+  "header": {
+    "title": "GOBIERNO REGIONAL CUSCO",
+    "subtitle": "Gerencia Regional de Transportes y Comunicaciones Cusco",
+    "subsubtitle": "SUB GERENCIA DE COBERTURA Y COMUNICACIONES",
+    "department": "UNIDAD FUNCIONAL ESTUDIOS Y PROYECTOS",
+    "laboratory": "Laboratorio de Mecánica de Suelos, Materiales y Pavimentos",
+    "slogan": "«Año de la recuperación y consolidación de la economía peruana»",
+    "logo_left_url": "/assets/logo_grtc.png",
+    "logo_right_url": "/assets/logo_cusco.png"
+  },
+  "metadataFields": [
+    { "label": "Proyecto", "source": "proyecto_nombre", "colSpan": 8, "highlight": true },
+    { "label": "Ubicación", "fields": [
+        { "sublabel": "Lugar", "source": "tramo_nombre", "width": "20%" },
+        { "sublabel": "Distrito", "source": "distrito", "width": "15%" },
+        { "sublabel": "Provincia", "source": "provincia", "width": "15%" },
+        { "sublabel": "Dpto", "source": "departamento", "width": "10%" }
+      ]
+    },
+    { "label": "Solicitante", "source": "solicitante", "colSpan": 3 },
+    { "label": "Coordenadas", "fields": [
+        { "sublabel": "E", "source": "longitud", "width": "25%" },
+        { "sublabel": "N", "source": "latitud", "width": "25%" }
+      ]
+    },
+    { "label": "Datos de Muestra", "fields": [
+        { "sublabel": "Exploración", "source": "calicata", "width": "12%" },
+        { "sublabel": "Progresiva", "source": "progresiva_codigo", "width": "15%", "format": "progresiva" },
+        { "sublabel": "Estrato", "source": "estrato_orden", "width": "12%" },
+        { "sublabel": "Lado", "source": "lado", "width": "12%" }
+      ]
+    },
+    { "label": "Profundidad", "source": "profundidad", "colSpan": 3 },
+    { "label": "Fecha Muestreo", "source": "fecha_muestreo", "colSpan": 3, "format": "fecha" }
+  ],
+  "signatures": [
+    { "role": "ESP. ENSAYOS GEOTECNICOS" },
+    { "role": "ESP. SUELOS Y PAVIMENTOS" },
+    { "role": "SUPERVISOR" }
+  ],
+  "pages": [
+    {
+      "layout": {
+        "type": "sequential",
+        "components": [
+          {
+            "type": "section_title",
+            "text": "Ensayo de Proctor Modificado - MTC E 115",
+            "align": "center"
+          },
+          {
+            "type": "grid",
+            "columns": [
+              {
+                "width": "50%",
+                "components": [
+                  {
+                    "type": "table_generic",
+                    "sourceTable": "detalles_molde"
+                  }
+                ]
+              },
+              {
+                "width": "50%",
+                "components": [
+                  {
+                    "type": "table_generic",
+                    "sourceTable": "detalles_ensayo"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "section_title",
+            "text": "Datos de ensayo"
+          },
+          {
+            "type": "table_generic",
+            "sourceTable": "datos_ensayo"
+          },
+          {
+            "type": "section_title",
+            "text": "Cálculo de la humedad"
+          },
+          {
+            "type": "table_generic",
+            "sourceTable": "calculo_humedad"
+          },
+          {
+             "type": "table_pesos",
+             "fields": [
+               { "label": "Máxima Densidad Seca =", "source": "resultados.maxima_densidad_seca", "format": "0.3", "suffix": " g/cm³", "highlight": true },
+               { "label": "Humedad Óptima =", "source": "resultados.humedad_optima", "format": "0.1", "suffix": " %", "highlight": true }
+             ]
+          }
+        ]
+      },
+      "charts": [
+        {
+          "chartConfigKey": "curva_compactacion",
+          "title": "Curva de compactación",
+          "height": "75mm",
+          "position": "after_layout"
+        }
+      ]
+    }
+  ]
+}
+' WHERE config_key = 'proctor';

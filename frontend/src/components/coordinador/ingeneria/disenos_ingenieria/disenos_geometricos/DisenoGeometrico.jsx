@@ -1505,7 +1505,245 @@ function ToolbarButton({ active, disabled, icon, label, onClick, compact }) {
   );
 }
 
-export default function DisenoGeometrico() {
+// Conversión matemática de coordenadas UTM a Latitud/Longitud (WGS84)
+function convertUtmToLatLon(easting, northing, zoneNum, hemisphere = 'S') {
+  const sa = 6378137.0; // WGS84 semi-major axis
+  const sb = 6356752.314245; // WGS84 semi-minor axis
+
+  const e2 = Math.sqrt((sa * sa) - (sb * sb)) / sb;
+  const e2sq = e2 * e2;
+  const c = (sa * sa) / sb;
+
+  const x = easting - 500000.0;
+  let y = northing;
+  if (hemisphere === 'S' || hemisphere === 's') {
+    y -= 10000000.0;
+  }
+
+  const s = ((zoneNum * 6.0) - 186.0);
+  const lambda0 = (s * Math.PI) / 180.0;
+
+  const phi = y / (6367449.146 * 0.9996);
+  const v = (c / Math.sqrt(1.0 + (e2sq * Math.cos(phi) * Math.cos(phi)))) * 0.9996;
+  const a = x / v;
+  const a1 = Math.sin(2.0 * phi);
+  const a2 = a1 * Math.cos(phi) * Math.cos(phi);
+  const j2 = phi + (a1 / 2.0);
+  const j4 = ((3.0 * j2) + a2) / 4.0;
+  const j6 = ((5.0 * j4) + (a2 * Math.cos(phi) * Math.cos(phi))) / 3.0;
+  const alpha = (3.0 / 4.0) * e2sq;
+  const beta = (5.0 / 3.0) * alpha * alpha;
+  const gamma = (35.0 / 27.0) * alpha * alpha * alpha;
+  const bm = 0.9996 * c * (phi - (alpha * j2) + (beta * j4) - (gamma * j6));
+  const b = (y - bm) / v;
+  const epg = (e2sq * Math.cos(phi) * Math.cos(phi)) / 2.0;
+
+  const t = Math.tan(phi) * Math.tan(phi);
+  const eta = e2sq * Math.cos(phi) * Math.cos(phi);
+  const fact1 = (1.0 + (5.0 * epg)) * t;
+
+  const lo = a - ((1.0 + (2.0 * t) + fact1) * a * a * a / 6.0) +
+             ((5.0 + (28.0 * t) + (24.0 * t * t) + (6.0 * fact1)) * a * a * a * a * a / 120.0);
+
+  let la = phi - ((t * (1.0 + eta)) * a * a / 2.0) +
+             ((t * (5.0 + (3.0 * t) + (6.0 * eta) - (9.0 * eta * t) - (4.0 * eta * eta) - (24.0 * eta * eta * t))) * a * a * a * a / 24.0) -
+             ((t * (61.0 + (90.0 * t) + (45.0 * t * t))) * a * a * a * a * a * a / 720.0);
+
+  const latitude = (la * 180.0) / Math.PI;
+  const longitude = ((lo / Math.cos(phi)) * 180.0) / Math.PI + (lambda0 * 180.0) / Math.PI;
+
+  return { latitude, longitude };
+}
+
+// Conversión matemática de Latitud/Longitud (WGS84) a coordenadas UTM
+function convertLatLonToUtm(lat, lon, forceZone = null) {
+  const la = lat * Math.PI / 180;
+  const lo = lon * Math.PI / 180;
+
+  let zoneNum = forceZone;
+  if (!zoneNum) {
+    zoneNum = Math.floor((lon + 180) / 6) + 1;
+  }
+  const lonOrigin = (zoneNum - 1) * 6 - 180 + 3;
+  const loOrigin = lonOrigin * Math.PI / 180;
+
+  const a = 6378137.0;
+  const eccSquared = 0.00669437999013;
+  const k0 = 0.9996;
+
+  const ePrimeSquared = eccSquared / (1 - eccSquared);
+
+  const N = a / Math.sqrt(1 - eccSquared * Math.sin(la) * Math.sin(la));
+  const T = Math.tan(la) * Math.tan(la);
+  const C = ePrimeSquared * Math.cos(la) * Math.cos(la);
+  const A = Math.cos(la) * (lo - loOrigin);
+
+  const M = a * (
+    (1 - eccSquared / 4 - 3 * eccSquared * eccSquared / 64 - 5 * eccSquared * eccSquared / 256) * la
+    - (3 * eccSquared / 8 + 3 * eccSquared * eccSquared / 32 + 45 * eccSquared * eccSquared * eccSquared / 1024) * Math.sin(2 * la)
+    + (15 * eccSquared * eccSquared / 256 + 45 * eccSquared * eccSquared / 1024) * Math.sin(4 * la)
+    - (35 * eccSquared * eccSquared * eccSquared / 3072) * Math.sin(6 * la)
+  );
+
+  let utmEasting = k0 * N * (A + (1 - T + C) * A * A * A / 6 + (5 - 18 * T + T * T + 72 * C - 58 * ePrimeSquared) * A * A * A * A * A / 120) + 500000.0;
+  let utmNorthing = k0 * (M + N * Math.tan(la) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24 + (61 - 58 * T + T * T + 600 * C - 330 * ePrimeSquared) * A * A * A * A * A * A / 720));
+
+  if (lat < 0) {
+    utmNorthing += 10000000.0;
+  }
+
+  const hemisphere = lat < 0 ? 'S' : 'N';
+
+  return {
+    easting: parseFloat(utmEasting.toFixed(3)),
+    northing: parseFloat(utmNorthing.toFixed(3)),
+    zone: zoneNum,
+    hemisphere
+  };
+}
+
+// Calcula el rumbo / azimut entre dos coordenadas UTM y lo devuelve formateado
+function calculateUtmBearingAndDistance(x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  if (distance === 0) {
+    return { distance: 0, azimuth: 0, bearing: 'Mismo Punto', dms: 'Mismo Punto' };
+  }
+
+  let rad = Math.atan2(dx, dy);
+  let azimuth = rad * 180 / Math.PI;
+  if (azimuth < 0) {
+    azimuth += 360;
+  }
+
+  const absAz = Math.abs(azimuth);
+  const degrees = Math.floor(absAz);
+  const minRemainder = (absAz - degrees) * 60;
+  const minutes = Math.floor(minRemainder);
+  const seconds = Math.round((minRemainder - minutes) * 60);
+
+  const formattedDms = `${degrees}° ${minutes}' ${seconds}"`;
+
+  let prefix = 'N';
+  let suffix = 'E';
+  let angle = azimuth;
+
+  if (azimuth > 90 && azimuth <= 180) {
+    prefix = 'S';
+    suffix = 'E';
+    angle = 180 - azimuth;
+  } else if (azimuth > 180 && azimuth <= 270) {
+    prefix = 'S';
+    suffix = 'W';
+    angle = azimuth - 180;
+  } else if (azimuth > 270 && azimuth < 360) {
+    prefix = 'N';
+    suffix = 'W';
+    angle = 360 - azimuth;
+  }
+
+  const rAbs = Math.abs(angle);
+  const rDeg = Math.floor(rAbs);
+  const rMinRemainder = (rAbs - rDeg) * 60;
+  const rMin = Math.floor(rMinRemainder);
+  const rSec = Math.round((rMinRemainder - rMin) * 60);
+
+  const formattedBearing = `${prefix} ${rDeg}° ${rMin}' ${rSec}" ${suffix}`;
+
+  return {
+    distance: parseFloat(distance.toFixed(2)),
+    azimuth: parseFloat(azimuth.toFixed(2)),
+    bearing: formattedBearing,
+    dms: formattedDms
+  };
+}
+
+// Procesa un feature (geometría) y calcula los datos técnicos del cuadro de construcción
+function getTechnicalTableData(feature, zone, hemisphere) {
+  if (!feature || !feature.geometry) return [];
+
+  const type = feature.geometry.type;
+  let coords = [];
+
+  if (type === 'Point') {
+    coords = [feature.geometry.coordinates];
+  } else if (type === 'LineString') {
+    coords = feature.geometry.coordinates;
+  } else if (type === 'Polygon') {
+    coords = feature.geometry.coordinates[0];
+  } else {
+    return [];
+  }
+
+  const utmPoints = coords.map((c, index) => {
+    const lon = c[0];
+    const lat = c[1];
+    const alt = c[2] !== undefined ? c[2] : 0;
+
+    const utm = convertLatLonToUtm(lat, lon, zone);
+    return {
+      name: `V${index + 1}`,
+      x: utm.easting,
+      y: utm.northing,
+      z: alt,
+      lat,
+      lon
+    };
+  });
+
+  const rows = [];
+  const len = utmPoints.length;
+
+  for (let i = 0; i < len; i++) {
+    const current = utmPoints[i];
+    let next = null;
+
+    if (type === 'Polygon') {
+      if (i === len - 1) {
+        continue;
+      }
+      const nextIndex = i + 1;
+      next = utmPoints[nextIndex];
+    } else if (type === 'LineString') {
+      if (i < len - 1) {
+        next = utmPoints[i + 1];
+      }
+    }
+
+    let segmentDist = '-';
+    let bearingStr = '-';
+    let dmsStr = '-';
+    let sideName = '-';
+
+    if (next) {
+      const calculation = calculateUtmBearingAndDistance(current.x, current.y, next.x, next.y);
+      segmentDist = `${calculation.distance.toFixed(2)} m`;
+      bearingStr = calculation.bearing;
+      dmsStr = calculation.dms;
+      sideName = `${current.name} - ${next.name}`;
+    }
+
+    rows.push({
+      vertex: current.name,
+      side: sideName,
+      distance: segmentDist,
+      bearing: bearingStr,
+      dms: dmsStr,
+      x: current.x,
+      y: current.y,
+      z: current.z,
+      rawX: current.x,
+      rawY: current.y,
+      rawZ: current.z
+    });
+  }
+
+  return rows;
+}
+
+export default function DisenoGeometrico({ onSwitchMode }) {
   const { setPageTitle } = usePageTitle();
   const { selectedProjectId: projectId, selectedProjectName, user } = useAuth();
 
@@ -1529,6 +1767,19 @@ export default function DisenoGeometrico() {
     areaHa: 0,
     perimeterKm: 0
   });
+
+  // Estados para el cargador de coordenadas UTM
+  const [utmZoneNum, setUtmZoneNum] = useState(18);
+  const [utmHemisphere, setUtmHemisphere] = useState('S');
+  const [utmGeomType, setUtmGeomType] = useState('point');
+  const [utmInputText, setUtmInputText] = useState('');
+  const [utmError, setUtmError] = useState('');
+  const [utmSuccess, setUtmSuccess] = useState('');
+
+  // Estados para el Cuadro de Datos Técnicos UTM
+  const [showTechnicalTable, setShowTechnicalTable] = useState(false);
+  const [technicalTableZone, setTechnicalTableZone] = useState(18);
+  const [technicalTableHemisphere, setTechnicalTableHemisphere] = useState('S');
   const [mapZoom, setMapZoom] = useState(6);
   const [manualColorAttributeInput, setManualColorAttributeInput] = useState('');
   const [baseMapKey, setBaseMapKey] = useState('street');
@@ -2371,6 +2622,178 @@ export default function DisenoGeometrico() {
     }
   };
 
+  const handleLoadUtmCoordinates = (event) => {
+    if (event) event.preventDefault();
+    setUtmError('');
+    setUtmSuccess('');
+
+    if (!projectId) {
+      setUtmError('Selecciona un proyecto primero.');
+      return;
+    }
+    if (!selectedLayer) {
+      setUtmError('Selecciona una capa activa primero.');
+      return;
+    }
+    if (!canManage) {
+      setUtmError('No tienes permisos de gestión para esta capa.');
+      return;
+    }
+
+    if (!utmInputText.trim()) {
+      setUtmError('Ingresa coordenadas UTM válidas (una por fila, ej: Este Norte).');
+      return;
+    }
+
+    const lines = utmInputText.split('\n');
+    const parsedCoordinates = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      // Dividir por espacios, comas, tabulaciones o punto y coma
+      const tokens = line.split(/[\s,;\t]+/).filter(Boolean);
+      if (tokens.length < 2) {
+        continue;
+      }
+
+      const easting = parseFloat(tokens[0]);
+      const northing = parseFloat(tokens[1]);
+      const altitude = tokens[2] ? parseFloat(tokens[2]) : null;
+
+      if (isNaN(easting) || isNaN(northing)) {
+        setUtmError(`Error en la fila ${i + 1}: coordenadas no numéricas.`);
+        return;
+      }
+
+      try {
+        const { latitude, longitude } = convertUtmToLatLon(easting, northing, Number(utmZoneNum), utmHemisphere);
+        if (isNaN(latitude) || isNaN(longitude)) {
+          setUtmError(`Error en la fila ${i + 1}: error de conversión matemática.`);
+          return;
+        }
+        parsedCoordinates.push({
+          lat: latitude,
+          lng: longitude,
+          alt: altitude,
+          easting,
+          northing
+        });
+      } catch (err) {
+        setUtmError(`Error en la fila ${i + 1}: ${err.message}`);
+        return;
+      }
+    }
+
+    if (parsedCoordinates.length === 0) {
+      setUtmError('No se encontraron coordenadas UTM legibles. Asegúrate de ingresar al menos un par.');
+      return;
+    }
+
+    // Validar según el tipo de geometría
+    if (utmGeomType === 'line' && parsedCoordinates.length < 2) {
+      setUtmError('Para crear una Línea se necesitan al menos 2 pares de coordenadas.');
+      return;
+    }
+    if (utmGeomType === 'polygon' && parsedCoordinates.length < 3) {
+      setUtmError('Para crear un Polígono se necesitan al menos 3 pares de coordenadas.');
+      return;
+    }
+
+    const nextCollection = cloneGeojson(activeFeatureCollection);
+    const newFeatures = [];
+
+    if (utmGeomType === 'point') {
+      // Crear un punto por cada coordenada ingresada
+      parsedCoordinates.forEach((coord, index) => {
+        const pointFeature = {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [coord.lng, coord.lat]
+          },
+          properties: {
+            dg_feature_id: createFeatureId(),
+            dg_type: 'point',
+            dg_created_at: new Date().toISOString(),
+            dg_name: `Punto UTM ${nextCollection.features.length + index + 1}`,
+            visible: true,
+            este: coord.easting.toFixed(2),
+            norte: coord.northing.toFixed(2),
+            altitud: coord.alt !== null ? coord.alt.toFixed(2) : ''
+          }
+        };
+        newFeatures.push(normalizeFeature(pointFeature, nextCollection.features.length + index));
+      });
+    } else if (utmGeomType === 'line') {
+      const lineFeature = {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: parsedCoordinates.map(c => [c.lng, c.lat])
+        },
+        properties: {
+          dg_feature_id: createFeatureId(),
+          dg_type: 'line',
+          dg_created_at: new Date().toISOString(),
+          dg_name: `Línea UTM ${nextCollection.features.length + 1}`,
+          visible: true,
+          vertices_count: parsedCoordinates.length
+        }
+      };
+      // Agregar metadatos de los vértices como propiedades informativas adicionales
+      parsedCoordinates.forEach((c, idx) => {
+        lineFeature.properties[`v_${idx + 1}_este`] = c.easting.toFixed(2);
+        lineFeature.properties[`v_${idx + 1}_norte`] = c.northing.toFixed(2);
+      });
+      newFeatures.push(normalizeFeature(lineFeature, nextCollection.features.length));
+    } else if (utmGeomType === 'polygon') {
+      // Asegurarse de cerrar el anillo
+      const ringCoords = parsedCoordinates.map(c => [c.lng, c.lat]);
+      const first = ringCoords[0];
+      const last = ringCoords[ringCoords.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) {
+        ringCoords.push([first[0], first[1]]);
+      }
+
+      const polygonFeature = {
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [ringCoords]
+        },
+        properties: {
+          dg_feature_id: createFeatureId(),
+          dg_type: 'polygon',
+          dg_created_at: new Date().toISOString(),
+          dg_name: `Polígono UTM ${nextCollection.features.length + 1}`,
+          visible: true,
+          vertices_count: parsedCoordinates.length
+        }
+      };
+      newFeatures.push(normalizeFeature(polygonFeature, nextCollection.features.length));
+    }
+
+    nextCollection.features.push(...newFeatures);
+
+    // Guardar cambios
+    commitActiveCollection(nextCollection);
+
+    // Ajustar el mapa a los nuevos elementos
+    const bounds = getLayerBounds({
+      type: 'FeatureCollection',
+      features: newFeatures
+    });
+    if (bounds) {
+      fitBounds(bounds);
+    }
+
+    // Resetear formulario y reportar éxito
+    setUtmInputText('');
+    setUtmSuccess(`¡Cargada(s) con éxito ${newFeatures.length} geometría(s)!`);
+  };
+
   const handleUpload = async (event) => {
     event.preventDefault();
 
@@ -3154,10 +3577,36 @@ export default function DisenoGeometrico() {
           <h1>Diseño Geometrico</h1>
           <p>Editor geoespacial por capas con guardado, autosave y exportacion de la capa activa.</p>
         </div>
-        <div className="dg-project-pill">
-          <span>Proyecto</span>
-          <strong>{selectedProjectName || 'Sin proyecto seleccionado'}</strong>
-          <span>{hasProjectReference ? 'Trazado de referencia cargado' : 'Sin trazado de referencia'}</span>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div className="dg-project-pill">
+            <span>Proyecto</span>
+            <strong>{selectedProjectName || 'Sin proyecto seleccionado'}</strong>
+            <span>{hasProjectReference ? 'Trazado de referencia cargado' : 'Sin trazado de referencia'}</span>
+          </div>
+          {onSwitchMode && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                type="button" 
+                className="dg-secondary-btn" 
+                onClick={() => onSwitchMode('external')}
+                title="Cambiar a la vista de consulta externa"
+                style={{ height: 'fit-content', padding: '10px 14px', borderRadius: '13px' }}
+              >
+                <i className="fas fa-earth-americas" style={{ marginRight: '6px' }}></i>
+                <span>Vista externa</span>
+              </button>
+              <button 
+                type="button" 
+                className="dg-secondary-btn" 
+                onClick={() => onSwitchMode(null)}
+                title="Salir del editor e ir al selector de vistas"
+                style={{ height: 'fit-content', padding: '10px 14px', borderRadius: '13px' }}
+              >
+                <i className="fas fa-right-from-bracket" style={{ marginRight: '6px' }}></i>
+                <span>Cambiar vista</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -3304,6 +3753,99 @@ export default function DisenoGeometrico() {
               <button type="submit" disabled={!projectId || !canManage || isUploading}>
                 <i className="fas fa-upload"></i>
                 <span>{isUploading && uploadProgress ? `Subiendo ${uploadProgress.percentage}%` : 'Publicar capa'}</span>
+              </button>
+            </form>
+          </section>
+
+          <section className="dg-panel">
+            <div className="dg-panel-head">
+              <div>
+                <h2>Cargar por coordenadas UTM</h2>
+                <p>Ingresa coordenadas Este y Norte precisas para la capa activa.</p>
+              </div>
+            </div>
+
+            <form className="dg-upload-form" onSubmit={handleLoadUtmCoordinates}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                <label>
+                  Zona UTM
+                  <select 
+                    value={utmZoneNum} 
+                    onChange={(event) => setUtmZoneNum(Number(event.target.value))} 
+                    disabled={!projectId || !canManage}
+                    className="dg-utm-select"
+                  >
+                    <option value={17}>17</option>
+                    <option value={18}>18</option>
+                    <option value={19}>19</option>
+                  </select>
+                </label>
+
+                <label>
+                  Hemisferio
+                  <select 
+                    value={utmHemisphere} 
+                    onChange={(event) => setUtmHemisphere(event.target.value)} 
+                    disabled={!projectId || !canManage}
+                    className="dg-utm-select"
+                  >
+                    <option value="S">Sur (S)</option>
+                    <option value="N">Norte (N)</option>
+                  </select>
+                </label>
+              </div>
+
+              <label style={{ marginTop: '8px' }}>
+                Tipo de geometría
+                <select 
+                  value={utmGeomType} 
+                  onChange={(event) => setUtmGeomType(event.target.value)} 
+                  disabled={!projectId || !canManage}
+                  className="dg-utm-select"
+                >
+                  <option value="point">Punto (Vértice individual)</option>
+                  <option value="line">Línea (Polilínea continua)</option>
+                  <option value="polygon">Polígono (Anillo cerrado)</option>
+                </select>
+              </label>
+
+              <label style={{ marginTop: '8px' }}>
+                Coordenadas (Este Norte [Altitud])
+                <textarea
+                  rows={4}
+                  value={utmInputText}
+                  onChange={(event) => setUtmInputText(event.target.value)}
+                  placeholder={`Ej: \n284512.42 8642109.15\n284530.50 8642125.80\n284550.00 8642140.00`}
+                  disabled={!projectId || !canManage}
+                  style={{
+                    width: '100%',
+                    padding: '8px 11px',
+                    borderRadius: '11px',
+                    border: '1px solid rgba(203, 213, 225, 0.95)',
+                    fontSize: '0.72rem',
+                    fontFamily: 'monospace',
+                    resize: 'vertical'
+                  }}
+                />
+              </label>
+
+              {utmError && (
+                <div style={{ color: 'var(--dg-danger)', fontSize: '0.7rem', fontWeight: 600, marginTop: '4px' }}>
+                  <i className="fas fa-exclamation-triangle" style={{ marginRight: '4px' }}></i>
+                  {utmError}
+                </div>
+              )}
+
+              {utmSuccess && (
+                <div style={{ color: 'var(--dg-primary-deep)', fontSize: '0.7rem', fontWeight: 600, marginTop: '4px' }}>
+                  <i className="fas fa-check-circle" style={{ marginRight: '4px' }}></i>
+                  {utmSuccess}
+                </div>
+              )}
+
+              <button type="submit" disabled={!projectId || !canManage || !selectedLayer}>
+                <i className="fas fa-drafting-compass"></i>
+                <span>Generar geometría</span>
               </button>
             </form>
           </section>
@@ -4005,6 +4547,40 @@ export default function DisenoGeometrico() {
                     <div className="dg-empty-box">Esta geometria no trae atributos adicionales del shape o KML.</div>
                   )}
                 </div>
+
+                <button
+                  type="button"
+                  className="dg-primary-btn"
+                  onClick={() => {
+                    // Autodetectar zona UTM tentativa a partir de las coordenadas del primer vértice
+                    try {
+                      if (selectedFeature && selectedFeature.geometry) {
+                        let coords = [];
+                        if (selectedFeature.geometry.type === 'Point') {
+                          coords = selectedFeature.geometry.coordinates;
+                        } else if (selectedFeature.geometry.type === 'LineString') {
+                          coords = selectedFeature.geometry.coordinates[0];
+                        } else if (selectedFeature.geometry.type === 'Polygon') {
+                          coords = selectedFeature.geometry.coordinates[0][0];
+                        }
+                        if (coords && coords.length >= 2) {
+                          const lon = coords[0];
+                          const lat = coords[1];
+                          const autoZone = Math.floor((lon + 180) / 6) + 1;
+                          setTechnicalTableZone(autoZone);
+                          setTechnicalTableHemisphere(lat < 0 ? 'S' : 'N');
+                        }
+                      }
+                    } catch (e) {
+                      console.error("Error autodetectando zona para cuadro técnico", e);
+                    }
+                    setShowTechnicalTable(true);
+                  }}
+                  style={{ marginTop: '16px', width: '100%' }}
+                >
+                  <i className="fas fa-table" style={{ marginRight: '6px' }}></i>
+                  <span>Generar Cuadro Técnico</span>
+                </button>
               </div>
             ) : (
               <div className="dg-empty-box">No hay una geometria seleccionada.</div>
@@ -4154,6 +4730,169 @@ export default function DisenoGeometrico() {
           </section>
         </aside>
       </div>
+
+      {showTechnicalTable && selectedFeature && (
+        <div className="dg-view-selection-overlay" style={{ zIndex: 10000, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)' }}>
+          <div className="dg-view-selection-card" style={{ maxWidth: '950px', width: '90%', padding: '24px', overflowY: 'auto', maxHeight: '90vh', background: '#fff', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+              <div>
+                <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600, color: 'var(--dg-primary)', letterSpacing: '0.05em' }}>CUADRO DE CONSTRUCCIÓN TOPOGRÁFICO</span>
+                <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 700, color: '#0f172a' }}>
+                  {selectedFeature.properties?.dg_name || 'Geometría Sin Nombre'} ({getFeatureLabel(selectedFeature)})
+                </h2>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowTechnicalTable(false)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <i className="fas fa-times" style={{ fontSize: '1rem', color: '#64748b' }}></i>
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+              <div>
+                <span style={{ fontSize: '0.72rem', display: 'block', color: '#64748b', textTransform: 'uppercase', fontWeight: 500 }}>Perímetro total</span>
+                <strong style={{ fontSize: '1.15rem', color: '#0f172a', fontWeight: 700 }}>
+                  {selectedFeatureType === 'line'
+                    ? (selectedFeatureMetrics.lengthKm ? `${(selectedFeatureMetrics.lengthKm * 1000).toFixed(2)} m` : '-')
+                    : (selectedFeatureMetrics.perimeterKm ? `${(selectedFeatureMetrics.perimeterKm * 1000).toFixed(2)} m` : '-')}
+                </strong>
+              </div>
+              {selectedFeatureType === 'polygon' && (
+                <div>
+                  <span style={{ fontSize: '0.72rem', display: 'block', color: '#64748b', textTransform: 'uppercase', fontWeight: 500 }}>Área total</span>
+                  <strong style={{ fontSize: '1.15rem', color: '#0f172a', fontWeight: 700 }}>
+                    {selectedFeatureMetrics.areaHa 
+                      ? `${selectedFeatureMetrics.areaHa.toFixed(4)} ha (${(selectedFeatureMetrics.areaHa * 10000).toFixed(2)} m²)` 
+                      : '-'}
+                  </strong>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <label style={{ flex: 1, fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}>
+                  Zona UTM
+                  <select 
+                    value={technicalTableZone} 
+                    onChange={(e) => setTechnicalTableZone(Number(e.target.value))}
+                    className="dg-utm-select"
+                    style={{ minHeight: '34px', width: '100%', marginTop: '4px', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '2px 8px' }}
+                  >
+                    <option value={17}>17</option>
+                    <option value={18}>18</option>
+                    <option value={19}>19</option>
+                  </select>
+                </label>
+                <label style={{ flex: 1, fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}>
+                  Hemisferio
+                  <select 
+                    value={technicalTableHemisphere} 
+                    onChange={(e) => setTechnicalTableHemisphere(e.target.value)}
+                    className="dg-utm-select"
+                    style={{ minHeight: '34px', width: '100%', marginTop: '4px', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '2px 8px' }}
+                  >
+                    <option value="S">Sur (S)</option>
+                    <option value="N">Norte (N)</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="dg-feature-table-container" style={{ overflowX: 'auto', maxHeight: '42vh', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Vértice</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Lado</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Distancia</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Este (X)</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Norte (Y)</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Elevación (Z)</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Rumbo / Azimut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getTechnicalTableData(selectedFeature, technicalTableZone, technicalTableHemisphere).map((row, index) => (
+                    <tr key={index} style={{ borderBottom: '1px solid #e2e8f0', background: index % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                      <td style={{ padding: '12px 16px', fontWeight: 600, color: '#0f172a' }}>{row.vertex}</td>
+                      <td style={{ padding: '12px 16px', color: '#64748b' }}>{row.side}</td>
+                      <td style={{ padding: '12px 16px', fontWeight: 600, color: '#0f172a' }}>{row.distance}</td>
+                      <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#334155' }}>{row.x.toFixed(3)}</td>
+                      <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#334155' }}>{row.y.toFixed(3)}</td>
+                      <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#334155' }}>{row.z.toFixed(2)} m</td>
+                      <td style={{ padding: '12px 16px', color: 'var(--dg-primary)', fontWeight: 600 }}>{row.bearing}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
+              <button 
+                type="button" 
+                className="dg-secondary-btn"
+                onClick={() => {
+                  const rows = getTechnicalTableData(selectedFeature, technicalTableZone, technicalTableHemisphere);
+                  let text = "Vertice\tLado\tDistancia\tEste (X)\tNorte (Y)\tElevacion (Z)\tRumbo\n";
+                  rows.forEach(r => {
+                    text += `${r.vertex}\t${r.side}\t${r.distance}\t${r.rawX.toFixed(3)}\t${r.rawY.toFixed(3)}\t${r.rawZ.toFixed(2)}\t${r.bearing}\n`;
+                  });
+                  navigator.clipboard.writeText(text);
+                  alert("Cuadro técnico copiado al portapapeles en formato tabulado.");
+                }}
+                style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem' }}
+              >
+                <i className="fas fa-copy" style={{ marginRight: '6px' }}></i>
+                Copiar Tabla
+              </button>
+              
+              <button 
+                type="button" 
+                className="dg-secondary-btn"
+                onClick={() => {
+                  const rows = getTechnicalTableData(selectedFeature, technicalTableZone, technicalTableHemisphere);
+                  let csvContent = "data:text/csv;charset=utf-8,";
+                  csvContent += "Vertice,Lado,Distancia,Este_X,Norte_Y,Elevacion_Z,Rumbo\n";
+                  rows.forEach(r => {
+                    csvContent += `${r.vertex},${r.side},${r.distance},${r.rawX.toFixed(3)},${r.rawY.toFixed(3)},${r.rawZ.toFixed(2)},${r.bearing}\n`;
+                  });
+                  const encodedUri = encodeURI(csvContent);
+                  const link = document.createElement("a");
+                  link.setAttribute("href", encodedUri);
+                  link.setAttribute("download", `Cuadro_Tecnico_${selectedFeature.properties?.dg_name || 'geometria'}.csv`);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '0.85rem' }}
+              >
+                <i className="fas fa-file-csv" style={{ marginRight: '6px' }}></i>
+                Exportar CSV
+              </button>
+
+              <button 
+                type="button" 
+                className="dg-primary-btn" 
+                onClick={() => setShowTechnicalTable(false)}
+                style={{ padding: '8px 20px', borderRadius: '8px', fontSize: '0.85rem' }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

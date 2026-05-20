@@ -1461,14 +1461,31 @@ const VisorGraficos = ({
   scope = "single",
   groupEnsayos = [],
   calculationConfig = null,
+  targetChartId = null,
+  isPrintMode = false,
 }) => {
   const chartRefs = useRef({});
-  const getChartHeight = (chartConfig = {}) =>
-    Math.max(Number(chartConfig?.height) || 0, 480);
+  const getChartHeight = (chartConfig = {}) => {
+    if (isPrintMode) {
+      // En modo impresión, usamos la altura definida en el config (ej. 60mm) o un valor compacto por defecto
+      const rawHeight = chartConfig?.height;
+      if (typeof rawHeight === 'string' && rawHeight.endsWith('mm')) {
+        return rawHeight; // Permitir que pase la altura en milímetros directamente para CSS
+      }
+      return Number(rawHeight) ? `${Number(rawHeight)}px` : "220px";
+    }
+    return Math.max(Number(chartConfig?.height) || 0, 480);
+  };
   const charts = useMemo(() => {
     const normalized = normalizeChartsConfig(graficosConfig);
-    return scope === "group" ? normalized.group : normalized.single;
-  }, [graficosConfig, scope]);
+    const selectedCharts = scope === "group" ? normalized.group : normalized.single;
+    if (targetChartId) {
+      return selectedCharts.filter(
+        (chart) => chart?.id === targetChartId || chart?.chartConfigKey === targetChartId
+      );
+    }
+    return selectedCharts;
+  }, [graficosConfig, scope, targetChartId]);
 
   const mergedData = useMemo(
     () => deepMerge(formData || {}, resultados || {}),
@@ -1565,6 +1582,40 @@ const VisorGraficos = ({
         {scope === "group"
           ? "No hay puntos suficientes para construir la tendencia de este tipo."
           : "No hay puntos suficientes para construir los gráficos de este ensayo."}
+      </div>
+    );
+  }
+
+  if (isPrintMode) {
+    return (
+      <div className="visor-graficos-print-wrapper" style={{ width: "100%", padding: 0, margin: 0 }}>
+        {preparedCharts.map(({ chartConfig }, index) => {
+          const chartId = chartConfig.id || `grafico-${index}`;
+          const height = getChartHeight(chartConfig);
+          return (
+            <div 
+              key={chartId} 
+              className="chart-container-print" 
+              style={{ 
+                width: "100%", 
+                height: height, 
+                position: "relative",
+                padding: "2px",
+                border: "1px solid #cbd5e1",
+                borderRadius: "4px",
+                backgroundColor: "#ffffff",
+                boxSizing: "border-box"
+              }}
+            >
+              <canvas
+                ref={(element) => {
+                  chartRefs.current[chartId] = element;
+                }}
+                style={{ width: "100%", height: "100%" }}
+              />
+            </div>
+          );
+        })}
       </div>
     );
   }

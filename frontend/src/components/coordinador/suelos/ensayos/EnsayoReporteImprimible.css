@@ -2,11 +2,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --cusco-blue-dark: #0f1e40;
-  --cusco-blue-medium: #1e3a8a;
-  --cusco-blue-light: #eff6ff;
-  --cusco-gray-dark: #334155;
-  --cusco-gray-light: #cbd5e1;
+  --cusco-blue-dark: #000000; /* Negro para bordes y textos principales */
+  --cusco-blue-medium: #444444; /* Plomo oscuro para banners de sección */
+  --cusco-blue-light: #cccccc; /* Plomo para cabeceras de tabla y sombreados */
+  --cusco-gray-dark: #1e293b;
+  --cusco-gray-light: #94a3b8;
   --cusco-accent: #dc2626;
   --sucs-gold: #f59e0b;
 }
@@ -14,8 +14,9 @@
 /* Contenedor de pantalla en modo navegador */
 .reporte-a4-page-container {
   font-family: 'Outfit', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-  background-color: #f1f5f9;
-  min-height: 100vh;
+  background-color: #94a3b8; /* Fondo plomo solicitado */
+  height: 100vh;
+  overflow-y: auto; /* Slider para la pantalla */
   padding: 40px 20px;
   display: flex;
   flex-direction: column;
@@ -96,16 +97,18 @@
 .reporte-a4-sheet {
   background: white;
   width: 210mm;
-  height: 297mm;
+  min-height: 297mm;
+  height: auto;
   padding: 8mm 8mm 6mm 8mm; /* Ajustes de márgenes milimétricos */
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
   border-radius: 4px;
   position: relative;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  margin-bottom: 40px; /* Espaciado entre hojas en pantalla */
 }
 
 /* ENCABEZADO OFICIAL DE CUSCO GRTC */
@@ -568,21 +571,33 @@
   margin-bottom: 2px;
 }
 
-/* NORMAS DE IMPRESIÓN FISICA */
+/* LOGOS */
+.svg-logo {
+  max-width: 60px;
+  max-height: 60px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* ESPECIFICACIONES DE IMPRESIÓN FÍSICA */
 @media print {
   body {
-    background: white !important;
-    margin: 0 !important;
-    padding: 0 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    background-color: white !important;
+    overflow: visible !important;
   }
-  
+
   .reporte-a4-page-container {
-    background: transparent !important;
     padding: 0 !important;
     margin: 0 !important;
-    min-height: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+    height: auto !important;
     display: block !important;
   }
 
@@ -591,11 +606,12 @@
     margin: 0 !important;
     padding: 0mm !important; /* Aprovechamiento de margen físico de impresora */
     width: 210mm !important;
-    height: 297mm !important;
+    height: auto !important;
+    min-height: 297mm !important;
     border: none !important;
     border-radius: 0 !important;
     page-break-inside: avoid !important;
-    page-break-after: avoid !important;
+    page-break-after: always !important; /* Fuerza una nueva hoja al imprimir múltiples páginas */
     page-break-before: avoid !important;
   }
 

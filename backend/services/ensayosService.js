@@ -1489,7 +1489,8 @@ const getFormularioConfig = async (tipoEnsayoId) => {
                 config_calculos,
                 config_graficos,
                 config_export_excel,
-                config_importacion
+                config_importacion,
+                config_reporte_pdf
             FROM tipo_ensayo
             WHERE id = $1
         `, [tipoEnsayoId]);
@@ -1506,7 +1507,8 @@ const getFormularioConfig = async (tipoEnsayoId) => {
             calculationConfig: row.config_calculos,
             graficosConfig: row.config_graficos,
             exportConfig: row.config_export_excel,
-            importConfig: row.config_importacion
+            importConfig: row.config_importacion,
+            reportConfig: row.config_reporte_pdf
         };
     } catch (error) {
         console.error(`[ERROR] getFormularioConfig for ${tipoEnsayoId}:`, error);
@@ -1623,6 +1625,7 @@ const getEnsayoDetailsById = async (id) => {
                 te.config_tabla,
                 te.config_calculos,
                 te.config_graficos,
+                te.config_reporte_pdf,
                 est.parent_type,
                 est.parent_id,
                 est.orden as estrato_orden,
@@ -1670,7 +1673,8 @@ const getEnsayoDetailsById = async (id) => {
             proyecto_id: hydratedRow.proyecto_id_progresiva || hydratedRow.proyecto_id_cantera || hydratedRow.proyecto_id || null,
             proyecto_nombre: hydratedRow.proyecto_nombre_progresiva || hydratedRow.proyecto_nombre_cantera || null,
             tramo_id: hydratedRow.tramo_id || hydratedRow.progresiva_referencia_id || null,
-            tramo_nombre: hydratedRow.tramo_nombre || null
+            tramo_nombre: hydratedRow.tramo_nombre || null,
+            config_reporte_pdf: hydratedRow.config_reporte_pdf
         };
     } catch (error) {
         console.error(`[ERROR] getEnsayoDetailsById ${id}:`, error);
