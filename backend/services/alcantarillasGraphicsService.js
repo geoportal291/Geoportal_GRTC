@@ -2,7 +2,7 @@ const db = require('../conexion');
 const ExcelJS = require('exceljs');
 const AdmZip = require('adm-zip');
 const path = require('path');
-const { put, del } = require('@vercel/blob');
+const { uploadFileToNAS, deleteFileFromNAS } = require('./nasStorageService');
 const axios = require('axios');
 const fs = require('fs');
 const fsp = require('fs').promises;
@@ -129,20 +129,20 @@ const processGraphicsJob = async (jobId) => {
             const entregableVal = entregableCell ? (entregableCell.value ? String(entregableCell.value).trim() : null) : null;
             const entregableNorm = normalizeEntregable(entregableVal);
 
-            const filename = `tramoinv/excelft/${projectId}/${entregableNorm}/${currentImageIndex}.${extension}`;
+            const filename = `${currentImageIndex}.${extension}`;
 
-            const blob = await put(filename, buffer, {
-                access: 'public',
-                allowOverwrite: true,
-                token: process.env.BLOB_READ_WRITE_TOKEN
-            });
+            const url = await uploadFileToNAS(
+                buffer,
+                `tramoinv/excelft/${projectId}/${entregableNorm}`,
+                filename
+            );
 
             await db.query(
                 'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url, entregable) VALUES ($1, $2, $3, $4)',
-                [projectId, String(currentImageIndex), blob.url, entregableVal]
+                [projectId, String(currentImageIndex), url, entregableVal]
             );
 
-            extractedImages.push({ index: currentImageIndex, url: blob.url });
+            extractedImages.push({ index: currentImageIndex, url: url });
             usefulImageCounter++;
         }
 
@@ -180,7 +180,13 @@ const deleteGraphicImage = async (imageId, projectId) => {
         }
         const imageUrl = result.rows[0].image_url;
 
-        await del(imageUrl, { token: process.env.BLOB_READ_WRITE_TOKEN });
+        if (imageUrl.includes('files.dafe.it.com')) {
+            const urlPath = new URL(imageUrl).pathname;
+            const filePath = decodeURIComponent(urlPath.replace(/^\/geoportal\//, ''));
+            await deleteFileFromNAS(filePath);
+        } else if (imageUrl.includes('vercel-storage.com')) {
+            console.log(`Bypassing deletion of legacy Vercel blob: ${imageUrl}`);
+        }
 
         await db.query(
             'DELETE FROM alcantarillas_graficos WHERE id = $1 AND proyecto_id = $2',
@@ -203,7 +209,11 @@ const deleteAllGraphicImages = async (projectId) => {
 
         for (const row of result.rows) {
             try {
-                await del(row.image_url, { token: process.env.BLOB_READ_WRITE_TOKEN });
+                if (row.image_url.includes('files.dafe.it.com')) {
+                    const urlPath = new URL(row.image_url).pathname;
+                    const filePath = decodeURIComponent(urlPath.replace(/^\/geoportal\//, ''));
+                    await deleteFileFromNAS(filePath);
+                }
             } catch (delError) {
                 console.error(`No se pudo eliminar el blob ${row.image_url}, puede que ya no exista. Continuando...`, delError);
             }
@@ -238,7 +248,11 @@ const deleteGraphicImagesByFolder = async (projectId, entregable) => {
 
         for (const row of result.rows) {
             try {
-                await del(row.image_url, { token: process.env.BLOB_READ_WRITE_TOKEN });
+                if (row.image_url.includes('files.dafe.it.com')) {
+                    const urlPath = new URL(row.image_url).pathname;
+                    const filePath = decodeURIComponent(urlPath.replace(/^\/geoportal\//, ''));
+                    await deleteFileFromNAS(filePath);
+                }
             } catch (delError) {
                 console.error(`No se pudo eliminar el blob ${row.image_url}. Continuando...`, delError);
             }
@@ -467,17 +481,17 @@ const processRarExtractionJob = async (jobId) => {
                 // Construct filename with the FINAL INDEX and ENTREGABLE to avoid collisions
                 const ext = path.extname(originalFileName);
                 const entregableNorm = normalizeEntregable(entregable);
-                const filename = `tramoinv/uploaded/${projectId}/${entregableNorm}/${finalIndex}${ext}`;
+                const filename = `${finalIndex}${ext}`;
 
-                const blob = await put(filename, processedBuffer, {
-                    access: 'public',
-                    allowOverwrite: true,
-                    token: process.env.BLOB_READ_WRITE_TOKEN
-                });
+                const url = await uploadFileToNAS(
+                    processedBuffer,
+                    `tramoinv/uploaded/${projectId}/${entregableNorm}`,
+                    filename
+                );
 
                 await db.query(
                     'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url, entregable) VALUES ($1, $2, $3, $4)',
-                    [projectId, String(finalIndex), blob.url, entregable]
+                    [projectId, String(finalIndex), url, entregable]
                 );
             } else {
                 console.log(`Archivo omitido (no es una imagen): ${filePath}`);
@@ -547,17 +561,17 @@ const processSimpleUploadJob = async (jobId) => {
         }
 
         const entregableNorm = normalizeEntregable(entregable);
-        const filename = `tramoinv/uploaded/${projectId}/${entregableNorm}/${nextIndex}.${extension}`;
+        const filename = `${nextIndex}.${extension}`;
 
-        const blob = await put(filename, processedBuffer, {
-            access: 'public',
-            allowOverwrite: true,
-            token: process.env.BLOB_READ_WRITE_TOKEN
-        });
+        const url = await uploadFileToNAS(
+            processedBuffer,
+            `tramoinv/uploaded/${projectId}/${entregableNorm}`,
+            filename
+        );
 
         await db.query(
             'INSERT INTO alcantarillas_graficos (proyecto_id, image_index, image_url, entregable) VALUES ($1, $2, $3, $4)',
-            [projectId, String(nextIndex), blob.url, entregable]
+            [projectId, String(nextIndex), url, entregable]
         );
 
         const successResult = { message: `Archivo subido y procesado (OCR: ${detectedIndex ? 'Sí' : 'No'}). Index: ${nextIndex}` };
@@ -733,16 +747,15 @@ const processBulkOcrJob = async (jobId) => {
         const resultJson = JSON.stringify(results, null, 2);
         const resultFilename = `bulk_ocr_results_${jobId}.json`;
 
-        const blob = await put(`tramoinv/exports/${resultFilename}`, resultJson, {
-            access: 'public',
-            allowOverwrite: true,
-            token: process.env.BLOB_READ_WRITE_TOKEN,
-            contentType: 'application/json'
-        });
+        const blobUrl = await uploadFileToNAS(
+            Buffer.from(resultJson, 'utf-8'),
+            'tramoinv/exports',
+            resultFilename
+        );
 
         const successResult = {
             message: `Procesamiento completado. ${results.length} imágenes analizadas.`,
-            downloadUrl: blob.url
+            downloadUrl: blobUrl
         };
 
         await db.query("UPDATE processing_jobs SET status = 'completed', result = $1, updated_at = NOW() WHERE id = $2", [successResult, jobId]);

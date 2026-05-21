@@ -137,8 +137,11 @@ const DashboardMap = ({ projectId, kmlUrl, mapData, filters, calibrations }) => 
         const fetchKml = async () => {
             if (!kmlUrl) return;
             try {
-                const response = await fetch(kmlUrl);
-                const text = await response.text();
+                // Use backend proxy to bypass CORS on dafe.it NAS
+                const { default: axiosInstance } = await import('../../../../api/axios');
+                const proxyUrl = `/api/proxy?url=${encodeURIComponent(kmlUrl)}`;
+                const response = await axiosInstance.get(proxyUrl, { responseType: 'text' });
+                const text = response.data;
                 const parser = new DOMParser();
                 const kmlDoc = parser.parseFromString(text, 'text/xml');
                 const geoJson = kml(kmlDoc);

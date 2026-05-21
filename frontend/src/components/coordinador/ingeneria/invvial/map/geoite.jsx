@@ -724,11 +724,10 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
 
             try {
                 if (showAlerts) alertify.message(`Descargando KML desde la URL...`);
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`Error en la red: ${response.statusText}`);
-                }
-                const kmlText = await response.text();
+                // Use backend proxy to bypass CORS on dafe.it NAS
+                const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+                const response = await axiosInstance.get(proxyUrl, { responseType: 'text' });
+                const kmlText = response.data;
 
                 const parser = new DOMParser();
                 const kmlDoc = parser.parseFromString(kmlText, 'text/xml');

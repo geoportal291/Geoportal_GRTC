@@ -30,14 +30,17 @@ const Dashboard = ({ projectId }) => {
                 setLoading(true);
                 const projRes = await axiosInstance.get(`/api/proyectos/${projectId}`);
 
-                // HOTFIX: Override KML URL for Project 24 due to remote/local DB mismatch
                 const data = projRes.data;
-                if (parseInt(projectId) === 24 || data.id === 24) {
-                    data.url_kml = "https://wtssndc4bmwklwss.public.blob.vercel-storage.com/1764685078654_tramofinalinvvial.kml";
-                    console.warn("Dashboard.jsx: HOTFIX - Overriding KML URL for Project 24");
-                }
-
                 setProjectData(data);
+                
+                try {
+                    const kmlRes = await axiosInstance.get(`/api/proyectos/${projectId}/kml`, {
+                        params: { section: 'invvial' }
+                    });
+                    if (kmlRes.data && kmlRes.data.url) {
+                        setProjectData(prev => ({ ...prev, url_kml: kmlRes.data.url }));
+                    }
+                } catch (e) { console.warn("KML url fetch failed", e); }
                 const statsRes = await axiosInstance.get(`/api/proyectos/${projectId}/estadisticas`);
                 setStats(statsRes.data);
                 try {

@@ -421,30 +421,26 @@ const Vialds = ({ isNavbarExpanded }) => {
         const projectRes = await axiosInstance.get(`/api/proyectos/${projectId}`, {
           headers: { Authorization: `Bearer ${user.token}` }
         });
-
-        // HOTFIX: Override KML URL for Project 24 due to remote/local DB mismatch
         const data = projectRes.data;
-        if (parseInt(projectId) === 24 || data.id === 24) {
-          data.url_kml = "https://wtssndc4bmwklwss.public.blob.vercel-storage.com/1764685078654_tramofinalinvvial.kml";
-          console.warn("vial.jsx: HOTFIX - Overriding KML URL for Project 24");
-        }
 
         console.log("vial.jsx: fetchProjectData response:", data);
         setProjectData(data);
-      } catch (error) {
-        console.error('Error fetching project data:', error);
-        // If project endpoint fails, try to fetch KML directly
+
+        // Fetch KML explicitly for the invvial section
         try {
           const kmlRes = await axiosInstance.get(`/api/proyectos/${projectId}/kml`, {
             params: { section: 'invvial' },
             headers: { Authorization: `Bearer ${user.token}` }
           });
           if (kmlRes.data && kmlRes.data.url) {
-            setProjectData({ kml_url: kmlRes.data.url });
+            setProjectData(prevData => ({ ...prevData, kml_url: kmlRes.data.url }));
           }
         } catch (kmlError) {
           console.error('Error fetching KML URL:', kmlError);
         }
+
+      } catch (error) {
+        console.error('Error fetching project data:', error);
       }
 
       // Fetch Alcantarillas

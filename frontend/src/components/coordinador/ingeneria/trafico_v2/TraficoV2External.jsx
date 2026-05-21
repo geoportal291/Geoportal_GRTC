@@ -19,6 +19,7 @@ import {
   MODULE_CONFIG,
   PROCESSING_SUBTABS
 } from './trafficV2Utils';
+import { getMockTrafficData } from './trafficV2MockData';
 
 /* ── Leaflet Icons ── */
 const stationIcon = new L.DivIcon({
@@ -238,6 +239,29 @@ const SidebarRight = ({
 
       <div className="ext-layer-group" style={{ marginTop: '14px' }}>
         <div className="ext-layer-title expanded">
+          <i className="fa-solid fa-fire" style={{ color: '#ef4444' }} />
+          Niveles de Tráfico (IMDa)
+        </div>
+        <div className="ext-layer-list-wrapper expanded">
+          <div className="ext-layer-list">
+            <div className="ext-layer-item">
+              <div style={{ width: '24px', height: '8px', background: '#ef4444', borderRadius: '4px', border: '1px solid rgba(0,0,0,0.1)' }} />
+              <span>Alto (&gt; 3500 veh/día)</span>
+            </div>
+            <div className="ext-layer-item">
+              <div style={{ width: '24px', height: '6px', background: '#f59e0b', borderRadius: '3px', border: '1px solid rgba(0,0,0,0.1)' }} />
+              <span>Medio (2000 - 3500)</span>
+            </div>
+            <div className="ext-layer-item">
+              <div style={{ width: '24px', height: '4px', background: '#10b981', borderRadius: '2px', border: '1px solid rgba(0,0,0,0.1)' }} />
+              <span>Bajo (&lt; 2000 veh/día)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="ext-layer-group" style={{ marginTop: '14px' }}>
+        <div className="ext-layer-title expanded">
           <i className="fa-solid fa-layer-group" style={{ color: '#3b82f6' }} />
           Capas Base
         </div>
@@ -324,6 +348,41 @@ const TraficoV2External = ({ projectName, dataset, isLoading, error, onBack, onS
     () => [...stations, ...sections].filter((e) => !e.mapPosition),
     [stations, sections]
   );
+
+  const sectionSegments = useMemo(() => {
+    if (mappedSections.length < 2) return [];
+    const segments = [];
+    for (let i = 0; i < mappedSections.length - 1; i++) {
+      const start = mappedSections[i];
+      const end = mappedSections[i + 1];
+      const traffic = getMockTrafficData(start.id, 'section');
+      const imda = traffic.imda || 1500;
+      
+      let color = '#10b981'; // Verde (Bajo)
+      let weight = 4;
+      if (imda > 3500) {
+        color = '#ef4444'; // Rojo (Alto)
+        weight = 8;
+      } else if (imda > 2000) {
+        color = '#f59e0b'; // Naranja (Medio)
+        weight = 6;
+      }
+      
+      segments.push({
+        id: `${start.id}-${end.id}`,
+        positions: [
+          [start.mapPosition.lat, start.mapPosition.lng],
+          [end.mapPosition.lat, end.mapPosition.lng]
+        ],
+        imda,
+        color,
+        weight,
+        startName: start.nombre || start.id,
+        endName: end.nombre || end.id
+      });
+    }
+    return segments;
+  }, [mappedSections]);
 
   const totalRecords = useMemo(
     () => [...stations, ...sections].reduce((acc, e) => acc + (e.totalUploads || 0), 0),
@@ -467,13 +526,25 @@ const TraficoV2External = ({ projectName, dataset, isLoading, error, onBack, onS
             </Marker>
           ))}
 
-          {/* Section polyline */}
-          {mappedSections.length > 1 && (
+          {/* Section segments (Heatmap) */}
+          {sectionSegments.map((seg) => (
             <Polyline
-              positions={mappedSections.map((s) => [s.mapPosition.lat, s.mapPosition.lng])}
-              pathOptions={{ color: '#f97316', weight: 3, opacity: 0.65, dashArray: '10 8' }}
-            />
-          )}
+              key={seg.id}
+              positions={seg.positions}
+              pathOptions={{ color: seg.color, weight: seg.weight, opacity: 0.8 }}
+            >
+              <Popup>
+                <div style={{ padding: '4px', fontFamily: 'Inter, sans-serif' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>Segmento de Vía</div>
+                  <div style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: 600, marginBottom: '6px' }}>{seg.startName} →<br/>{seg.endName}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: seg.color }}></div>
+                    <strong style={{ fontSize: '1.05rem', color: seg.color }}>{seg.imda} veh/día</strong>
+                  </div>
+                </div>
+              </Popup>
+            </Polyline>
+          ))}
         </MapContainer>
       </div>
 
