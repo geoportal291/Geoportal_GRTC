@@ -1665,24 +1665,24 @@ const getEnsayoDetailsById = async (id) => {
                     to_jsonb(proy_can)->>'nombre_proyecto',
                     to_jsonb(proy_can)->>'proyecto_nom'
                 ) as proyecto_nombre_cantera,
-                COALESCE(dep_prog.nombre, dep_can.nombre) as departamento,
-                COALESCE(prov_prog.nombre, prov_can.nombre) as provincia,
-                COALESCE(dist_prog.nombre, dist_can.nombre) as distrito
+                COALESCE(dep_prog.nombre, dep_can.nombre, proy_prog.departamento, proy_can.departamento) as departamento,
+                COALESCE(prov_prog.nombre, prov_can.nombre, proy_prog.provincia, proy_can.provincia) as provincia,
+                COALESCE(dist_prog.nombre, dist_can.nombre, proy_prog.distrito, proy_can.distrito) as distrito
             FROM ensayos ens
             LEFT JOIN tipo_ensayo te ON ens.tipo_ensayo = te.id
             LEFT JOIN estratos est ON ens.estrato_id = est.id
             LEFT JOIN progresivas prog ON est.parent_type = 'progresiva' AND est.parent_id = prog.id
             LEFT JOIN progresivas tramo ON prog.parent_id = tramo.id
-            LEFT JOIN proyectos proy_prog ON prog.proyecto_id = proy_prog.id
-            LEFT JOIN codigo_departamentos dep_prog ON proy_prog.departamento = dep_prog.codigo_departamento
-            LEFT JOIN provincias prov_prog ON proy_prog.provincia = prov_prog.codigo_provincia
-            LEFT JOIN distritos dist_prog ON proy_prog.distrito = dist_prog.codigo_distrito
+            LEFT JOIN proyectos proy_prog ON COALESCE(prog.proyecto_id, tramo.proyecto_id) = proy_prog.id
+            LEFT JOIN codigo_departamentos dep_prog ON TRIM(BOTH FROM proy_prog.departamento::text) = TRIM(BOTH FROM dep_prog.codigo_departamento::text)
+            LEFT JOIN provincias prov_prog ON TRIM(BOTH FROM proy_prog.provincia::text) = TRIM(BOTH FROM prov_prog.codigo_provincia::text)
+            LEFT JOIN distritos dist_prog ON TRIM(BOTH FROM proy_prog.distrito::text) = TRIM(BOTH FROM dist_prog.codigo_distrito::text)
             LEFT JOIN canteras can ON est.parent_type = 'cantera' AND est.parent_id = can.id
             LEFT JOIN progresivas pref ON can.id_progresiva_referencia = pref.id
             LEFT JOIN proyectos proy_can ON can.id_proyecto = proy_can.id
-            LEFT JOIN codigo_departamentos dep_can ON proy_can.departamento = dep_can.codigo_departamento
-            LEFT JOIN provincias prov_can ON proy_can.provincia = prov_can.codigo_provincia
-            LEFT JOIN distritos dist_can ON proy_can.distrito = dist_can.codigo_distrito
+            LEFT JOIN codigo_departamentos dep_can ON TRIM(BOTH FROM proy_can.departamento::text) = TRIM(BOTH FROM dep_can.codigo_departamento::text)
+            LEFT JOIN provincias prov_can ON TRIM(BOTH FROM proy_can.provincia::text) = TRIM(BOTH FROM prov_can.codigo_provincia::text)
+            LEFT JOIN distritos dist_can ON TRIM(BOTH FROM proy_can.distrito::text) = TRIM(BOTH FROM dist_can.codigo_distrito::text)
             WHERE ens.id = $1
         `, [id]);
         const row = result.rows[0];

@@ -1170,11 +1170,19 @@ function MapZoomTracker({ onZoomChange }) {
   useEffect(() => {
     if (!map) return undefined;
 
-    const syncZoom = () => onZoomChange(map.getZoom());
-    syncZoom();
+    let debounceTimer = null;
+    const syncZoom = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        onZoomChange(map.getZoom());
+      }, 150);
+    };
+    // Sync initial zoom without debounce
+    onZoomChange(map.getZoom());
     map.on('zoomend', syncZoom);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       map.off('zoomend', syncZoom);
     };
   }, [map, onZoomChange]);
@@ -2085,6 +2093,10 @@ export default function DisenoGeometrico({ onSwitchMode }) {
     return Array.from(keyMap.values()).sort((left, right) => left.key.localeCompare(right.key, 'es'));
   }, [activeFeatures]);
   const activeBaseMap = BASEMAPS[baseMapKey] || BASEMAPS.street;
+  const inactiveVisibleLayers = useMemo(
+    () => layers.filter((layer) => layer.tab_name !== selectedTabName && (visibleTabs[layer.tab_name] ?? true)),
+    [layers, selectedTabName, visibleTabs]
+  );
   const isThreeDToolLocked = isThreeDMode;
   const projectReferenceHasFeatures = useMemo(
     () => Array.isArray(projectReferenceGeojson?.features) && projectReferenceGeojson.features.length > 0,
@@ -2528,10 +2540,30 @@ export default function DisenoGeometrico({ onSwitchMode }) {
     }, 0);
   }, [fitBounds, projectId, projectReferenceGeojson, projectReferenceHasFeatures, selectedTabName]);
 
+  // Track previous selected feature to only re-style 2 layers (old + new) instead of all
+  const prevSelectedFeatureIdRef = useRef('');
   useEffect(() => {
-    Object.entries(layerRegistryRef.current).forEach(([featureId, leafletLayer]) => {
-      applyLayerStyle(leafletLayer, leafletLayer.feature, featureId === selectedFeatureId, effectivePointLabelConfig, selectionHighlightColor);
-    });
+    const prevId = prevSelectedFeatureIdRef.current;
+    const nextId = selectedFeatureId;
+    prevSelectedFeatureIdRef.current = nextId;
+
+    // If label config or highlight color changed, we must re-style everything
+    const registry = layerRegistryRef.current;
+    const configOrColorChanged = prevId === nextId;
+    if (configOrColorChanged) {
+      Object.entries(registry).forEach(([featureId, leafletLayer]) => {
+        applyLayerStyle(leafletLayer, leafletLayer.feature, featureId === nextId, effectivePointLabelConfig, selectionHighlightColor);
+      });
+      return;
+    }
+
+    // Only selection changed: re-style only the 2 affected layers (O(2) instead of O(n))
+    if (prevId && registry[prevId]) {
+      applyLayerStyle(registry[prevId], registry[prevId].feature, false, effectivePointLabelConfig, selectionHighlightColor);
+    }
+    if (nextId && registry[nextId]) {
+      applyLayerStyle(registry[nextId], registry[nextId].feature, true, effectivePointLabelConfig, selectionHighlightColor);
+    }
   }, [effectivePointLabelConfig, selectedFeatureId, selectionHighlightColor]);
 
   useEffect(() => {
@@ -3379,17 +3411,27 @@ export default function DisenoGeometrico({ onSwitchMode }) {
     nextMeta.colorByAttributePalette = Object.fromEntries(colorMap.entries());
     nextCollection.dg_meta = nextMeta;
 
-    nextCollection.features.forEach((feature) => {
-      const featureId = getFeatureId(feature);
-      const layer = layerRegistryRef.current[featureId];
-      if (!layer) return;
-
-      layer.feature = feature;
-      applyLayerStyle(layer, feature, featureId === selectedFeatureIdRef.current, effectivePointLabelConfig, selectionHighlightColor);
-      if (layer.getPopup()) {
-        layer.setPopupContent(featureToPopupHtml(feature));
+    // Batch DOM updates with rAF to avoid freezing UI on large datasets
+    const featuresToUpdate = nextCollection.features.slice();
+    const BATCH_SIZE = 60;
+    const processBatch = (startIndex) => {
+      const endIndex = Math.min(startIndex + BATCH_SIZE, featuresToUpdate.length);
+      for (let i = startIndex; i < endIndex; i++) {
+        const feature = featuresToUpdate[i];
+        const featureId = getFeatureId(feature);
+        const layer = layerRegistryRef.current[featureId];
+        if (!layer) continue;
+        layer.feature = feature;
+        applyLayerStyle(layer, feature, featureId === selectedFeatureIdRef.current, effectivePointLabelConfig, selectionHighlightColor);
+        if (layer.getPopup()) {
+          layer.setPopupContent(featureToPopupHtml(feature));
+        }
       }
-    });
+      if (endIndex < featuresToUpdate.length) {
+        requestAnimationFrame(() => processBatch(endIndex));
+      }
+    };
+    processBatch(0);
 
     commitActiveCollection(nextCollection, { selectedFeatureId: selectedFeatureIdRef.current });
     alertify.success(`Bordes coloreados por ${selectedLabel}`);
@@ -4001,9 +4043,7 @@ export default function DisenoGeometrico({ onSwitchMode }) {
                       />
                     )}
 
-                    {layers
-                      .filter((layer) => layer.tab_name !== selectedTabName && (visibleTabs[layer.tab_name] ?? true))
-                      .map((layer) => (
+                    {inactiveVisibleLayers.map((layer) => (
                         <GeoJSON
                           key={layer.tab_name}
                           data={layer.geojson_data}

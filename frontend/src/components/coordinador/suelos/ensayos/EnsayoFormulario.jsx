@@ -35,6 +35,7 @@ const EnsayoFormulario = ({ data, onInputChange, resultados, tableConfig }) => {
             seccion={{ titulo: 'Datos Generales', campos: camposGenerales }}
             data={data}
             onInputChange={onInputChange}
+            resultados={resultados}
           />
         )}
 
@@ -68,6 +69,7 @@ const EnsayoFormulario = ({ data, onInputChange, resultados, tableConfig }) => {
                       seccion={{ titulo: '', campos: camposGenerales }}
                       data={data}
                       onInputChange={onInputChange}
+                      resultados={resultados}
                     />
                   ) : (
                     <SeccionTablaDinamica
@@ -108,6 +110,7 @@ const EnsayoFormulario = ({ data, onInputChange, resultados, tableConfig }) => {
           seccion={{ titulo: 'Datos Generales', campos: legacyCampos }}
           data={data}
           onInputChange={onInputChange}
+          resultados={resultados}
         />
       )}
       {legacyHayTabla && (

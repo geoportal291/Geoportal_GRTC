@@ -297,6 +297,8 @@ const applyConfiguredAutofillByFieldPath = (
   );
 };
 
+  // Lógica de Granulometría migrada nativamente a la base de datos (config_tabla y config_calculos)
+
 const formatProgresiva = (codigo) => {
   if (!codigo) return "N/A";
   const code = codigo.includes("-") ? codigo.split("-")[1] : codigo;
@@ -331,7 +333,11 @@ export default function EnsayoDetallePanel({
 
   const applyGeneralFieldDefaults = useCallback(
     (currentData, currentTableConfig) => {
-      if (!currentTableConfig?.general_fields?.length) return currentData;
+      const generalFieldsList = Array.isArray(currentTableConfig?.general_fields)
+        ? currentTableConfig.general_fields
+        : (currentTableConfig?.general_fields?.fields || []);
+
+      if (!generalFieldsList.length) return currentData;
 
       const nextData = cloneJson(currentData);
       if (
@@ -341,7 +347,7 @@ export default function EnsayoDetallePanel({
         nextData.general_fields = {};
       }
 
-      currentTableConfig.general_fields.forEach((field) => {
+      generalFieldsList.forEach((field) => {
         const hasValue =
           nextData.general_fields[field.key] !== undefined &&
           nextData.general_fields[field.key] !== null &&
@@ -477,6 +483,9 @@ export default function EnsayoDetallePanel({
           );
           if (ignore) return;
           const cfg = normalizeEnsayoConfig(configRes.data);
+
+          // Cargando campos del formulario dinámicamente desde config_tabla
+
           const hydratedTableConfig = hydrateDynamicFieldConfig(
             cfg.tableConfig,
             formDataObject,
@@ -490,6 +499,51 @@ export default function EnsayoDetallePanel({
             formDataObject,
           );
 
+          // Ejecutar los cálculos en caliente para garantizar la fidelidad absoluta de resultados
+          let finalResultados = {};
+          if (cfg.calculationConfig && formDataObject) {
+            try {
+              const normalizedData = { ...formDataObject };
+              if (!normalizedData.tables) {
+                normalizedData.tables = { ...formDataObject };
+              }
+              console.log("[PANEL DETALLE] Recalculando en CARGA inicial del ensayo...");
+              const calculatedRes = calcularResultados(cfg.calculationConfig, normalizedData);
+              finalResultados = calculatedRes || {};
+              console.log("[PANEL DETALLE] Resultados finales recalculados en carga exitosamente:", finalResultados);
+            } catch (err) {
+              console.error("[PANEL DETALLE - ERROR] Error al recalcular en carga inicial:", err);
+              finalResultados = data.resultado || {};
+            }
+          } else {
+            console.log("[PANEL DETALLE] No hay configuración de cálculo o datos en la carga del ensayo.");
+            finalResultados = data.resultado || {};
+          }
+
+          // Sincronizar en caliente los campos editables auto-calculados al cargar
+          const generalFieldsList = Array.isArray(finalTableConfig?.general_fields)
+            ? finalTableConfig.general_fields
+            : (finalTableConfig?.general_fields?.fields || []);
+
+          if (cfg.calculationConfig && generalFieldsList.length > 0) {
+            try {
+              generalFieldsList.forEach((field) => {
+                const fieldPath = `general_fields.${field.key}`;
+                if (cfg.calculationConfig[fieldPath] !== undefined) {
+                  const currentValue = getValueAtPath(formDataObject, fieldPath);
+                  const calculatedValue = getValueAtPath(finalResultados, fieldPath);
+                  
+                  if ((currentValue === undefined || currentValue === null || currentValue === "" || Number(currentValue) === 0) &&
+                      calculatedValue !== undefined && calculatedValue !== null && Number(calculatedValue) !== 0) {
+                    setValueAtPath(formDataObject, fieldPath, calculatedValue);
+                  }
+                }
+              });
+            } catch (err) {
+              console.error("Error al sincronizar campos editables calculados en carga:", err);
+            }
+          }
+
           setFormData(formDataObject);
           setInitialFormSnapshot(JSON.stringify(formDataObject || {}));
           setFormConfig(finalTableConfig);
@@ -497,6 +551,7 @@ export default function EnsayoDetallePanel({
           setTableConfig(finalTableConfig);
           setCalculationConfig(cfg.calculationConfig);
           setGraficosConfig(cfg.graficosConfig);
+          setResultados(finalResultados);
           setFormData((prev) =>
             applyGeneralFieldDefaults(prev, finalTableConfig),
           );
@@ -535,28 +590,41 @@ export default function EnsayoDetallePanel({
 
   useEffect(() => {
     if (!calculationConfig || !formData || Object.keys(formData).length === 0) {
+      console.log("[PANEL DETALLE - EFFECT] Ignorando recálculo en useEffect: formData o calculationConfig no listos/vacíos", { formData, calculationConfig });
       setResultados({});
       return;
     }
 
     try {
-      const resultadosCalculados = calcularResultados(
+      console.log("[PANEL DETALLE - EFFECT] Detectado cambio en formData. Iniciando recálculo dinámico automático...", { formData });
+      let resultadosCalculados = calcularResultados(
         calculationConfig,
         formData,
       );
+
+      console.log("[PANEL DETALLE - EFFECT] Recálculo completado. Seteando nuevos resultados calculados en el estado:", resultadosCalculados);
       setResultados(resultadosCalculados);
     } catch (err) {
-      console.error("Error en el cálculo automático:", err);
+      console.error("[PANEL DETALLE - EFFECT - ERROR] Falló el cálculo automático reactivo en useEffect:", err);
       setResultados({ error: "Error en el cálculo." });
     }
-  }, [formData, calculationConfig]);
+  }, [formData, calculationConfig, tableConfig, ensayoDetails]);
 
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
-    const val = type === "number" ? parseFloat(value) || 0 : value;
+    let val = value;
+    if (type === "number") {
+      if (value === "") {
+        val = "";
+      } else {
+        const parsed = parseFloat(value);
+        val = isNaN(parsed) ? value : parsed;
+      }
+    }
 
     setFormData((prev) => {
       let newState = cloneJson(prev);
+
       setValueAtPath(newState, name, val);
       newState = applyConfiguredAutofillByFieldPath(
         newState,
@@ -564,6 +632,33 @@ export default function EnsayoDetallePanel({
         name,
         val,
       );
+
+      // Sincronización dinámica de campos auto-calculados editables en caliente
+      const generalFieldsList = Array.isArray(tableConfig?.general_fields)
+        ? tableConfig.general_fields
+        : (tableConfig?.general_fields?.fields || []);
+
+      if (calculationConfig && generalFieldsList.length > 0) {
+        try {
+          console.log(`[PANEL DETALLE - INPUT_CHANGE] Evaluando sincronización de campos generales autocalculados por cambio en: "${name}"`);
+          const tempResults = calcularResultados(calculationConfig, newState);
+
+          generalFieldsList.forEach((field) => {
+            const fieldPath = `general_fields.${field.key}`;
+            
+            // Si el campo tiene fórmula de cálculo y NO es el campo que el usuario está editando activamente
+            if (calculationConfig[fieldPath] !== undefined && name !== fieldPath) {
+              const calculatedValue = getValueAtPath(tempResults, fieldPath);
+              if (calculatedValue !== undefined && calculatedValue !== null) {
+                console.log(`[PANEL DETALLE - INPUT_CHANGE] Sincronizando campo autocalculado "${fieldPath}" -> Nuevo valor calculado:`, calculatedValue);
+                setValueAtPath(newState, fieldPath, calculatedValue);
+              }
+            }
+          });
+        } catch (err) {
+          console.error("[PANEL DETALLE - INPUT_CHANGE - ERROR] Error al sincronizar campos editables autocalculados en caliente:", err);
+        }
+      }
 
       return newState;
     });

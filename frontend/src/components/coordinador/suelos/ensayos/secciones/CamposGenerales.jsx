@@ -1,11 +1,24 @@
 import React from 'react';
 
-const CamposGenerales = ({ seccion, data, onInputChange }) => (
+const CamposGenerales = ({ seccion, data, onInputChange, resultados }) => (
   <div className="campos-generales-container" key={seccion.titulo}>
     <h5 className="campos-generales-header">{seccion.titulo}</h5>
     <div className="campos-generales-grid">
       {seccion.campos.map((field) => {
         const fieldName = `general_fields.${field.key}`;
+        const isReadOnly = field.readOnly || field.input_config?.readOnly || field.type === 'calculated';
+        const isDisabled = field.disabled || field.input_config?.disabled;
+
+        // Determinar el valor a mostrar. Si es de sólo lectura o calculado, priorizar resultados
+        let displayValue = data.general_fields?.[field.key] ?? '';
+        if (isReadOnly) {
+          if (resultados?.general_fields?.[field.key] !== undefined && resultados?.general_fields?.[field.key] !== null) {
+            displayValue = resultados.general_fields[field.key];
+          } else if (resultados?.[field.key] !== undefined && resultados?.[field.key] !== null) {
+            displayValue = resultados[field.key];
+          }
+        }
+
         return (
           <div className="campo-general-item" key={field.key}>
             <div className="form-group mb-3">
@@ -17,9 +30,10 @@ const CamposGenerales = ({ seccion, data, onInputChange }) => (
                   className="form-control form-control-sm"
                   id={fieldName}
                   name={fieldName}
-                  value={data.general_fields?.[field.key] || ''}
+                  value={displayValue}
                   onChange={onInputChange}
                   required={field.required}
+                  disabled={isDisabled}
                 >
                   <option value="">{field.input_config?.placeholder || 'Seleccione'}</option>
                   {(field.input_config?.options || []).map((option) => {
@@ -39,9 +53,11 @@ const CamposGenerales = ({ seccion, data, onInputChange }) => (
                   className="form-control form-control-sm"
                   id={fieldName}
                   name={fieldName}
-                  value={data.general_fields?.[field.key] || ''}
+                  value={displayValue}
                   onChange={onInputChange}
                   required={field.required}
+                  readOnly={isReadOnly}
+                  disabled={isDisabled}
                 />
               )}
             </div>

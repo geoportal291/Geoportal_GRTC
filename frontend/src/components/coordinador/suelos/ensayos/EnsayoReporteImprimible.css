@@ -231,44 +231,89 @@
   align-items: center;
 }
 
-/* TABLA FICHA TECNICA */
+/* TABLA FICHA TECNICA PREMIUM CSS GRID */
 .reporte-metadata-section {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
-.table-metadata {
+.premium-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
   width: 100%;
-  border-collapse: collapse;
-  font-size: 8px;
+  border-top: 1px solid var(--cusco-blue-dark);
+  border-left: 1px solid var(--cusco-blue-dark);
+  font-size: 8.5px;
+  background-color: white;
+  box-sizing: border-box;
 }
 
-.table-metadata td {
-  border: 0.75px solid #475569;
-  padding: 1.5px 4px;
-  vertical-align: middle;
-  height: 18px;
+.premium-metadata-grid .p-lbl,
+.premium-metadata-grid .p-val,
+.premium-metadata-grid .p-sublbl {
+  border-right: 1px solid var(--cusco-blue-dark);
+  border-bottom: 1px solid var(--cusco-blue-dark);
+  padding: 3px 5px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 20px;
 }
 
-.meta-label {
-  font-weight: 700;
+.premium-metadata-grid .p-lbl {
   background-color: #f1f5f9;
+  font-weight: 700;
   color: var(--cusco-blue-dark);
 }
 
-.meta-sublabel {
+.premium-metadata-grid .p-sublbl {
+  background-color: #fafafc;
   font-weight: 600;
   color: var(--cusco-blue-dark);
+  justify-content: flex-end;
   text-align: right;
-  background-color: #fafafc;
 }
 
-.meta-value {
+.premium-metadata-grid .p-val {
   color: #0f172a;
+  background-color: white;
+  font-weight: 500;
 }
 
-.value-highlight {
+.premium-metadata-grid .val-highlight {
   font-weight: 700;
   color: var(--cusco-blue-dark);
+}
+
+/* Clases de spans de columnas principales */
+.premium-metadata-grid .span-2 { grid-column: span 2; }
+.premium-metadata-grid .span-6 { grid-column: span 6; }
+.premium-metadata-grid .span-8 { grid-column: span 8; }
+.premium-metadata-grid .span-10 { grid-column: span 10; }
+
+/* Subgrids */
+.premium-metadata-grid .p-grid {
+  display: grid;
+  padding: 0 !important;
+  border: none !important;
+}
+
+/* Fila de Ubicación: 4 subcampos (Lugar, Distrito, Provincia, Dpto) repartidos en 10 columnas */
+.premium-metadata-grid .location-subgrid {
+  grid-template-columns: 1fr 2.5fr 1fr 2fr 1fr 2fr 0.8fr 1.7fr;
+}
+
+/* Fila de Coordenadas: 2 subcampos (E, N) repartidos en 6 columnas */
+.premium-metadata-grid .coords-subgrid {
+  grid-template-columns: 0.8fr 2.2fr 0.8fr 2.2fr;
+}
+
+/* Fila de Datos de Muestra: 4 subcampos (Exploración, Progresiva, Estrato, Lado) repartidos en 10 columnas */
+.premium-metadata-grid .sample-subgrid {
+  grid-template-columns: 1.2fr 1.8fr 1fr 2fr 0.8fr 1.2fr 0.8fr 1.2fr;
+}
+
+.premium-metadata-grid .dynamic-subgrid {
+  display: grid;
 }
 
 /* SECCION CENTRAL: CUADRICULA */

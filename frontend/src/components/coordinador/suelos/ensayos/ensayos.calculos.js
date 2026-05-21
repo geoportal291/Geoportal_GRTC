@@ -289,8 +289,13 @@ function runExcelLikeCalculations(excelConfig, formData) {
 
     if (circular.length > 0) {
         const errorMsg = `Dependencia circular detectada: ${circular.join(', ')}`;
+        console.error("[MOTOR CALC] Error de dependencia circular detectado en la configuración:", circular);
         return { error: errorMsg };
     }
+
+    console.log("[MOTOR CALC - EXCEL] Iniciando recálculo estilo Excel.");
+    console.log("[MOTOR CALC - EXCEL] Orden de evaluación topológica de campos:", sorted);
+    console.log("[MOTOR CALC - EXCEL] Datos de entrada para cálculo (formData):", formData);
 
     // Clonamos la data para no mutar el estado original directamente durante el proceso
     const dataForLookup = JSON.parse(JSON.stringify(formData));
@@ -336,16 +341,30 @@ function runExcelLikeCalculations(excelConfig, formData) {
                 ? Math.round(result * 10000) / 10000
                 : result;
 
+            console.log(`[MOTOR CALC - EVAL] Variable recalculada: %c${targetPath}`, 'color: #10b981; font-weight: bold;', {
+                formulaOriginal: excelConfig[targetPath],
+                formulaEvaluada: formulaString,
+                scopeValores: scope,
+                valorCalculado: roundedResult
+            });
+
             // Actualizar la copia interna para que los siguientes cálculos usen este valor nuevo
             setNestedValue(dataForLookup, targetPath, roundedResult);
             // Guardar en el objeto de resultados finales
             setNestedValue(results, targetPath, roundedResult);
 
         } catch (error) {
+            console.error(`[MOTOR CALC - EVAL ERROR] Error al evaluar variable: ${targetPath}`, {
+                formulaOriginal: excelConfig[targetPath],
+                formulaEvaluada: formulaString,
+                scopeValores: scope,
+                errorStack: error
+            });
             // En caso de error, devolvemos 0 o NaN según prefieras. 0 es más seguro para no romper la UI.
             setNestedValue(results, targetPath, 0);
         }
     }
+    console.log("[MOTOR CALC - EXCEL] Finalizado. Resultados obtenidos:", results);
     return results;
 }
 
@@ -372,12 +391,15 @@ function _processSteps(steps, context) {
 
 // --- FUNCIÓN EXPORTADA PRINCIPAL (ADAPTADOR) ---
 export function calcularResultados(calculationConfig, inputData) {
+    console.log("[MOTOR CALC] Llamado global a calcularResultados");
     if (!calculationConfig || Object.keys(calculationConfig).length === 0) {
+        console.warn("[MOTOR CALC] Advertencia: No se suministró una configuración de cálculo (calculationConfig vacía o nula)");
         return {};
     }
 
     // Detección: Si la config tiene "steps", usamos el motor antiguo
     if (calculationConfig.steps) {
+        console.log("[MOTOR CALC] Utilizando motor de cálculo ANTIGUO (basado en 'steps')");
         const context = { inputs: { formData: inputData }, vars: {}, results: {}, ...math };
 
         // Inicializar variables
@@ -388,6 +410,7 @@ export function calcularResultados(calculationConfig, inputData) {
         }
 
         _processSteps(calculationConfig.steps, context);
+        console.log("[MOTOR CALC] Resultados motor antiguo:", context.results);
         return context.results;
     }
 

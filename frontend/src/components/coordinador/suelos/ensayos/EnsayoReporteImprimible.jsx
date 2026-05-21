@@ -6,6 +6,30 @@ import { calcularResultados } from "./ensayos.calculos.js";
 import VisorGraficos from "./secciones/VisorGraficos.jsx";
 import "./EnsayoReporteImprimible.css";
 
+// Importación de base de datos local de ubigeo para mapeo de alta fidelidad
+import departamentosData from "../../../../data/ubigeo/ubigeo_peru_2016_departamentos.json";
+import provinciasData from "../../../../data/ubigeo/ubigeo_peru_2016_provincias.json";
+import distritosData from "../../../../data/ubigeo/ubigeo_peru_2016_distritos.json";
+
+// Helpers para traducir codigos de ubigeo a nombres legibles
+const getDepartmentName = (idOrName) => {
+  if (!idOrName) return "N/A";
+  const dept = departamentosData.find(d => d.id === idOrName);
+  return dept ? dept.name : idOrName;
+};
+
+const getProvinceName = (idOrName) => {
+  if (!idOrName) return "N/A";
+  const prov = provinciasData.find(p => p.id === idOrName);
+  return prov ? prov.name : idOrName;
+};
+
+const getDistrictName = (idOrName) => {
+  if (!idOrName) return "N/A";
+  const dist = distritosData.find(d => d.id === idOrName);
+  return dist ? dist.name : idOrName;
+};
+
 // Helper para formatear progresiva
 const formatProgresiva = (codigo) => {
   if (!codigo) return "N/A";
@@ -237,9 +261,27 @@ export default function EnsayoReporteImprimible() {
     } else if (source.startsWith("formData.")) {
       const cleanPath = source.replace("formData.", "");
       val = getNested(formData, cleanPath, null);
+      if (val === null || val === undefined || val === "") {
+        val = getNested(formData, `general_fields.${cleanPath}`, null);
+      }
+      if (val === null || val === undefined || val === "") {
+        val = getNested(resultados, cleanPath, null);
+      }
+      if (val === null || val === undefined || val === "") {
+        val = getNested(resultados, `general_fields.${cleanPath}`, null);
+      }
     } else if (source.startsWith("resultados.")) {
       const cleanPath = source.replace("resultados.", "");
       val = getNested(resultados, cleanPath, null);
+      if (val === null || val === undefined || val === "") {
+        val = getNested(resultados, `general_fields.${cleanPath}`, null);
+      }
+      if (val === null || val === undefined || val === "") {
+        val = getNested(formData, cleanPath, null);
+      }
+      if (val === null || val === undefined || val === "") {
+        val = getNested(formData, `general_fields.${cleanPath}`, null);
+      }
     } else {
       // Intentar en metadatos del ensayo
       val = getNested(ensayoDetails, source, null);
@@ -249,9 +291,19 @@ export default function EnsayoReporteImprimible() {
         val = getNested(resultados, source, null);
       }
       
+      // Intentar en resultados.general_fields
+      if (val === null || val === undefined || val === "") {
+        val = getNested(resultados, `general_fields.${source}`, null);
+      }
+      
       // Intentar en formData
       if (val === null || val === undefined || val === "") {
         val = getNested(formData, source, null);
+      }
+      
+      // Intentar en formData.general_fields
+      if (val === null || val === undefined || val === "") {
+        val = getNested(formData, `general_fields.${source}`, null);
       }
     }
 
@@ -296,6 +348,11 @@ export default function EnsayoReporteImprimible() {
       }
     }
 
+    // Traducción de códigos de ubigeo al vuelo utilizando el diccionario local
+    if (source === "departamento") return getDepartmentName(val);
+    if (source === "provincia") return getProvinceName(val);
+    if (source === "distrito") return getDistrictName(val);
+
     if (format === "progresiva") {
       return formatProgresiva(val);
     }
@@ -316,46 +373,140 @@ export default function EnsayoReporteImprimible() {
 
   // Renderizado dinámico de Metadatos
   const renderMetadata = (fields) => {
-    // Si no hay fields definidos (ej. página 2), NO renderizar nada
     if (fields === null || fields === undefined) return null;
-    // Si es un array vacío, tampoco renderizar
     if (Array.isArray(fields) && fields.length === 0) return null;
 
+    // Buscar campos estándar para maquetación inteligente y alineación de alta gama
+    const fProyecto = fields.find(f => f.label?.toLowerCase() === "proyecto");
+    const fUbicacion = fields.find(f => f.label?.toLowerCase() === "ubicación" || f.label?.toLowerCase() === "ubicacion");
+    const fSolicitante = fields.find(f => f.label?.toLowerCase() === "solicitante");
+    const fCoordenadas = fields.find(f => f.label?.toLowerCase() === "coordenadas");
+    const fMuestra = fields.find(f => f.label?.toLowerCase() === "datos de muestra");
+    const fProfundidad = fields.find(f => f.label?.toLowerCase() === "profundidad");
+    const fFecha = fields.find(f => f.label?.toLowerCase() === "fecha muestreo" || f.label?.toLowerCase() === "fecha de muestreo");
+
+    // Si tenemos los campos estándar del MTC, renderizamos el Grid Premium perfectamente balanceado
+    if (fProyecto || fUbicacion || fSolicitante || fCoordenadas || fMuestra || fProfundidad || fFecha) {
+      return (
+        <div className="premium-metadata-grid">
+          {/* FILA 1: PROYECTO */}
+          {fProyecto && (
+            <React.Fragment>
+              <div className="p-lbl span-2 font-bold">{fProyecto.label}:</div>
+              <div className="p-val span-10 font-bold val-highlight">
+                {getSourceValue(fProyecto.source, fProyecto.format)}
+              </div>
+            </React.Fragment>
+          )}
+
+          {/* FILA 2: UBICACIÓN */}
+          {fUbicacion && fUbicacion.fields && (
+            <React.Fragment>
+              <div className="p-lbl span-2 font-bold">{fUbicacion.label}:</div>
+              <div className="p-grid span-10 location-subgrid">
+                {fUbicacion.fields.map((sub, sIdx) => (
+                  <React.Fragment key={sIdx}>
+                    <div className="p-sublbl">{sub.sublabel}:</div>
+                    <div className="p-val">{getSourceValue(sub.source, sub.format)}</div>
+                  </React.Fragment>
+                ))}
+              </div>
+            </React.Fragment>
+          )}
+
+          {/* FILA 3: SOLICITANTE Y FECHA MUESTREO */}
+          {fSolicitante && (
+            <React.Fragment>
+              <div className="p-lbl span-2 font-bold">{fSolicitante.label}:</div>
+              <div className="p-val span-6">
+                {getSourceValue(fSolicitante.source, fSolicitante.format)}
+              </div>
+            </React.Fragment>
+          )}
+          {fFecha && (
+            <React.Fragment>
+              <div className="p-lbl span-2 font-bold">{fFecha.label}:</div>
+              <div className="p-val span-2">
+                {getSourceValue(fFecha.source, fFecha.format)}
+              </div>
+            </React.Fragment>
+          )}
+          {!fFecha && fSolicitante && <div className="p-val span-4"></div>}
+          {!fSolicitante && fFecha && <div className="p-val span-10"></div>}
+
+          {/* FILA 4: COORDENADAS Y PROFUNDIDAD */}
+          {fCoordenadas && fCoordenadas.fields && (
+            <React.Fragment>
+              <div className="p-lbl span-2 font-bold">{fCoordenadas.label}:</div>
+              <div className="p-grid span-6 coords-subgrid">
+                {fCoordenadas.fields.map((sub, sIdx) => (
+                  <React.Fragment key={sIdx}>
+                    <div className="p-sublbl">{sub.sublabel}:</div>
+                    <div className="p-val">{getSourceValue(sub.source, sub.format)}</div>
+                  </React.Fragment>
+                ))}
+              </div>
+            </React.Fragment>
+          )}
+          {fProfundidad && (
+            <React.Fragment>
+              <div className="p-lbl span-2 font-bold">{fProfundidad.label}:</div>
+              <div className="p-val span-2">
+                {getSourceValue(fProfundidad.source, fProfundidad.format)}
+              </div>
+            </React.Fragment>
+          )}
+          {!fProfundidad && fCoordenadas && <div className="p-val span-4"></div>}
+          {!fCoordenadas && fProfundidad && <div className="p-val span-10"></div>}
+
+          {/* FILA 5: DATOS DE MUESTRA */}
+          {fMuestra && fMuestra.fields && (
+            <React.Fragment>
+              <div className="p-lbl span-2 font-bold">{fMuestra.label}:</div>
+              <div className="p-grid span-10 sample-subgrid">
+                {fMuestra.fields.map((sub, sIdx) => (
+                  <React.Fragment key={sIdx}>
+                    <div className="p-sublbl">{sub.sublabel}:</div>
+                    <div className="p-val">{getSourceValue(sub.source, sub.format)}</div>
+                  </React.Fragment>
+                ))}
+              </div>
+            </React.Fragment>
+          )}
+        </div>
+      );
+    }
+
+    // Fallback dinámico genérico si la estructura difiere de la estándar
     return (
-      <table className="table-metadata">
-        <tbody>
-          {fields.map((field, idx) => {
-            if (field.fields) {
-              return (
-                <tr key={idx}>
-                  <td className="meta-label" style={{ width: "12%" }}>{field.label}:</td>
+      <div className="premium-metadata-grid dynamic-fallback">
+        {fields.map((field, idx) => {
+          if (field.fields) {
+            return (
+              <React.Fragment key={idx}>
+                <div className="p-lbl span-2 font-bold">{field.label}:</div>
+                <div className="p-grid span-10 dynamic-subgrid" style={{ gridTemplateColumns: `repeat(${field.fields.length * 2}, 1fr)` }}>
                   {field.fields.map((sub, sIdx) => (
                     <React.Fragment key={sIdx}>
-                      <td className="meta-sublabel" style={{ width: "8%" }}>{sub.sublabel}:</td>
-                      <td className="meta-value" style={{ width: sub.width }}>
-                        {getSourceValue(sub.source, sub.format)}
-                      </td>
+                      <div className="p-sublbl">{sub.sublabel}:</div>
+                      <div className="p-val">{getSourceValue(sub.source, sub.format)}</div>
                     </React.Fragment>
                   ))}
-                  {field.fields.length < 3 && <td colSpan={(3 - field.fields.length) * 2}></td>}
-                </tr>
-              );
-            } else {
-              return (
-                <tr key={idx}>
-                  <td className="meta-label" style={{ width: "12%" }}>{field.label}:</td>
-                  <td 
-                    className={`meta-value ${field.highlight ? "value-highlight" : ""}`} 
-                    colSpan={field.colSpan || 7}
-                  >
-                    {getSourceValue(field.source, field.format)}
-                  </td>
-                </tr>
-              );
-            }
-          })}
-        </tbody>
-      </table>
+                </div>
+              </React.Fragment>
+            );
+          } else {
+            return (
+              <React.Fragment key={idx}>
+                <div className="p-lbl span-2 font-bold">{field.label}:</div>
+                <div className={`p-val span-10 ${field.highlight ? "val-highlight font-bold" : ""}`}>
+                  {getSourceValue(field.source, field.format)}
+                </div>
+              </React.Fragment>
+            );
+          }
+        })}
+      </div>
     );
   };
 
