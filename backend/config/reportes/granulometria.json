@@ -151,7 +151,8 @@
     {
       "charts": [
         {
-          "chartConfigKey": "granulometria_tendencia",
+          "chartConfigKey": "curva_granulometrica",
+          "scope": "single",
           "height": "95mm",
           "position": "after_layout"
         }

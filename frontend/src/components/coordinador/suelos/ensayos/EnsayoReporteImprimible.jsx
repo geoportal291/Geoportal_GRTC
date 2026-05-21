@@ -191,13 +191,50 @@ export default function EnsayoReporteImprimible() {
     );
   }
 
+  // Coordenadas UTM — directamente desde la base de datos (progresivas.coordenada_este/norte)
+  let coordE = "N/A";
+  let coordN = "N/A";
+  if (ensayoDetails.coordenada_este != null && ensayoDetails.coordenada_este !== "") {
+    coordE = Number(ensayoDetails.coordenada_este).toFixed(0);
+  } else if (ensayoDetails.coordenadas) {
+    const coords = String(ensayoDetails.coordenadas);
+    const matchE = coords.match(/E:\s*(\d+(\.\d+)?)/i);
+    if (matchE) coordE = matchE[1];
+  } else if (ensayoDetails.longitud) {
+    coordE = Number(ensayoDetails.longitud).toFixed(6);
+  }
+  if (ensayoDetails.coordenada_norte != null && ensayoDetails.coordenada_norte !== "") {
+    coordN = Number(ensayoDetails.coordenada_norte).toFixed(0);
+  } else if (ensayoDetails.coordenadas) {
+    const coords = String(ensayoDetails.coordenadas);
+    const matchN = coords.match(/N:\s*(\d+(\.\d+)?)/i);
+    if (matchN) coordN = matchN[1];
+  } else if (ensayoDetails.latitud) {
+    coordN = Number(ensayoDetails.latitud).toFixed(6);
+  }
+
   // Helper para buscar de forma flexible dot-notation en formData, resultados o metadatos
   const getSourceValue = (source, format) => {
     if (!source) return "N/A";
     
     let val = null;
 
-    if (source.startsWith("formData.")) {
+    if (source === "solicitante") {
+      const userRaw = localStorage.getItem("user");
+      if (userRaw) {
+        try {
+          const u = JSON.parse(userRaw);
+          const fullName = `${u.nombre || ""} ${u.ap_paterno || ""} ${u.ap_materno || ""}`.trim();
+          if (fullName) return fullName;
+        } catch (e) {
+          console.error("Error parsing user from localStorage:", e);
+        }
+      }
+      val = getNested(ensayoDetails, source, null);
+      if (val === null || val === undefined || val === "") {
+        val = getNested(formData, source, null);
+      }
+    } else if (source.startsWith("formData.")) {
       const cleanPath = source.replace("formData.", "");
       val = getNested(formData, cleanPath, null);
     } else if (source.startsWith("resultados.")) {
@@ -220,11 +257,43 @@ export default function EnsayoReporteImprimible() {
 
     if (val === null || val === undefined || val === "") {
       if (source === "profundidad") {
-        const min = ensayoDetails.estrato_profundidad_min ?? "0.00";
-        const max = ensayoDetails.estrato_profundidad_max ?? "0.00";
-        return `${Number(min).toFixed(2)} - ${Number(max).toFixed(2)} m`;
+        let min = ensayoDetails.estrato_profundidad_min;
+        let max = ensayoDetails.estrato_profundidad_max;
+        
+        // Fallbacks si es nulo, vacío, o si ambos son cero y tenemos algo en formData o resultados
+        if (min === null || min === undefined || (Number(min) === 0 && Number(max) === 0)) {
+          const alternativeMin = getNested(formData, "profundidad_inicial", null) || 
+                                 getNested(formData, "profundidad_min", null) || 
+                                 getNested(formData, "cota_inicial", null) || 
+                                 getNested(resultados, "profundidad_inicial", null) || 
+                                 ensayoDetails.estrato_profundidad_min;
+          
+          const alternativeMax = getNested(formData, "profundidad_final", null) || 
+                                 getNested(formData, "profundidad_max", null) || 
+                                 getNested(formData, "cota_final", null) || 
+                                 getNested(resultados, "profundidad_final", null) || 
+                                 ensayoDetails.estrato_profundidad_max;
+          
+          if (alternativeMin !== null && alternativeMin !== undefined && alternativeMin !== "") min = alternativeMin;
+          if (alternativeMax !== null && alternativeMax !== undefined && alternativeMax !== "") max = alternativeMax;
+        }
+        
+        const numMin = (min !== null && min !== undefined && min !== "") ? Number(min) : 0.00;
+        const numMax = (max !== null && max !== undefined && max !== "") ? Number(max) : 0.00;
+        
+        return `${numMin.toFixed(2)} - ${numMax.toFixed(2)} m`;
       }
-      return "N/A";
+      if (source === "longitud") return coordE || "N/A";
+      if (source === "latitud") return coordN || "N/A";
+      if (source === "fecha_muestreo") {
+        val = ensayoDetails.fecha_muestreo || ensayoDetails.fecha || ensayoDetails.created_at;
+        if (!val) return "N/A";
+      } else if (source === "calicata" || source === "exploracion") {
+        val = ensayoDetails.calicata || ensayoDetails.cantera_codigo || ensayoDetails.progresiva_codigo || "N/A";
+        if (!val) return "N/A";
+      } else {
+        return "N/A";
+      }
     }
 
     if (format === "progresiva") {
@@ -243,73 +312,14 @@ export default function EnsayoReporteImprimible() {
     return val;
   };
 
-  // Coordenadas dinámicas de respaldo
-  let coordE = "N/A";
-  let coordN = "N/A";
-  if (ensayoDetails.coordenadas) {
-    const coords = String(ensayoDetails.coordenadas);
-    const matchE = coords.match(/E:\s*(\d+(\.\d+)?)/i);
-    const matchN = coords.match(/N:\s*(\d+(\.\d+)?)/i);
-    if (matchE) coordE = matchE[1];
-    if (matchN) coordN = matchN[1];
-  } else if (ensayoDetails.longitud && ensayoDetails.latitud) {
-    coordE = Number(ensayoDetails.longitud).toFixed(6);
-    coordN = Number(ensayoDetails.latitud).toFixed(6);
-  }
-
   // --- RENDERS DE COMPONENTES DINÁMICOS DE REPORTES ---
 
   // Renderizado dinámico de Metadatos
   const renderMetadata = (fields) => {
-    if (!fields) {
-      // Fallback genérico inteligente de alta calidad basado en campos reales
-      return (
-        <table className="table-metadata">
-          <tbody>
-            <tr>
-              <td className="meta-label" style={{ width: "12%" }}>Proyecto:</td>
-              <td className="meta-value value-highlight" colSpan="7">
-                {ensayoDetails.proyecto_nombre || "ESTUDIO DE MECÁNICA DE SUELOS"}
-              </td>
-            </tr>
-            <tr>
-              <td className="meta-label">Ubicación:</td>
-              <td className="meta-sublabel" style={{ width: "8%" }}>Lugar:</td>
-              <td className="meta-value" style={{ width: "20%" }}>{ensayoDetails.tramo_nombre || "N/A"}</td>
-              <td className="meta-sublabel" style={{ width: "8%" }}>Distrito:</td>
-              <td className="meta-value" style={{ width: "15%" }}>{ensayoDetails.distrito || "N/A"}</td>
-              <td className="meta-sublabel" style={{ width: "8%" }}>Provincia:</td>
-              <td className="meta-value" style={{ width: "15%" }}>{ensayoDetails.provincia || "N/A"}</td>
-              <td className="meta-sublabel" style={{ width: "8%" }}>Dpto:</td>
-              <td className="meta-value">{ensayoDetails.departamento || "N/A"}</td>
-            </tr>
-            <tr>
-              <td className="meta-label">Solicitante:</td>
-              <td className="meta-value" colSpan="3">{ensayoDetails.solicitante || "GERENCIA REGIONAL DE TRANSPORTES Y COMUNICACIONES"}</td>
-              <td className="meta-label" colSpan="2">Coordenadas:</td>
-              <td className="meta-value" colSpan="2" style={{ fontWeight: "600" }}>E: {coordE} | N: {coordN}</td>
-            </tr>
-            <tr>
-              <td className="meta-label" rowSpan="2">Datos de la muestra:</td>
-              <td className="meta-sublabel">Exploración:</td>
-              <td className="meta-value">{ensayoDetails.calicata || "C-1"}</td>
-              <td className="meta-sublabel">Progresiva:</td>
-              <td className="meta-value">{formatProgresiva(ensayoDetails.progresiva_codigo)}</td>
-              <td className="meta-sublabel">Estrato:</td>
-              <td className="meta-value">{ensayoDetails.estrato_orden || "E-1"}</td>
-              <td className="meta-sublabel">Lado:</td>
-              <td className="meta-value">{ensayoDetails.lado || "N/A"}</td>
-            </tr>
-            <tr>
-              <td className="meta-sublabel">Profundidad:</td>
-              <td className="meta-value" colSpan="3">{ensayoDetails.estrato_profundidad_min ?? "0.00"} - {ensayoDetails.estrato_profundidad_max ?? "1.00"} m</td>
-              <td className="meta-sublabel" colSpan="2">Fecha Muestreo:</td>
-              <td className="meta-value" colSpan="2">{formatFechaEsp(ensayoDetails.fecha_muestreo || ensayoDetails.fecha || ensayoDetails.created_at)}</td>
-            </tr>
-          </tbody>
-        </table>
-      );
-    }
+    // Si no hay fields definidos (ej. página 2), NO renderizar nada
+    if (fields === null || fields === undefined) return null;
+    // Si es un array vacío, tampoco renderizar
+    if (Array.isArray(fields) && fields.length === 0) return null;
 
     return (
       <table className="table-metadata">
@@ -348,6 +358,7 @@ export default function EnsayoReporteImprimible() {
       </table>
     );
   };
+
 
   // Helper para particionar arrays (usado por table_pesos)
   const chunkArray = (arr, size) => {
@@ -808,12 +819,24 @@ export default function EnsayoReporteImprimible() {
       </div>
 
       {pages.map((page, pageIndex) => {
+        const isLastPage = pageIndex === pages.length - 1;
+        // El header siempre se muestra (fallback global si la página no define uno propio)
         const currentHeader = page.header || reportConfig?.header;
-        const currentMetadata = page.metadataFields || reportConfig?.metadataFields;
-        const currentSignatures = page.signatures || reportConfig?.signatures;
+        // Los metadatos SOLO se muestran si la página los define explícitamente,
+        // O si es la primera página (pageIndex === 0) y están en el config global.
+        const currentMetadata = page.metadataFields !== undefined
+          ? page.metadataFields
+          : (pageIndex === 0 ? reportConfig?.metadataFields : null);
+        // Las firmas se muestran si la página las define,
+        // o si es la ÚLTIMA página y el config global las tiene.
+        const currentSignatures = page.signatures !== undefined
+          ? page.signatures
+          : (isLastPage ? reportConfig?.signatures : null);
+        // El código de ensayo solo se muestra en páginas que no lo ocultan explícitamente
+        const showCodeBanner = !page.hideCodeBanner && (pageIndex === 0 || page.showCodeBanner === true);
 
         return (
-          <div key={pageIndex} className="reporte-a4-sheet" style={{ pageBreakAfter: "always" }}>
+          <div key={pageIndex} className="reporte-a4-sheet" style={{ pageBreakAfter: isLastPage ? "auto" : "always" }}>
             {/* ENCABEZADO OFICIAL DINÁMICO */}
             <header className="reporte-header-container">
               <div className="header-logo-left">
@@ -838,18 +861,20 @@ export default function EnsayoReporteImprimible() {
               </div>
             </header>
 
-            {/* FRANJA DE CÓDIGO */}
-            {(!page.hideCodeBanner && !reportConfig?.hideCodeBanner) && (
+            {/* FRANJA DE CÓDIGO - solo en páginas que deben mostrarlo */}
+            {showCodeBanner && (
               <div className="reporte-code-banner">
                 <div className="code-label">{page.codeBannerLabel || reportConfig?.codeBannerLabel || "CÓDIGO"}</div>
                 <div className="code-value">{ensayoDetails.codigo_ensayo || ensayoDetails.codigo_generado || `ENS-${ensayoDetails.id}`}</div>
               </div>
             )}
 
-            {/* FICHA TÉCNICA - DATOS DEL PROYECTO Y MUESTRA */}
-            <section className="reporte-metadata-section">
-              {renderMetadata(currentMetadata)}
-            </section>
+            {/* FICHA TÉCNICA - DATOS DEL PROYECTO Y MUESTRA (solo página 1 o páginas que la definan) */}
+            {currentMetadata != null && (
+              <section className="reporte-metadata-section">
+                {renderMetadata(currentMetadata)}
+              </section>
+            )}
 
             {/* CONTENIDO PRINCIPAL DEL ENSAYO */}
             <main className="reporte-main-content">
@@ -880,23 +905,24 @@ export default function EnsayoReporteImprimible() {
 
               {/* GRÁFICOS DINÁMICOS */}
               {page.charts && graficosConfig && (
-                <div className="reporte-charts-grid" style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                <div className="reporte-charts-grid" style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "6px" }}>
                   {page.charts.map((chart, chartIdx) => {
                     if (chart.position === "after_layout") {
+                      const chartH = chart.height || "95mm";
                       return (
                         <section 
                           key={chartIdx} 
                           className="reporte-chart-container-wrapper" 
                           style={{ 
-                            height: chart.height || "60mm", 
-                            flex: 1,
+                            height: chartH,
+                            flex: "0 0 auto",
                             marginTop: "0px"
                           }}
                         >
                           <div className="chart-header-title">
                             {String(chart.title || chart.chartConfigKey).replace(/_/g, " ").toUpperCase()}
                           </div>
-                          <div className="reporte-chart-body">
+                          <div className="reporte-chart-body" style={{ height: `calc(${chartH} - 22px)` }}>
                             <VisorGraficos
                               graficosConfig={graficosConfig}
                               resultados={resultados}
@@ -910,6 +936,7 @@ export default function EnsayoReporteImprimible() {
                                 datos_formulario: formData,
                                 resultado: resultados
                               }]}
+                              printHeight={chartH}
                             />
                           </div>
                         </section>

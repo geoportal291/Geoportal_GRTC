@@ -1629,14 +1629,29 @@ const getEnsayoDetailsById = async (id) => {
                 est.parent_type,
                 est.parent_id,
                 est.orden as estrato_orden,
+                est.nombre as estrato_nombre,
+                est.cota_inicial as estrato_profundidad_min,
+                est.cota_final as estrato_profundidad_max,
                 prog.id as progresiva_id,
                 prog.codigo as progresiva_codigo,
                 prog.nombre as progresiva_nombre,
+                prog.coordenada_este as prog_coordenada_este,
+                prog.coordenada_norte as prog_coordenada_norte,
+                prog.lado as prog_lado,
+                prog.fecha_ejecucion,
+                prog.descripcion as progresiva_descripcion,
                 tramo.id as tramo_id,
                 tramo.nombre as tramo_nombre,
+                tramo.coordenada_este as tramo_coordenada_este,
+                tramo.coordenada_norte as tramo_coordenada_norte,
                 can.id as cantera_id,
                 can.nombre as cantera_nombre,
                 can.id_progresiva_referencia as progresiva_referencia_id,
+                can.coordenada_este as can_coordenada_este,
+                can.coordenada_norte as can_coordenada_norte,
+                can.latitud as can_latitud,
+                can.longitud as can_longitud,
+                can.lado as can_lado,
                 pref.codigo as cantera_codigo,
                 proy_prog.id as proyecto_id_progresiva,
                 COALESCE(
@@ -1649,21 +1664,34 @@ const getEnsayoDetailsById = async (id) => {
                     to_jsonb(proy_can)->>'nombre',
                     to_jsonb(proy_can)->>'nombre_proyecto',
                     to_jsonb(proy_can)->>'proyecto_nom'
-                ) as proyecto_nombre_cantera
+                ) as proyecto_nombre_cantera,
+                COALESCE(dep_prog.nombre, dep_can.nombre) as departamento,
+                COALESCE(prov_prog.nombre, prov_can.nombre) as provincia,
+                COALESCE(dist_prog.nombre, dist_can.nombre) as distrito
             FROM ensayos ens
             LEFT JOIN tipo_ensayo te ON ens.tipo_ensayo = te.id
             LEFT JOIN estratos est ON ens.estrato_id = est.id
             LEFT JOIN progresivas prog ON est.parent_type = 'progresiva' AND est.parent_id = prog.id
             LEFT JOIN progresivas tramo ON prog.parent_id = tramo.id
             LEFT JOIN proyectos proy_prog ON prog.proyecto_id = proy_prog.id
+            LEFT JOIN codigo_departamentos dep_prog ON proy_prog.departamento = dep_prog.codigo_departamento
+            LEFT JOIN provincias prov_prog ON proy_prog.provincia = prov_prog.codigo_provincia
+            LEFT JOIN distritos dist_prog ON proy_prog.distrito = dist_prog.codigo_distrito
             LEFT JOIN canteras can ON est.parent_type = 'cantera' AND est.parent_id = can.id
             LEFT JOIN progresivas pref ON can.id_progresiva_referencia = pref.id
             LEFT JOIN proyectos proy_can ON can.id_proyecto = proy_can.id
+            LEFT JOIN codigo_departamentos dep_can ON proy_can.departamento = dep_can.codigo_departamento
+            LEFT JOIN provincias prov_can ON proy_can.provincia = prov_can.codigo_provincia
+            LEFT JOIN distritos dist_can ON proy_can.distrito = dist_can.codigo_distrito
             WHERE ens.id = $1
         `, [id]);
         const row = result.rows[0];
         if (!row) return null;
         const hydratedRow = await ensureEnsayoDerivedFields(row, db);
+
+        const coordE = hydratedRow.prog_coordenada_este || hydratedRow.tramo_coordenada_este || hydratedRow.can_coordenada_este || hydratedRow.can_longitud || null;
+        const coordN = hydratedRow.prog_coordenada_norte || hydratedRow.tramo_coordenada_norte || hydratedRow.can_coordenada_norte || hydratedRow.can_latitud || null;
+        const lado = hydratedRow.prog_lado || hydratedRow.can_lado || hydratedRow.lado || null;
 
         return {
             ...hydratedRow,
@@ -1674,7 +1702,20 @@ const getEnsayoDetailsById = async (id) => {
             proyecto_nombre: hydratedRow.proyecto_nombre_progresiva || hydratedRow.proyecto_nombre_cantera || null,
             tramo_id: hydratedRow.tramo_id || hydratedRow.progresiva_referencia_id || null,
             tramo_nombre: hydratedRow.tramo_nombre || null,
-            config_reporte_pdf: hydratedRow.config_reporte_pdf
+            config_reporte_pdf: hydratedRow.config_reporte_pdf,
+            // Campos para el reporte de impresión
+            estrato_profundidad_min: hydratedRow.estrato_profundidad_min,
+            estrato_profundidad_max: hydratedRow.estrato_profundidad_max,
+            lado: lado,
+            coordenada_este: coordE,
+            coordenada_norte: coordN,
+            longitud: coordE, // Mapeamos a longitud para compatibilidad del reporte
+            latitud: coordN,  // Mapeamos a latitud para compatibilidad del reporte
+            departamento: hydratedRow.departamento || null,
+            provincia: hydratedRow.provincia || null,
+            distrito: hydratedRow.distrito || null,
+            fecha_muestreo: hydratedRow.fecha_ejecucion || hydratedRow.fecha || hydratedRow.created_at,
+            calicata: hydratedRow.progresiva_descripcion || hydratedRow.progresiva_nombre || hydratedRow.cantera_nombre || null,
         };
     } catch (error) {
         console.error(`[ERROR] getEnsayoDetailsById ${id}:`, error);

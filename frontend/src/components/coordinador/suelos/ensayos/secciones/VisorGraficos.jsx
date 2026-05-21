@@ -1158,7 +1158,7 @@ const buildChartData = (chartConfig, datasets = []) => {
   return { datasets };
 };
 
-const buildChartOptions = (chartConfig, datasets = []) => {
+const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false) => {
   const topBands = Array.isArray(chartConfig?.decorations?.topBands)
     ? chartConfig.decorations.topBands
     : [];
@@ -1188,15 +1188,15 @@ const buildChartOptions = (chartConfig, datasets = []) => {
     normalized: true,
     spanGaps: true,
     animation: {
-      duration: datasets.length > 20 ? 0 : 450,
+      duration: isPrintMode ? 0 : (datasets.length > 20 ? 0 : 450),
       easing: "easeOutQuart",
     },
     layout: {
       padding: {
         top: topBands.length ? 40 : 12,
-        right: 12,
-        bottom: 8,
-        left: 8,
+        right: isPrintMode ? 16 : 12,
+        bottom: isPrintMode ? 28 : 12,
+        left: isPrintMode ? 16 : 8,
       },
     },
     interaction: {
@@ -1342,7 +1342,7 @@ const buildChartOptions = (chartConfig, datasets = []) => {
           text: chartConfig?.x_axis?.label || "",
           color: "#2563eb",
           font: { size: 13, weight: "700" },
-          padding: { top: 12 },
+          padding: { top: isPrintMode ? 4 : 12 },
         },
         reverse: chartConfig?.x_axis?.reverse || false,
         min: chartConfig?.x_axis?.min,
@@ -1463,14 +1463,17 @@ const VisorGraficos = ({
   calculationConfig = null,
   targetChartId = null,
   isPrintMode = false,
+  printHeight = null, // Altura de impresión forzada desde el reportConfig (ej: '95mm')
 }) => {
   const chartRefs = useRef({});
   const getChartHeight = (chartConfig = {}) => {
     if (isPrintMode) {
-      // En modo impresión, usamos la altura definida en el config (ej. 60mm) o un valor compacto por defecto
+      // Prioridad 1: altura forzada desde el padre (reportConfig)
+      if (printHeight) return printHeight;
+      // Prioridad 2: altura en el propio chartConfig de la DB
       const rawHeight = chartConfig?.height;
       if (typeof rawHeight === 'string' && rawHeight.endsWith('mm')) {
-        return rawHeight; // Permitir que pase la altura en milímetros directamente para CSS
+        return rawHeight;
       }
       return Number(rawHeight) ? `${Number(rawHeight)}px` : "220px";
     }
@@ -1557,7 +1560,7 @@ const VisorGraficos = ({
       chartInstances[chartId] = new Chart(ctx, {
         type: chartConfig.type || "line",
         data: buildChartData(chartConfig, datasets),
-        options: buildChartOptions(chartConfig, datasets),
+        options: buildChartOptions(chartConfig, datasets, isPrintMode),
       });
     });
 
@@ -1588,21 +1591,19 @@ const VisorGraficos = ({
 
   if (isPrintMode) {
     return (
-      <div className="visor-graficos-print-wrapper" style={{ width: "100%", padding: 0, margin: 0 }}>
+      <div className="visor-graficos-print-wrapper" style={{ width: "100%", height: "100%", padding: 0, margin: 0 }}>
         {preparedCharts.map(({ chartConfig }, index) => {
           const chartId = chartConfig.id || `grafico-${index}`;
-          const height = getChartHeight(chartConfig);
           return (
             <div 
               key={chartId} 
               className="chart-container-print" 
               style={{ 
                 width: "100%", 
-                height: height, 
+                height: "100%", 
                 position: "relative",
-                padding: "2px",
-                border: "1px solid #cbd5e1",
-                borderRadius: "4px",
+                padding: "4px",
+                border: "none",
                 backgroundColor: "#ffffff",
                 boxSizing: "border-box"
               }}
