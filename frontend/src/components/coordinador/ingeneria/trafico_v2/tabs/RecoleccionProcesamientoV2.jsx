@@ -6,7 +6,7 @@ import TrafficInternalGeoMap from '../components/TrafficInternalGeoMap';
 import { MODULE_CONFIG } from '../trafficV2Utils';
 import { useAuth } from '../../../../../data/contexts/AuthContext';
 
-const RecoleccionProcesamientoV2 = ({ activeSubTab, stations, sections, onReload }) => {
+const RecoleccionProcesamientoV2 = ({ activeSubTab, stations, sections, onReload, extractedTrafficData, setExtractedTrafficData }) => {
   const { selectedProjectId } = useAuth();
   const moduleConfig = MODULE_CONFIG[activeSubTab];
   const entities = useMemo(
@@ -69,6 +69,8 @@ const RecoleccionProcesamientoV2 = ({ activeSubTab, stations, sections, onReload
           moduleKey={moduleConfig.id}
           moduleLabel={moduleConfig.label}
           onReload={onReload}
+          extractedTrafficData={extractedTrafficData}
+          setExtractedTrafficData={setExtractedTrafficData}
         />
       </div>
 
@@ -80,6 +82,7 @@ const RecoleccionProcesamientoV2 = ({ activeSubTab, stations, sections, onReload
         onUploadSuccess={() => {
           if (onReload) onReload();
         }}
+        setExtractedTrafficData={setExtractedTrafficData}
       />
     </>
   );

@@ -314,14 +314,68 @@ export default function CanteraFormModal({
   // Memoize KML IDs to prevent map reload/flicker
   const kmlIdsMemo = useMemo(() => tramoKmlTrazadoId ? [tramoKmlTrazadoId] : [], [tramoKmlTrazadoId]);
 
+  // Agrupar progresivas: Primero con datos (estratos_perfil.length > 0) y luego sin datos.
+  // Ambos grupos ordenados numéricamente de menor a mayor kilometraje.
+  const progresivasAgrupadas = useMemo(() => {
+    const parseProgresivaToMeters = (rawCodigo) => {
+      if (!rawCodigo) return 0;
+      if (rawCodigo.includes('-')) {
+        const parts = rawCodigo.split('-');
+        const metersStr = parts[parts.length - 1];
+        const meters = parseInt(metersStr, 10);
+        if (!isNaN(meters)) return meters;
+      }
+      if (rawCodigo.includes('+')) {
+        const clean = rawCodigo.replace(/km\s*/gi, '').trim();
+        const parts = clean.split('+');
+        if (parts.length === 2) {
+          const km = parseInt(parts[0], 10) || 0;
+          const meters = parseInt(parts[1], 10) || 0;
+          return km * 1000 + meters;
+        }
+      }
+      const num = parseInt(rawCodigo, 10);
+      if (!isNaN(num)) return num;
+      return 0;
+    };
+
+    const conDatos = [];
+    const sinDatos = [];
+
+    progresivas.forEach(prog => {
+      const tienePerfil = Array.isArray(prog.estratos_perfil) && prog.estratos_perfil.length > 0;
+      if (tienePerfil) {
+        conDatos.push(prog);
+      } else {
+        sinDatos.push(prog);
+      }
+    });
+
+    // Ordenar numéricamente de menor a mayor kilometraje
+    const sortByMeters = (a, b) => parseProgresivaToMeters(a.codigo) - parseProgresivaToMeters(b.codigo);
+    conDatos.sort(sortByMeters);
+    sinDatos.sort(sortByMeters);
+
+    return { conDatos, sinDatos };
+  }, [progresivas]);
+
   const handleNextStep = () => setStep((prev) => prev + 1);
   const handlePrevStep = () => setStep((prev) => prev - 1);
 
   // ✅ Guardar
-  const [imagenFile, setImagenFile] = useState(null);
+  const [imagenFiles, setImagenFiles] = useState([]);
 
-  const handleImagenChange = (e) => {
-    setImagenFile(e.target.files[0]);
+  const handleImagenesChange = (e) => {
+    const files = Array.from(e.target.files);
+    setImagenFiles(prev => [...prev, ...files]);
+  };
+
+  const handleRemoveFile = (index) => {
+    setImagenFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleClearFiles = () => {
+    setImagenFiles([]);
   };
 
   // ... (resto de los hooks y funciones)
@@ -352,28 +406,28 @@ export default function CanteraFormModal({
       // 2. Save Cantera (Create or Update) first to ensure we have an ID
       const savedCantera = await onSave(dataToSave);
 
-      if (savedCantera && savedCantera.id && imagenFile) {
-        // 3. If there is an image, upload it associated with the cantera ID
+      if (savedCantera && savedCantera.id && imagenFiles.length > 0) {
+        // 3. Subir todos los archivos seleccionados de forma masiva
         try {
           const token = user?.token;
           if (!token) throw new Error('No estás autenticado');
 
           const formDataImg = new FormData();
-          formDataImg.append('imagen_cantera', imagenFile);
-          formDataImg.append('canteraId', savedCantera.id);
-          formDataImg.append('descripcion', 'Imagen principal (Formulario)');
+          for (let i = 0; i < imagenFiles.length; i++) {
+            formDataImg.append('files', imagenFiles[i]);
+          }
 
-          await axios.post(`${API_URL}/api/canteras/upload-image`, formDataImg, {
+          await axios.post(`${API_URL}/api/canteras/${savedCantera.id}/upload-bulk`, formDataImg, {
             headers: {
               'Content-Type': 'multipart/form-data',
               Authorization: `Bearer ${token}`,
             },
           });
-          alertify.success('Imagen asociada correctamente.');
+          alertify.success('Imágenes procesadas y subidas correctamente.');
         } catch (uploadError) {
-          console.error('Error al subir la imagen:', uploadError);
+          console.error('Error al subir las imágenes masivas:', uploadError);
           const detailMsg = uploadError.response?.data?.details || uploadError.response?.data?.error || 'Error desconocido';
-          alertify.warning(`La cantera se guardó, pero falló la imagen: ${detailMsg}`);
+          alertify.warning(`La cantera se guardó, pero falló la carga masiva: ${detailMsg}`);
         }
       }
 
@@ -390,8 +444,8 @@ export default function CanteraFormModal({
   if (!showModal) return null;
 
   return createPortal(
-    <div className="overlay" onClick={onClose}>
-      <div className="progresivas-form-container" onClick={(e) => e.stopPropagation()}>
+    <div className="overlay cantera-overlay-custom" onClick={onClose}>
+      <div className="progresivas-form-container cantera-form-modal-custom" onClick={(e) => e.stopPropagation()}>
         {isSubmitting && (
           <div className="loading-overlay">
             <div className="loading-spinner"></div>
@@ -427,12 +481,32 @@ export default function CanteraFormModal({
                   <input type="text" id="material" name="material" value={formData.material} onChange={handleChange} required />
                 </div>
                 <div className="form-group">
-                  <label htmlFor="estado">Estado</label>
-                  <select id="estado" name="estado" value={formData.estado} onChange={handleChange} required>
-                    <option value="Activa">Activa</option>
-                    <option value="Potencial">Potencial</option>
-                    <option value="Inactiva">Inactiva</option>
-                  </select>
+                  <label>Estado</label>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    {[
+                      { value: 'Activa', label: 'Activa', className: 'status-pill-btn activa' },
+                      { value: 'Potencial', label: 'Potencial', className: 'status-pill-btn potencial' },
+                      { value: 'Inactiva', label: 'Inactiva', className: 'status-pill-btn inactiva' }
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, estado: opt.value }))}
+                        className={`${opt.className} ${formData.estado === opt.value ? 'active' : ''}`}
+                        style={{
+                          flex: 1,
+                          padding: '10px 8px',
+                          borderRadius: '8px',
+                          fontWeight: '700',
+                          fontSize: '0.85rem',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="form-group">
                   <label htmlFor="accesibilidad">Accesibilidad</label>
@@ -443,9 +517,69 @@ export default function CanteraFormModal({
                   <textarea id="descripcion" name="descripcion" value={formData.descripcion} onChange={handleChange} rows="3" />
                 </div>
 
-                <div className="form-group full-width">
-                  <label htmlFor="imagen">Imagen de la Cantera</label>
-                  <input type="file" id="imagen" name="imagen" accept="image/*" onChange={handleImagenChange} />
+                <div className="form-group full-width" style={{ marginTop: '5px' }}>
+                  <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span>Imágenes de la Cantera (Imágenes, ZIP/RAR o Carpetas)</span>
+                    {imagenFiles.length > 0 && (
+                      <button type="button" onClick={handleClearFiles} className="btn-clear-uploads" style={{ padding: '2px 8px', fontSize: '0.75rem', background: '#fee2e2', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                        Limpiar selección ({imagenFiles.length})
+                      </button>
+                    )}
+                  </label>
+                  <div className="upload-options-premium" style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                    {/* Input invisible para Archivos (Múltiples imágenes, ZIP/RAR) */}
+                    <label htmlFor="imagen-files-input" className="btn-upload-premium" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600', color: '#475569', transition: 'all 0.2s' }}>
+                      <i className="fas fa-images" style={{ color: '#54a0ca' }}></i>
+                      <span>Seleccionar Archivos</span>
+                    </label>
+                    <input
+                      id="imagen-files-input"
+                      type="file"
+                      accept="image/*,.zip,.rar"
+                      multiple
+                      onChange={handleImagenesChange}
+                      style={{ display: 'none' }}
+                    />
+
+                    {/* Input invisible para Carpetas */}
+                    <label htmlFor="imagen-folder-input" className="btn-upload-premium" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600', color: '#475569', transition: 'all 0.2s' }}>
+                      <i className="fas fa-folder-open" style={{ color: '#f59e0b' }}></i>
+                      <span>Subir Carpeta</span>
+                    </label>
+                    <input
+                      id="imagen-folder-input"
+                      type="file"
+                      webkitdirectory="true"
+                      directory="true"
+                      multiple
+                      onChange={handleImagenesChange}
+                      style={{ display: 'none' }}
+                    />
+                  </div>
+
+                  {/* Previsualización de los archivos seleccionados */}
+                  {imagenFiles.length > 0 && (
+                    <div className="uploaded-files-preview-list" style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '150px', overflowY: 'auto', padding: '8px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                      {imagenFiles.map((file, idx) => {
+                        const isArchive = file.name.endsWith('.zip') || file.name.endsWith('.rar');
+                        const iconClass = isArchive ? 'fa-file-archive' : 'fa-file-image';
+                        const iconColor = isArchive ? '#f59e0b' : '#54a0ca';
+                        
+                        return (
+                          <div key={idx} className="preview-file-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#334155', padding: '4px 8px', background: 'white', border: '1px solid #f1f5f9', borderRadius: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <i className={`fas ${iconClass}`} style={{ color: iconColor }}></i>
+                              <span title={file.name}>{file.name}</span>
+                              <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>({(file.size / 1024).toFixed(1)} KB)</span>
+                            </div>
+                            <button type="button" onClick={() => handleRemoveFile(idx)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.9rem', padding: '2px', fontWeight: 'bold' }}>
+                              &times;
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -553,20 +687,33 @@ export default function CanteraFormModal({
                       <div className="form-group">
                         <label htmlFor="id_progresiva_referencia">Progresiva de Referencia</label>
                         <div className="select-with-loader">
-                          <select
-                            id="id_progresiva_referencia"
-                            name="id_progresiva_referencia"
-                            value={formData.id_progresiva_referencia}
-                            onChange={handleChange}
-                            disabled={!selectedTramoId || loadingProgresivas}
-                          >
-                            <option value="">Seleccione una progresiva</option>
-                            {progresivas.map((prog) => (
-                              <option key={prog.id} value={prog.id}>
-                                {formatProgresivaCodigo(prog.codigo)} - {prog.nombre}
-                              </option>
-                            ))}
-                          </select>
+                            <select
+                              id="id_progresiva_referencia"
+                              name="id_progresiva_referencia"
+                              value={formData.id_progresiva_referencia}
+                              onChange={handleChange}
+                              disabled={!selectedTramoId || loadingProgresivas}
+                            >
+                              <option value="">Seleccione una progresiva</option>
+                              {progresivasAgrupadas.conDatos.length > 0 && (
+                                <optgroup label="📍 Progresivas con Perfil Estratigráfico (Con Datos)">
+                                  {progresivasAgrupadas.conDatos.map((prog) => (
+                                    <option key={prog.id} value={prog.id}>
+                                      ⭐ {formatProgresivaCodigo(prog.codigo)} - {prog.nombre || `Km ${formatProgresivaCodigo(prog.codigo)}`}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {progresivasAgrupadas.sinDatos.length > 0 && (
+                                <optgroup label="🗺️ Progresivas de Trazado KML (Sin Datos)">
+                                  {progresivasAgrupadas.sinDatos.map((prog) => (
+                                    <option key={prog.id} value={prog.id}>
+                                      {formatProgresivaCodigo(prog.codigo)} - {prog.nombre || `Km ${formatProgresivaCodigo(prog.codigo)}`}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
                           {loadingProgresivas && <div className="loading-spinner-inline"></div>}
                         </div>
                       </div>

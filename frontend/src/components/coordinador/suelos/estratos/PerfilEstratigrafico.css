@@ -1,204 +1,357 @@
-/* PerfilEstratigrafico.css - Estilos para el modal de GESTIÓN */
+/* PerfilEstratigrafico.css - Estilos premium para el modal de GESTIÓN */
 
-/* ===== MODAL GENERAL ===== */
-.overlay {
+.perfil-overlay-custom {
     position: fixed;
     inset: 0;
-    background-color: rgba(0, 0, 0, 0.45);
+    background-color: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(2px);
-    z-index: 999;
+    z-index: 2000; /* Superar sidebar, header, mapa */
+    animation: fadeInOverlay 0.25s ease-out forwards;
 }
 
-.perfil-estratigrafico-modal.gestion-modal {
-    background-color: #fff;
-    border-radius: 10px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+@keyframes fadeInOverlay {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.perfil-estratigrafico-modal-custom {
+    background-color: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(226, 232, 240, 0.8);
     width: 90%;
-    max-width: 900px; /* Ancho para el formulario */
+    max-width: 850px;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    animation: fadeIn 0.3s ease;
+    font-family: 'Outfit', 'Inter', -apple-system, sans-serif;
+    animation: slideInModal 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.98); }
-    to { opacity: 1; transform: scale(1); }
+@keyframes slideInModal {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* ===== HEADER ===== */
-.perfil-header {
-    padding: 15px 20px;
-    border-bottom: 1px solid #e0e0e0;
-    background-color: #f7f9fc;
-    flex-shrink: 0;
+/* Header */
+.perfil-header-custom {
+    padding: 20px 25px;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+    background-color: #ffffff;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-shrink: 0;
 }
 
-.perfil-header-title {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.perfil-header h3 {
+.perfil-header-title h3 {
     margin: 0;
-    font-size: 1.3rem;
-    color: #2c3e50;
-    font-weight: 600;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #1e293b;
+    letter-spacing: -0.5px;
 }
 
-.perfil-header h4 {
-    margin: 0;
+.perfil-header-subtitle {
+    margin-top: 4px;
     font-size: 0.9rem;
-    color: #7f8c8d;
-    font-weight: normal;
-}
-
-.perfil-close-btn {
-    background: none;
-    border: none;
-    font-size: 1.8rem;
-    line-height: 1;
-    color: #888;
-    cursor: pointer;
-    transition: color 0.2s, transform 0.2s;
-}
-
-.perfil-close-btn:hover {
-    color: #e74c3c;
-    transform: scale(1.1);
-}
-
-/* ===== CONTENIDO DE GESTIÓN ===== */
-.perfil-content-gestion {
-    padding: 20px;
-    flex-grow: 1;
-    overflow-y: auto; /* Permitir scroll si la lista es larga */
+    color: #64748b;
     display: flex;
-    flex-direction: column;
-}
-
-.estrato-list-header {
-    display: grid;
-    grid-template-columns: 2fr 3fr 1.5fr 1.5fr 1fr;
-    gap: 10px;
-    padding: 0 15px 10px 15px;
-    border-bottom: 2px solid #dee2e6;
-    font-weight: 600;
-    color: #495057;
-    font-size: 0.9rem;
-}
-
-.estrato-list-body {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.estrato-form-row {
-    display: grid;
-    grid-template-columns: 2fr 3fr 1.5fr 1.5fr 1fr;
-    gap: 10px;
     align-items: center;
-    padding: 8px 15px;
+    gap: 6px;
+    font-weight: 500;
+}
+
+.highlight-badge {
+    background: #eff6ff;
+    color: #2563eb;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    border: 1px solid #dbeafe;
+}
+
+.perfil-close-btn-custom {
+    background: #f1f5f9;
+    border: none;
+    font-size: 1.5rem;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.perfil-close-btn-custom:hover {
+    background: #fee2e2;
+    color: #ef4444;
+    transform: rotate(90deg);
+}
+
+/* Content Area */
+.perfil-content-custom {
+    padding: 25px;
+    flex-grow: 1;
+    overflow-y: auto;
+    background-color: #f8fafc;
+}
+
+/* Empty State */
+.estratos-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 50px 20px;
+    text-align: center;
+    color: #64748b;
+}
+
+.estratos-empty-state i {
+    font-size: 3rem;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 15px;
+}
+
+.estratos-empty-state p {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #334155;
+    margin: 0 0 5px 0;
+}
+
+.estratos-empty-state p.subtitle {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: #64748b;
+    max-width: 320px;
+}
+
+/* Cards Container */
+.estratos-cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Estrato Card */
+.estrato-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.02);
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.estrato-card:hover {
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+    transform: translateY(-2px);
+}
+
+.estrato-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, #2563eb, #3b82f6);
+}
+
+.estrato-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #e2e8f0;
+}
+
+.estrato-index-badge {
+    font-size: 0.85rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #475569;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.estrato-index-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #2563eb;
+}
+
+.btn-delete-estrato-premium {
+    background: #fff5f5;
+    border: 1px solid #fee2e2;
+    color: #ef4444;
+    width: 30px;
+    height: 30px;
     border-radius: 6px;
-    background-color: #fff;
-    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-.estrato-form-row:nth-child(odd) {
-    background-color: #f9f9f9;
+.btn-delete-estrato-premium:hover {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+    transform: scale(1.05);
 }
 
-.estrato-form-row input {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    font-size: 0.95rem;
-    transition: border-color 0.2s, box-shadow 0.2s;
+/* Card Fields Grid */
+.estrato-card-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
 }
 
-.estrato-form-row input:focus {
+.estrato-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.estrato-field-group.full-width {
+    grid-column: span 4;
+}
+
+.estrato-field-group:not(.full-width) {
+    grid-column: span 2;
+}
+
+/* Para cota inicial / final, ocupan 1 columna cada uno */
+.estrato-field-group.cota-field {
+    grid-column: span 1;
+}
+
+@media (max-width: 640px) {
+    .estrato-card-grid {
+        grid-template-columns: 1fr;
+    }
+    .estrato-field-group.full-width,
+    .estrato-field-group:not(.full-width),
+    .estrato-field-group.cota-field {
+        grid-column: span 4;
+    }
+}
+
+.estrato-field-group label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.estrato-field-group input,
+.estrato-field-group textarea {
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: #1e293b;
+    background-color: #ffffff;
+    transition: all 0.2s ease;
     outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+    font-family: inherit;
 }
 
-.estrato-form-row input.readonly-depth {
-    background-color: #e9ecef;
-    color: #495057;
-    border-color: #ced4da;
+.estrato-field-group input:focus,
+.estrato-field-group textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.estrato-field-group input.readonly-depth {
+    background-color: #f1f5f9;
+    border-color: #e2e8f0;
+    color: #64748b;
+    font-weight: 600;
     cursor: not-allowed;
 }
 
-.estrato-actions {
+/* Footer styling */
+.perfil-footer-custom {
+    padding: 15px 25px;
+    border-top: 1px solid rgba(226, 232, 240, 0.8);
+    background-color: #ffffff;
     display: flex;
-    gap: 8px;
-    justify-content: center;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
 }
 
-.estrato-actions button {
-    background: none;
-    border: none;
+.btn-add-estrato-premium {
+    background: #ffffff;
+    border: 2px solid #2563eb;
+    color: #2563eb;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
     cursor: pointer;
-    font-size: 1.1rem;
-    padding: 5px;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    transition: background-color 0.2s;
+    gap: 8px;
+    transition: all 0.2s ease;
 }
 
-.btn-save-estrato {
-    color: #28a745; /* Verde */
-}
-.btn-save-estrato:hover {
-    background-color: rgba(40, 167, 69, 0.1);
+.btn-add-estrato-premium:hover {
+    background: #eff6ff;
+    transform: translateY(-1px);
 }
 
-.btn-delete-estrato {
-    color: #dc3545; /* Rojo */
-}
-.btn-delete-estrato:hover {
-    background-color: rgba(220, 53, 69, 0.1);
-}
-
-/* ===== FOOTER ===== */
-.perfil-footer {
-    padding: 15px 20px;
-    border-top: 1px solid #e0e0e0;
-    background-color: #f7f9fc;
-    display: flex;
-    justify-content: flex-end;
-}
-
-.btn-add-new-estrato {
-    background-color: var(--primary);
-    color: white;
+.btn-save-estrato-premium {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
     border: none;
-    padding: 10px 20px;
-    border-radius: 5px;
-    font-size: 0.95rem;
-    font-weight: 500;
+    color: #ffffff;
+    padding: 11px 24px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
     cursor: pointer;
-    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    transition: all 0.2s ease;
 }
 
-.btn-add-new-estrato:hover {
-    background-color: #0b3b84; /* Un poco más oscuro */
+.btn-save-estrato-premium:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
 }
 
-.btn-add-new-estrato i {
-    margin-right: 8px;
+.btn-save-estrato-premium:disabled {
+    background: #cbd5e1;
+    color: #94a3b8;
+    box-shadow: none;
+    cursor: not-allowed;
 }

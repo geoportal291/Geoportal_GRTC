@@ -565,3 +565,97 @@
     font-style: italic;
     font-size: 11px;
 }
+
+/* ==========================================================================
+   Botones Leaflet - Vista INTERNA (Blanco, sin external-view-active)
+   En la vista externa (dashboard) Leaflet usa el azul marino por defecto.
+   ========================================================================== */
+
+/* Zoom buttons blancos en vista interna */
+.suelos-map-wrapper:not(.external-view-active) .leaflet-bar a,
+.suelos-map-wrapper:not(.external-view-active) .leaflet-bar a:hover {
+    background-color: #ffffff !important;
+    color: #374151 !important;
+    border-color: rgba(0, 0, 0, 0.15) !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
+}
+
+.suelos-map-wrapper:not(.external-view-active) .leaflet-bar a:hover {
+    background-color: #f8fafc !important;
+    color: #111827 !important;
+}
+
+/* Contenedor (barra) de controles blancos */
+.suelos-map-wrapper:not(.external-view-active) .leaflet-bar {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18) !important;
+    border: none !important;
+}
+
+/* Botones de draw (editar, eliminar, etc.) blancos en vista interna */
+.suelos-map-wrapper:not(.external-view-active) .leaflet-draw-toolbar a {
+    background-color: #ffffff !important;
+    color: #374151 !important;
+    border-color: rgba(0,0,0,0.1) !important;
+}
+
+.suelos-map-wrapper:not(.external-view-active) .leaflet-draw-toolbar a:hover {
+    background-color: #f1f5f9 !important;
+    color: #1e293b !important;
+}
+
+/* Botones de Leaflet-Draw Section (guardar, cancelar, etc.) blancos */
+.suelos-map-wrapper:not(.external-view-active) .leaflet-draw-actions a {
+    background-color: #1a237e !important;
+    color: #ffffff !important;
+}
+
+.suelos-map-wrapper:not(.external-view-active) .leaflet-draw-actions a:hover {
+    background-color: #283593 !important;
+}
+
+/* Botón de cambio de capas (Layer Control Toggle) blanco en vista interna */
+.suelos-map-wrapper:not(.external-view-active) .leaflet-control-layers-toggle {
+    background-color: #ffffff !important;
+    border-color: rgba(0,0,0,0.2) !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
+    border-radius: 4px !important;
+}
+
+.suelos-map-wrapper:not(.external-view-active) .leaflet-control-layers-toggle:hover {
+    background-color: #f8fafc !important;
+}
+
+/* Cuando el panel de capas está expandido: fondo blanco */
+.suelos-map-wrapper:not(.external-view-active) .leaflet-control-layers {
+    background-color: #ffffff !important;
+    border: 1px solid rgba(0,0,0,0.15) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    border-radius: 8px !important;
+    color: #1e293b !important;
+    font-size: 0.85rem !important;
+}
+
+.suelos-map-wrapper:not(.external-view-active) .leaflet-control-layers label {
+    color: #374151 !important;
+    font-weight: 500 !important;
+}
+
+/* ==========================================================================
+   Alineación de paneles de controles (zoom + draw toolbar) en vista interna
+   ========================================================================== */
+
+/* El zoom control de Leaflet tiene margen por defecto de 10px */
+.suelos-map-wrapper:not(.external-view-active) .leaflet-top.leaflet-left {
+    margin-top: 10px !important;
+    margin-left: 10px !important;
+}
+
+/* Reducir el espacio entre el panel zoom y el panel draw */
+.suelos-map-wrapper:not(.external-view-active) .leaflet-top .leaflet-control {
+    margin-bottom: 4px !important;
+}
+
+/* El zoom control (barra +/-) tiene un margin extra que reducimos */
+.suelos-map-wrapper:not(.external-view-active) .leaflet-control-zoom {
+    margin-bottom: 4px !important;
+}

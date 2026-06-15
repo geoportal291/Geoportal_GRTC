@@ -39,6 +39,8 @@ const usuariosService = {
     fechaEgresoAcademica = fechaEgresoAcademica || null;
     fechaIngresoLaboral = fechaIngresoLaboral || null;
     fechaEgresoLaboral = fechaEgresoLaboral || null;
+    especialidad = especialidad || null;
+    rol = rol || null;
 
     let client; // Declarar client fuera del try para que sea accesible en finally
 

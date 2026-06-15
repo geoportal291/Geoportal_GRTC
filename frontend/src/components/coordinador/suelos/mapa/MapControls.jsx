@@ -376,11 +376,29 @@ const MapControls = ({ displayMode, map, displayLayers, measurementLayers, persi
         return () => clearInterval(interval);
     }, [displayLayers, measurementLayers, persistentMeasurementLayers]);
 
+    const isHorizontal = displayMode === 'horizontal-bottom';
+
     return (
         <>
-            <div className="leaflet-top leaflet-left" style={{ zIndex: 1000, top: '180px' }}>
-                <div style={{ display: 'flex', gap: '15px' }}>
-                    <div className="leaflet-control leaflet-bar vertical-controls-premium">
+            <div
+                className={isHorizontal ? "leaflet-bottom leaflet-left" : "leaflet-top leaflet-left"}
+                style={{
+                    zIndex: 1000,
+                    position: 'absolute',
+                    margin: 0,
+                    padding: 0,
+                    ...(isHorizontal ? {
+                        bottom: '25px',
+                        left: '370px',
+                        top: 'auto'
+                    } : {
+                        top: '110px',
+                        left: '1px'
+                    })
+                }}
+            >
+                <div style={{ display: 'flex', flexDirection: isHorizontal ? 'column-reverse' : 'row', gap: '15px', alignItems: isHorizontal ? 'flex-start' : 'initial' }}>
+                    <div className={`leaflet-control leaflet-bar ${isHorizontal ? 'horizontal-controls-premium' : 'vertical-controls-premium'}`}>
                         <button className={`leaflet-control-custom-button-premium ${measureModalOpen ? 'active-tool' : ''}`} title="Herramientas de Medición" onClick={() => { setMeasureModalOpen(!measureModalOpen); setDrawModalOpen(false); setDownloadModalOpen(false); }}>
                             <i className="fas fa-ruler-combined"></i>
                         </button>
@@ -393,7 +411,11 @@ const MapControls = ({ displayMode, map, displayLayers, measurementLayers, persi
 
                         {hasDrawings && (
                             <>
-                                <div style={{ height: '8px', borderTop: '1px solid #f1f5f9' }}></div>
+                                {isHorizontal ? (
+                                    <div style={{ width: '1px', backgroundColor: '#334155', height: '24px', margin: '0 8px' }}></div>
+                                ) : (
+                                    <div style={{ height: '8px', borderTop: '1px solid #f1f5f9' }}></div>
+                                )}
                                 <button className="leaflet-control-custom-button-premium save-btn" title="Guardar Cambios" onClick={() => alertify.success('Guardado')}>
                                     <i className="fas fa-save"></i>
                                 </button>
@@ -410,7 +432,7 @@ const MapControls = ({ displayMode, map, displayLayers, measurementLayers, persi
                         )}
                     </div>
 
-                    <div className="popover-container-premium">
+                    <div className={isHorizontal ? "popover-container-premium horizontal-popover" : "popover-container-premium"}>
                         <Modal title="Mediciones" isOpen={measureModalOpen} onClose={() => setMeasureModalOpen(false)} headerColor="#004b8d">
                             <MeasureTools map={map} displayLayers={displayLayers} measurementLayers={measurementLayers} persistentMeasurementLayers={persistentMeasurementLayers} onCloseModal={() => setMeasureModalOpen(false)} />
                         </Modal>

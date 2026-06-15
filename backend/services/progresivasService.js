@@ -11,7 +11,7 @@ const path = require('path');
 const turf = require('@turf/turf');
 const { kml } = require('@tmcw/togeojson');
 const utm = require('utm');
-const { uploadFileToNAS, deleteFileFromNAS } = require('./nasStorageService');
+const { uploadFileToNAS, deleteFileFromNAS } = require('./blobStorageService');
 
 // --- HELPERS PARA INTERPOLACIÓN DE COORDENADAS ---
 const parseToMeters = (val) => {
@@ -569,7 +569,9 @@ const getSubProgresivas = async (req, res) => {
                     est.orden AS estrato_orden,
                     te.descripcion AS tipo_ensayo_descripcion,
                     te.config_key,
-                    te.results_config
+                    te.results_config,
+                    te.config_tabla,
+                    te.config_calculos
                 FROM ensayos ens
                 LEFT JOIN tipo_ensayo te ON ens.tipo_ensayo = te.id
                 LEFT JOIN estratos est ON ens.estrato_id = est.id
@@ -677,7 +679,10 @@ const getAllSubProgresivas = async (req, res) => {
                     est.orden AS estrato_orden,
                     te.descripcion AS tipo_ensayo_descripcion,
                     te.config_key,
-                    te.results_config
+                    te.results_config,
+                    te.config_tabla,
+                    te.config_calculos,
+                    te.config_graficos
                 FROM ensayos ens
                 LEFT JOIN tipo_ensayo te ON ens.tipo_ensayo = te.id
                 LEFT JOIN estratos est ON ens.estrato_id = est.id

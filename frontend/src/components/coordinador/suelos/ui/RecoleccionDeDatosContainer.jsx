@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-
 
 import GestorDeTramosActual from '../gestion_tramos/GestorDeTramosActual';
 import GestorDeCanteras from '../canteras/GestorDeCanteras';
-import GestorDeFuentesDeAgua from './GestorDeFuentesDeAgua';
+import GestorDeFuentesDeAgua from '../fuentes_de_agua/GestorDeFuentesDeAgua';
 import GestorDeMaterialesContainer from './GestorDeMaterialesContainer'; // Importar el nuevo contenedor
 import DashboardSuelos from './DashboardSuelos'; // NEW: Import Dashboard
 import Vista3D from '../3d/Vista3D'; // IMPORTAR VISTA 3D

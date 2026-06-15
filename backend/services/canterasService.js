@@ -5,7 +5,8 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const { exec } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
-const { uploadFileToNAS, deleteFileFromNAS } = require('./nasStorageService');
+const { uploadFileToNAS, deleteFileFromNAS } = require('./blobStorageService');
+const suelosNlpService = require('./suelosNlpService');
 
 // --- Funciones de Canteras ---
 
@@ -123,9 +124,24 @@ const getCanterasByTramoId = async (tramoId) => {
         // 2. Obtener todas las imágenes, estratos y ensayos para esas canteras en paralelo
         const [imagenesResult, estratosResult, ensayosResult] = await Promise.all([
             db.query('SELECT * FROM cantera_imagenes WHERE cantera_id = ANY($1::int[]) ORDER BY created_at ASC', [canteraIds]),
-            db.query('SELECT id, parent_id AS id_cantera, nombre, descripcion, cota_inicial, cota_final, orden FROM estratos WHERE parent_type = \'cantera\' AND parent_id = ANY($1::int[]) ORDER BY parent_id, orden ASC', [canteraIds]),
+            db.query('SELECT id, parent_id AS id_cantera, nombre, descripcion, cota_inicial, cota_final, orden, nlp_color_hex FROM estratos WHERE parent_type = \'cantera\' AND parent_id = ANY($1::int[]) ORDER BY parent_id, orden ASC', [canteraIds]),
             db.query(`
-                SELECT e.id, e.estrato_id, e.tipo_ensayo AS tipo_ensayo_id, te.descripcion AS tipo_ensayo_descripcion, e.nombre_ensayo, e.fecha, e.estado, e.resultado, (u.nombre || ' ' || u.ap_paterno || ' ' || u.ap_materno) AS responsable_nombre
+                SELECT 
+                    e.id, 
+                    e.estrato_id, 
+                    e.tipo_ensayo AS tipo_ensayo_id, 
+                    te.descripcion AS tipo_ensayo_descripcion, 
+                    te.config_key,
+                    te.results_config,
+                    te.config_tabla,
+                    te.config_calculos,
+                    te.config_graficos,
+                    e.nombre_ensayo, 
+                    e.fecha, 
+                    e.estado, 
+                    e.resultado, 
+                    e.datos_formulario,
+                    (u.nombre || ' ' || u.ap_paterno || ' ' || u.ap_materno) AS responsable_nombre
                 FROM ensayos e
                 LEFT JOIN tipo_ensayo te ON e.tipo_ensayo = te.id
                 LEFT JOIN usuariost u ON e.responsable_id = u.id
@@ -331,12 +347,34 @@ const createCanteraEstrato = async (canteraId, estratoData) => {
         const ordenResult = await client.query(ordenQuery, [canteraId]);
         const nextOrden = (ordenResult.rows[0].max_orden || 0) + 1;
 
+        // --- CLASIFICACIÓN NLP Y COLOR ---
+        let colorHex = '#cbd5e1';
+        let sucs = null;
+        let aashto = null;
+        const textoAClasificar = nombre || descripcion;
+        if (textoAClasificar) {
+            try {
+                const nlpRes = await suelosNlpService.clasificarSuelo(textoAClasificar);
+                if (nlpRes && nlpRes.encontrado) {
+                    if (nlpRes.clasificacion_sucs !== "DESCONOCIDO (Requiere Revisión)") {
+                        colorHex = nlpRes.color_hex_sugerido || colorHex;
+                        sucs = nlpRes.clasificacion_sucs || null;
+                        aashto = nlpRes.clasificacion_aashto || null;
+                    } else if (nlpRes.color_hex_sugerido) {
+                        colorHex = nlpRes.color_hex_sugerido;
+                    }
+                }
+            } catch (nlpErr) {
+                console.warn('[NLP Error] No se pudo clasificar el suelo al crear estrato:', nlpErr.message);
+            }
+        }
+
         const query = `
-            INSERT INTO estratos (parent_type, parent_id, nombre, descripcion, cota_inicial, cota_final, orden)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO estratos (parent_type, parent_id, nombre, descripcion, cota_inicial, cota_final, orden, nlp_clasificacion_sucs, nlp_clasificacion_aashto, nlp_color_hex)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *;
         `;
-        const values = ['cantera', canteraId, nombre, descripcion, cota_inicial, cota_final, nextOrden]; // Use nextOrden
+        const values = ['cantera', canteraId, nombre, descripcion, cota_inicial, cota_final, nextOrden, sucs, aashto, colorHex]; // Use nextOrden
         const result = await client.query(query, values);
 
         await client.query('COMMIT');
@@ -352,14 +390,38 @@ const createCanteraEstrato = async (canteraId, estratoData) => {
 
 const updateCanteraEstrato = async (estratoId, estratoData) => {
     const { nombre, descripcion, cota_inicial, cota_final, orden } = estratoData;
+
+    // --- CLASIFICACIÓN NLP Y COLOR ---
+    let colorHex = '#cbd5e1';
+    let sucs = null;
+    let aashto = null;
+    const textoAClasificar = nombre || descripcion;
+    if (textoAClasificar) {
+        try {
+            const nlpRes = await suelosNlpService.clasificarSuelo(textoAClasificar);
+            if (nlpRes && nlpRes.encontrado) {
+                if (nlpRes.clasificacion_sucs !== "DESCONOCIDO (Requiere Revisión)") {
+                    colorHex = nlpRes.color_hex_sugerido || colorHex;
+                    sucs = nlpRes.clasificacion_sucs || null;
+                    aashto = nlpRes.clasificacion_aashto || null;
+                } else if (nlpRes.color_hex_sugerido) {
+                    colorHex = nlpRes.color_hex_sugerido;
+                }
+            }
+        } catch (nlpErr) {
+            console.warn('[NLP Error] No se pudo clasificar el suelo al actualizar estrato:', nlpErr.message);
+        }
+    }
+
     try {
         const query = `
             UPDATE estratos SET
-                nombre = $1, descripcion = $2, cota_inicial = $3, cota_final = $4, orden = $5
-            WHERE id = $6
+                nombre = $1, descripcion = $2, cota_inicial = $3, cota_final = $4, orden = $5,
+                nlp_clasificacion_sucs = $6, nlp_clasificacion_aashto = $7, nlp_color_hex = $8
+            WHERE id = $9
             RETURNING *;
         `;
-        const values = [nombre, descripcion, cota_inicial, cota_final, orden, estratoId];
+        const values = [nombre, descripcion, cota_inicial, cota_final, orden, sucs, aashto, colorHex, estratoId];
         const result = await db.query(query, values);
         return result.rows[0];
     } catch (err) {
@@ -505,6 +567,55 @@ const uploadBulkImages = async (files, canteraId, userId) => {
     return uploadedImages;
 };
 
+const backfillCanteraEstratos = async () => {
+    try {
+        const { rows } = await db.query(
+            "SELECT id, nombre, descripcion FROM estratos WHERE parent_type = 'cantera' AND nlp_color_hex IS NULL"
+        );
+        if (rows.length === 0) return;
+        
+        console.log(`[BACKFILL] Detectados ${rows.length} estratos de cantera sin color. Iniciando clasificación...`);
+        
+        for (const estrato of rows) {
+            const textoAClasificar = estrato.nombre || estrato.descripcion;
+            if (textoAClasificar) {
+                try {
+                    const nlpRes = await suelosNlpService.clasificarSuelo(textoAClasificar);
+                    if (nlpRes && nlpRes.encontrado) {
+                        let colorHex = '#cbd5e1';
+                        let sucs = null;
+                        let aashto = null;
+                        
+                        if (nlpRes.clasificacion_sucs !== "DESCONOCIDO (Requiere Revisión)") {
+                            colorHex = nlpRes.color_hex_sugerido || colorHex;
+                            sucs = nlpRes.clasificacion_sucs || null;
+                            aashto = nlpRes.clasificacion_aashto || null;
+                        } else if (nlpRes.color_hex_sugerido) {
+                            colorHex = nlpRes.color_hex_sugerido;
+                        }
+                        
+                        await db.query(
+                            "UPDATE estratos SET nlp_clasificacion_sucs = $1, nlp_clasificacion_aashto = $2, nlp_color_hex = $3 WHERE id = $4",
+                            [sucs, aashto, colorHex, estrato.id]
+                        );
+                        console.log(`[BACKFILL] Estrato ID ${estrato.id} clasificado como Sucs: ${sucs}, Color: ${colorHex}`);
+                    }
+                } catch (nlpErr) {
+                    console.warn(`[BACKFILL Error] No se pudo clasificar el estrato ID ${estrato.id}:`, nlpErr.message);
+                }
+            }
+        }
+        console.log('[BACKFILL] Clasificación de estratos de cantera completada.');
+    } catch (err) {
+        console.error('[BACKFILL Error] Error general durante el backfill de estratos:', err);
+    }
+};
+
+// Ejecutar el backfill 5 segundos después de que se inicialice el servicio en segundo plano
+setTimeout(() => {
+    backfillCanteraEstratos();
+}, 5000);
+
 module.exports = {
     createCantera,
     updateCantera,
@@ -518,4 +629,5 @@ module.exports = {
     createCanteraEstrato,
     updateCanteraEstrato,
     deleteCanteraEstrato,
+    backfillCanteraEstratos
 };

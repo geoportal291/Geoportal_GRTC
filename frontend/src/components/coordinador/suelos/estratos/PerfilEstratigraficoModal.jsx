@@ -139,44 +139,89 @@ const PerfilEstratigraficoModal = ({ isOpen, onClose, onSave, cantera }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="overlay" onClick={onClose}>
-            <div className="perfil-estratigrafico-modal gestion-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="perfil-header">
+        <div className="perfil-overlay-custom" onClick={onClose}>
+            <div className="perfil-estratigrafico-modal-custom" onClick={(e) => e.stopPropagation()}>
+                <div className="perfil-header-custom">
                     <div className="perfil-header-title">
                         <h3>Gestionar Perfil Estratigráfico</h3>
-                        <h4>Cantera: {cantera?.nombre}</h4>
+                        <div className="perfil-header-subtitle">
+                            Cantera: <span className="highlight-badge">{cantera?.nombre}</span>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="perfil-close-btn">&times;</button>
+                    <button onClick={onClose} className="perfil-close-btn-custom">&times;</button>
                 </div>
-                <div className="perfil-content-gestion">
-                    <div className="estrato-list-header">
-                        <span>Nombre</span>
-                        <span>Descripción</span>
-                        <span>Prof. Inicial (m)</span>
-                        <span>Prof. Final (m)</span>
-                        <span>Acciones</span>
-                    </div>
-                    <div className="estrato-list-body">
-                        {estratos.map((estrato, index) => (
-                            <div className="estrato-form-row" key={estrato.id}>
-                                <input type="text" value={estrato.nombre} onChange={(e) => handleEstratoChange(index, 'nombre', e.target.value)} placeholder="Nombre" />
-                                <input type="text" value={estrato.descripcion} onChange={(e) => handleEstratoChange(index, 'descripcion', e.target.value)} placeholder="Descripción" />
-                                <input type="number" value={estrato.cota_inicial} readOnly disabled className="readonly-depth" />
-                                <input type="number" value={estrato.cota_final} onChange={(e) => handleEstratoChange(index, 'cota_final', e.target.value)} placeholder="Prof. Final" />
-                                <div className="estrato-actions">
-                                    <button onClick={() => handleDeleteEstrato(index)} className="btn-delete-estrato" title="Eliminar este estrato"><i className="fas fa-trash"></i></button>
+                <div className="perfil-content-custom custom-scrollbar">
+                    {estratos.length === 0 ? (
+                        <div className="estratos-empty-state">
+                            <i className="fas fa-layer-group"></i>
+                            <p>No hay estratos definidos para esta cantera.</p>
+                            <p className="subtitle">Haz clic en "Añadir Estrato" para comenzar a definir el perfil estratigráfico.</p>
+                        </div>
+                    ) : (
+                        <div className="estratos-cards-container">
+                            {estratos.map((estrato, index) => (
+                                <div className="estrato-card" key={estrato.id}>
+                                    <div className="estrato-card-header">
+                                        <span className="estrato-index-badge">Estrato {index + 1}</span>
+                                        <button 
+                                            onClick={() => handleDeleteEstrato(index)} 
+                                            className="btn-delete-estrato-premium" 
+                                            title="Eliminar este estrato"
+                                        >
+                                            <i className="fas fa-trash-alt"></i>
+                                        </button>
+                                    </div>
+                                    <div className="estrato-card-grid">
+                                        <div className="estrato-field-group">
+                                            <label>Nombre del Material / Estrato</label>
+                                            <input 
+                                                type="text" 
+                                                value={estrato.nombre} 
+                                                onChange={(e) => handleEstratoChange(index, 'nombre', e.target.value)} 
+                                                placeholder="Ej. Arena arcillosa (SC)" 
+                                            />
+                                        </div>
+                                        <div className="estrato-field-group cota-field">
+                                            <label>Prof. Inicial (m)</label>
+                                            <input 
+                                                type="number" 
+                                                value={estrato.cota_inicial} 
+                                                readOnly 
+                                                disabled 
+                                                className="readonly-depth" 
+                                            />
+                                        </div>
+                                        <div className="estrato-field-group cota-field">
+                                            <label>Prof. Final (m)</label>
+                                            <input 
+                                                type="number" 
+                                                value={estrato.cota_final} 
+                                                onChange={(e) => handleEstratoChange(index, 'cota_final', e.target.value)} 
+                                                placeholder="Ej. 1.50" 
+                                            />
+                                        </div>
+                                        <div className="estrato-field-group full-width">
+                                            <label>Descripción / Observaciones</label>
+                                            <textarea 
+                                                value={estrato.descripcion} 
+                                                onChange={(e) => handleEstratoChange(index, 'descripcion', e.target.value)} 
+                                                placeholder="Descripción del estrato (color, plasticidad, humedad, etc.)" 
+                                                rows="2" 
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="perfil-footer">
-                        <button onClick={handleAddNewEstrato} className="btn-add-new-estrato">
-                            <i className="fas fa-plus"></i> Añadir Estrato
-                        </button>
-                        <button onClick={handleSaveAll} className="btn-primary">
-                            <i className="fas fa-save"></i> Guardar Cambios
-                        </button>
-                    </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <div className="perfil-footer-custom">
+                    <button onClick={handleAddNewEstrato} className="btn-add-estrato-premium">
+                        <i className="fas fa-plus"></i> Añadir Estrato
+                    </button>
+                    <button onClick={handleSaveAll} className="btn-save-estrato-premium">
+                        <i className="fas fa-save"></i> Guardar Cambios
+                    </button>
                 </div>
             </div>
         </div>

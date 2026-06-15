@@ -19,6 +19,7 @@ import {
 } from 'recharts';
 import { MODULE_CONFIG, REPORT_TAB_TO_MODULE, formatDate } from '../trafficV2Utils';
 import { getMockTrafficData } from '../trafficV2MockData';
+import TrafficExcelUploadModal from '../components/TrafficExcelUploadModal';
 
 // Paleta de colores premium para los gráficos
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -47,7 +48,8 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [] }) => {
+const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [], extractedTrafficData = {}, setExtractedTrafficData }) => {
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const moduleKey = REPORT_TAB_TO_MODULE[activeSubTab];
   const moduleConfig = MODULE_CONFIG[moduleKey];
   const isSectionBased = moduleConfig?.entityType === 'section' || activeSubTab === 'encuesta_velocidad';
@@ -89,9 +91,143 @@ const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [] }) => {
 
   // Obtener datos detallados del estudio para la entidad seleccionada
   const trafficData = useMemo(() => {
-    if (!selectedEntity) return null;
-    return getMockTrafficData(selectedEntity.id, isSectionBased ? 'section' : 'station');
-  }, [selectedEntity, isSectionBased]);
+    if (!selectedEntity) return { isRealData: false };
+    
+    // Si hay data real extraída del Excel
+    if (extractedTrafficData && extractedTrafficData[selectedEntity.id]) {
+      const realData = extractedTrafficData[selectedEntity.id];
+      
+      // Filtro de Calidad QA/QC: Solo consumimos la data si está "approved"
+      const currentStatus = realData.moduleStatus?.[moduleKey] || 'pending';
+      if (currentStatus !== 'approved') {
+        return { isRealData: false, qaStatus: currentStatus };
+      }
+      
+      if (activeSubTab === 'conteo_vehicular' && realData.hourlyLabels) {
+        const hourlyVariation = realData.hourlyLabels.map((label, idx) => ({
+           hora: label,
+           Total: realData.hourlyData[idx] || 0
+        }));
+        
+        const vehicleClassification = realData.classificationLabels.map((label, idx) => ({
+           name: label,
+           value: realData.classificationData[idx] || 0
+        })).filter(item => item.value > 0);
+        
+        const imda = realData.classificationData.reduce((a, b) => a + b, 0);
+        
+        const sortedClass = [...vehicleClassification].sort((a,b) => b.value - a.value);
+        const dominantVehicle = sortedClass.length > 0 ? sortedClass[0].name : 'N/A';
+
+        const dailyVariation = realData.dailyLabels.map((label, idx) => ({
+           dia: label,
+           Total: realData.dailyData[idx] || 0
+        }));
+
+        return {
+           imda: Math.round(imda),
+           dominantVehicle,
+           hourlyVariation,
+           vehicleClassification,
+           dailyVariation,
+           isRealData: true
+        };
+      }
+
+      if (activeSubTab === 'encuesta_origen_destino' && (realData.odLivianos || realData.odPesados || realData.odPairs)) {
+        // Función para limpiar datos OD (redondear decimales, filtrar orígenes/destinos inválidos)
+        const cleanODData = (odData) => {
+          if (!odData || !odData.data || !odData.origins) return null;
+          
+          // Filtrar orígenes que sean números (porcentajes escapados como 0.133...)
+          const validOrigins = odData.origins.filter(o => {
+            if (typeof o === 'number') return false;
+            const num = Number(o);
+            return isNaN(num) || o === '';
+          });
+          
+          // Limpiar los datos: redondear valores, eliminar destinos genéricos
+          const cleanedData = odData.data
+            .filter(dest => {
+              if (/^Destino \d+$/i.test(dest.name)) return false;
+              const nameUpper = (dest.name || '').toUpperCase();
+              if (nameUpper.includes('PARTICIPACI') || nameUpper === 'TOTAL' || nameUpper === 'TOTALES' || nameUpper.includes('%')) return false;
+              return true;
+            })
+            .map(dest => {
+              const cleaned = { name: dest.name };
+              // Tomar TODOS los keys del destino que no sean 'name' y que correspondan a orígenes válidos
+              const allKeys = Object.keys(dest).filter(k => k !== 'name');
+              allKeys.forEach(key => {
+                // Solo incluir si el key es un origen válido (string no numérico)
+                if (validOrigins.includes(key)) {
+                  const rounded = Math.round(Number(dest[key]));
+                  if (rounded > 0) {
+                    cleaned[key] = rounded;
+                  }
+                }
+              });
+              return cleaned;
+            })
+            .filter(dest => {
+              return Object.keys(dest).some(k => k !== 'name' && dest[k] > 0);
+            });
+          
+          if (cleanedData.length === 0) return null;
+          return { data: cleanedData, origins: validOrigins.filter(o => 
+            cleanedData.some(d => d[o] !== undefined && d[o] > 0)
+          )};
+        };
+        
+        const cleanedLiv = cleanODData(realData.odLivianos);
+        const cleanedPes = cleanODData(realData.odPesados);
+        
+        // Si después de limpiar no hay datos válidos, marcar como sin datos para mostrar botón de subir
+        if (!cleanedLiv && !cleanedPes) {
+          return { isRealData: false, qaStatus: 'missing', needsReupload: true };
+        }
+        
+        return {
+          odLivianos: cleanedLiv,
+          odPesados: cleanedPes,
+          isRealData: true
+        };
+      }
+
+      if (activeSubTab === 'encuesta_velocidad' && realData.speedDistribution) {
+        return {
+          speedDistribution: realData.speedDistribution,
+          speedStats: realData.speedStats,
+          isRealData: true
+        };
+      }
+
+      if (activeSubTab === 'censo_de_cargas' && (realData.cargasCE2 || realData.cargasCE3)) {
+        return {
+          cargasCE2: realData.cargasCE2 || [],
+          cargasCE3: realData.cargasCE3 || [],
+          isRealData: true
+        };
+      }
+
+      if (activeSubTab === 'ejes_equivalentes' && realData.ejesEquivalentes) {
+        return {
+          esalsProjection: [
+             { year: 2024, projectedEsals: 1200000 },
+             { year: 2029, projectedEsals: 1500000 },
+             { year: 2034, projectedEsals: 2100000 },
+             { year: 2044, projectedEsals: 3500000 },
+          ],
+          ejesTableData: realData.ejesEquivalentes.tableData,
+          ejesEquivalentes: realData.ejesEquivalentes,
+          isRealData: true
+        };
+      }
+    }
+
+    // Si no hay data real extraída, enviamos objeto vacío
+    return { isRealData: false, qaStatus: 'missing' };
+  }, [extractedTrafficData, selectedEntity, activeSubTab, moduleKey]);
 
   if (!selectedEntity || !trafficData) {
     return (
@@ -104,7 +240,32 @@ const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [] }) => {
   }
 
   // Renderizado dinámico de gráficos según la subpestaña activa
-  const renderCharts = () => {
+  const renderCurrentView = () => {
+    if (!trafficData) return null;
+    
+    if (!trafficData.isRealData) {
+      const isRejected = trafficData.qaStatus === 'rejected';
+      const isPending = trafficData.qaStatus === 'pending';
+
+      return (
+        <div className="traffic-v2-grid-sub">
+          <div className="traffic-v2-chart-card traffic-v2-span-full" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', backgroundColor: isRejected ? '#fef2f2' : isPending ? '#fefce8' : '#f8fafc', border: `2px dashed ${isRejected ? '#fca5a5' : isPending ? '#fde047' : '#cbd5e1'}` }}>
+             <i className={isRejected ? "fas fa-times-circle" : isPending ? "fas fa-clock" : "fas fa-file-excel"} style={{ fontSize: '48px', color: isRejected ? '#ef4444' : isPending ? '#eab308' : '#94a3b8', marginBottom: '16px' }}></i>
+             <h4 style={{ color: isRejected ? '#991b1b' : isPending ? '#854d0e' : '#475569', margin: '0 0 8px 0' }}>
+               {isRejected ? 'Datos Rechazados' : isPending ? 'Pendiente de Aprobación' : 'Sin datos extraídos'}
+             </h4>
+             <p style={{ color: isRejected ? '#b91c1c' : isPending ? '#a16207' : '#64748b', textAlign: 'center', maxWidth: '400px' }}>
+               {isRejected 
+                 ? `El Excel de ${titleMap[activeSubTab]} tiene errores detectados y fue rechazado. No se puede generar el reporte hasta que se corrija.` 
+                 : isPending 
+                 ? `Los datos de ${titleMap[activeSubTab]} han sido extraídos pero están a la espera de la revisión del Coordinador.`
+                 : `Sube el archivo Excel oficial de tráfico usando el botón superior para visualizar los gráficos de ${titleMap[activeSubTab]}.`}
+             </p>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeSubTab) {
       case 'conteo_vehicular':
         return (
@@ -124,23 +285,13 @@ const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [] }) => {
                           <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.7} />
                           <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                         </linearGradient>
-                        <linearGradient id="colorBuses" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.7} />
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                        </linearGradient>
-                        <linearGradient id="colorCamiones" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.7} />
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                        </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
                       <XAxis dataKey="hora" tick={{ fill: '#94a3b8', fontSize: 11 }} />
                       <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-                      <Area type="monotone" dataKey="Ligeros" stroke="#3b82f6" fillOpacity={1} fill="url(#colorLigeros)" name="Vehículos Ligeros" />
-                      <Area type="monotone" dataKey="Buses" stroke="#10b981" fillOpacity={1} fill="url(#colorBuses)" name="Buses" />
-                      <Area type="monotone" dataKey="Camiones" stroke="#f59e0b" fillOpacity={1} fill="url(#colorCamiones)" name="Camiones de Carga" />
+                      <Area type="monotone" dataKey="Total" stroke="#3b82f6" fillOpacity={1} fill="url(#colorLigeros)" name="Total Vehículos (Excel)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -181,98 +332,166 @@ const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [] }) => {
                   </div>
                 </div>
               </div>
+
+              {/* Gráfico 3: Tráfico Diario */}
+              <div className="traffic-v2-chart-card traffic-v2-span-full" style={{ marginTop: '22px' }}>
+                <div className="chart-header">
+                  <h4>Tráfico Diario (Semana Representativa)</h4>
+                  <p>Volumen total de vehículos por cada día de la semana según el conteo extraído del Excel.</p>
+                </div>
+                <div className="chart-container" style={{ width: '100%', height: 320 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={trafficData.dailyVariation} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis dataKey="dia" tick={{ fill: '#94a3b8' }} />
+                      <YAxis tick={{ fill: '#94a3b8' }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="Total" fill="#8b5cf6" name="Total Vehículos" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </div>
           </>
         );
 
       case 'encuesta_origen_destino':
+        const COLORS_OD = ['#ef4444', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'];
+        
+        const renderCustomBarLabel = (props) => {
+          const { x, y, width, height, payload, dataKey } = props;
+          
+          // Extraemos el valor real desde el payload usando el dataKey (el nombre del origen)
+          const val = payload && dataKey ? payload[dataKey] : 0;
+          
+          if (!val || val <= 0) return null;
+          
+          return (
+            <text x={x + width / 2} y={y + height / 2} fill="#000" fontSize={11} fontWeight="bold" textAnchor="middle" dominantBaseline="central">
+              {val}
+            </text>
+          );
+        };
+
         return (
           <div className="traffic-v2-grid-sub">
-            <div className="traffic-v2-chart-card traffic-v2-span-full">
-              <div className="chart-header">
-                <h4>Principales Flujos de Origen y Destino Vial</h4>
-                <p>Distribución porcentual de los pares O-D de mayor tránsito captados en el estudio.</p>
+            {trafficData.odLivianos && trafficData.odLivianos.data.length > 0 && (
+              <div className="traffic-v2-chart-card traffic-v2-span-full">
+                <div className="chart-header" style={{ textAlign: 'center' }}>
+                  <h4 style={{ textTransform: 'uppercase' }}>Comparación de Orígenes y Destino en la Estación {selectedEntity ? selectedEntity.id.replace('E-', '') : ''} - Vehículos Livianos</h4>
+                </div>
+                <div className="chart-container" style={{ width: '100%', height: Math.max(400, trafficData.odLivianos.data.length * 40) }}>
+                  <ResponsiveContainer>
+                    <BarChart data={trafficData.odLivianos.data} margin={{ top: 20, right: 30, left: 100, bottom: 20 }} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis type="number" tick={{ fill: '#94a3b8' }} allowDecimals={false} label={{ value: 'Conteo de Vehículos', position: 'insideBottom', offset: -10, fill: '#64748b', fontSize: 12 }} />
+                      <YAxis dataKey="name" type="category" tick={{ fill: '#94a3b8', fontSize: 11 }} width={130} label={{ value: 'Destino (Rutas)', angle: -90, position: 'insideLeft', offset: -100, fill: '#64748b', fontSize: 12 }} />
+                      <Tooltip />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                      {trafficData.odLivianos.origins.map((origen, idx) => (
+                        <Bar key={origen} dataKey={origen} stackId="a" fill={COLORS_OD[idx % COLORS_OD.length]}
+                          label={renderCustomBarLabel} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-              <div className="chart-container" style={{ width: '100%', height: 320 }}>
-                <ResponsiveContainer>
-                  <BarChart data={trafficData.odPairs} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fill: '#94a3b8' }} />
-                    <YAxis dataKey="pair" type="category" tick={{ fill: '#94a3b8', fontSize: 12 }} width={120} />
-                    <Tooltip formatter={(v) => `${v}%`} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="Pasajeros" fill="#3b82f6" name="Tránsito de Pasajeros (%)" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="Carga" fill="#f59e0b" name="Tránsito de Carga (%)" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+            )}
+            
+            {trafficData.odPesados && trafficData.odPesados.data.length > 0 && (
+              <div className="traffic-v2-chart-card traffic-v2-span-full" style={{ marginTop: '20px' }}>
+                <div className="chart-header" style={{ textAlign: 'center' }}>
+                  <h4 style={{ textTransform: 'uppercase' }}>Comparación de Orígenes y Destinos Estación {selectedEntity ? selectedEntity.id.replace('E-', '') : ''} Vehículos Pesados</h4>
+                </div>
+                <div className="chart-container" style={{ width: '100%', height: Math.max(400, trafficData.odPesados.data.length * 40) }}>
+                  <ResponsiveContainer>
+                    <BarChart data={trafficData.odPesados.data} margin={{ top: 20, right: 30, left: 100, bottom: 20 }} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis type="number" tick={{ fill: '#94a3b8' }} allowDecimals={false} label={{ value: 'Conteo de Vehículos', position: 'insideBottom', offset: -10, fill: '#64748b', fontSize: 12 }} />
+                      <YAxis dataKey="name" type="category" tick={{ fill: '#94a3b8', fontSize: 11 }} width={130} label={{ value: 'Origen', angle: -90, position: 'insideLeft', offset: -100, fill: '#64748b', fontSize: 12 }} />
+                      <Tooltip />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                      {trafficData.odPesados.origins.map((origen, idx) => (
+                        <Bar key={origen} dataKey={origen} stackId="a" fill={COLORS_OD[(idx + 8) % COLORS_OD.length]}
+                          label={renderCustomBarLabel} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         );
 
       case 'censo_de_cargas':
+        const dataCE2 = trafficData.cargasCE2 || [];
+        const dataCE3 = trafficData.cargasCE3 || [];
         return (
           <div className="traffic-v2-grid-sub">
-            <div className="traffic-v2-chart-card traffic-v2-span-full">
-              <div className="chart-header">
-                <h4>Espectro de Pesos por Eje vs Límite Legal MTC</h4>
-                <p>Peso promedio medido por tipo de eje en el censo frente al límite de carga máxima autorizada.</p>
+            {dataCE2.length > 0 && (
+              <div className="traffic-v2-chart-card traffic-v2-span-8">
+                <div className="chart-header">
+                  <h4>Cantidades por Producto (Camión CE2 / E-2)</h4>
+                  <p>Frecuencia absoluta de productos transportados por vehículos de 2 ejes.</p>
+                </div>
+                <div className="chart-container" style={{ width: '100%', height: 400 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={dataCE2} margin={{ top: 20, right: 30, left: 20, bottom: 90 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} interval={0} angle={-45} textAnchor="end" />
+                      <YAxis tick={{ fill: '#94a3b8' }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-              <div className="chart-container" style={{ width: '100%', height: 340 }}>
-                <ResponsiveContainer>
-                  <BarChart data={trafficData.loadSpectrum} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis dataKey="tipo" tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                    <YAxis label={{ value: 'Peso (Toneladas)', angle: -90, position: 'insideLeft', fill: '#94a3b8', style: { textAnchor: 'middle' } }} tick={{ fill: '#94a3b8' }} />
-                    <Tooltip formatter={(value) => `${value} TN`} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="Medido" fill="#ef4444" name="Peso Promedio Medido (TN)" radius={[4, 4, 0, 0]}>
-                      {trafficData.loadSpectrum.map((entry, index) => {
-                        const isOverloaded = entry.Medido > entry.Limite;
-                        return <Cell key={`cell-${index}`} fill={isOverloaded ? '#ef4444' : '#10b981'} />;
-                      })}
-                    </Bar>
-                    <Bar dataKey="Limite" fill="#64748b" name="Límite Legal MTC (TN)" radius={[4, 4, 0, 0]} opacity={0.5} />
-                  </BarChart>
-                </ResponsiveContainer>
+            )}
+            {dataCE3.length > 0 && (
+              <div className="traffic-v2-chart-card traffic-v2-span-8">
+                <div className="chart-header">
+                  <h4>Cantidades por Producto (Camión CE3 / E-3)</h4>
+                  <p>Frecuencia absoluta de productos transportados por vehículos de 3 ejes.</p>
+                </div>
+                <div className="chart-container" style={{ width: '100%', height: 400 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={dataCE3} margin={{ top: 20, right: 30, left: 20, bottom: 90 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                      <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} interval={0} angle={-45} textAnchor="end" />
+                      <YAxis tick={{ fill: '#94a3b8' }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-              <div style={{ marginTop: '12px', fontSize: '11px', color: '#94a3b8', display: 'flex', gap: '15px', justifyContent: 'center' }}>
-                <span>🟢 Dentro del límite legal</span>
-                <span>🔴 Eje sobrecargado (Riesgo estructural de pavimento)</span>
-              </div>
-            </div>
+            )}
           </div>
         );
 
       case 'encuesta_velocidad':
         return (
           <div className="traffic-v2-grid-sub">
-            {/* Gráfico de Histograma de Velocidades */}
             <div className="traffic-v2-chart-card traffic-v2-span-8">
               <div className="chart-header">
-                <h4>Distribución General de Velocidades</h4>
-                <p>Histograma de velocidad de vehículos y curva acumulada del tramo.</p>
+                <h4>Distribución Porcentual de Velocidad</h4>
+                <p>Distribución de vehículos por rangos de velocidad (km/h).</p>
               </div>
               <div className="chart-container" style={{ width: '100%', height: 320 }}>
                 <ResponsiveContainer>
-                  <ComposedChart data={trafficData.speedDistribution} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis dataKey="rango" tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                    <YAxis yAxisId="left" tick={{ fill: '#94a3b8' }} label={{ value: 'Vehículos Medidos', angle: -90, position: 'insideLeft', fill: '#94a3b8' }} />
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar yAxisId="left" dataKey="vehiculos" fill="#8b5cf6" name="Número de Vehículos" radius={[4, 4, 0, 0]} />
-                    <ReferenceLine yAxisId="left" x={trafficData.speedDistribution.find((s) => s.rango.includes(String(Math.floor(trafficData.speedStats.v85 / 10) * 10)))?.rango} stroke="#ef4444" strokeDasharray="3 3" label={{ value: `V85 = ${trafficData.speedStats.v85} km/h`, fill: '#ef4444', position: 'top' }} />
-                  </ComposedChart>
+                  <PieChart>
+                    <Pie data={trafficData.speedDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="vehiculos" nameKey="rango" labelLine={false}>
+                      {trafficData.speedDistribution && trafficData.speedDistribution.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
-
-            {/* Ficha técnica de velocidades */}
             <div className="traffic-v2-chart-card traffic-v2-span-4">
               <div className="chart-header">
                 <h4>Velocidades de Operación</h4>
-                <p>Estadísticos de diseño vial y control de velocidad en el tramo.</p>
               </div>
               <div className="traffic-v2-speed-kpis">
                 <div className="speed-kpi-item">
@@ -282,17 +501,7 @@ const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [] }) => {
                 <div className="speed-kpi-item highlight">
                   <span>Velocidad Percentil 85 (V85)</span>
                   <strong>{trafficData.speedStats.v85} km/h</strong>
-                  <small>Velocidad máxima segura de operación</small>
                 </div>
-                <div className="speed-kpi-item">
-                  <span>Velocidad Media Operativa</span>
-                  <strong>{trafficData.speedStats.vMedia} km/h</strong>
-                </div>
-              </div>
-              <div className="traffic-v2-observation-box" style={{ fontSize: '11px', marginTop: '15px' }}>
-                {trafficData.speedStats.v85 > trafficData.speedStats.vDiseno
-                  ? '⚠️ Alerta: La velocidad del percentil 85 supera la velocidad de diseño del tramo. Se recomienda revisar señalización o geometría vial.'
-                  : '✔️ Estado Óptimo: La velocidad operativa V85 está dentro del límite de diseño geométrico aprobado.'}
               </div>
             </div>
           </div>
@@ -301,57 +510,47 @@ const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [] }) => {
       case 'ejes_equivalentes':
         return (
           <div className="traffic-v2-grid-sub">
-            <div className="traffic-v2-chart-card traffic-v2-span-full">
-              <div className="chart-header">
-                <h4>Proyección de Ejes Equivalentes Acumulados (ESALs)</h4>
-                <p>Crecimiento acumulado en el carril de diseño para un horizonte de diseño de 20 años bajo tres escenarios.</p>
+            <div className="traffic-v2-chart-card traffic-v2-span-full" style={{ padding: '20px', overflowX: 'auto' }}>
+              <div className="chart-header" style={{ marginBottom: '20px' }}>
+                <h4>Cálculo de Ejes Equivalentes</h4>
               </div>
-              <div className="chart-container" style={{ width: '100%', height: 340 }}>
-                <ResponsiveContainer>
-                  <AreaChart data={trafficData.esalsProjection} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis dataKey="año" tick={{ fill: '#94a3b8' }} />
-                    <YAxis tickFormatter={formatNumber} tick={{ fill: '#94a3b8' }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Area type="monotone" dataKey="Escenario Alto (5.5%)" stroke="#ef4444" fill="#ef4444" fillOpacity={0.08} name="Alto (5.5% Crecimiento)" />
-                    <Area type="monotone" dataKey="Escenario Medio (4.0%)" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.1} name="Medio (4.0% Crecimiento)" />
-                    <Area type="monotone" dataKey="Escenario Bajo (2.5%)" stroke="#10b981" fill="#10b981" fillOpacity={0.15} name="Bajo (2.5% Crecimiento)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'center' }}>
+                <tbody>
+                  {trafficData.ejesTableData.map((row, rowIndex) => (
+                    <tr key={rowIndex}>
+                      {row.map((cell, colIndex) => (
+                        <td key={colIndex} style={{ border: '1px solid #cbd5e1', padding: '4px 6px' }}>{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         );
 
       default:
-        return <div className="traffic-v2-empty-state">Seleccione un reporte temático.</div>;
+        return null;
     }
   };
 
-  // Construcción del reporte ejecutivo automático
-  const totalUploads = selectedEntity.imagenes ? selectedEntity.imagenes.length : 0;
-  const lastUpload = selectedEntity.imagenes && selectedEntity.imagenes.length > 0 
-    ? selectedEntity.imagenes[0].upload_date 
-    : null;
-
   const getObservationText = () => {
+    if (!trafficData || !trafficData.isRealData) return 'Sube un archivo Excel de Tráfico para generar las observaciones de ingeniería automáticamente.';
     switch (activeSubTab) {
       case 'conteo_vehicular':
-        return `La estación de control ${selectedEntity.nombre || selectedEntity.id} presenta un IMDa calculado de ${trafficData.imda} vehículos por día. La composición principal está liderada por vehículos ligeros con un ${((trafficData.vehicleClassification[0].value / trafficData.imda) * 100).toFixed(1)}%. Se registran picos de flujo de tráfico significativos a las 08:00 hrs y a las 18:00 hrs.`;
+        return `El control ${selectedEntity.nombre || selectedEntity.id} presenta un IMDa calculado de ${trafficData.imda} vehículos por día. La composición principal está liderada por la categoría ${trafficData.dominantVehicle}.`;
       case 'encuesta_origen_destino':
-        return `Para la estación ${selectedEntity.nombre || selectedEntity.id}, el principal par de origen-destino detectado para el transporte de carga es el corredor ${trafficData.odPairs[0].pair} con un ${trafficData.odPairs[0].Carga}% del tráfico total de pesados, seguido por ${trafficData.odPairs[1].pair} (${trafficData.odPairs[1].Carga}%).`;
+        const topOD = trafficData.odPairs && trafficData.odPairs.length > 0 ? trafficData.odPairs[0].pair : 'N/A';
+        return `La dinámica de viajes de la zona está dominada por el par Origen-Destino "${topOD}". Esto confirma la dependencia económica y logística entre dichos centros poblados/urbanos a través de este corredor.`;
       case 'censo_de_cargas':
-        const overloadedAxis = trafficData.loadSpectrum.filter((a) => a.Medido > a.Limite);
-        if (overloadedAxis.length > 0) {
-          return `⚠️ ALERTA DE CARGAS: Se ha detectado sobrecarga vehicular en el censo. Particularmente, el ${overloadedAxis.map(a => a.tipo).join(', ')} excede el límite legal del MTC (Medido: ${overloadedAxis.map(a => `${a.Medido} TN vs Límite ${a.Limite} TN`).join(', ')}). Esto acelerará el deterioro del pavimento en el tramo.`;
-        }
-        return `Las mediciones del censo de cargas de la estación ${selectedEntity.nombre || selectedEntity.id} indican que todos los conjuntos de ejes (simples, tándem y trídem) se encuentran operando dentro de los límites máximos permitidos por el MTC peruano.`;
+        return `Las mediciones del censo de cargas de la entidad ${selectedEntity.nombre || selectedEntity.id} han sido extraídas correctamente. Revisa la distribución de productos para identificar las principales materias primas o manufacturas transportadas en la zona.`;
       case 'encuesta_velocidad':
-        return `El tramo en análisis ${selectedEntity.nombre || selectedEntity.id} cuenta con una velocidad de diseño de ${trafficData.speedStats.vDiseno} km/h. La velocidad del percentil 85 (V85) se midió en ${trafficData.speedStats.v85} km/h. ${trafficData.speedStats.v85 > trafficData.speedStats.vDiseno ? 'Se requiere implementar reductores de velocidad o señalización adicional debido a que los conductores circulan por encima de la velocidad de diseño seguro.' : 'Las velocidades observadas demuestran un comportamiento de conducción conforme al diseño geométrico.'}`;
+        if (trafficData.speedStats) {
+           return `El tramo en análisis ${selectedEntity.nombre || selectedEntity.id} cuenta con una velocidad de diseño de ${trafficData.speedStats.vDiseno} km/h. La velocidad del percentil 85 (V85) se midió en ${trafficData.speedStats.v85} km/h. ${trafficData.speedStats.v85 > trafficData.speedStats.vDiseno ? 'Se requiere implementar reductores de velocidad o señalización adicional debido a que los conductores circulan por encima de la velocidad de diseño seguro.' : 'Las velocidades observadas demuestran un comportamiento de conducción conforme al diseño geométrico.'}`;
+        }
+        return `Datos de velocidad extraídos correctamente para ${selectedEntity.nombre || selectedEntity.id}.`;
       case 'ejes_equivalentes':
-        const finalEsals = trafficData.esalsProjection[19]['Escenario Medio (4.0%)'];
-        return `La proyección de ejes equivalentes acumulados (ESALs) para un periodo de diseño de 20 años en la estación ${selectedEntity.nombre || selectedEntity.id} estima un tráfico de diseño de ${formatNumber(finalEsals)} ejes equivalentes en el escenario de crecimiento del 4.0%. Este parámetro servirá de base directa para el diseño estructural de pavimentos de la vía.`;
+        return `Los cálculos de ejes equivalentes (ESALs) para el tramo ${selectedEntity.nombre || selectedEntity.id} han sido extraídos. Este parámetro servirá de base directa para el diseño estructural de pavimentos de la vía.`;
       default:
         return 'No hay observaciones automáticas registradas para este módulo.';
     }
@@ -401,41 +600,97 @@ const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [] }) => {
 
       <div className="traffic-v2-grid report">
         {/* Panel Izquierdo: Ficha Ejecutiva y Observaciones */}
-        <section className="traffic-v2-panel traffic-v2-span-5">
-          <div className="traffic-v2-panel-header">
+        <section className={`traffic-v2-panel ${activeSubTab === 'encuesta_origen_destino' ? 'traffic-v2-span-12' : 'traffic-v2-span-5'}`} style={{ display: 'flex', flexDirection: activeSubTab === 'encuesta_origen_destino' ? 'row' : 'column', flexWrap: 'wrap', gap: '20px' }}>
+          <div className="traffic-v2-panel-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '4px', width: '100%', flexBasis: '100%' }}>
             <div>
-              <h3>Consolidado Ejecutivo</h3>
-              <p>Ficha de resumen del {titleMap[activeSubTab]} para la entidad seleccionada.</p>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.25rem', color: '#1e293b', margin: '0 0 4px 0' }}>
+                <i className="fas fa-clipboard-list" style={{ color: '#3b82f6' }}></i>
+                Consolidado Ejecutivo
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Ficha de resumen del {titleMap[activeSubTab]} para la entidad seleccionada.</p>
+            </div>
+            {trafficData.isRealData ? (
+              <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid #bbf7d0' }}>
+                <i className="fas fa-check-circle" /> Validado (QA/QC)
+              </span>
+            ) : trafficData.qaStatus === 'rejected' ? (
+              <span style={{ background: '#fee2e2', color: '#991b1b', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid #fecaca' }}>
+                <i className="fas fa-times-circle" /> Rechazado
+              </span>
+            ) : trafficData.qaStatus === 'pending' ? (
+              <span style={{ background: '#fefce8', color: '#854d0e', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid #fef08a' }}>
+                <i className="fas fa-clock" /> Pendiente
+              </span>
+            ) : (
+              <span style={{ background: '#f1f5f9', color: '#475569', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid #e2e8f0' }}>
+                <i className="fas fa-exclamation-triangle" /> Sin Excel
+              </span>
+            )}
+          </div>
+
+          <div className="traffic-v2-kpi-grid" style={{ gridTemplateColumns: activeSubTab === 'encuesta_origen_destino' ? 'repeat(auto-fit, minmax(200px, 1fr))' : '1fr', gap: '12px', flexGrow: 1, minWidth: '300px' }}>
+            <div className="traffic-v2-kpi-card" style={{ padding: '16px', background: 'linear-gradient(to right, #ffffff, #f8fafc)', borderLeft: '4px solid #3b82f6' }}>
+              <span className="traffic-v2-kpi-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <i className="fas fa-map-marker-alt" style={{ color: '#3b82f6' }}></i> Entidad Seleccionada
+              </span>
+              <strong className="traffic-v2-kpi-value" style={{ fontSize: '1.1rem', marginTop: '6px' }}>{selectedEntity.nombre || selectedEntity.id}</strong>
+              <span className="traffic-v2-kpi-hint" style={{ marginTop: '4px' }}>Coordenadas: {selectedEntity.coordenadas || 'N/A'}</span>
+            </div>
+
+            <div className="traffic-v2-kpi-card" style={{ padding: '16px' }}>
+              <span className="traffic-v2-kpi-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <i className="fas fa-chart-line" style={{ color: '#8b5cf6' }}></i> 
+                {activeSubTab === 'conteo_vehicular' ? 'IMDa Estimado' : 
+                 activeSubTab === 'encuesta_velocidad' ? 'V85 Registrada' :
+                 activeSubTab === 'ejes_equivalentes' ? 'Ejes de Diseño' :
+                 'Indicador Principal'}
+              </span>
+              <strong className="traffic-v2-kpi-value" style={{ fontSize: '1.4rem', color: '#1e293b', marginTop: '6px' }}>
+                {trafficData.isRealData ? (
+                   activeSubTab === 'conteo_vehicular' ? `${trafficData.imda} veh/día` :
+                   activeSubTab === 'encuesta_velocidad' ? `${trafficData.speedStats?.v85 || '-'} km/h` :
+                   activeSubTab === 'ejes_equivalentes' ? `Procesado` :
+                   'Disponible'
+                ) : <span style={{ color: '#94a3b8', fontSize: '1.1rem' }}>No calculado</span>}
+              </strong>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+               <div className="traffic-v2-kpi-card" style={{ padding: '14px 12px' }}>
+                 <span className="traffic-v2-kpi-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}><i className="fas fa-file-excel" style={{ color: '#10b981' }}></i> Archivos Base</span>
+                 <strong className="traffic-v2-kpi-value" style={{ fontSize: '1rem' }}>{trafficData.isRealData ? '1 oficial' : '0 archivos'}</strong>
+               </div>
+               <div className="traffic-v2-kpi-card" style={{ padding: '14px 12px' }}>
+                 <span className="traffic-v2-kpi-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}><i className="fas fa-clock" style={{ color: '#f59e0b' }}></i> Actualización</span>
+                 <strong className="traffic-v2-kpi-value" style={{ fontSize: '0.9rem' }}>{trafficData.isRealData ? formatDate(new Date()) : '-'}</strong>
+               </div>
             </div>
           </div>
 
-          <div className="traffic-v2-report-summary vertical">
-            <article>
-              <span>Entidad Seleccionada</span>
-              <strong>{selectedEntity.nombre || selectedEntity.id}</strong>
-            </article>
-            <article>
-              <span>IMDa Estimado</span>
-              <strong>{trafficData.imda} veh/día</strong>
-            </article>
-            <article>
-              <span>Archivos en Registro</span>
-              <strong>{totalUploads} evidencias</strong>
-            </article>
-            <article>
-              <span>Última Actualización</span>
-              <strong>{formatDate(lastUpload)}</strong>
-            </article>
-          </div>
-
-          <div className="traffic-v2-observation-box">
-            <h5>Observaciones de Ingeniería de Tránsito</h5>
-            <p>{getObservationText()}</p>
+          <div className="traffic-v2-observation-box" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: '300px' }}>
+            <h5 style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1e293b', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px', marginBottom: '12px' }}>
+               <i className="fas fa-robot" style={{ color: '#6366f1' }}></i> 
+               Observaciones de Ingeniería
+            </h5>
+            <p style={{ lineHeight: '1.6', color: '#475569', fontSize: '0.9rem' }}>{getObservationText()}</p>
+            
+            {!trafficData.isRealData && (
+               <div style={{ marginTop: 'auto', paddingTop: '16px', display: 'flex', justifyContent: 'center' }}>
+                 <button 
+                   className="traffic-v2-btn primary"
+                   onClick={() => setIsUploadModalOpen(true)}
+                   style={{ width: '100%', padding: '10px', borderRadius: '8px' }}
+                 >
+                   <i className="fas fa-upload" style={{ marginRight: '8px' }} />
+                   Subir Excel de Campo
+                 </button>
+               </div>
+            )}
           </div>
         </section>
 
         {/* Panel Derecho: Visualización Gráfica */}
-        <section className="traffic-v2-panel traffic-v2-span-7">
+        <section className={`traffic-v2-panel ${activeSubTab === 'encuesta_origen_destino' ? 'traffic-v2-span-12' : 'traffic-v2-span-7'}`}>
           <div className="traffic-v2-panel-header">
             <div>
               <h3>Visualización de Datos</h3>
@@ -443,10 +698,19 @@ const ReporteFinalV2 = ({ activeSubTab, stations = [], sections = [] }) => {
             </div>
           </div>
           <div className="traffic-v2-charts-wrapper">
-            {renderCharts()}
+            {renderCurrentView()}
           </div>
         </section>
       </div>
+
+      <TrafficExcelUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        entityId={selectedEntity?.id}
+        selectedEntity={selectedEntity}
+        moduleConfig={moduleConfig}
+        setExtractedTrafficData={setExtractedTrafficData}
+      />
     </div>
   );
 };

@@ -18,6 +18,24 @@ const TraficoV2 = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const CACHE_KEY = `geoportal_traffic_v2_extracted_${selectedProjectId || 'default'}`;
+
+  const [extractedTrafficData, setExtractedTrafficData] = useState(() => {
+    try {
+      const cached = window.localStorage.getItem(CACHE_KEY);
+      return cached ? JSON.parse(cached) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  // Sync to localStorage whenever it changes
+  useEffect(() => {
+    if (Object.keys(extractedTrafficData).length > 0) {
+      window.localStorage.setItem(CACHE_KEY, JSON.stringify(extractedTrafficData));
+    }
+  }, [extractedTrafficData, CACHE_KEY]);
+
   useEffect(() => {
     setPageTitle('Área de Tráfico V2');
   }, [setPageTitle]);
@@ -45,7 +63,24 @@ const TraficoV2 = () => {
           Authorization: `Bearer ${user.token}`
         }
       });
-      setRawRows(Array.isArray(response.data) ? response.data : []);
+      const fetchedData = Array.isArray(response.data) ? response.data : [];
+      setRawRows(fetchedData);
+
+      // Cargar datos_extraidos de la base de datos al estado
+      // Cargar datos_extraidos de la base de datos al estado
+      const newExtracted = { ...extractedTrafficData }; // Empezamos con lo que haya en caché
+      let hasDbData = false;
+      fetchedData.forEach(item => {
+         if (item.datos_extraidos) {
+            newExtracted[item.id] = { ...newExtracted[item.id], ...item.datos_extraidos };
+            hasDbData = true;
+         }
+      });
+      // Solo forzamos la actualización si la DB nos mandó algo nuevo que no teníamos, 
+      // o si la caché estaba vacía, para no sobrescribir la caché con nada.
+      if (hasDbData || Object.keys(extractedTrafficData).length === 0) {
+         setExtractedTrafficData(newExtracted);
+      }
     } catch (loadError) {
       console.error('Error cargando Tráfico V2:', loadError);
       setError('No se pudieron cargar los datos de tráfico para la V2.');
@@ -74,6 +109,8 @@ const TraficoV2 = () => {
         onReload={loadTrafficData}
         onBack={handleBack}
         onSwitchMode={handleSwitchMode}
+        extractedTrafficData={extractedTrafficData}
+        setExtractedTrafficData={setExtractedTrafficData}
       />
     );
   }

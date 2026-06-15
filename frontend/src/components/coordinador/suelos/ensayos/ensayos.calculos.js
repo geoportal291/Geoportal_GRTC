@@ -190,9 +190,9 @@ function calcularRegresionLinealLog(xInput, yInput) {
     }
 
     if (validX.length < 2) {
-        return { 
-            m: 0, b: 0, ll_25: 0, puntos_recta: [], 
-            error: "Se necesitan al menos 2 puntos válidos" 
+        return {
+            m: 0, b: 0, ll_25: 0, puntos_recta: [],
+            error: "Se necesitan al menos 2 puntos válidos"
         };
     }
 
@@ -233,7 +233,8 @@ function calcularRegresionLinealLog(xInput, yInput) {
 
 function topologicalSort(formulas) {
     const graph = new Map();
-    const allNodes = Object.keys(formulas);
+    // Ignorar funciones dinámicas para el ordenamiento topológico
+    const allNodes = Object.keys(formulas).filter(key => !key.startsWith('_functions.'));
     const circular = [];
 
     for (const node of allNodes) {
@@ -241,11 +242,12 @@ function topologicalSort(formulas) {
     }
 
     for (const [node, formula] of Object.entries(formulas)) {
-        const dependencies = getDependencies(formula.substring(1)); // Ignorar el "=" inicial
+        if (node.startsWith('_functions.')) continue;
+        const formulaString = formula.substring(1); // Ignorar el "=" inicial
+        const dependencies = getDependencies(formulaString);
         for (const dep of dependencies) {
-            // Buscamos si la dependencia (ej: "results.curva.x") coincide exacto o es hija de un nodo (ej: "results.curva")
             const matchedNode = allNodes.find(n => dep === n || dep.startsWith(n + '.'));
-            
+
             if (matchedNode) {
                 graph.get(node).in++;
                 graph.get(matchedNode).out.push(node);
@@ -284,28 +286,65 @@ function topologicalSort(formulas) {
     return { sorted, circular };
 }
 
-function runExcelLikeCalculations(excelConfig, formData) {
+/**
+ * Compila y registra en mathjs de forma dinámica cualquier función personalizada
+ * configurada en la base de datos bajo claves que empiezan con "_functions."
+ */
+function registrarFuncionesDinamicas(excelConfig) {
+    if (!excelConfig || typeof excelConfig !== 'object') return;
+
+    const mathFuncs = {};
+    for (const [key, value] of Object.entries(excelConfig)) {
+        if (key.startsWith('_functions.')) {
+            const fnName = key.replace('_functions.', '');
+            try {
+                const compiledFn = new Function(`return (${value})`)();
+                mathFuncs[fnName] = compiledFn;
+            } catch (err) {
+                console.error(`[MOTOR CALC] Error al compilar función dinámica ${fnName}:`, err);
+            }
+        }
+    }
+
+    if (Object.keys(mathFuncs).length > 0) {
+        math.import(mathFuncs, { override: true });
+    }
+}
+
+function runExcelLikeCalculations(excelConfig, formData, tableConfig = null) {
     const { sorted, circular } = topologicalSort(excelConfig);
 
     if (circular.length > 0) {
-        const errorMsg = `Dependencia circular detectada: ${circular.join(', ')}`;
-        console.error("[MOTOR CALC] Error de dependencia circular detectado en la configuración:", circular);
-        return { error: errorMsg };
+        return { error: `Dependencia circular detectada: ${circular.join(', ')}` };
     }
 
-    console.log("[MOTOR CALC - EXCEL] Iniciando recálculo estilo Excel.");
-    console.log("[MOTOR CALC - EXCEL] Orden de evaluación topológica de campos:", sorted);
-    console.log("[MOTOR CALC - EXCEL] Datos de entrada para cálculo (formData):", formData);
-
-    // Clonamos la data para no mutar el estado original directamente durante el proceso
     const dataForLookup = JSON.parse(JSON.stringify(formData));
-    const results = {}; // Objeto para devolver solo los resultados calculados.
+    if (tableConfig) {
+        const simplifiedTableConfig = { tables: {} };
+        const tablesRaw = tableConfig.tables || {};
+        const tablesArray = Array.isArray(tablesRaw) ? tablesRaw : Object.values(tablesRaw);
+        tablesArray.forEach(table => {
+            if (table && table.key) {
+                const rowsRaw = table.rows || [];
+                const rowsArray = Array.isArray(rowsRaw) ? rowsRaw : Object.values(rowsRaw);
+                simplifiedTableConfig.tables[table.key] = {
+                    rows: rowsArray.map(row => ({
+                        key: row?.key,
+                        mm: typeof row?.mm === 'number' ? row.mm : Number(row?.mm || 0),
+                        tamiz: row?.tamiz,
+                        label: row?.label
+                    }))
+                };
+            }
+        });
+        dataForLookup.tableConfig = simplifiedTableConfig;
+    }
+    const results = {};
 
     for (const targetPath of sorted) {
         let formulaString = excelConfig[targetPath].substring(1).trim();
         const dependencies = getDependencies(formulaString);
 
-        // Ordenar dependencias por longitud (descendente) para evitar reemplazos parciales incorrectos
         dependencies.sort((a, b) => b.length - a.length);
 
         const scope = {};
@@ -313,20 +352,16 @@ function runExcelLikeCalculations(excelConfig, formData) {
             const safeDepName = dep.replace(/\./g, '_');
             formulaString = formulaString.split(dep).join(safeDepName);
 
-            // Buscar el valor (en la data original o en resultados previos)
             let value = getNestedValue(dataForLookup, dep);
 
-            // CORRECCIÓN 3: Sanitización inteligente
-            // Si es un objeto (como el resultado de una regresión), lo pasamos tal cual.
-            // Si es algo que se puede convertir a número, lo convertimos (evita "1" + "1" = "11").
             if (typeof value === 'object' && value !== null) {
-                // Dejar objeto tal cual para que mathjs acceda a sus propiedades (ej: curva.x)
+                // Dejar objeto tal cual
             } else {
                 const numericValue = Number(value);
                 if (Number.isFinite(numericValue)) {
                     value = numericValue;
                 } else {
-                    value = 0; // Fallback para basura o vacíos
+                    value = 0;
                 }
             }
 
@@ -336,86 +371,190 @@ function runExcelLikeCalculations(excelConfig, formData) {
         try {
             const result = math.evaluate(formulaString, scope);
 
-            // Redondeo a 4 decimales para evitar errores de punto flotante (0.1 + 0.2 != 0.300000004)
             const roundedResult = typeof result === 'number' && isFinite(result)
                 ? Math.round(result * 10000) / 10000
                 : result;
 
-            console.log(`[MOTOR CALC - EVAL] Variable recalculada: %c${targetPath}`, 'color: #10b981; font-weight: bold;', {
-                formulaOriginal: excelConfig[targetPath],
-                formulaEvaluada: formulaString,
-                scopeValores: scope,
-                valorCalculado: roundedResult
-            });
-
-            // Actualizar la copia interna para que los siguientes cálculos usen este valor nuevo
             setNestedValue(dataForLookup, targetPath, roundedResult);
-            // Guardar en el objeto de resultados finales
             setNestedValue(results, targetPath, roundedResult);
 
         } catch (error) {
-            console.error(`[MOTOR CALC - EVAL ERROR] Error al evaluar variable: ${targetPath}`, {
-                formulaOriginal: excelConfig[targetPath],
-                formulaEvaluada: formulaString,
-                scopeValores: scope,
-                errorStack: error
-            });
-            // En caso de error, devolvemos 0 o NaN según prefieras. 0 es más seguro para no romper la UI.
+            console.error(`[MOTOR CALC EVAL ERROR] en variable: ${targetPath}`, error);
             setNestedValue(results, targetPath, 0);
         }
     }
-    console.log("[MOTOR CALC - EXCEL] Finalizado. Resultados obtenidos:", results);
     return results;
 }
 
 
 // --- MOTOR DE CÁLCULO ANTIGUO (para compatibilidad) ---
 function _processSteps(steps, context) {
-    // Implementación básica del motor antiguo si aun lo usas
-    // Si no usas "steps" en tu configuración nueva, esto no se ejecutará.
     if (!steps) return;
 
     for (const step of steps) {
         if (step.type === 'expression') {
             try {
-                // Lógica simplificada para el motor viejo
                 const result = math.evaluate(step.expression, context);
                 if (step.output) {
                     setNestedValue(context, step.output, result);
                 }
             } catch (e) { }
         }
-        // ... (resto de lógica de loops del motor viejo si es necesaria) ...
     }
 }
 
+/**
+ * Determina dinámicamente el Tamaño Máximo Nominal a partir de una lista ordenada de tamices
+ * y sus correspondientes valores de porcentaje retenido acumulado.
+ * Es completamente genérica y multifuncional: no asume nombres de tamiz ni claves fijas.
+ *
+ * @param {Array} rows Array de objetos de configuración de filas (ej: tableConfig.tables.granulometria.rows)
+ * @param {Object} data Objeto con los datos de resultado o de entrada del ensayo
+ * @param {string} acumPath Sufijo o ruta para buscar el retenido acumulado dentro de cada fila (opcional)
+ */
+function calcularTmnGenerico(rows, data, acumPath = '') {
+    const rowsArray = Array.isArray(rows) ? rows : (rows ? Object.values(rows) : []);
+    if (rowsArray.length === 0 || typeof data !== 'object' || data === null) {
+        return "N/A";
+    }
+
+    // Filtrar y ordenar las filas que representen tamices reales con abertura numérica (mm)
+    const tamicesValidos = rowsArray
+        .filter(row => row && row.key && typeof row.mm === 'number' && Number.isFinite(row.mm))
+        .sort((a, b) => b.mm - a.mm); // Asegurar orden descendente de abertura (mayor a menor)
+
+    for (const row of tamicesValidos) {
+        let valorAcumulado = 0;
+
+        // Buscar el valor acumulado de este tamiz en el objeto de datos
+        if (acumPath) {
+            const val = getNestedValue(data, `${row.key}.${acumPath}`, null);
+            if (val !== null) {
+                valorAcumulado = Number(val);
+            }
+        } else {
+            // Intenta buscar el valor directamente por la clave de la fila, o en propiedades comunes de acumulación
+            const rowData = data[row.key];
+            if (rowData !== undefined) {
+                if (typeof rowData === 'object' && rowData !== null) {
+                    valorAcumulado = Number(rowData.acum_retenido_porcentaje ?? rowData.acum ?? rowData.porcRetAcumulado ?? rowData.porc_acum ?? 0);
+                } else {
+                    valorAcumulado = Number(rowData);
+                }
+            } else if (data.acum && data.acum[row.key] !== undefined) {
+                valorAcumulado = Number(data.acum[row.key]);
+            } else if (data.porcRetAcumulado && data.porcRetAcumulado[row.key] !== undefined) {
+                valorAcumulado = Number(data.porcRetAcumulado[row.key]);
+            } else if (data.porcRetenidoAcumulado && data.porcRetenidoAcumulado[row.key] !== undefined) {
+                valorAcumulado = Number(data.porcRetenidoAcumulado[row.key]);
+            }
+        }
+
+        // Si el acumulado es mayor a 0 (tolerancia para ruidos de punto flotante)
+        if (Number.isFinite(valorAcumulado) && valorAcumulado > 0.01) {
+            return row.tamiz || row.label || `${row.mm} mm`;
+        }
+    }
+
+    return "N/A";
+}
+
+
+/**
+ * Calcula el diámetro correspondiente a un determinado porcentaje que pasa (ej: D10, D30, D50, D60)
+ * por interpolación semilogarítmica exacta entre los tamices del ensayo.
+ */
+function calcularDxGenerico(rows, data, porcentaje, valueKey = 'pasa') {
+    const rowsArray = Array.isArray(rows) ? rows : (rows ? Object.values(rows) : []);
+    if (rowsArray.length === 0 || typeof data !== 'object' || data === null) {
+        return 0;
+    }
+
+    const puntos = [];
+    for (const row of rowsArray) {
+        if (!row || !row.key || typeof row.mm !== 'number' || !Number.isFinite(row.mm)) {
+            continue;
+        }
+        const pasaVal = getNestedValue(data, `${row.key}.${valueKey}`, null);
+        if (pasaVal !== null) {
+            const pasaNum = Number(pasaVal);
+            if (Number.isFinite(pasaNum)) {
+                puntos.push({ mm: row.mm, pasa: pasaNum });
+            }
+        }
+    }
+
+    if (puntos.length === 0) return 0;
+
+    // Ordenar de menor a mayor abertura para facilitar la interpolación semilogarítmica
+    puntos.sort((a, b) => a.mm - b.mm);
+
+    // Si coincide exactamente con alguno
+    for (const pt of puntos) {
+        if (Math.abs(pt.pasa - porcentaje) < 1e-5) {
+            return pt.mm;
+        }
+    }
+
+    // Buscar los dos puntos que encierran el porcentaje
+    for (let i = 0; i < puntos.length - 1; i++) {
+        const p1 = puntos[i];     // Menor abertura
+        const p2 = puntos[i + 1]; // Mayor abertura
+
+        const minPasa = Math.min(p1.pasa, p2.pasa);
+        const maxPasa = Math.max(p1.pasa, p2.pasa);
+
+        if (porcentaje >= minPasa && porcentaje <= maxPasa) {
+            if (Math.abs(maxPasa - minPasa) < 1e-5) {
+                return p1.mm;
+            }
+            // Interpolación semilogarítmica
+            const logD1 = Math.log10(p1.mm);
+            const logD2 = Math.log10(p2.mm);
+            const logDx = logD1 + ((porcentaje - p1.pasa) / (p2.pasa - p1.pasa)) * (logD2 - logD1);
+            return Math.round(Math.pow(10, logDx) * 10000) / 10000;
+        }
+    }
+
+    // Si el porcentaje es menor que el menor pasa registrado
+    if (porcentaje < puntos[0].pasa) {
+        return 0;
+    }
+
+    // Si el porcentaje es mayor que el mayor pasa registrado
+    if (porcentaje > puntos[puntos.length - 1].pasa) {
+        return puntos[puntos.length - 1].mm;
+    }
+
+    return 0;
+}
+
 // --- FUNCIÓN EXPORTADA PRINCIPAL (ADAPTADOR) ---
-export function calcularResultados(calculationConfig, inputData) {
-    console.log("[MOTOR CALC] Llamado global a calcularResultados");
+export function calcularResultados(calculationConfig, inputData, tableConfig = null) {
     if (!calculationConfig || Object.keys(calculationConfig).length === 0) {
-        console.warn("[MOTOR CALC] Advertencia: No se suministró una configuración de cálculo (calculationConfig vacía o nula)");
         return {};
     }
 
+    // Registrar en caliente las funciones dinámicas inyectadas por la DB
+    registrarFuncionesDinamicas(calculationConfig);
+
     // Detección: Si la config tiene "steps", usamos el motor antiguo
     if (calculationConfig.steps) {
-        console.log("[MOTOR CALC] Utilizando motor de cálculo ANTIGUO (basado en 'steps')");
         const context = { inputs: { formData: inputData }, vars: {}, results: {}, ...math };
 
         // Inicializar variables
         if (calculationConfig.vars) {
             for (const varName in calculationConfig.vars) {
-                context.vars[varName] = calculationConfig.vars[varName]; // Valor inicial simple
+                context.vars[varName] = calculationConfig.vars[varName];
             }
         }
 
         _processSteps(calculationConfig.steps, context);
-        console.log("[MOTOR CALC] Resultados motor antiguo:", context.results);
         return context.results;
     }
 
     // Detección: Si la config es un objeto de fórmulas (Estilo Excel), usamos el motor nuevo
-    return runExcelLikeCalculations(calculationConfig, inputData);
+    return runExcelLikeCalculations(calculationConfig, inputData, tableConfig);
 }
 
 // Re-importar funciones para el motor antiguo si es necesario para mathjs
@@ -428,7 +567,9 @@ math.import({
     safeDivide,
     firstPositive,
     regresion_cuadratica: calcularMaximoCuadratico,
-    regresion_log: calcularRegresionLinealLog
+    regresion_log: calcularRegresionLinealLog,
+    obtener_tmn: calcularTmnGenerico,
+    calcular_dx: calcularDxGenerico
 }, {
     override: true
 });

@@ -1786,6 +1786,18 @@ export default function DisenoGeometrico({ onSwitchMode }) {
 
   // Estados para el Cuadro de Datos Técnicos UTM
   const [showTechnicalTable, setShowTechnicalTable] = useState(false);
+  const [collapsedPanels, setCollapsedPanels] = useState({
+    subirShapefile: true,
+    cargarUtm: true,
+    coloresAtributo: true,
+    propiedades: true,
+    etiquetas: true,
+    mediciones: true,
+    coordenadas: true
+  });
+  const togglePanel = (panelName) => {
+    setCollapsedPanels(prev => ({ ...prev, [panelName]: !prev[panelName] }));
+  };
   const [technicalTableZone, setTechnicalTableZone] = useState(18);
   const [technicalTableHemisphere, setTechnicalTableHemisphere] = useState('S');
   const [mapZoom, setMapZoom] = useState(6);
@@ -1796,6 +1808,12 @@ export default function DisenoGeometrico({ onSwitchMode }) {
   const [showProjectReference, setShowProjectReference] = useState(false);
   const [projectReferenceGeojson, setProjectReferenceGeojson] = useState(() => cloneGeojson(EMPTY_FEATURE_COLLECTION));
   const [hasProjectReference, setHasProjectReference] = useState(false);
+
+  // NUEVOS ESTADOS PARA VERSIONES
+  const [versiones, setVersiones] = useState([]);
+  const [selectedVersionId, setSelectedVersionId] = useState(null);
+  const [showNewVersionModal, setShowNewVersionModal] = useState(false);
+  const [isUploadingVersion, setIsUploadingVersion] = useState(false);
 
   const mapRef = useRef(null);
   const editableGroupRef = useRef(null);
@@ -1877,9 +1895,22 @@ export default function DisenoGeometrico({ onSwitchMode }) {
     }
   }, []);
 
+  const selectedVersion = useMemo(() => versiones.find(v => v.id === selectedVersionId), [versiones, selectedVersionId]);
+  const isVersionMode = selectedVersionId !== null;
+
+  const versionVisibleLayers = useMemo(() => {
+    if (!selectedVersion) return [];
+    return (selectedVersion.capas || []).map(capa => ({
+      tab_name: `vcapa_${capa.id}`,
+      file_name: `${capa.tipo} - ${capa.file_name}`,
+      geojson_data: normalizeFeatureCollection(parseGeojson(capa.geojson_data)),
+      properties: {}
+    }));
+  }, [selectedVersion]);
+
   const selectedLayer = useMemo(
-    () => layers.find((layer) => layer.tab_name === selectedTabName) || null,
-    [layers, selectedTabName]
+    () => isVersionMode ? null : (layers.find((layer) => layer.tab_name === selectedTabName) || null),
+    [layers, selectedTabName, isVersionMode]
   );
   const groupedLayers = useMemo(() => {
     const groups = new Map();
@@ -2423,9 +2454,68 @@ export default function DisenoGeometrico({ onSwitchMode }) {
     }
   }, [ensureHistory, projectId]);
 
+  const fetchVersiones = useCallback(async () => {
+    if (!projectId) {
+      setVersiones([]);
+      return;
+    }
+    try {
+      const response = await axiosInstance.get(`/api/proyectos/${projectId}/diseno-geometrico-versiones`);
+      setVersiones(response.data?.data || []);
+    } catch (error) {
+      console.error('Error al cargar versiones de Diseño Geométrico:', error);
+    }
+  }, [projectId]);
+
   useEffect(() => {
     fetchLayers();
-  }, [fetchLayers]);
+    fetchVersiones();
+  }, [fetchLayers, fetchVersiones]);
+
+  const handleUploadVersionSubmit = async (e) => {
+    e.preventDefault();
+    if (!projectId) return;
+
+    const formData = new FormData(e.target);
+    const fileEje = formData.get('file_eje');
+    const fileBordes = formData.get('file_bordes');
+    const fileCorte = formData.get('file_corte');
+    const fileProgresivas = formData.get('file_progresivas');
+    const filePis = formData.get('file_pis');
+
+    if (!fileEje?.size || !fileBordes?.size || !fileCorte?.size || !fileProgresivas?.size || !filePis?.size) {
+      alertify.error('Debes subir todas las capas basicas requeridas (Eje, Bordes, Corte, Progresivas, PIs).');
+      return;
+    }
+
+    setIsUploadingVersion(true);
+    try {
+      await axiosInstance.post(`/api/proyectos/${projectId}/diseno-geometrico-versiones`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alertify.success('Version creada con exito');
+      setShowNewVersionModal(false);
+      fetchVersiones();
+      fetchLayers();
+    } catch (error) {
+      console.error('Error creando version:', error);
+      alertify.error(error.response?.data?.message || 'Error al crear la version');
+    } finally {
+      setIsUploadingVersion(false);
+    }
+  };
+
+  const handleDeleteVersion = async (versionId) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar esta versión?')) return;
+    try {
+      await axiosInstance.delete(`/api/proyectos/${projectId}/diseno-geometrico-versiones/${versionId}`);
+      alertify.success('Versión eliminada');
+      if (selectedVersionId === versionId) setSelectedVersionId(null);
+      fetchVersiones();
+    } catch (error) {
+      alertify.error('Error al eliminar la versión');
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -3654,117 +3744,175 @@ export default function DisenoGeometrico({ onSwitchMode }) {
 
       <div className="dg-workspace">
         <aside className="dg-left-column">
+
           <section className="dg-panel">
-            <div className="dg-panel-head">
+            <div className="dg-panel-head" onClick={() => togglePanel('contexto')} style={{ cursor: 'pointer', userSelect: 'none' }}>
               <div>
                 <h2>Contexto del editor</h2>
                 <p>Las herramientas de dibujo, edicion, medicion y exportacion ahora estan unificadas en la barra superior.</p>
               </div>
-            </div>
-
-            <div className="dg-metric-list">
-              <div className="dg-property-item">
-                <span>Capa activa</span>
-                <strong>{selectedLayer ? (selectedLayer.file_name || selectedLayer.tab_name) : 'Sin capa seleccionada'}</strong>
-              </div>
-              <div className="dg-property-item">
-                <span>Trazado del proyecto</span>
-                <strong>{hasProjectReference ? (showProjectReference ? 'Visible' : 'Oculto') : 'No cargado'}</strong>
-              </div>
-              <div className="dg-property-item">
-                <span>Modo actual</span>
-                <strong>{STATUS_LABELS[selectedLayerStatus] || 'Editor listo'}</strong>
-              </div>
-            </div>
-
-            <div className="dg-inline-actions">
-              <button type="button" className="dg-secondary-btn" disabled={!projectReferenceHasFeatures} onClick={handleFocusProjectReference}>
-                <i className="fas fa-route"></i>
-                <span>Ir al trazado</span>
-              </button>
-              <button
-                type="button"
-                className="dg-secondary-btn"
-                disabled={!projectReferenceHasFeatures}
-                onClick={() => setShowProjectReference((current) => !current)}
-              >
-                <i className={`fas ${showProjectReference ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                <span>{showProjectReference ? 'Ocultar trazado' : 'Mostrar trazado'}</span>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.contexto ? 'down' : 'up'}`}></i>
               </button>
             </div>
-          </section>
 
-          <section className="dg-panel">
-            <div className="dg-panel-head">
-              <div>
-                <h2>Capas</h2>
-                <p>{isLoading ? 'Cargando capas...' : `${groupedLayers.length} registradas`}</p>
-              </div>
-            </div>
+            {!collapsedPanels.contexto && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="dg-metric-list">
+                  <div className="dg-property-item">
+                    <span>Capa activa</span>
+                    <strong>{selectedLayer ? (selectedLayer.file_name || selectedLayer.tab_name) : 'Sin capa seleccionada'}</strong>
+                  </div>
+                  <div className="dg-property-item">
+                    <span>Trazado del proyecto</span>
+                    <strong>{hasProjectReference ? (showProjectReference ? 'Visible' : 'Oculto') : 'No cargado'}</strong>
+                  </div>
+                  <div className="dg-property-item">
+                    <span>Modo actual</span>
+                    <strong>{STATUS_LABELS[selectedLayerStatus] || 'Editor listo'}</strong>
+                  </div>
+                </div>
 
-            <form className="dg-mini-form" onSubmit={handleCreateLayer}>
-              <input type="text" value={newLayerName} onChange={(event) => setNewLayerName(event.target.value)} placeholder="Nueva capa" disabled={!projectId || !canManage} />
-              <button type="submit" disabled={!projectId || !canManage}>
-                <i className="fas fa-plus"></i>
-                <span>Nueva capa</span>
-              </button>
-            </form>
-
-            {!groupedLayers.length ? (
-              <div className="dg-empty-box">Todavia no hay capas para este proyecto.</div>
-            ) : (
-              <div className="dg-layer-list">
-                {groupedLayers.map((group) => {
-                  const isActive = group.key === selectedLayerGroupKey;
-                  const isVisible = isActive ? true : group.layers.some((layer) => visibleTabs[layer.tab_name] ?? true);
-                  const groupBounds = getLayerBounds({
-                    type: 'FeatureCollection',
-                    features: group.layers.flatMap((layer) => parseGeojson(layer.geojson_data)?.features || [])
-                  });
-
-                  return (
-                    <div key={group.key} className={`dg-layer-row ${isActive ? 'active' : ''}`}>
-                      <button type="button" className="dg-layer-main" onClick={() => handleSelectLayerGroup(group)}>
-                        <span
-                          className={`dg-layer-swatch ${isActive ? 'active' : ''}`}
-                          style={{ background: group.swatchColor }}
-                        ></span>
-                        <div>
-                          <strong>{group.label}</strong>
-                          <small>
-                            {group.totalFeatures} elementos
-                            {group.isSplit ? ` · ${group.layers.length} partes internas` : ''}
-                          </small>
-                        </div>
-                      </button>
-
-                      <div className="dg-layer-actions">
-                        <button type="button" title={isVisible ? 'Ocultar capa' : 'Mostrar capa'} onClick={() => toggleLayerGroupVisibility(group)}>
-                          <i className={`fas ${isVisible ? 'fa-eye' : 'fa-eye-slash'}`}></i>
-                        </button>
-                        <button type="button" title="Zoom a capa" onClick={() => fitBounds(groupBounds)}>
-                          <i className="fas fa-expand"></i>
-                        </button>
-                        <button type="button" title="Eliminar capa" disabled={!canManage} onClick={() => handleDeleteLayerGroup(group)}>
-                          <i className="fas fa-trash"></i>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                <div className="dg-inline-actions">
+                  <button type="button" className="dg-secondary-btn" onClick={handleFocusProjectReference} disabled={!projectReferenceHasFeatures}>
+                    <i className="fas fa-route"></i>
+                    <span>Ir al trazado</span>
+                  </button>
+                  <button type="button" className="dg-secondary-btn" onClick={() => setShowProjectReference(!showProjectReference)} disabled={!projectReferenceHasFeatures}>
+                    <i className={`fas ${showProjectReference ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                    <span>{showProjectReference ? 'Ocultar trazado' : 'Mostrar trazado'}</span>
+                  </button>
+                </div>
               </div>
             )}
           </section>
 
           <section className="dg-panel">
-            <div className="dg-panel-head">
+            <div className="dg-panel-head" onClick={(e) => { if(!e.target.closest('button')) togglePanel('capas'); }} style={{ borderBottom: collapsedPanels.capas ? 'none' : '1px solid #e2e8f0', paddingBottom: collapsedPanels.capas ? '0' : '12px', marginBottom: collapsedPanels.capas ? '0' : '12px', cursor: 'pointer', userSelect: 'none' }}>
+              <div>
+                <h2>Gestión de Capas y Versiones</h2>
+                <p>{isLoading ? 'Cargando capas...' : `${groupedLayers.length} registradas`}</p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {canManage && (
+                  <button type="button" className="dg-primary-btn" onClick={(e) => { e.stopPropagation(); setShowNewVersionModal(true); }} style={{ padding: '6px 10px', fontSize: '13px' }} title="Crear nueva versión">
+                    <i className="fas fa-code-branch" style={{ marginRight: '6px' }}></i> Nueva Versión
+                  </button>
+                )}
+                <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                  <i className={`fas fa-chevron-${collapsedPanels.capas ? 'down' : 'up'}`}></i>
+                </button>
+              </div>
+            </div>
+
+            {!collapsedPanels.capas && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Vista Activa en el Mapa:
+                  </label>
+                  <select 
+                    className="dg-version-select" 
+                    value={selectedVersionId || ''} 
+                    onChange={(e) => setSelectedVersionId(e.target.value ? Number(e.target.value) : null)}
+                    style={{ padding: '8px', width: '100%', borderRadius: '8px', border: '1px solid #e2e8f0', background: isVersionMode ? '#f0fdf4' : '#fff', color: isVersionMode ? '#166534' : '#1e293b', fontWeight: isVersionMode ? '600' : '400', outline: 'none' }}
+                  >
+                    <option value="">Versión {versiones.length > 0 ? Math.max(...versiones.map(v => v.version_numero)) + 1 : 1} (Borrador Actual Editable)</option>
+                    {versiones.map(v => (
+                      <option key={v.id} value={v.id}>Version {v.version_numero} {v.nombre ? `- ${v.nombre}` : ''}</option>
+                    ))}
+                  </select>
+                  {selectedVersion && (
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Creada el: {formatDate(selectedVersion.created_at)}</span>
+                      {canManage && (
+                        <button type="button" onClick={() => handleDeleteVersion(selectedVersionId)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                          <i className="fas fa-trash"></i> Eliminar
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <hr style={{ border: 'none', borderTop: '1px dashed #cbd5e1', margin: '0 0 16px 0' }} />
+
+                {isVersionMode ? (
+                  <div className="dg-empty-box" style={{ background: '#f8fafc', color: '#64748b' }}>
+                    Estás visualizando una versión histórica. Las herramientas de capas y edición están deshabilitadas.
+                  </div>
+                ) : (
+                  <>
+                    <form className="dg-mini-form" onSubmit={handleCreateLayer}>
+                      <input type="text" value={newLayerName} onChange={(event) => setNewLayerName(event.target.value)} placeholder="Nueva capa" disabled={!projectId || !canManage} />
+                      <button type="submit" disabled={!projectId || !canManage}>
+                        <i className="fas fa-plus"></i>
+                        <span>Nueva capa</span>
+                      </button>
+                    </form>
+
+                    {!groupedLayers.length ? (
+                      <div className="dg-empty-box">Todavia no hay capas para este proyecto.</div>
+                    ) : (
+                      <div className="dg-layer-list">
+                        {groupedLayers.map((group) => {
+                          const isActive = group.key === selectedLayerGroupKey;
+                          const isVisible = isActive ? true : group.layers.some((layer) => visibleTabs[layer.tab_name] ?? true);
+                          const groupBounds = getLayerBounds({
+                            type: 'FeatureCollection',
+                            features: group.layers.flatMap((layer) => parseGeojson(layer.geojson_data)?.features || [])
+                          });
+
+                          return (
+                            <div key={group.key} className={`dg-layer-row ${isActive ? 'active' : ''}`}>
+                              <button type="button" className="dg-layer-main" onClick={() => handleSelectLayerGroup(group)}>
+                                <span
+                                  className={`dg-layer-swatch ${isActive ? 'active' : ''}`}
+                                  style={{ background: group.swatchColor }}
+                                ></span>
+                                <div>
+                                  <strong>{group.label}</strong>
+                                  <small>
+                                    {group.totalFeatures} elementos
+                                    {group.isSplit ? ` · ${group.layers.length} partes internas` : ''}
+                                  </small>
+                                </div>
+                              </button>
+
+                              <div className="dg-layer-actions">
+                                <button type="button" title={isVisible ? 'Ocultar capa' : 'Mostrar capa'} onClick={() => toggleLayerGroupVisibility(group)}>
+                                  <i className={`fas ${isVisible ? 'fa-eye' : 'fa-eye-slash'}`}></i>
+                                </button>
+                                <button type="button" title="Zoom a capa" onClick={() => fitBounds(groupBounds)}>
+                                  <i className="fas fa-expand"></i>
+                                </button>
+                                <button type="button" title="Eliminar capa" disabled={!canManage} onClick={() => handleDeleteLayerGroup(group)}>
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </section>
+
+          <section className="dg-panel">
+            <div className="dg-panel-head" onClick={() => togglePanel('subirShapefile')} style={{ cursor: 'pointer', userSelect: 'none' }}>
               <div>
                 <h2>Subir shapefile</h2>
                 <p>  ZIP, RAR, KML o KMZ</p>
               </div>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.subirShapefile ? 'down' : 'up'}`}></i>
+              </button>
             </div>
 
-            <form className="dg-upload-form" onSubmit={handleUpload}>
+            {!collapsedPanels.subirShapefile && (
+              <form className="dg-upload-form" onSubmit={handleUpload}>
               <label>
                 Nombre de la capa
                 <input type="text" value={uploadName} onChange={(event) => setUploadName(event.target.value)} placeholder="Ej. Eje vial propuesto" disabled={!projectId || !canManage} />
@@ -3797,17 +3945,22 @@ export default function DisenoGeometrico({ onSwitchMode }) {
                 <span>{isUploading && uploadProgress ? `Subiendo ${uploadProgress.percentage}%` : 'Publicar capa'}</span>
               </button>
             </form>
+            )}
           </section>
 
           <section className="dg-panel">
-            <div className="dg-panel-head">
+            <div className="dg-panel-head" onClick={() => togglePanel('cargarUtm')} style={{ cursor: 'pointer', userSelect: 'none' }}>
               <div>
                 <h2>Cargar por coordenadas UTM</h2>
                 <p>Ingresa coordenadas Este y Norte precisas para la capa activa.</p>
               </div>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.cargarUtm ? 'down' : 'up'}`}></i>
+              </button>
             </div>
 
-            <form className="dg-upload-form" onSubmit={handleLoadUtmCoordinates}>
+            {!collapsedPanels.cargarUtm && (
+              <form className="dg-upload-form" onSubmit={handleLoadUtmCoordinates}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                 <label>
                   Zona UTM
@@ -3887,21 +4040,27 @@ export default function DisenoGeometrico({ onSwitchMode }) {
 
               <button type="submit" disabled={!projectId || !canManage || !selectedLayer}>
                 <i className="fas fa-drafting-compass"></i>
-                <span>Generar geometría</span>
+                <span>Generar desde Coordenadas</span>
               </button>
             </form>
+            )}
           </section>
         </aside>
 
         <main className="dg-center-column">
           <section className="dg-toolbar-card">
-            <div className="dg-toolbar-top">
+            <div className="dg-toolbar-top" onClick={() => togglePanel('herramientas')} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h2>Herramientas del editor</h2>
                 <p>{isThreeDMode ? 'En vista 3D el mapa queda en modo visual, por eso se bloquean las herramientas de edicion y medicion.' : 'Ordenadas por flujo de trabajo para dibujar, corregir y exportar sin duplicaciones.'}</p>
               </div>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer', paddingRight: '12px' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.herramientas ? 'down' : 'up'}`}></i>
+              </button>
             </div>
 
+            {!collapsedPanels.herramientas && (
+              <>
             <div className="dg-toolbar-layout">
               <div className="dg-tool-section">
                 <div className="dg-tool-section-head">
@@ -3946,6 +4105,8 @@ export default function DisenoGeometrico({ onSwitchMode }) {
                 </div>
               </div>
             </div>
+              </>
+            )}
 
             <div className={`dg-save-badge ${selectedLayerStatus}`}>
               <span>{STATUS_LABELS[selectedLayerStatus] || STATUS_LABELS.saved}</span>
@@ -4014,7 +4175,7 @@ export default function DisenoGeometrico({ onSwitchMode }) {
                       activeTool={activeTool}
                       editableGroupRef={editableGroupRef}
                       measurementLayerRef={measurementLayerRef}
-                      canEdit={canManage}
+                      canEdit={canManage && !isVersionMode}
                       onFeatureCreated={handleFeatureCreated}
                       onFeaturesEdited={handleFeaturesEdited}
                       onFeaturesDeleted={handleFeaturesDeleted}
@@ -4043,7 +4204,30 @@ export default function DisenoGeometrico({ onSwitchMode }) {
                       />
                     )}
 
-                    {inactiveVisibleLayers.map((layer) => (
+                    {!isVersionMode && inactiveVisibleLayers.map((layer) => (
+                        <GeoJSON
+                          key={layer.tab_name}
+                          data={layer.geojson_data}
+                          style={(feature) => getVectorStyle(feature, false, selectionHighlightColor)}
+                          pointToLayer={(feature, latlng) => {
+                            const pointColor = feature?.properties?.fill || feature?.properties?.stroke || '#ef4444';
+                            const pointRadius = Math.max(4, Math.min(8, (Number(feature?.properties?.dg_marker_size) || 14) / 2.1));
+
+                            return L.circleMarker(latlng, {
+                              radius: pointRadius,
+                              color: '#ffffff',
+                              weight: 2,
+                              fillColor: pointColor,
+                              fillOpacity: 0.95
+                            });
+                          }}
+                          onEachFeature={(feature, leafletLayer) => {
+                            leafletLayer.bindPopup(featureToPopupHtml(feature));
+                          }}
+                        />
+                      ))}
+
+                    {isVersionMode && versionVisibleLayers.map((layer) => (
                         <GeoJSON
                           key={layer.tab_name}
                           data={layer.geojson_data}
@@ -4230,14 +4414,19 @@ export default function DisenoGeometrico({ onSwitchMode }) {
 
         <aside className="dg-right-column">
           <section className="dg-panel">
-            <div className="dg-panel-head">
+            <div className="dg-panel-head" onClick={() => togglePanel('resumenCapa')} style={{ cursor: 'pointer', userSelect: 'none' }}>
               <div>
                 <h2>Resumen de capa</h2>
                 <p>{selectedLayer ? `Capa activa: ${selectedLayer.file_name || selectedLayer.tab_name}` : 'Sin capa activa'}</p>
               </div>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.resumenCapa ? 'down' : 'up'}`}></i>
+              </button>
             </div>
 
-            <div className="dg-metric-list">
+            {!collapsedPanels.resumenCapa && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="dg-metric-list">
               <div className="dg-property-item">
                 <span>Geometrias creadas</span>
                 <strong>{activeFeatures.length}</strong>
@@ -4260,17 +4449,23 @@ export default function DisenoGeometrico({ onSwitchMode }) {
               <i className="fas fa-table-list"></i>
               <span>Ver lista completa</span>
             </button>
+              </div>
+            )}
           </section>
 
           <section className="dg-panel">
-            <div className="dg-panel-head">
+            <div className="dg-panel-head" onClick={() => togglePanel('coloresAtributo')} style={{ cursor: 'pointer', userSelect: 'none' }}>
               <div>
                 <h2>Colores por atributo</h2>
                 <p>Aplica colores distintos al borde segun los campos del shape o KML.</p>
               </div>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.coloresAtributo ? 'down' : 'up'}`}></i>
+              </button>
             </div>
 
-            <div className="dg-property-stack">
+            {!collapsedPanels.coloresAtributo && (
+              <div className="dg-property-stack">
               <label>
                 Sugerencias automaticas
                 <select
@@ -4399,17 +4594,23 @@ export default function DisenoGeometrico({ onSwitchMode }) {
                 <div className="dg-empty-box">Elige una sugerencia o escribe el nombre exacto de cualquier atributo detectado en la capa para repartir colores automaticamente.</div>
               )}
             </div>
+            )}
           </section>
 
           <section className="dg-panel">
-            <div className="dg-panel-head">
+            <div className="dg-panel-head" onClick={() => togglePanel('propiedades')} style={{ cursor: 'pointer', userSelect: 'none' }}>
               <div>
                 <h2>Propiedades</h2>
 
                 <p> {selectedFeature ? 'Datos de la geometria seleccionada' : ' Eliga una geometria para poder ver sus propiedades.'} </p>
               </div>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.propiedades ? 'down' : 'up'}`}></i>
+              </button>
             </div>
 
+            {!collapsedPanels.propiedades && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {selectedFeature ? (
               <div className="dg-property-stack">
                 <div className="dg-property-item">
@@ -4625,17 +4826,23 @@ export default function DisenoGeometrico({ onSwitchMode }) {
             ) : (
               <div className="dg-empty-box">No hay una geometria seleccionada.</div>
             )}
+              </div>
+            )}
           </section>
 
           <section className="dg-panel">
-            <div className="dg-panel-head">
+            <div className="dg-panel-head" onClick={() => togglePanel('etiquetas')} style={{ cursor: 'pointer', userSelect: 'none' }}>
               <div>
                 <h2>Etiquetas</h2>
                 <p>Muestra un campo sobre puntos y tambien sobre lineas seleccionadas.</p>
               </div>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.etiquetas ? 'down' : 'up'}`}></i>
+              </button>
             </div>
 
-            <div className="dg-property-stack">
+            {!collapsedPanels.etiquetas && (
+              <div className="dg-property-stack">
               <label>
                 Campo a mostrar
                 <div className="dg-option-chip-list">
@@ -4714,17 +4921,23 @@ export default function DisenoGeometrico({ onSwitchMode }) {
                 <span>{showLabelTable ? 'Ocultar tabla de etiquetas' : 'Ver tabla de etiquetas al seleccionar'}</span>
               </button>
             </div>
+            )}
           </section>
 
           <section className="dg-panel">
-            <div className="dg-panel-head">
+            <div className="dg-panel-head" onClick={() => togglePanel('mediciones')} style={{ cursor: 'pointer', userSelect: 'none' }}>
               <div>
                 <h2>Mediciones</h2>
                 <p>Sesion libre del mapa</p>
               </div>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.mediciones ? 'down' : 'up'}`}></i>
+              </button>
             </div>
 
-            <div className="dg-metric-list">
+            {!collapsedPanels.mediciones && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="dg-metric-list">
               <div className="dg-property-item">
                 <span>Distancia total</span>
                 <strong>{measurementSummary.distanceKm ? `${measurementSummary.distanceKm.toFixed(2)} km` : '-'}</strong>
@@ -4743,17 +4956,23 @@ export default function DisenoGeometrico({ onSwitchMode }) {
               <i className="fas fa-broom"></i>
               <span>Limpiar mediciones</span>
             </button>
+              </div>
+            )}
           </section>
 
           <section className="dg-panel">
-            <div className="dg-panel-head">
+            <div className="dg-panel-head" onClick={() => togglePanel('coordenadas')} style={{ cursor: 'pointer', userSelect: 'none' }}>
               <div>
                 <h2>Coordenadas</h2>
                 <p>{selectedFeature ? 'Referencia de la geometria' : 'Sin seleccion'}</p>
               </div>
+              <button type="button" style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1rem', cursor: 'pointer' }}>
+                <i className={`fas fa-chevron-${collapsedPanels.coordenadas ? 'down' : 'up'}`}></i>
+              </button>
             </div>
 
-            <div className="dg-metric-list">
+            {!collapsedPanels.coordenadas && (
+              <div className="dg-metric-list">
               <div className="dg-property-item">
                 <span>Latitud</span>
                 <strong>{selectedFeatureCoordinates.latitude}</strong>
@@ -4767,6 +4986,7 @@ export default function DisenoGeometrico({ onSwitchMode }) {
                 <strong>{selectedFeature?.properties?.elevation || 'No disponible'}</strong>
               </div>
             </div>
+            )}
           </section>
         </aside>
       </div>
@@ -4930,6 +5150,64 @@ export default function DisenoGeometrico({ onSwitchMode }) {
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {showNewVersionModal && (
+        <div className="dg-modal">
+          <div className="dg-modal-content" style={{ maxWidth: '580px' }}>
+            <div className="dg-modal-header">
+              <h2>Crear Nueva Version</h2>
+              <button type="button" className="dg-modal-close" onClick={() => setShowNewVersionModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <form className="dg-modal-body" onSubmit={handleUploadVersionSubmit}>
+              <p style={{ marginBottom: '16px', color: '#64748b', fontSize: '0.9rem' }}>
+                Sube los archivos (ZIP, KML, KMZ) correspondientes a las capas obligatorias de esta version. Puedes anadir archivos extra opcionalmente.
+              </p>
+              
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>Nombre de la Version (Opcional)</label>
+                <input type="text" name="nombre" placeholder="Ej: V2 - Levantamiento Topografico" className="dg-layer-input" style={{ width: '100%' }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                <div className="dg-form-group">
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#ef4444', marginBottom: '4px' }}>* Eje del Proyecto</label>
+                  <input type="file" name="file_eje" accept=".zip,.rar,.kml,.kmz" required style={{ fontSize: '0.8rem', width: '100%' }} />
+                </div>
+                <div className="dg-form-group">
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#ef4444', marginBottom: '4px' }}>* Bordes / Carriles</label>
+                  <input type="file" name="file_bordes" accept=".zip,.rar,.kml,.kmz" required style={{ fontSize: '0.8rem', width: '100%' }} />
+                </div>
+                <div className="dg-form-group">
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#ef4444', marginBottom: '4px' }}>* Proyeccion de Corte</label>
+                  <input type="file" name="file_corte" accept=".zip,.rar,.kml,.kmz" required style={{ fontSize: '0.8rem', width: '100%' }} />
+                </div>
+                <div className="dg-form-group">
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#ef4444', marginBottom: '4px' }}>* Progresivas</label>
+                  <input type="file" name="file_progresivas" accept=".zip,.rar,.kml,.kmz" required style={{ fontSize: '0.8rem', width: '100%' }} />
+                </div>
+                <div className="dg-form-group">
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#ef4444', marginBottom: '4px' }}>* PIs (Intersecciones)</label>
+                  <input type="file" name="file_pis" accept=".zip,.rar,.kml,.kmz" required style={{ fontSize: '0.8rem', width: '100%' }} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '20px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Capas Extras (Opcional)</label>
+                <input type="file" name="file_extras" accept=".zip,.rar,.kml,.kmz" multiple style={{ fontSize: '0.8rem', width: '100%' }} />
+                <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>Puedes seleccionar multiples archivos a la vez.</span>
+              </div>
+
+              <div className="dg-modal-footer">
+                <button type="button" className="dg-secondary-btn" onClick={() => setShowNewVersionModal(false)} disabled={isUploadingVersion}>Cancelar</button>
+                <button type="submit" className="dg-primary-btn" disabled={isUploadingVersion}>
+                  {isUploadingVersion ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: '6px' }}></i>Procesando...</> : 'Subir Version'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

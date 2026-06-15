@@ -1189,3 +1189,117 @@ WHERE proyecto_id = :proyecto_id AND tab_name = 'GEOTECNIA';
 INSERT INTO navbar_options (nombre, link, descripcion, icono)
 VALUES ('Diseños de Ingeniería', 'disenos_ingenieria', 'Módulo de diseños de ingeniería con sub-opciones', 'fas fa-drafting-compass')
 ON CONFLICT (link) DO NOTHING;
+
+-- Fase 3: Inventario
+CREATE TABLE productos (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  nombre TEXT NOT NULL,
+  descripcion TEXT,
+  marca TEXT,
+  unidad_medida TEXT NOT NULL,
+  precio_unitario NUMERIC(10, 2) NOT NULL,
+  stock_actual INTEGER NOT NULL DEFAULT 0,
+  stock_minimo INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+-- Fase 3: Inventario (Actualizado para Ferretería)
+CREATE TABLE productos (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  codigo TEXT UNIQUE,
+  nombre TEXT NOT NULL,
+  descripcion TEXT,
+  categoria TEXT,
+  marca TEXT,
+  ubicacion TEXT,
+  unidad_medida TEXT NOT NULL,
+  precio_unitario NUMERIC(10, 2) NOT NULL,
+  stock_actual INTEGER NOT NULL DEFAULT 0,
+  stock_minimo INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+-- Fase 4: Clientes
+CREATE TABLE clientes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  ruc TEXT UNIQUE NOT NULL,
+  razon_social TEXT NOT NULL,
+  direccion TEXT,
+  telefono TEXT,
+  correo TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+-- Fase 5: Cotizaciones
+CREATE TABLE cotizaciones (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  numero SERIAL,
+  cliente_id UUID REFERENCES clientes(id) ON DELETE SET NULL,
+  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+  total NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  estado TEXT DEFAULT 'Pendiente',
+  observaciones TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+CREATE TABLE detalle_cotizacion (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  cotizacion_id UUID REFERENCES cotizaciones(id) ON DELETE CASCADE,
+  producto_id UUID REFERENCES productos(id) ON DELETE SET NULL,
+  cantidad INTEGER NOT NULL,
+  precio_unitario NUMERIC(10, 2) NOT NULL,
+  subtotal NUMERIC(10, 2) NOT NULL
+);
+-- Datos de Prueba para Ferreteria
+INSERT INTO productos (codigo, nombre, descripcion, categoria, marca, ubicacion, unidad_medida, precio_unitario, stock_actual, stock_minimo)
+VALUES 
+('CM-001', 'Cemento Sol 42.5', 'Cemento Portland', 'Construccion', 'Sol', 'Almacen 1', 'BOLSA', 28.50, 100, 20),
+('PVC-002', 'Tubo PVC SAL 2 pulgadas', 'Tubo desague', 'Gasfiteria', 'Pavco', 'Estante A', 'UND', 12.00, 50, 10);
+
+INSERT INTO clientes (ruc, razon_social, direccion, telefono, correo)
+VALUES 
+('20602810977', 'MULTISERVICIOS Y PROYECTOS AGUILAR S.A.C.', 'Cusco', '987654321', 'test@test.com');
+
+-- Soportar decimales en stock y cantidades
+ALTER TABLE productos ALTER COLUMN stock_actual TYPE numeric;
+ALTER TABLE productos ALTER COLUMN stock_minimo TYPE numeric;
+ALTER TABLE detalle_cotizacion ALTER COLUMN cantidad TYPE numeric;
+
+
+-- Insert de prueba para venta por kilos
+INSERT INTO productos (codigo, nombre, descripcion, categoria, marca, ubicacion, unidad_medida, precio_unitario, stock_actual, stock_minimo) VALUES ('CLAVO-2P', 'Clavos de Acero 2 Pulgadas', 'Clavos de acero para madera', 'Construccion', 'Siderperu', 'Almacen 1', 'KG', 8.50, 50.00, 5.00);
+
+
+-- Progresur Web: Tabla Configuracion
+CREATE TABLE configuracion (
+  id integer PRIMARY KEY DEFAULT 1,
+  empresa_nombre text,
+  empresa_ruc text,
+  empresa_direccion text,
+  empresa_celular text,
+  empresa_email text,
+  representante text,
+  banco1_nombre text,
+  banco1_cuenta text,
+  banco1_cci text,
+  banco2_nombre text,
+  banco2_cuenta text,
+  banco2_cci text,
+  logo_url text
+);
+INSERT INTO configuracion (id, empresa_nombre, empresa_ruc, empresa_direccion) VALUES (1, 'IMPORTACIONES PROGRESUR E.I.R.L', '20609208342', 'Prolongación Av. de la Cultura 1975 San Sebastián - Cusco');
+
+
+-- Progresur Web: Seguridad RLS
+ALTER TABLE clientes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE productos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cotizaciones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE detalle_cotizacion ENABLE ROW LEVEL SECURITY;
+ALTER TABLE configuracion ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Autenticados pueden gestionar clientes" ON clientes FOR ALL TO authenticated USING (true);
+CREATE POLICY "Autenticados pueden gestionar productos" ON productos FOR ALL TO authenticated USING (true);
+CREATE POLICY "Autenticados pueden gestionar cotizaciones" ON cotizaciones FOR ALL TO authenticated USING (true);
+CREATE POLICY "Autenticados pueden gestionar detalle_cotizacion" ON detalle_cotizacion FOR ALL TO authenticated USING (true);
+CREATE POLICY "Autenticados pueden gestionar configuracion" ON configuracion FOR ALL TO authenticated USING (true);
+

@@ -3,48 +3,119 @@
   "document": {
     "title": "Ensayo de Proctor Modificado",
     "subtitle": "Norma MTC E 115",
-    "orientation": "portrait",
-    "paperSize": "A4"
+    "paperSize": "A4",
+    "orientation": "portrait"
   },
   "header": {
     "title": "GOBIERNO REGIONAL CUSCO",
+    "slogan": "«Año de la recuperación y consolidación de la economía peruana»",
     "subtitle": "Gerencia Regional de Transportes y Comunicaciones Cusco",
-    "subsubtitle": "SUB GERENCIA DE COBERTURA Y COMUNICACIONES",
     "department": "UNIDAD FUNCIONAL ESTUDIOS Y PROYECTOS",
     "laboratory": "Laboratorio de Mecánica de Suelos, Materiales y Pavimentos",
-    "slogan": "«Año de la recuperación y consolidación de la economía peruana»",
+    "subsubtitle": "SUB GERENCIA DE COBERTURA Y COMUNICACIONES",
     "logo_left_url": "/assets/logo_grtc.png",
     "logo_right_url": "/assets/logo_cusco.png"
   },
   "metadataFields": [
-    { "label": "Proyecto", "source": "proyecto_nombre", "colSpan": 8, "highlight": true },
-    { "label": "Ubicación", "fields": [
-        { "sublabel": "Lugar", "source": "tramo_nombre", "width": "20%" },
-        { "sublabel": "Distrito", "source": "distrito", "width": "15%" },
-        { "sublabel": "Provincia", "source": "provincia", "width": "15%" },
-        { "sublabel": "Dpto", "source": "departamento", "width": "10%" }
+    {
+      "label": "Proyecto",
+      "source": "proyecto_nombre",
+      "colSpan": 8,
+      "highlight": true
+    },
+    {
+      "label": "Ubicación",
+      "fields": [
+        {
+          "width": "20%",
+          "source": "tramo_nombre",
+          "sublabel": "Lugar"
+        },
+        {
+          "width": "15%",
+          "source": "distrito",
+          "sublabel": "Distrito"
+        },
+        {
+          "width": "15%",
+          "source": "provincia",
+          "sublabel": "Provincia"
+        },
+        {
+          "width": "10%",
+          "source": "departamento",
+          "sublabel": "Dpto"
+        }
       ]
     },
-    { "label": "Solicitante", "source": "solicitante", "colSpan": 3 },
-    { "label": "Coordenadas", "fields": [
-        { "sublabel": "E", "source": "longitud", "width": "25%" },
-        { "sublabel": "N", "source": "latitud", "width": "25%" }
+    {
+      "label": "Solicitante",
+      "source": "solicitante",
+      "colSpan": 3
+    },
+    {
+      "label": "Coordenadas",
+      "fields": [
+        {
+          "width": "25%",
+          "source": "longitud",
+          "sublabel": "E"
+        },
+        {
+          "width": "25%",
+          "source": "latitud",
+          "sublabel": "N"
+        }
       ]
     },
-    { "label": "Datos de Muestra", "fields": [
-        { "sublabel": "Exploración", "source": "calicata", "width": "12%" },
-        { "sublabel": "Progresiva", "source": "progresiva_codigo", "width": "15%", "format": "progresiva" },
-        { "sublabel": "Estrato", "source": "estrato_orden", "width": "12%" },
-        { "sublabel": "Lado", "source": "lado", "width": "12%" }
+    {
+      "label": "Datos de Muestra",
+      "fields": [
+        {
+          "width": "12%",
+          "source": "calicata",
+          "sublabel": "Exploración"
+        },
+        {
+          "width": "15%",
+          "format": "progresiva",
+          "source": "progresiva_codigo",
+          "sublabel": "Progresiva"
+        },
+        {
+          "width": "12%",
+          "source": "estrato_orden",
+          "sublabel": "Estrato"
+        },
+        {
+          "width": "12%",
+          "source": "lado",
+          "sublabel": "Lado"
+        }
       ]
     },
-    { "label": "Profundidad", "source": "profundidad", "colSpan": 3 },
-    { "label": "Fecha Muestreo", "source": "fecha_muestreo", "colSpan": 3, "format": "fecha" }
+    {
+      "label": "Profundidad",
+      "source": "profundidad",
+      "colSpan": 3
+    },
+    {
+      "label": "Fecha Muestreo",
+      "format": "fecha",
+      "source": "fecha_muestreo",
+      "colSpan": 3
+    }
   ],
   "signatures": [
-    { "role": "ESP. ENSAYOS GEOTECNICOS" },
-    { "role": "ESP. SUELOS Y PAVIMENTOS" },
-    { "role": "SUPERVISOR" }
+    {
+      "role": "ESP. ENSAYOS GEOTECNICOS"
+    },
+    {
+      "role": "ESP. SUELOS Y PAVIMENTOS"
+    },
+    {
+      "role": "SUPERVISOR"
+    }
   ],
   "pages": [
     {
@@ -52,8 +123,8 @@
         "type": "sequential",
         "components": [
           {
-            "type": "section_title",
             "text": "Ensayo de Proctor Modificado - MTC E 115",
+            "type": "section_title",
             "align": "center"
           },
           {
@@ -63,8 +134,32 @@
                 "width": "50%",
                 "components": [
                   {
-                    "type": "table_generic",
-                    "sourceTable": "detalles_molde"
+                    "text": "Detalles del molde:",
+                    "type": "section_title"
+                  },
+                  {
+                    "type": "table_pesos",
+                    "fields": [
+                      {
+                        "label": "Código del molde =",
+                        "source": "formData.general_fields.codigo_molde"
+                      },
+                      {
+                        "label": "Diámetro =",
+                        "source": "formData.general_fields.diametro_cm",
+                        "suffix": " cm"
+                      },
+                      {
+                        "label": "Altura =",
+                        "source": "formData.general_fields.altura_cm",
+                        "suffix": " cm"
+                      },
+                      {
+                        "label": "Volumen =",
+                        "source": "formData.general_fields.volumen_cm3",
+                        "suffix": " cm³"
+                      }
+                    ]
                   }
                 ]
               },
@@ -72,46 +167,73 @@
                 "width": "50%",
                 "components": [
                   {
-                    "type": "table_generic",
-                    "sourceTable": "detalles_ensayo"
+                    "text": "Detalles de Ensayo:",
+                    "type": "section_title"
+                  },
+                  {
+                    "type": "table_pesos",
+                    "fields": [
+                      {
+                        "label": "Número de golpes/capa =",
+                        "source": "formData.general_fields.golpes_por_capa"
+                      },
+                      {
+                        "label": "Número de capas =",
+                        "source": "formData.general_fields.numero_capas"
+                      },
+                      {
+                        "label": "Masa del martillo =",
+                        "source": "formData.general_fields.masa_martillo_lb",
+                        "suffix": " lb"
+                      }
+                    ]
                   }
                 ]
               }
             ]
           },
           {
-            "type": "section_title",
-            "text": "Datos de ensayo"
+            "text": "Datos de ensayo",
+            "type": "section_title"
           },
           {
             "type": "table_generic",
             "sourceTable": "datos_ensayo"
           },
           {
-            "type": "section_title",
-            "text": "Cálculo de la humedad"
+            "text": "Cálculo de la humedad",
+            "type": "section_title"
           },
           {
             "type": "table_generic",
             "sourceTable": "calculo_humedad"
           },
           {
-             "type": "table_pesos",
-             "fields": [
-               { "label": "Máxima Densidad Seca =", "source": "resultados.maxima_densidad_seca", "format": "0.3", "suffix": " g/cm³", "highlight": true },
-               { "label": "Humedad Óptima =", "source": "resultados.humedad_optima", "format": "0.1", "suffix": " %", "highlight": true }
-             ]
+            "type": "chart",
+            "height": "65mm",
+            "chartConfigKey": "curva_compactacion"
+          },
+          {
+            "type": "table_pesos",
+            "fields": [
+              {
+                "label": "Máxima Densidad Seca =",
+                "format": "0.3",
+                "source": "results.maxima_densidad_seca",
+                "suffix": " g/cm³",
+                "highlight": true
+              },
+              {
+                "label": "Humedad Óptima =",
+                "format": "0.1",
+                "source": "results.humedad_optima",
+                "suffix": " %",
+                "highlight": true
+              }
+            ]
           }
         ]
-      },
-      "charts": [
-        {
-          "chartConfigKey": "curva_compactacion",
-          "title": "Curva de compactación",
-          "height": "75mm",
-          "position": "after_layout"
-        }
-      ]
+      }
     }
   ]
 }

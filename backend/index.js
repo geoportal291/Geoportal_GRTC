@@ -25,6 +25,48 @@ const tokml = require('tokml');
 const archiver = require('archiver');
 const FormData = require('form-data'); // Import FormData
 const db = require('./conexion');
+
+// Inyección temporal de la migración de Fuentes de Agua
+(async () => {
+    try {
+        console.log('[MIGRATION] Verificando e inyectando tablas de Fuentes de Agua...');
+        const sql = `
+        CREATE TABLE IF NOT EXISTS fuentes_agua_suelos (
+            id SERIAL PRIMARY KEY,
+            id_proyecto INTEGER REFERENCES proyectos(id) ON DELETE CASCADE,
+            nombre VARCHAR(255) NOT NULL,
+            descripcion TEXT,
+            estado VARCHAR(50) DEFAULT 'Activa',
+            coordenada_este DECIMAL(12, 3),
+            coordenada_norte DECIMAL(12, 3),
+            id_progresiva_referencia INTEGER REFERENCES progresivas(id) ON DELETE SET NULL,
+            desplazamiento_km DECIMAL(8, 2),
+            lado VARCHAR(20),
+            kml_id INTEGER,
+            latitud DECIMAL(10, 8),
+            longitud DECIMAL(11, 8),
+            tramo_id INTEGER REFERENCES progresivas(id) ON DELETE CASCADE,
+            codigo VARCHAR(50),
+            propietario VARCHAR(255),
+            CONSTRAINT uq_fuentes_agua_suelos_tramo_codigo UNIQUE (tramo_id, codigo)
+        );
+
+        CREATE TABLE IF NOT EXISTS fuente_agua_imagenes_suelos (
+            id SERIAL PRIMARY KEY,
+            fuente_agua_id INTEGER REFERENCES fuentes_agua_suelos(id) ON DELETE CASCADE,
+            imagen_url VARCHAR(255) NOT NULL,
+            descripcion TEXT,
+            nombre_archivo VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        `;
+        await db.query(sql);
+        console.log('[MIGRATION] Tablas de Fuentes de Agua verificadas/creadas con éxito.');
+    } catch (err) {
+        console.error('[MIGRATION ERROR] Error al crear tablas de Fuentes de Agua:', err.message);
+    }
+})();
+
 const distritosService = require('./services/distritosService');
 const ensayosService = require('./services/ensayosService');
 const granulometriaService = require('./services/granulometriaService'); // Keeping imports clean
@@ -38,6 +80,7 @@ const estratosService = require('./services/estratosService');
 const usuariosService = require('./services/usuariosService');
 const puntosMapaService = require('./services/puntosMapaService');
 const canterasService = require('./services/canterasService');
+const fuentesAguaService = require('./services/fuentesAguaService');
 const suelosNlpService = require('./services/suelosNlpService');
 const alcantarillasService = require('./services/alcantarillasService');
 const alcantarillasGraphicsService = require('./services/alcantarillasGraphicsService');
@@ -217,7 +260,7 @@ const whitelist = [
     'http://localhost:3000',
     'https://geoportalbetav3.fly.dev',
     'https://geoportal-frontend-1.fly.dev',
-    'https://geoportal-frontend-u3zi.fly.dev'
+    'https://geoportal-frontend-e5f5.fly.dev'
 ];
 
 const corsOptions = {
@@ -610,7 +653,11 @@ app.get('/api/proxy', async (req, res) => {
 
     } catch (error) {
         console.error(`Error en proxy para ${url}:`, error.message);
-        res.status(500).json({ error: 'Error al obtener el recurso remoto.' });
+        if (error.response && error.response.status) {
+            res.status(error.response.status).json({ error: 'Error al obtener el recurso remoto del proxy.' });
+        } else {
+            res.status(500).json({ error: 'Error al obtener el recurso remoto.' });
+        }
     }
 });
 
@@ -2336,6 +2383,15 @@ app.post('/api/trafico/conteovehicular/upload-excel', authenticateToken, authori
             [stationId, excelUrl, description || 'Excel Conteo Vehicular', upload_date, 'conteo_vehicular_excel']
         );
 
+        if (req.body.extractedData) {
+            try {
+                const parsedData = JSON.parse(req.body.extractedData);
+                await db.query('UPDATE elementos_trafico SET datos_extraidos = $1 WHERE id = $2', [parsedData, stationId]);
+            } catch (jsonErr) {
+                console.error("Error guardando datos extraídos en DB:", jsonErr);
+            }
+        }
+
         res.status(201).json({ status: 'ok', message: 'Archivo Excel subido correctamente', excelUrl, imageData: result.rows[0] });
 
         // --- Audit Log: Subida de Archivo de Tráfico ---
@@ -2347,6 +2403,96 @@ app.post('/api/trafico/conteovehicular/upload-excel', authenticateToken, authori
     } catch (error) {
         console.error('Error al subir archivo Excel de conteo vehicular:', error);
         res.status(500).json({ status: 'error', message: 'Error al subir el archivo Excel de conteo vehicular.' });
+    }
+});
+
+// Nuevo endpoint para subir archivos Excel de Origen-Destino
+app.post('/api/trafico/encuestaorigendestino/upload-excel', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('excelFile'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
+        const { stationId, description } = req.body;
+        if (!stationId) return res.status(400).json({ error: 'stationId es requerido.' });
+        const excelUrl = await uploadTrafficFileToNAS(req.file, 'reportorigen', stationId, Date.now(), { useDescriptionFolder: false, fileBaseName: stationId });
+        const { DateTime } = require('luxon');
+        const upload_date = DateTime.utc().toISODate();
+        const result = await db.query(
+            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [stationId, excelUrl, description || 'Excel Origen-Destino', upload_date, 'encuesta_origen_destino_excel']
+        );
+
+        if (req.body.extractedData) {
+            try {
+                const parsedData = JSON.parse(req.body.extractedData);
+                await db.query('UPDATE elementos_trafico SET datos_extraidos = $1 WHERE id = $2', [parsedData, stationId]);
+            } catch (jsonErr) {
+                console.error("Error guardando datos extraídos en DB:", jsonErr);
+            }
+        }
+        res.status(201).json({ status: 'ok', message: 'Archivo Excel OD subido correctamente', excelUrl, imageData: result.rows[0] });
+        await db.query('INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)', [req.user.id, 'Subida de Archivo de Tráfico', `Archivo Excel "${description || 'Excel O-D'}" subido para estación ${stationId} por usuario ${req.user.id}. URL: ${excelUrl}`]);
+    } catch (error) {
+        console.error('Error al subir archivo Excel OD:', error);
+        res.status(500).json({ status: 'error', message: 'Error al subir el archivo Excel OD.' });
+    }
+});
+
+// Nuevo endpoint para subir archivos Excel de Censo de Cargas
+app.post('/api/trafico/censodecargas/upload-excel', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('excelFile'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
+        const { stationId, description } = req.body;
+        if (!stationId) return res.status(400).json({ error: 'stationId es requerido.' });
+        const excelUrl = await uploadTrafficFileToNAS(req.file, 'reportcargas', stationId, Date.now(), { useDescriptionFolder: false, fileBaseName: stationId });
+        const { DateTime } = require('luxon');
+        const upload_date = DateTime.utc().toISODate();
+        const result = await db.query(
+            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [stationId, excelUrl, description || 'Excel Censo de Cargas', upload_date, 'censo_de_cargas_excel']
+        );
+
+        if (req.body.extractedData) {
+            try {
+                const parsedData = JSON.parse(req.body.extractedData);
+                await db.query('UPDATE elementos_trafico SET datos_extraidos = $1 WHERE id = $2', [parsedData, stationId]);
+            } catch (jsonErr) {
+                console.error("Error guardando datos extraídos en DB:", jsonErr);
+            }
+        }
+        res.status(201).json({ status: 'ok', message: 'Archivo Excel Cargas subido correctamente', excelUrl, imageData: result.rows[0] });
+        await db.query('INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)', [req.user.id, 'Subida de Archivo de Tráfico', `Archivo Excel "${description || 'Excel Cargas'}" subido para estación ${stationId} por usuario ${req.user.id}. URL: ${excelUrl}`]);
+    } catch (error) {
+        console.error('Error al subir archivo Excel Cargas:', error);
+        res.status(500).json({ status: 'error', message: 'Error al subir el archivo Excel Cargas.' });
+    }
+});
+
+// Nuevo endpoint para subir archivos Excel de Encuesta de Velocidad
+app.post('/api/trafico/encuestavelocidad/upload-excel', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('excelFile'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
+        const { sectionId, description } = req.body;
+        if (!sectionId) return res.status(400).json({ error: 'sectionId es requerido.' });
+        const excelUrl = await uploadTrafficFileToNAS(req.file, 'reportvelocidad', sectionId, Date.now(), { useDescriptionFolder: false, fileBaseName: sectionId });
+        const { DateTime } = require('luxon');
+        const upload_date = DateTime.utc().toISODate();
+        const result = await db.query(
+            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [sectionId, excelUrl, description || 'Excel Encuesta Velocidad', upload_date, 'encuesta_velocidad_excel']
+        );
+
+        if (req.body.extractedData) {
+            try {
+                const parsedData = JSON.parse(req.body.extractedData);
+                await db.query('UPDATE elementos_trafico SET datos_extraidos = $1 WHERE id = $2', [parsedData, sectionId]);
+            } catch (jsonErr) {
+                console.error("Error guardando datos extraídos en DB:", jsonErr);
+            }
+        }
+        res.status(201).json({ status: 'ok', message: 'Archivo Excel Velocidad subido correctamente', excelUrl, imageData: result.rows[0] });
+        await db.query('INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)', [req.user.id, 'Subida de Archivo de Tráfico', `Archivo Excel "${description || 'Excel Velocidad'}" subido para tramo ${sectionId} por usuario ${req.user.id}. URL: ${excelUrl}`]);
+    } catch (error) {
+        console.error('Error al subir archivo Excel Velocidad:', error);
+        res.status(500).json({ status: 'error', message: 'Error al subir el archivo Excel Velocidad.' });
     }
 });
 
@@ -4041,6 +4187,142 @@ app.post('/api/canteras/:id/kml', authenticateToken, async (req, res) => {
             return res.status(error.statusCode || 400).json({ error: error.message });
         }
         res.status(500).json({ error: 'Error interno del servidor al subir KML para la cantera.' });
+    }
+});
+
+// --------------------- FUENTES DE AGUA ---------------------
+app.get('/api/tramos/:tramoId/fuentes-agua', authenticateToken, async (req, res) => {
+    const { tramoId } = req.params;
+    try {
+        const fuentes = await fuentesAguaService.getFuentesAguaByTramoId(tramoId);
+        res.json(fuentes);
+    } catch (err) {
+        console.error(`Error al obtener fuentes de agua para el tramo ${tramoId}:`, err);
+        res.status(500).json({ error: 'Error al obtener fuentes de agua por tramo', details: err.message });
+    }
+});
+
+app.post('/api/fuentes-agua', authenticateToken, async (req, res) => {
+    try {
+        const fuenteData = req.body;
+        const userId = req.user.id;
+        if (!fuenteData) {
+            return res.status(400).json({ error: 'No se recibieron datos de la fuente de agua.' });
+        }
+        const nuevaFuente = await fuentesAguaService.createFuenteAgua(fuenteData, userId);
+        res.status(201).json(nuevaFuente);
+    } catch (error) {
+        console.error('Error al crear fuente de agua:', error);
+        res.status(500).json({ error: 'Error al crear la fuente de agua', details: error.message });
+    }
+});
+
+app.put('/api/fuentes-agua/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const updated = await fuentesAguaService.updateFuenteAgua(id, req.body);
+        res.json(updated);
+    } catch (error) {
+        console.error(`Error al actualizar fuente de agua ${id}:`, error);
+        res.status(500).json({ error: 'Error al actualizar la fuente de agua.', details: error.message });
+    }
+});
+
+app.get('/api/fuentes-agua/:fuenteId/details', authenticateToken, async (req, res) => {
+    const { fuenteId } = req.params;
+    try {
+        const details = await fuentesAguaService.getFuenteDetailsById(fuenteId);
+        if (details) {
+            res.json(details);
+        } else {
+            res.status(404).json({ error: 'Fuente de agua no encontrada' });
+        }
+    } catch (err) {
+        console.error(`Error al obtener detalles para la fuente de agua ${fuenteId}:`, err);
+        res.status(500).json({ error: 'Error al obtener detalles de la fuente de agua', details: err.message });
+    }
+});
+
+app.delete('/api/fuentes-agua/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await fuentesAguaService.deleteFuenteAgua(id);
+        res.status(204).send();
+    } catch (error) {
+        console.error(`Error al eliminar fuente de agua ${id}:`, error);
+        res.status(500).json({ error: 'Error al eliminar la fuente de agua.', details: error.message });
+    }
+});
+
+app.post('/api/fuentes-agua/:fuenteId/upload-bulk', authenticateToken, upload.array('files'), async (req, res) => {
+    const { fuenteId } = req.params;
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'No se subieron archivos.' });
+    }
+    try {
+        const results = await fuentesAguaService.uploadBulkImages(req.files, fuenteId, req.user.id);
+        res.status(201).json({ status: 'ok', uploaded: results.length, images: results });
+    } catch (error) {
+        console.error('Error al subir imágenes masivas de fuente de agua:', error);
+        res.status(500).json({ error: 'Error al procesar subida masiva', details: error.message });
+    }
+});
+
+app.delete('/api/fuentes-agua/imagenes/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await fuentesAguaService.deleteImagen(id);
+        res.status(200).json({ status: 'ok', message: 'Imagen eliminada correctamente.' });
+    } catch (error) {
+        console.error('Error al eliminar la imagen de la fuente de agua:', error);
+        res.status(500).json({ error: 'Error al eliminar la imagen.' });
+    }
+});
+
+app.post('/api/fuentes-agua/imagenes/bulk-delete', authenticateToken, async (req, res) => {
+    const { imageIds } = req.body;
+    if (!imageIds || !Array.isArray(imageIds)) {
+        return res.status(400).json({ error: 'Se requiere un array de IDs de imágenes.' });
+    }
+    try {
+        const result = await fuentesAguaService.deleteBulkImagenes(imageIds);
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('Error al eliminar imágenes masivas de fuente de agua:', error);
+        res.status(500).json({ error: 'Error al eliminar imágenes.' });
+    }
+});
+
+app.post('/api/fuentes-agua/:fuenteId/estratos', authenticateToken, async (req, res) => {
+    const { fuenteId } = req.params;
+    try {
+        const nuevoEstrato = await fuentesAguaService.createFuenteEstrato(parseInt(fuenteId), req.body);
+        res.status(201).json(nuevoEstrato);
+    } catch (err) {
+        console.error('Error al crear muestra de fuente de agua:', err);
+        res.status(500).json({ error: 'Error al crear la muestra de la fuente de agua', details: err.message });
+    }
+});
+
+app.put('/api/fuentes-agua/estratos/:estratoId', authenticateToken, async (req, res) => {
+    const { estratoId } = req.params;
+    try {
+        const updatedEstrato = await fuentesAguaService.updateFuenteEstrato(parseInt(estratoId), req.body);
+        res.status(200).json(updatedEstrato);
+    } catch (err) {
+        console.error('Error al actualizar muestra de fuente de agua:', err);
+        res.status(500).json({ error: 'Error al actualizar la muestra de la fuente de agua', details: err.message });
+    }
+});
+
+app.delete('/api/fuentes-agua/estratos/:estratoId', authenticateToken, async (req, res) => {
+    const { estratoId } = req.params;
+    try {
+        await fuentesAguaService.deleteFuenteEstrato(parseInt(estratoId));
+        res.status(204).send();
+    } catch (err) {
+        console.error('Error al eliminar muestra de fuente de agua:', err);
+        res.status(500).json({ error: 'Error al eliminar la muestra de la fuente de agua', details: err.message });
     }
 });
 
@@ -6727,6 +7009,172 @@ app.delete('/api/proyectos/:id/diseno-geometrico-capas/:tabName', authenticateTo
         res.status(200).json({ status: 'success', message: 'Capa eliminada correctamente' });
     } catch (err) {
         console.error('Error en Diseno Geometrico DELETE /capas/:tabName:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ==========================================
+// VERSIONES DE DISEÑO GEOMÉTRICO
+// ==========================================
+
+const ensureDisenoGeometricoVersionesTables = async () => {
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS diseno_geometrico_versiones (
+            id SERIAL PRIMARY KEY,
+            proyecto_id INTEGER NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+            version_numero INTEGER NOT NULL,
+            nombre VARCHAR(255),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (proyecto_id, version_numero)
+        );
+    `);
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS diseno_geometrico_version_capas (
+            id SERIAL PRIMARY KEY,
+            version_id INTEGER NOT NULL REFERENCES diseno_geometrico_versiones(id) ON DELETE CASCADE,
+            tipo VARCHAR(50) NOT NULL,
+            file_name VARCHAR(255) NOT NULL,
+            file_url TEXT NOT NULL,
+            geojson_data JSONB
+        );
+    `);
+};
+
+app.get('/api/proyectos/:id/diseno-geometrico-versiones', authenticateToken, async (req, res) => {
+    try {
+        await ensureDisenoGeometricoVersionesTables();
+        const proyectoId = parseInt(req.params.id, 10);
+        const result = await db.query(`
+            SELECT v.id, v.version_numero, v.nombre, v.created_at,
+                   json_agg(json_build_object('id', c.id, 'tipo', c.tipo, 'file_name', c.file_name, 'file_url', c.file_url, 'geojson_data', c.geojson_data)) as capas
+            FROM diseno_geometrico_versiones v
+            LEFT JOIN diseno_geometrico_version_capas c ON v.id = c.version_id
+            WHERE v.proyecto_id = $1
+            GROUP BY v.id
+            ORDER BY v.version_numero DESC;
+        `, [proyectoId]);
+        
+        const formattedData = result.rows.map(row => ({
+            ...row,
+            capas: row.capas.filter(c => c && c.id !== null)
+        }));
+
+        res.status(200).json({ status: 'success', data: formattedData });
+    } catch (err) {
+        console.error('Error GET versiones:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.post('/api/proyectos/:id/diseno-geometrico-versiones', authenticateToken, authorizeDisenoGeometricoManage, upload.any(), async (req, res) => {
+    let transactionStarted = false;
+    try {
+        await ensureDisenoGeometricoVersionesTables();
+        const proyectoId = parseInt(req.params.id, 10);
+        const nombre = String(req.body.nombre || '').trim();
+        const files = req.files || [];
+        
+        const versionRes = await db.query(`SELECT COALESCE(MAX(version_numero), 0) + 1 as next_v FROM diseno_geometrico_versiones WHERE proyecto_id = $1`, [proyectoId]);
+        const versionNumero = versionRes.rows[0].next_v;
+
+        await db.query('BEGIN');
+        transactionStarted = true;
+        
+        const insertVersionRes = await db.query(`
+            INSERT INTO diseno_geometrico_versiones (proyecto_id, version_numero, nombre)
+            VALUES ($1, $2, $3) RETURNING id;
+        `, [proyectoId, versionNumero, nombre]);
+        
+        const versionId = insertVersionRes.rows[0].id;
+        const AdmZip = require('adm-zip');
+        const { DOMParser } = require('xmldom');
+        const path = require('path');
+        const FormData = require('form-data');
+        const axios = require('axios');
+        const { kml } = require('@tmcw/togeojson');
+        
+        await db.query(`DELETE FROM diseno_geometrico_capas WHERE proyecto_id = $1`, [proyectoId]);
+
+        for (const file of files) {
+            let tipo = 'EXTRA';
+            if (file.fieldname.startsWith('file_eje')) tipo = 'EJE';
+            else if (file.fieldname.startsWith('file_bordes')) tipo = 'BORDES';
+            else if (file.fieldname.startsWith('file_corte')) tipo = 'CORTE';
+            else if (file.fieldname.startsWith('file_progresivas')) tipo = 'PROGRESIVAS';
+            else if (file.fieldname.startsWith('file_pis')) tipo = 'PIS';
+
+            const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
+            const filename = `diseno-geometrico/${proyectoId}/v${versionNumero}/${Date.now()}_${cleanFilename}`;
+
+            const blob = await put(filename, file.buffer, {
+                access: 'public',
+                token: process.env.BLOB_READ_WRITE_TOKEN_GEOLOGIA || process.env.BLOB_READ_WRITE_TOKEN
+            });
+
+            let geojsonData = null;
+            const ext = path.extname(file.originalname).toLowerCase();
+            
+            if (ext === '.rar' || ext === '.zip') {
+                const formData = new FormData();
+                formData.append('file', file.buffer, { filename: file.originalname });
+                try {
+                    const pythonRes = await axios.post('http://127.0.0.1:8000/convert-shapefile', formData, {
+                        headers: formData.getHeaders(),
+                        maxContentLength: Infinity,
+                        maxBodyLength: Infinity,
+                        timeout: 300000
+                    });
+                    if (pythonRes.data?.status === 'ok') geojsonData = pythonRes.data.geojson;
+                } catch(e) { console.error('Error python worker version:', e.message); }
+            } else if (ext === '.kml' || ext === '.kmz') {
+                try {
+                    let kmlText = '';
+                    if (ext === '.kmz') {
+                        const zip = new AdmZip(file.buffer);
+                        const kmlEntry = zip.getEntries().find((entry) => entry.entryName.toLowerCase().endsWith('.kml'));
+                        if (kmlEntry) kmlText = zip.readAsText(kmlEntry);
+                    } else {
+                        kmlText = file.buffer.toString('utf-8');
+                    }
+                    const doc = new DOMParser().parseFromString(kmlText, 'text/xml');
+                    const { injectFoldersToGeoJSON } = require('./utils/kmlFolderInjector');
+                    geojsonData = injectFoldersToGeoJSON(kmlText, kml(doc));
+                } catch(e) { console.error('Error parseando KML/KMZ:', e.message); }
+            }
+            
+            if (geojsonData) {
+                geojsonData = compactGeojsonForStorage(geojsonData);
+            }
+
+                await db.query(`
+                INSERT INTO diseno_geometrico_version_capas (version_id, tipo, file_name, file_url, geojson_data)
+                VALUES ($1, $2, $3, $4, $5);
+            `, [versionId, tipo, file.originalname, blob.url, geojsonData ? JSON.stringify(geojsonData) : null]);
+
+            await db.query(`
+                INSERT INTO diseno_geometrico_capas (proyecto_id, tab_name, file_name, file_url, geojson_data)
+                VALUES ($1, $2, $3, $4, $5);
+            `, [proyectoId, `v_capa_${Date.now()}_${Math.floor(Math.random()*1000)}`, file.originalname, blob.url, geojsonData ? JSON.stringify(geojsonData) : null]);
+        }
+        
+        await db.query('COMMIT');
+        res.status(200).json({ status: 'success', message: 'Version creada con exito' });
+    } catch (err) {
+        if (transactionStarted) await db.query('ROLLBACK');
+        console.error('Error POST versiones:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+app.delete('/api/proyectos/:id/diseno-geometrico-versiones/:versionId', authenticateToken, authorizeDisenoGeometricoManage, async (req, res) => {
+    try {
+        await ensureDisenoGeometricoVersionesTables();
+        const { id, versionId } = req.params;
+        const result = await db.query('DELETE FROM diseno_geometrico_versiones WHERE id = $1 AND proyecto_id = $2 RETURNING id;', [versionId, id]);
+        if (!result.rowCount) return res.status(404).json({ status: 'error', message: 'Version no encontrada' });
+        res.status(200).json({ status: 'success', message: 'Version eliminada' });
+    } catch (err) {
+        console.error('Error DELETE version:', err);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });

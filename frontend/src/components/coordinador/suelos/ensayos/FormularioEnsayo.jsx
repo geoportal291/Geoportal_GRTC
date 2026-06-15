@@ -1,39 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
-import '../proyectos/GestorProyectos.css';
+import './FormularioEnsayo.css';
 
-const FormularioEnsayo = ({ showModal, onClose, estrato, ensayoData, token, canteraId, progresiva, onAssayCreated }) => {
+const FormularioEnsayo = ({ showModal, onClose, estrato, ensayoData, ensayoToEdit, token, canteraId, progresiva, onAssayCreated, onSave, estratoId }) => {
+    const activeEnsayoData = ensayoData || ensayoToEdit;
+
     const initialFormData = {
         tipo_ensayo_id: '',
         nombre_ensayo: '',
         estado: 'Pendiente',
     };
 
-    // Soluciona el warning de "controlled input" proveyendo siempre valores definidos.
     const [formData, setFormData] = useState(initialFormData);
     const [tiposEnsayo, setTiposEnsayo] = useState([]);
 
     const API_URL = process.env.REACT_APP_API_BASE || '';
 
-    // Initial load and updates when ensayoData changes
     useEffect(() => {
-        if (ensayoData) {
+        if (activeEnsayoData) {
             setFormData({
-                tipo_ensayo_id: ensayoData.tipo_ensayo_id || ensayoData.tipo_ensayo || '',
-                nombre_ensayo: ensayoData.nombre_ensayo || '',
-                estado: ensayoData.estado || 'Pendiente',
+                tipo_ensayo_id: activeEnsayoData.tipo_ensayo_id || activeEnsayoData.tipo_ensayo || '',
+                nombre_ensayo: activeEnsayoData.nombre_ensayo || '',
+                estado: activeEnsayoData.estado || 'Pendiente',
             });
         } else {
             setFormData(initialFormData);
         }
-    }, [ensayoData]);
+    }, [activeEnsayoData]);
 
     useEffect(() => {
-        if (showModal) {
+        if (showModal || showModal === undefined) {
             const fetchTiposEnsayo = async () => {
                 try {
-                    // Corrige la ruta de la API a /api/tipos-ensayo (con guion)
                     const res = await axios.get(`${API_URL}/api/tipos-ensayo`, { headers: { 'Authorization': `Bearer ${token}` } });
                     setTiposEnsayo(res.data);
                 } catch (err) {
@@ -47,42 +46,57 @@ const FormularioEnsayo = ({ showModal, onClose, estrato, ensayoData, token, cant
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        if (name === 'tipo_ensayo_id') {
+            const selectedTipo = tiposEnsayo.find(t => t.id === parseInt(value, 10) || t.id === value);
+            const tipoNombre = selectedTipo ? selectedTipo.descripcion : '';
+            setFormData(prev => ({
+                ...prev,
+                tipo_ensayo_id: value,
+                nombre_ensayo: prev.nombre_ensayo === '' || prev.nombre_ensayo === undefined || tiposEnsayo.some(t => t.descripcion === prev.nombre_ensayo) ? tipoNombre : prev.nombre_ensayo
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                [name]: value
+            }));
+        }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        let nombreEnsayo = formData.nombre_ensayo ? formData.nombre_ensayo.trim() : '';
+        if (!nombreEnsayo) {
+            const selectedTipo = tiposEnsayo.find(t => t.id === parseInt(formData.tipo_ensayo_id, 10) || t.id === formData.tipo_ensayo_id);
+            nombreEnsayo = selectedTipo ? selectedTipo.descripcion : 'Ensayo';
+        }
+
         try {
-            if (ensayoData) { // Modo edición
+            if (activeEnsayoData) { // Modo edición
                 const dataToSend = {
-                    nombre_ensayo: formData.nombre_ensayo,
+                    nombre_ensayo: nombreEnsayo,
                     estado: formData.estado,
                 };
-                // Corrige la ruta de la API para PUT
-                await axios.put(`${API_URL}/api/ensayos/${ensayoData.id}/base`, dataToSend, {
+                await axios.put(`${API_URL}/api/ensayos/${activeEnsayoData.id}/base`, dataToSend, {
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
                 });
                 alertify.success("Ensayo actualizado correctamente.");
             } else { // Modo creación
                 const dataToSend = {
                     tipo_ensayo_id: formData.tipo_ensayo_id,
-                    nombre_ensayo: formData.nombre_ensayo,
+                    nombre_ensayo: nombreEnsayo,
                     estado: formData.estado,
-                    estrato_id: estrato?.id,
+                    estrato_id: estrato?.id || estratoId,
                     cantera_id: canteraId,
                     progresiva_id: progresiva?.id,
                 };
-                // Corrige la ruta de la API para POST
                 await axios.post(`${API_URL}/api/ensayos/base`, dataToSend, {
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
                 });
                 alertify.success("Ensayo creado correctamente.");
             }
 
+            if (onSave) onSave();
             if (onAssayCreated) onAssayCreated();
             onClose(); // Cerrar el modal
         } catch (error) {
@@ -91,30 +105,39 @@ const FormularioEnsayo = ({ showModal, onClose, estrato, ensayoData, token, cant
         }
     };
 
-    if (!showModal) {
+    if (showModal !== undefined && !showModal) {
         return null;
     }
 
     return (
-        <div className="progresivas-form-container">
-            <h3>{ensayoData ? 'Editar Ensayo' : 'Agregar Nuevo Ensayo'}</h3>
-            <form onSubmit={handleSubmit}>
-                <div className="form-grid">
-                    <div className="form-group">
+        <div className="ensayo-overlay-custom" onClick={onClose}>
+            <div className="ensayo-modal-container-custom" onClick={(e) => e.stopPropagation()}>
+                <div className="ensayo-modal-header">
+                    <h3>{activeEnsayoData ? 'Editar Ensayo' : 'Agregar Nuevo Ensayo'}</h3>
+                    <button type="button" onClick={onClose} className="ensayo-close-btn-custom">&times;</button>
+                </div>
+                <form onSubmit={handleSubmit} className="ensayo-form-body">
+                    <div className="ensayo-field-group">
                         <label>Tipo de Ensayo</label>
-                        <select name="tipo_ensayo_id" value={formData.tipo_ensayo_id} onChange={handleInputChange} required disabled={!!ensayoData}>
+                        <select name="tipo_ensayo_id" value={formData.tipo_ensayo_id} onChange={handleInputChange} required disabled={!!activeEnsayoData}>
                             <option value="">Seleccione un tipo de ensayo</option>
                             {tiposEnsayo.map(tipo => (
                                 <option key={tipo.id} value={tipo.id}>{tipo.descripcion}</option>
                             ))}
                         </select>
                     </div>
-                    <div className="form-group">
+                    <div className="ensayo-field-group">
                         <label>Nombre del Ensayo</label>
-                        <input type="text" name="nombre_ensayo" value={formData.nombre_ensayo} onChange={handleInputChange} required />
+                        <input 
+                            type="text" 
+                            name="nombre_ensayo" 
+                            value={formData.nombre_ensayo} 
+                            onChange={handleInputChange} 
+                            placeholder="Dejar vacío para usar nombre del tipo"
+                        />
                     </div>
-                    {ensayoData && ( // Solo mostrar estado en modo edición
-                        <div className="form-group">
+                    {activeEnsayoData && ( // Solo mostrar estado en modo edición
+                        <div className="ensayo-field-group">
                             <label>Estado</label>
                             <select
                                 name="estado"
@@ -134,18 +157,18 @@ const FormularioEnsayo = ({ showModal, onClose, estrato, ensayoData, token, cant
                             >
                                 <option value="Pendiente" style={{ backgroundColor: '#f0f0f0', color: '#616161' }}>⬤ Pendiente</option>
                                 <option value="En revisión" style={{ backgroundColor: '#fff9c4', color: '#fbc02d' }}>⬤ En revisión</option>
-                                <option value="Rechazado" style={{ backgroundColor: '#ffcdd2', color: '#d32f2f' }}>⬤ Rechazado</option>
+                                <option value="Rechazado" style={{ backgroundColor: '#ffcdd2', color: '#d32f2f' }}>⬤ ... Rechazado</option>
                                 <option value="Aprobado" style={{ backgroundColor: '#c8e6c9', color: '#388e3c' }}>⬤ Aprobado</option>
                                 <option value="Completado" style={{ backgroundColor: '#bbdefb', color: '#1976d2' }}>⬤ Completado</option>
                             </select>
                         </div>
                     )}
-                </div>
-                <div className="modal-footer">
-                    <button type="button" className="btn btn-outline" onClick={onClose}>Cancelar</button>
-                    <button type="submit" className="btn">Guardar Ensayo</button>
-                </div>
-            </form>
+                    <div className="ensayo-modal-footer">
+                        <button type="button" className="btn-ensayo-cancel" onClick={onClose}>Cancelar</button>
+                        <button type="submit" className="btn-ensayo-submit">Guardar Ensayo</button>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 };

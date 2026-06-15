@@ -10,6 +10,7 @@ import EstratoItem from '../estratos/EstratoItem'; // Import the new EstratoItem
 import PerfilEstratigraficoModal from '../estratos/PerfilEstratigraficoModal'; // Import the new PerfilEstratigraficoModal component
 import VisorGraficosProgresivaModal from '../estratos/VisorGraficosProgresivaModal'; // NEW: Import VisorGraficosProgresivaModal
 import ProgresivaImageGalleryModal from './ProgresivaImageGalleryModal'; // Importar Modal de Galería
+import '../estratos/PerfilEstratigrafico.css'; // Estilos premium para el modal de gestión de estratos
 
 // --- Pagination Component ---
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
@@ -570,23 +571,30 @@ export default function GestorDeTramosActual() {
         setShowGestionarEstratosModal(true);
     };
 
-    const handleEstratoChange = (index, e) => {
-        const { name, value } = e.target;
+    const handleEstratoChange = (index, field, value) => {
         setEstratosEnEdicion(prev => {
             const newPerfil = [...prev];
-            newPerfil[index] = { ...newPerfil[index], [name]: value };
+            newPerfil[index] = { ...newPerfil[index], [field]: value };
+
+            // Si se cambia la profundidad final, actualizar la profundidad inicial del siguiente estrato
+            if (field === 'profundidad_final' && index < newPerfil.length - 1) {
+                newPerfil[index + 1] = { ...newPerfil[index + 1], profundidad_inicial: value };
+            }
             return newPerfil;
         });
     };
 
     const handleAddEstrato = () => {
         setEstratosEnEdicion(prev => {
+            const lastEstrato = prev.length > 0 ? prev[prev.length - 1] : null;
+            const newInitialDepth = lastEstrato ? parseFloat(lastEstrato.profundidad_final) || 0 : 0;
+
             const newEstrato = {
-                id: `temp-${Date.now()}`, // Use a temporary ID for new estratos
+                id: `temp-${Date.now()}`,
                 nombre: '',
                 descripcion: '',
-                cota_inicial: prev.length > 0 ? parseFloat(prev[prev.length - 1].cota_final) : 0,
-                cota_final: '',
+                profundidad_inicial: newInitialDepth,
+                profundidad_final: '',
                 orden: prev.length,
             };
             return [...prev, newEstrato];
@@ -594,7 +602,22 @@ export default function GestorDeTramosActual() {
     };
 
     const handleRemoveEstrato = (indexToRemove) => {
-        setEstratosEnEdicion(prev => prev.filter((_, index) => index !== indexToRemove));
+        alertify.confirm(
+            'Confirmar Eliminación',
+            '¿Está seguro que desea eliminar este estrato? Esta acción es irreversible.',
+            () => {
+                setEstratosEnEdicion(prev => {
+                    const newPerfil = prev.filter((_, index) => index !== indexToRemove);
+                    // Re-calcular profundidades iniciales de los siguientes estratos
+                    for (let i = indexToRemove; i < newPerfil.length; i++) {
+                        const prevFinal = i > 0 ? parseFloat(newPerfil[i - 1].profundidad_final) || 0 : 0;
+                        newPerfil[i] = { ...newPerfil[i], profundidad_inicial: prevFinal };
+                    }
+                    return newPerfil;
+                });
+            },
+            () => alertify.message('Eliminación cancelada')
+        ).set('labels', { ok: 'Sí', cancel: 'No' });
     };
 
     const handleEditProgresiva = (progresiva) => {
@@ -626,21 +649,31 @@ export default function GestorDeTramosActual() {
     };
 
     const handleUpdateEstratos = async (e) => {
-        e.preventDefault();
+        if (e && e.preventDefault) e.preventDefault();
         if (!progresivaParaGestionar) return;
+
+        // Validaciones similares a canteras
+        for (const [index, estrato] of estratosEnEdicion.entries()) {
+            if (!estrato.nombre || estrato.profundidad_inicial === '' || estrato.profundidad_final === '') {
+                alertify.error(`Error: El estrato en la fila ${index + 1} tiene campos requeridos vacíos.`);
+                return;
+            }
+            if (parseFloat(estrato.profundidad_final) <= parseFloat(estrato.profundidad_inicial)) {
+                alertify.error(`Error: La profundidad final del estrato en la fila ${index + 1} debe ser mayor que la inicial.`);
+                return;
+            }
+        }
+
         setSubmitting(true);
         try {
             const headers = getAuthHeaders();
 
-            // Send all strata (new and existing) to the backend. The backend is now equipped to handle creation of new strata.
+            // Send all strata (new and existing) to the backend
             const payload = { ...progresivaParaGestionar, estratos_perfil: estratosEnEdicion };
-            payload.estratos_perfil.forEach((estrato, index) => {
-                console.log(`Estrato ${index}:`, estrato);
-            });
             await axios.put(`${API_URL}/api/progresivas/child/${progresivaParaGestionar.id}`, payload, { headers });
             alertify.success('Estratos actualizados correctamente.');
             setShowGestionarEstratosModal(false);
-            fetchProgresivas(tramoSeleccionado.id, currentPage);
+            fetchProgresivas(tramoSeleccionado.id, currentPage, searchTerm);
         } catch (err) {
             alertify.error(`Error al actualizar los estratos: ${err.response?.data?.error || err.message}`);
         } finally {
@@ -935,32 +968,92 @@ export default function GestorDeTramosActual() {
             </div>
 
             {showGestionarEstratosModal && (
-                <div className="overlay">
-                    <div className="progresivas-form-container">
-                        <form className="progresivas-form" onSubmit={handleUpdateEstratos}>
-                            <div className="estratos-header" style={{ marginBottom: '15px' }}>
-                                <h3 className="estratos-title"><i className="fas fa-layer-group"></i> Estratos identificados</h3>
-                                <button type="button" onClick={handleAddEstrato} className="btn btn-outline">
-                                    <i className="fas fa-plus"></i> Añadir Estrato
-                                </button>
+                <div className="perfil-overlay-custom" onClick={() => setShowGestionarEstratosModal(false)}>
+                    <div className="perfil-estratigrafico-modal-custom" onClick={(e) => e.stopPropagation()}>
+                        <div className="perfil-header-custom">
+                            <div className="perfil-header-title">
+                                <h3>Gestionar Perfil Estratigráfico</h3>
+                                <div className="perfil-header-subtitle">
+                                    Progresiva: <span className="highlight-badge">{formatCodigoForDisplay(getProgresivaCodeForDisplay(progresivaParaGestionar?.codigo))}</span>
+                                </div>
                             </div>
-                            <div className="form-group full-width">
-                                <div className="estratos-editor-list">
+                            <button onClick={() => setShowGestionarEstratosModal(false)} className="perfil-close-btn-custom">&times;</button>
+                        </div>
+                        <div className="perfil-content-custom custom-scrollbar">
+                            {estratosEnEdicion.length === 0 ? (
+                                <div className="estratos-empty-state">
+                                    <i className="fas fa-layer-group"></i>
+                                    <p>No hay estratos definidos para esta progresiva.</p>
+                                    <p className="subtitle">Haz clic en "Añadir Estrato" para comenzar a definir el perfil estratigráfico.</p>
+                                </div>
+                            ) : (
+                                <div className="estratos-cards-container">
                                     {estratosEnEdicion.map((estrato, index) => (
-                                        <div className="estrato-editor-row" key={index}>
-                                            <input type="number" name="profundidad_inicial" value={estrato.profundidad_inicial} placeholder="Prof. Inicial" readOnly />
-                                            <input type="number" step="any" name="profundidad_final" value={estrato.profundidad_final} placeholder="Prof. Final" onChange={(e) => handleEstratoChange(index, e)} />
-                                            <textarea name="descripcion" value={estrato.descripcion || ''} placeholder="Descripción" onChange={(e) => handleEstratoChange(index, e)} rows="1"></textarea>
-                                            <button type="button" onClick={() => handleRemoveEstrato(index)} className="remove-estrato-btn" disabled={index === 0}>×</button>
+                                        <div className="estrato-card" key={estrato.id || index}>
+                                            <div className="estrato-card-header">
+                                                <span className="estrato-index-badge">Estrato {index + 1}</span>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleRemoveEstrato(index)} 
+                                                    className="btn-delete-estrato-premium" 
+                                                    title="Eliminar este estrato"
+                                                >
+                                                    <i className="fas fa-trash-alt"></i>
+                                                </button>
+                                            </div>
+                                            <div className="estrato-card-grid">
+                                                <div className="estrato-field-group">
+                                                    <label>Nombre del Material / Estrato</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={estrato.nombre || ''} 
+                                                        onChange={(e) => handleEstratoChange(index, 'nombre', e.target.value)} 
+                                                        placeholder="Ej. Arena arcillosa (SC)" 
+                                                    />
+                                                </div>
+                                                <div className="estrato-field-group cota-field">
+                                                    <label>Prof. Inicial (m)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={estrato.profundidad_inicial} 
+                                                        readOnly 
+                                                        disabled 
+                                                        className="readonly-depth" 
+                                                    />
+                                                </div>
+                                                <div className="estrato-field-group cota-field">
+                                                    <label>Prof. Final (m)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        step="any"
+                                                        value={estrato.profundidad_final} 
+                                                        onChange={(e) => handleEstratoChange(index, 'profundidad_final', e.target.value)} 
+                                                        placeholder="Ej. 1.50" 
+                                                    />
+                                                </div>
+                                                <div className="estrato-field-group full-width">
+                                                    <label>Descripción / Observaciones</label>
+                                                    <textarea 
+                                                        value={estrato.descripcion || ''} 
+                                                        onChange={(e) => handleEstratoChange(index, 'descripcion', e.target.value)} 
+                                                        placeholder="Descripción del estrato (color, plasticidad, humedad, etc.)" 
+                                                        rows="2" 
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
-                            <div className="form-actions">
-                                <button type="button" className="close-btn" onClick={() => setShowGestionarEstratosModal(false)}>Cancelar</button>
-                                <button type="submit" className="submit-btn" disabled={submitting}>{submitting ? 'Guardando...' : 'Guardar Cambios'}</button>
-                            </div>
-                        </form>
+                            )}
+                        </div>
+                        <div className="perfil-footer-custom">
+                            <button type="button" onClick={handleAddEstrato} className="btn-add-estrato-premium">
+                                <i className="fas fa-plus"></i> Añadir Estrato
+                            </button>
+                            <button type="button" onClick={handleUpdateEstratos} className="btn-save-estrato-premium" disabled={submitting}>
+                                <i className="fas fa-save"></i> {submitting ? 'Guardando...' : 'Guardar Cambios'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -1145,19 +1238,15 @@ export default function GestorDeTramosActual() {
             )}
 
             {showEnsayoModal && currentProgresivaForAssay && currentEstratoForAssay && (
-                <div className="overlay" onClick={handleCloseEnsayoModal}>
-                    <div className="progresivas-form-container" onClick={(e) => e.stopPropagation()}>
-                        <FormularioEnsayo
-                            showModal={showEnsayoModal}
-                            onClose={handleCloseEnsayoModal}
-                            progresiva={currentProgresivaForAssay}
-                            estrato={currentEstratoForAssay}
-                            onAssayCreated={handleAssayCreated}
-                            ensayoData={ensayoToEdit} // Pass ensayoToEdit as ensayoData
-                            token={user?.token}
-                        />
-                    </div>
-                </div>
+                <FormularioEnsayo
+                    showModal={showEnsayoModal}
+                    onClose={handleCloseEnsayoModal}
+                    progresiva={currentProgresivaForAssay}
+                    estrato={currentEstratoForAssay}
+                    onAssayCreated={handleAssayCreated}
+                    ensayoData={ensayoToEdit} // Pass ensayoToEdit as ensayoData
+                    token={user?.token}
+                />
             )}
 
             <EnsayoDetalleModal

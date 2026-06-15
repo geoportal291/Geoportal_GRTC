@@ -396,6 +396,40 @@
   color: #333;
 }
 
+.card-ensayo-tipo .header-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.card-ensayo-tipo .mini-progress-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569 !important;
+  letter-spacing: 0.2px;
+}
+
+.mini-rejected-badge {
+  background-color: #fee2e2;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  box-shadow: 0 1px 2px rgba(239, 68, 68, 0.05);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.mini-rejected-badge i {
+  font-size: 0.75rem;
+}
+
 .ensayo-count-badge {
   background-color: var(--accent-color, #54a0ca);
   color: white;
@@ -449,6 +483,12 @@
 }
 
 .btn-card-action.export:hover {
+  background-color: #a4d2eb60;
+  color: white;
+  border-color: #757e83;
+}
+
+.btn-card-action.pdf:hover {
   background-color: #a4d2eb60;
   color: white;
   border-color: #757e83;
@@ -1156,3 +1196,173 @@
 .mini-status-text.status-completado {
   color: #40c057;
 }
+
+/* Hover reactivos premium para botones en el listado modal de ensayos */
+.btn-results:hover {
+  background-color: rgba(13, 110, 253, 0.08) !important;
+  border-color: rgba(13, 110, 253, 0.3) !important;
+  color: #0d6efd !important;
+  transform: translateY(-1px);
+}
+
+.btn-report-quick:hover {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #dc2626 !important;
+  transform: translateY(-1px);
+}
+
+/* --- ESTILOS DE ESTADOS ADICIONALES --- */
+.status-rechazado {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.status-aprobado {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.status-en-progreso {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.mini-status-dot.status-rechazado {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.mini-status-dot.status-aprobado {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.mini-status-dot.status-en-progreso {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+/* --- ESTILOS DEL CARRUSEL DE OBJETIVOS PREMIUM --- */
+.carrusel-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.milestone-carrusel-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.carrusel-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.5rem;
+  font-size: 0.95rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+}
+
+.carrusel-btn:hover {
+  background-color: #f1f5f9;
+  color: #1e293b;
+  border-color: #e2e8f0;
+  transform: scale(1.08);
+}
+
+.carrusel-slide {
+  flex-grow: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.5rem;
+  animation: fadeInObjective 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.objective-mini-bar-container {
+  width: 80%;
+  height: 5px;
+  background-color: #f1f5f9;
+  border-radius: 10px;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.objective-mini-bar-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.carrusel-dots {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+}
+
+.carrusel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.carrusel-dot:hover {
+  background-color: #94a3b8;
+  transform: scale(1.15);
+}
+
+.carrusel-dot.active {
+  background-color: #54a0ca;
+  transform: scale(1.3);
+  box-shadow: 0 0 6px rgba(84, 160, 202, 0.4);
+}
+
+.objective-pending-label {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.objective-completed-label {
+  color: #10b981;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@keyframes fadeInObjective {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

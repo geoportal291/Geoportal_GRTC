@@ -59,7 +59,7 @@ export default function Layout({ children, setPageTitle }) {
 
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div className="geoportal-layout-root" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {!isAmigoSecretoRoute && location.pathname !== '/coordinador/dashboardprincipal' && !isTrafficV2Route && (
         <Header
           sidebarCollapsed={collapsed}
@@ -70,12 +70,13 @@ export default function Layout({ children, setPageTitle }) {
           userProjectEntityName={selectedProjectName}
         />
       )}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div className="geoportal-layout-flex" style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <div
           style={{
             transition: 'width 0.3s ease',
             flexShrink: 0
           }}
+          className="geoportal-sidebar-wrapper"
         >
           <Navbar onToggle={setCollapsed} isCollapsed={collapsed} />
         </div>

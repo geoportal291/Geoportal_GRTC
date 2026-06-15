@@ -61,8 +61,11 @@ export const hasMeaningfulAssayData = (formData, tableConfig) => {
 };
 
 export const getEnsayoCompletionStatus = (ensayo, tableConfig) => {
-  const estado = String(ensayo?.estado || "").toLowerCase();
-  if (estado === "en proceso") return "EN PROCESO";
+  if (ensayo?.estado) {
+    const estadoNormalizado = String(ensayo.estado).trim().toUpperCase();
+    if (estadoNormalizado) return estadoNormalizado;
+  }
+
   return hasMeaningfulAssayData(ensayo?.datos_formulario, tableConfig)
     ? "COMPLETADO"
     : "PENDIENTE";

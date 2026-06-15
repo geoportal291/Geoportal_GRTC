@@ -3,7 +3,7 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'geoportal-frontend-u3zi'
+app = 'geoportal-frontend-e5f5'
 primary_region = 'gru'
 
 [build]

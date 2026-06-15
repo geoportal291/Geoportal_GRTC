@@ -4,11 +4,14 @@ import TrafficKpiPanel from '../components/TrafficKpiPanel';
 import TrafficMapPanel from '../components/TrafficMapPanel';
 import TrafficInsightPanel from '../components/TrafficInsightPanel';
 import TrafficInternalGeoMap from '../components/TrafficInternalGeoMap';
+import GlobalEsalProjection from '../components/GlobalEsalProjection';
+import TrafficProjectFunnel from '../components/TrafficProjectFunnel';
+import ExportMasterExcelButton from '../components/ExportMasterExcelButton';
 import { FORMAT_LIBRARY } from '../trafficV2Utils';
 
 const buildEmbeddedFormatUrl = (url) => `${API_BASE_URL}/api/proxy?url=${encodeURIComponent(url)}`;
 
-const ResumenGeneralV2 = ({ activeSubTab, projectId, stations, sections, summary }) => {
+const ResumenGeneralV2 = ({ activeSubTab, projectId, stations, sections, summary, extractedTrafficData }) => {
   const [selectedFormatId, setSelectedFormatId] = useState(FORMAT_LIBRARY[0]?.id || '');
   const selectedFormat = useMemo(
     () => FORMAT_LIBRARY.find((item) => item.id === selectedFormatId) || FORMAT_LIBRARY[0] || null,
@@ -80,20 +83,74 @@ const ResumenGeneralV2 = ({ activeSubTab, projectId, stations, sections, summary
 
   return (
     <div className="traffic-v2-grid">
-      <TrafficKpiPanel summary={summary} />
-      <TrafficInternalGeoMap
-        className="traffic-v2-span-8"
-        projectId={projectId}
-        title={title}
-        description={mapDescription}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+         <div>
+            <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1e293b' }}>Resumen del Proyecto</h2>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>Indicadores globales extraídos de la base de datos oficial.</p>
+         </div>
+         <ExportMasterExcelButton 
+            stations={stations}
+            sections={sections}
+            extractedTrafficData={extractedTrafficData}
+            projectName={projectId}
+         />
+      </div>
+
+      <TrafficKpiPanel 
+         summary={summary} 
+         extractedTrafficData={extractedTrafficData} 
+         stations={stations} 
+         viewMode={activeSubTab} 
       />
-      <TrafficInsightPanel className="traffic-v2-span-4" stations={stations} sections={sections} />
-      <TrafficMapPanel
-        className="traffic-v2-span-full"
-        title="Cobertura operativa visible"
-        entities={entities}
-        emptyText={emptyText}
-      />
+      
+      {activeSubTab === 'estaciones' ? (
+        <>
+          <TrafficInternalGeoMap
+            className="traffic-v2-span-full"
+            projectId={projectId}
+            title={title}
+            description={mapDescription}
+            extractedTrafficData={extractedTrafficData}
+            sections={sections}
+            stations={stations}
+            hideHeatmapTools={true}
+          />
+          <TrafficProjectFunnel 
+            className="traffic-v2-span-full" 
+            stations={stations} 
+            extractedTrafficData={extractedTrafficData} 
+          />
+          <TrafficMapPanel
+            className="traffic-v2-span-full"
+            title="Lista de Estaciones Operativas"
+            entities={entities}
+            emptyText={emptyText}
+          />
+        </>
+      ) : (
+        <>
+          <TrafficInternalGeoMap
+            className="traffic-v2-span-8"
+            projectId={projectId}
+            title={title}
+            description={mapDescription}
+            extractedTrafficData={extractedTrafficData}
+            sections={sections}
+            stations={stations}
+          />
+          <TrafficInsightPanel 
+            className="traffic-v2-span-4" 
+            stations={stations} 
+            sections={sections} 
+            extractedTrafficData={extractedTrafficData} 
+          />
+          <GlobalEsalProjection 
+            className="traffic-v2-span-full" 
+            extractedTrafficData={extractedTrafficData} 
+            stations={stations} 
+          />
+        </>
+      )}
     </div>
   );
 };

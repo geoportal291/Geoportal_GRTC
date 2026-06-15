@@ -155,34 +155,17 @@ const NuevoUsuarioModal = ({ isOpen, onClose, onUserCreated, onUserUpdated, edit
     if (!formData.apMaterno) tempErrors.apMaterno = 'El apellido materno es obligatorio.';
     // Nombres
     if (!formData.nombres) tempErrors.nombres = 'Los nombres son obligatorios.';
-    // Tramo
-    if (!formData.tramo) tempErrors.tramo = 'El tramo es obligatorio.';
-    // Fecha de Nacimiento
-    if (!formData.fechaNacimiento) tempErrors.fechaNacimiento = 'La fecha de nacimiento es obligatoria.';
-    // Fecha de Ingreso
-    if (!formData.fechaIngreso) tempErrors.fechaIngreso = 'La fecha de ingreso es obligatoria.';
-    // Contacto Personal
-    if (!formData.contactoPersonal) tempErrors.contactoPersonal = 'El número de contacto es obligatorio.';
-    // Mail Personal
-    if (!formData.mailPersonal) {
-      tempErrors.mailPersonal = 'El mail personal es obligatorio.';
-    } else if (!/\S+@\S+\.\S+/.test(formData.mailPersonal)) {
-      tempErrors.mailPersonal = 'El formato del correo no es válido.';
-    }
-    // Mail de Proyecto
-    if (!formData.mailProyecto) {
-      tempErrors.mailProyecto = 'El mail de proyecto es obligatorio.';
-    } else if (!/\S+@\S+\.\S+/.test(formData.mailProyecto)) {
-      tempErrors.mailProyecto = 'El formato del correo no es válido.';
-    }
-    // Profesión
-    if (!formData.profesion) tempErrors.profesion = 'La profesión es obligatoria.';
     // Rol
     if (!formData.rol) tempErrors.rol = 'Debe seleccionar un rol.';
-    // Especialidad
-    if (!formData.especialidad) tempErrors.especialidad = 'Debe seleccionar una especialidad.';
-    // Otros Detalles
-    if (!formData.otrosDetalles) tempErrors.otrosDetalles = 'Otros detalles son obligatorios.';
+    
+    // Mail Personal (solo validar formato si se ingresó)
+    if (formData.mailPersonal && !/\S+@\S+\.\S+/.test(formData.mailPersonal)) {
+      tempErrors.mailPersonal = 'El formato del correo no es válido.';
+    }
+    // Mail de Proyecto (solo validar formato si se ingresó)
+    if (formData.mailProyecto && !/\S+@\S+\.\S+/.test(formData.mailProyecto)) {
+      tempErrors.mailProyecto = 'El formato del correo no es válido.';
+    }
 
     setErrors(tempErrors);
     return Object.keys(tempErrors).length === 0;
@@ -190,7 +173,35 @@ const NuevoUsuarioModal = ({ isOpen, onClose, onUserCreated, onUserUpdated, edit
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validate()) {
+    
+    // Primero validamos para obtener los errores
+    let tempErrors = {};
+    if (formData.dni.length !== 8) tempErrors.dni = 'DNI (8 dígitos)';
+    if (!formData.password) tempErrors.password = 'Contraseña';
+    if (!formData.apPaterno) tempErrors.apPaterno = 'Apellido Paterno';
+    if (!formData.apMaterno) tempErrors.apMaterno = 'Apellido Materno';
+    if (!formData.nombres) tempErrors.nombres = 'Nombres';
+    if (!formData.rol) tempErrors.rol = 'Rol';
+    if (formData.mailPersonal && !/\S+@\S+\.\S+/.test(formData.mailPersonal)) tempErrors.mailPersonal = 'Formato de Correo Personal';
+    if (formData.mailProyecto && !/\S+@\S+\.\S+/.test(formData.mailProyecto)) tempErrors.mailProyecto = 'Formato de Correo Proyecto';
+    
+    // Actualizamos el estado para los estilos rojos en inputs
+    const validateErrors = () => {
+      let formErrors = {};
+      if (formData.dni.length !== 8) formErrors.dni = 'El DNI debe tener 8 dígitos.';
+      if (!formData.password) formErrors.password = 'La contraseña es obligatoria.';
+      if (!formData.apPaterno) formErrors.apPaterno = 'El apellido paterno es obligatorio.';
+      if (!formData.apMaterno) formErrors.apMaterno = 'El apellido materno es obligatorio.';
+      if (!formData.nombres) formErrors.nombres = 'Los nombres son obligatorios.';
+      if (!formData.rol) formErrors.rol = 'Debe seleccionar un rol.';
+      if (formData.mailPersonal && !/\S+@\S+\.\S+/.test(formData.mailPersonal)) formErrors.mailPersonal = 'El formato del correo no es válido.';
+      if (formData.mailProyecto && !/\S+@\S+\.\S+/.test(formData.mailProyecto)) formErrors.mailProyecto = 'El formato del correo no es válido.';
+      
+      setErrors(formErrors);
+      return Object.keys(formErrors).length === 0;
+    };
+
+    if (validateErrors()) {
       try {
         if (editingUser) {
           const dataToSend = {
@@ -240,6 +251,9 @@ const NuevoUsuarioModal = ({ isOpen, onClose, onUserCreated, onUserUpdated, edit
         alertify.error('Hubo un problema al conectar con el servidor o al crear el usuario.');
         console.error('Detalles del error de la API:', error.response?.data);
       }
+    } else {
+      const missingFields = Object.values(tempErrors).join(', ');
+      alertify.warning(`Faltan campos obligatorios o hay errores: ${missingFields}`);
     }
   };
 

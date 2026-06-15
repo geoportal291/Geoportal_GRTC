@@ -1153,18 +1153,34 @@ const GeologiaExternal = ({ onBack }) => {
                 const groupBounds = L.latLngBounds();
                 let hasBounds = false;
 
-                // 1. KML Base (usar el geojson ya procesado arriba)
-                if (kmlRes.data?.url) {
+                // 1. KML Base
+                let baseKmlText = null;
+                try {
+                    const projectRes = await axiosInstance.get(`/api/proyectos/${projectId}`);
+                    const kmlTrazadoId = projectRes.data?.kml_trazado_id;
+                    if (kmlTrazadoId) {
+                        const storedKmlRes = await axiosInstance.get(`/api/kml-trazados/${kmlTrazadoId}/content`);
+                        baseKmlText = storedKmlRes.data?.kmlContent;
+                    }
+                } catch (e) { console.warn("Falló carga de KML por BD, intentando fallback de URL externa"); }
+
+                if (!baseKmlText && kmlRes.data?.url) {
                     try {
                         const proxyRes = await axiosInstance.get('/api/proxy?url=' + encodeURIComponent(kmlRes.data.url), { responseType: 'text' });
-                        const geojson = kml(new DOMParser().parseFromString(proxyRes.data, 'text/xml'));
+                        baseKmlText = proxyRes.data;
+                    } catch (e) { console.warn("Error cargando KML de URL externa", e); }
+                }
+
+                if (baseKmlText) {
+                    try {
+                        const geojson = kml(new DOMParser().parseFromString(baseKmlText, 'text/xml'));
                         setBaseKml(geojson);
                         const tempLayer = L.geoJSON(geojson);
                         if (tempLayer.getBounds().isValid()) {
                             groupBounds.extend(tempLayer.getBounds());
                             hasBounds = true;
                         }
-                    } catch (e) { console.warn("Error bounds baseKml", e); }
+                    } catch (e) { console.warn("Error parseando KML o extendiendo bounds", e); }
                 }
 
                 // 2. Capas GeoJSON
@@ -1805,7 +1821,7 @@ const GeologiaExternal = ({ onBack }) => {
                     <MapEventsController setZoom={setCurrentZoom} onMapClick={clearSelectedFeature} featureClickGuardRef={featureClickGuardRef} />
                     <MapFitter bounds={mapBounds} />
 
-                    {baseKml && visible.route && <GeoJSON data={baseKml} style={{ color: "#007aff", weight: 6, opacity: 0.4, filter: 'drop-shadow(0 0 3px rgba(0,122,255,0.5))' }} />}
+                    {baseKml && visible.route && <GeoJSON data={baseKml} style={{ color: "#007aff", weight: 6, opacity: 1, filter: 'drop-shadow(0 0 3px rgba(0,122,255,0.5))' }} />}
                     <RouteEndpointsLayer geoJson={baseKml} />
 
                     {orderedLayers.map(l => (visible[`layer-${l.id}`] && (

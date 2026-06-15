@@ -82,7 +82,7 @@ const EstratoItem = React.memo(React.forwardRef(({
             >
                 <div className="estrato-header" onClick={toggleExpand}>
                     <div className="estrato-info">
-                        <div className="estrato-color" style={{ backgroundColor: '#2196f3' }}></div> {/* Azul para progresivas */}
+                        <div className="estrato-color" style={{ backgroundColor: '#1e293b' }}></div> {/* Azul marino para progresivas */}
                         <div className="estrato-details">
                             <h4 className="estrato-name">{progresiva.nombre}</h4>
                             <p className="estrato-description">

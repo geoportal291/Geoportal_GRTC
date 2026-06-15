@@ -11,6 +11,24 @@ class GeologiaCapasError extends Error {
     }
 }
 
+const deleteGeologiaCapaFiles = async (capaId) => {
+    const client = await db.connect();
+    try {
+        const query = 'SELECT file_url FROM geologia_capas WHERE id = $1';
+        const result = await client.query(query, [capaId]);
+        if (result.rows.length > 0) {
+            const fileUrl = result.rows[0].file_url;
+            await deleteFileFromNAS(fileUrl);
+            await client.query('DELETE FROM geologia_capas WHERE id = $1', [capaId]);
+        }
+    } catch (err) {
+        console.error('Error al eliminar archivos de geología:', err);
+        throw new GeologiaCapasError('Error al eliminar la capa de geología.', 500);
+    } finally {
+        client.release();
+    }
+};
+
 const uploadGeologiaCapa = async (file, proyectoId, tabName, userId) => {
     if (!file) throw new GeologiaCapasError('No se proporcionó ningún archivo para subir.', 400);
     if (!proyectoId) throw new GeologiaCapasError('ID de proyecto es requerido.', 400);

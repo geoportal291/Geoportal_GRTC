@@ -715,19 +715,22 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
 
         const loadKmlFromUrl = async (url, showAlerts = true) => {
             const normalizedUrl = String(url || '').toLowerCase();
-            if (normalizedUrl.includes('.blob.vercel-storage.com')) {
-                if (showAlerts) {
-                    alertify.error('Este KML aún apunta a Vercel Blob y fue bloqueado. Debes volver a cargarlo en el NAS.');
-                }
-                return;
-            }
+            const isVercelBlob = normalizedUrl.includes('.blob.vercel-storage.com');
 
             try {
                 if (showAlerts) alertify.message(`Descargando KML desde la URL...`);
-                // Use backend proxy to bypass CORS on dafe.it NAS
-                const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-                const response = await axiosInstance.get(proxyUrl, { responseType: 'text' });
-                const kmlText = response.data;
+                
+                let kmlText;
+                if (isVercelBlob) {
+                    // Bypass proxy for Vercel Blob URLs since they have CORS configured
+                    const response = await axiosInstance.get(url, { responseType: 'text' });
+                    kmlText = response.data;
+                } else {
+                    // Use backend proxy to bypass CORS on dafe.it NAS
+                    const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+                    const response = await axiosInstance.get(proxyUrl, { responseType: 'text' });
+                    kmlText = response.data;
+                }
 
                 const parser = new DOMParser();
                 const kmlDoc = parser.parseFromString(kmlText, 'text/xml');
@@ -1310,6 +1313,13 @@ const MapLogic = ({ projectId, section, initialRoute, onTramoSelect, highlighted
                     params: { section: section }
                 });
                 let kmlUrl = response.data && response.data.url;
+                
+                if (!kmlUrl) {
+                    // Fallback to global project KML if section KML is missing
+                    const fallbackResponse = await axiosInstance.get(`/api/proyectos/${projectId}/kml`);
+                    kmlUrl = fallbackResponse.data && fallbackResponse.data.url;
+                }
+
                 notifyKmlStateChange(kmlUrl || '');
 
                 if (kmlUrl) {

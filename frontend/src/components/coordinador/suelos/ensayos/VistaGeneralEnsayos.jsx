@@ -10,6 +10,32 @@ import { getEnsayoCompletionStatus } from "./ensayos.estado.js";
 import VisorGraficos from "./secciones/VisorGraficos.jsx";
 import "./VistaGeneralEnsayos.css";
 import "./ResultadosBrevesModal.css";
+import "./ensayos.css";
+
+// Helper para comprimir IDs consecutivos en rangos (ej. 2251,2252,2253 -> 2251-2253)
+const compressIds = (ids) => {
+  if (!ids || ids.length === 0) return "";
+  const sorted = [...ids].map(Number).sort((a, b) => a - b);
+  const ranges = [];
+  let start = sorted[0];
+  let prev = sorted[0];
+
+  for (let i = 1; i <= sorted.length; i++) {
+    const current = sorted[i];
+    if (current === prev + 1) {
+      prev = current;
+    } else {
+      if (start === prev) {
+        ranges.push(String(start));
+      } else {
+        ranges.push(`${start}-${prev}`);
+      }
+      start = current;
+      prev = current;
+    }
+  }
+  return ranges.join(",");
+};
 
 // ========== ImportModal ==========
 const ImportModal = ({ isOpen, onClose, onImport, loading, errors }) => {
@@ -80,70 +106,84 @@ const ConfirmationModal = ({
     <div className="import-modal-overlay">
       <div className="import-modal-content" style={{ maxWidth: "600px" }}>
         <h2>Confirmar Cambios</h2>
-        <ul>
-          <li>Se crearán: {summary?.ensayosParaCrear || 0} ensayos</li>
-          <li>
-            Se actualizarán: {summary?.ensayosParaActualizar || 0} ensayos
-          </li>
-        </ul>
-        {errors.length > 0 && (
-          <div
-            className="import-errors"
-            style={{
-              marginTop: "15px",
-              maxHeight: "200px",
-              overflowY: "auto",
-              textAlign: "left",
-              backgroundColor: "#f8d7da",
-              padding: "10px",
-              borderRadius: "5px",
-            }}
-          >
-            <p
-              style={{
-                fontWeight: "bold",
-                color: "#721c24",
-                margin: "0 0 10px 0",
-                fontSize: "0.95em",
-              }}
-            >
-              <i className="fas fa-exclamation-triangle"></i> Los siguientes
-              ensayos NO se crearán ni actualizarán por errores en el documento.
-              Corrige el archivo si deseas importarlos, o presiona Confirmar
-              para omitirlos e importar el resto:
-            </p>
-            {errors.map((err, i) => (
+        {!loading ? (
+          <>
+            <ul>
+              <li>Se crearán: {summary?.ensayosParaCrear || 0} ensayos</li>
+              <li>
+                Se actualizarán: {summary?.ensayosParaActualizar || 0} ensayos
+              </li>
+            </ul>
+            {errors.length > 0 && (
               <div
-                key={i}
+                className="import-errors"
                 style={{
-                  fontSize: "0.85em",
-                  color: "#721c24",
-                  borderBottom: "1px solid #f5c6cb",
-                  paddingBottom: "5px",
-                  marginBottom: "5px",
+                  marginTop: "15px",
+                  maxHeight: "200px",
+                  overflowY: "auto",
+                  textAlign: "left",
+                  backgroundColor: "#f8d7da",
+                  padding: "10px",
+                  borderRadius: "5px",
                 }}
               >
-                <strong>Hoja: {err.sheet}</strong> - {err.error}
+                <p
+                  style={{
+                    fontWeight: "bold",
+                    color: "#721c24",
+                    margin: "0 0 10px 0",
+                    fontSize: "0.95em",
+                  }}
+                >
+                  <i className="fas fa-exclamation-triangle"></i> Los siguientes
+                  ensayos NO se crearán ni actualizarán por errores en el documento.
+                  Corrige el archivo si deseas importarlos, o presiona Confirmar
+                  para omitirlos e importar el resto:
+                </p>
+                {errors.map((err, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      fontSize: "0.85em",
+                      color: "#721c24",
+                      borderBottom: "1px solid #f5c6cb",
+                      paddingBottom: "5px",
+                      marginBottom: "5px",
+                    }}
+                  >
+                    <strong>Hoja: {err.sheet}</strong> - {err.error}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+            <div className="modal-actions" style={{ marginTop: "20px" }}>
+              <button
+                onClick={onClose}
+                className="btn btn-outline"
+                disabled={loading}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={onConfirm}
+                className="btn btn-primary"
+                disabled={loading}
+              >
+                Confirmar y Omitir Errores
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="loading-spinner-modal" style={{ padding: "30px 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <div className="loading-spinner" style={{ width: "50px", height: "50px", borderWidth: "5px", marginBottom: "20px" }}></div>
+            <p style={{ fontWeight: "600", fontSize: "1.1em", color: "#2c3e50", textAlign: "center", margin: 0 }}>
+              Los ensayos identificados se están importando con éxito.
+            </p>
+            <p style={{ fontSize: "0.95em", color: "#7f8c8d", marginTop: "8px", textAlign: "center", marginBottom: 0 }}>
+              Por favor, espere un momento...
+            </p>
           </div>
         )}
-        <div className="modal-actions" style={{ marginTop: "20px" }}>
-          <button
-            onClick={onClose}
-            className="btn btn-outline"
-            disabled={loading}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            className="btn btn-primary"
-            disabled={loading}
-          >
-            Confirmar y Omitir Errores
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -266,7 +306,25 @@ const EnsayosFullListModal = ({
           <h2>
             <i className="fas fa-list-ul"></i> {grupo.descripcion}
           </h2>
-          <button className="btn-close-modal" onClick={onClose}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", marginRight: "10px", marginLeft: "auto" }}>
+            <button
+              className="btn-pdf-premium"
+              type="button"
+              onClick={() => {
+                const completados = grupo.ensayos.filter(e => getEnsayoStatus(e) === "COMPLETADO");
+                if (completados.length === 0) {
+                  alertify.warning("No hay ensayos completados para generar un reporte.");
+                  return;
+                }
+                const ids = compressIds(completados.map(c => c.id));
+                window.open(`/coordinador/suelos/ensayos/consolidado/reporte?ids=${ids}`, "_blank");
+              }}
+              title="Generar reporte consolidado de ensayos completados"
+            >
+              <i className="fas fa-file-pdf"></i> Reporte Consolidado ({grupo.ensayos.filter(e => getEnsayoStatus(e) === "COMPLETADO").length} Completados)
+            </button>
+          </div>
+          <button className="btn-close-modal" onClick={onClose} style={{ marginLeft: "0" }}>
             &times;
           </button>
         </div>
@@ -382,22 +440,48 @@ const EnsayosFullListModal = ({
                         </span>
                       </td>
                       <td style={{ textAlign: "center" }}>
-                        <button
-                          className="btn-results"
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            handleShowResults(ev, e);
-                          }}
-                          style={{
-                            background: "#f8f9fa",
-                            border: "1px solid #ddd",
-                            padding: "5px 8px",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <i className="fas fa-poll-h"></i>
-                        </button>
+                        <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
+                          <button
+                            className="btn-results"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              handleShowResults(ev, e);
+                            }}
+                            style={{
+                              background: "#f8f9fa",
+                              border: "1px solid #ddd",
+                              padding: "5px 8px",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              transition: "all 0.2s ease"
+                            }}
+                            title="Ver Resultados / Editar"
+                          >
+                            <i className="fas fa-poll-h"></i>
+                          </button>
+                          
+                          {getEnsayoStatus(e) === "COMPLETADO" && (
+                            <button
+                              className="btn-report-quick"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                window.open(`/coordinador/suelos/ensayos/${e.id}/reporte`, "_blank");
+                              }}
+                              style={{
+                                background: "#f8f9fa",
+                                border: "1px solid #ddd",
+                                padding: "5px 8px",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                color: "#dc2626",
+                                transition: "all 0.2s ease"
+                              }}
+                              title="Ver Reporte PDF"
+                            >
+                              <i className="fas fa-file-pdf"></i>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -433,6 +517,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const [selectedAssayForResults, setSelectedAssayForResults] = useState(null);
   const [selectedAssayForDetail, setSelectedAssayForDetail] = useState(null);
   const [tramosList, setTramosList] = useState([]);
+  const [activeObjectiveIndex, setActiveObjectiveIndex] = useState(0);
 
   const fetchTramosList = useCallback(async () => {
     try {
@@ -515,7 +600,10 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   );
 
   const isDone = useCallback(
-    (ensayo) => getEnsayoStatus(ensayo) === "COMPLETADO",
+    (ensayo) => {
+      const st = getEnsayoStatus(ensayo);
+      return st === "COMPLETADO" || st === "APROBADO";
+    },
     [getEnsayoStatus],
   );
 
@@ -671,10 +759,30 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     (a, g) => a + g.ensayos.length,
     0,
   );
-  const done = Object.values(ensayosAgrupados).reduce(
-    (a, g) => a + g.ensayos.filter((e) => isDone(e)).length,
+  const aprobado = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.filter((e) => getEnsayoStatus(e) === "APROBADO").length,
     0,
   );
+  const completado = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.filter((e) => getEnsayoStatus(e) === "COMPLETADO").length,
+    0,
+  );
+  const enProgreso = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.filter((e) => {
+      const st = getEnsayoStatus(e);
+      return st === "EN PROGRESO" || st === "EN_PROGRESO" || st === "EN PROCESO";
+    }).length,
+    0,
+  );
+  const rechazado = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.filter((e) => {
+      const st = getEnsayoStatus(e);
+      return st === "RECHAZADO" || st === "INCOMPLETO";
+    }).length,
+    0,
+  );
+  const pendiente = total - aprobado - completado - enProgreso - rechazado;
+  const done = aprobado + completado;
   const colors = [
     "#54a0ca",
     "#28a745",
@@ -744,28 +852,50 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                 <PieChart>
                   <Pie
                     data={[
-                      { name: "Hecho", value: done },
-                      { name: "Pend", value: total - done },
-                    ]}
+                      { name: "Pendientes", value: pendiente, color: "#eab308" },
+                      { name: "En Progreso", value: enProgreso, color: "#3b82f6" },
+                      { name: "Completados", value: completado, color: "#10b981" },
+                      { name: "Aprobados", value: aprobado, color: "#059669" },
+                      { name: "Rechazados", value: rechazado, color: "#ef4444" },
+                    ].filter((item) => item.value > 0)}
                     cx="50%"
                     cy="50%"
                     innerRadius={40}
                     outerRadius={60}
                     paddingAngle={5}
+                    minAngle={15}
                     dataKey="value"
                   >
-                    <Cell fill="#28a745" />
-                    <Cell fill="#ffc107" />
+                    {[
+                      { name: "Pendientes", value: pendiente, color: "#eab308" },
+                      { name: "En Progreso", value: enProgreso, color: "#3b82f6" },
+                      { name: "Completados", value: completado, color: "#10b981" },
+                      { name: "Aprobados", value: aprobado, color: "#059669" },
+                      { name: "Rechazados", value: rechazado, color: "#ef4444" },
+                    ]
+                      .filter((item) => item.value > 0)
+                      .map((entry, idx) => (
+                        <Cell key={`cell-${idx}`} fill={entry.color} />
+                      ))}
                   </Pie>
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
               <div className="chart-labels">
                 <div className="label-item">
-                  <span className="dot dot-success"></span> {done} Hechos
+                  <span className="dot" style={{ backgroundColor: "#eab308" }}></span> {pendiente} Pendientes
                 </div>
                 <div className="label-item">
-                  <span className="dot dot-warning"></span> {total - done} Pend.
+                  <span className="dot" style={{ backgroundColor: "#3b82f6" }}></span> {enProgreso} En Progreso
+                </div>
+                <div className="label-item">
+                  <span className="dot" style={{ backgroundColor: "#10b981" }}></span> {completado} Completados
+                </div>
+                <div className="label-item">
+                  <span className="dot" style={{ backgroundColor: "#059669" }}></span> {aprobado} Aprobados
+                </div>
+                <div className="label-item">
+                  <span className="dot" style={{ backgroundColor: "#ef4444" }}></span> {rechazado} Rechazados
                 </div>
               </div>
             </div>
@@ -788,35 +918,90 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
             </div>
           </div>
           <div className="analitica-col">
-            <div className="stat-card-premium milestone-card">
-              <div className="stat-header">
-                <span className="stat-label">PRÓXIMO OBJETIVO</span>
-                <i className="fas fa-flag-checkered stat-icon"></i>
-              </div>
-              <div className="milestone-content">
-                {(() => {
-                  const items = Object.values(ensayosAgrupados)
-                    .map((g) => ({
-                      desc: g.descripcion,
-                      pend:
-                        g.ensayos.length -
-                        g.ensayos.filter((e) => isDone(e)).length,
-                    }))
-                    .filter((i) => i.pend > 0)
-                    .sort((a, b) => a.pend - b.pend);
-                  return items[0] ? (
-                    <>
-                      <div className="milestone-name">{items[0].desc}</div>
-                      <div className="milestone-sub">
-                        Faltan {items[0].pend} ensayos
+            {(() => {
+              const objectives = Object.values(ensayosAgrupados).map((g) => {
+                const totalGrupo = g.ensayos.length;
+                const hechosGrupo = g.ensayos.filter((e) => isDone(e)).length;
+                const pendGrupo = totalGrupo - hechosGrupo;
+                return {
+                  desc: g.descripcion,
+                  pend: pendGrupo,
+                  hechos: hechosGrupo,
+                  total: totalGrupo
+                };
+              });
+
+              const safeIndex = activeObjectiveIndex < objectives.length ? activeObjectiveIndex : 0;
+
+              return (
+                <div className="stat-card-premium milestone-card carrusel-card">
+                  <div className="stat-header">
+                    <span className="stat-label">OBJETIVOS DE ENSAYOS</span>
+                    <i className="fas fa-flag-checkered stat-icon"></i>
+                  </div>
+                  <div className="milestone-carrusel-wrapper">
+                    {objectives.length > 0 ? (
+                      <>
+                        <button
+                          className="carrusel-btn prev"
+                          onClick={() => setActiveObjectiveIndex((prev) => (prev === 0 ? objectives.length - 1 : prev - 1))}
+                          title="Objetivo anterior"
+                        >
+                          <i className="fas fa-chevron-left"></i>
+                        </button>
+                        
+                        <div className="milestone-content carrusel-slide">
+                          <div className="milestone-name">{objectives[safeIndex]?.desc}</div>
+                          <div className="milestone-sub">
+                            {objectives[safeIndex]?.pend > 0 ? (
+                              <span className="objective-pending-label">
+                                Faltan {objectives[safeIndex]?.pend} de {objectives[safeIndex]?.total} ensayos
+                              </span>
+                            ) : (
+                              <span className="objective-completed-label">
+                                <i className="fas fa-check-circle"></i> ¡Meta Lograda!
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="objective-mini-bar-container">
+                            <div 
+                              className="objective-mini-bar-fill" 
+                              style={{ 
+                                width: `${objectives[safeIndex]?.total > 0 ? (objectives[safeIndex]?.hechos / objectives[safeIndex]?.total) * 100 : 0}%`,
+                                backgroundColor: objectives[safeIndex]?.pend > 0 ? "#54a0ca" : "#28a745"
+                              }}
+                            ></div>
+                          </div>
+                          
+                          <div className="carrusel-dots">
+                            {objectives.map((_, idx) => (
+                              <span 
+                                key={idx} 
+                                className={`carrusel-dot ${idx === safeIndex ? 'active' : ''}`}
+                                onClick={() => setActiveObjectiveIndex(idx)}
+                              ></span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <button
+                          className="carrusel-btn next"
+                          onClick={() => setActiveObjectiveIndex((prev) => (prev === objectives.length - 1 ? 0 : prev + 1))}
+                          title="Siguiente objetivo"
+                        >
+                          <i className="fas fa-chevron-right"></i>
+                        </button>
+                      </>
+                    ) : (
+                      <div className="milestone-content">
+                        <div className="milestone-name">Sin objetivos configurados</div>
                       </div>
-                    </>
-                  ) : (
-                    <div className="milestone-name">Meta lograda</div>
-                  );
-                })()}
-              </div>
-            </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -845,6 +1030,19 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                     <span className="mini-progress-text">
                       {hechosGrupo}/{totalGrupo} completados
                     </span>
+                    {grupo.ensayos.filter((e) => {
+                      const st = getEnsayoStatus(e);
+                      return st === "RECHAZADO" || st === "INCOMPLETO";
+                    }).length > 0 && (
+                      <span className="mini-rejected-badge">
+                        <i className="fas fa-times-circle"></i> {
+                          grupo.ensayos.filter((e) => {
+                            const st = getEnsayoStatus(e);
+                            return st === "RECHAZADO" || st === "INCOMPLETO";
+                          }).length
+                        } rechaz.
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="header-actions-main">
@@ -872,6 +1070,22 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
                       title="Exportar este tipo"
                     >
                       <i className="fas fa-download"></i>
+                    </button>
+                    <button
+                      className="btn-card-action pdf"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const completados = grupo.ensayos.filter(e => isDone(e));
+                        if (completados.length === 0) {
+                          alertify.warning("No hay ensayos completados para generar un reporte.");
+                          return;
+                        }
+                        const ids = compressIds(completados.map(c => c.id));
+                        window.open(`/coordinador/suelos/ensayos/consolidado/reporte?ids=${ids}`, "_blank");
+                      }}
+                      title="Generar reporte consolidado de todos los ensayos completados"
+                    >
+                      <i className="fas fa-file-pdf"></i>
                     </button>
                   </div>
                   <i className="fas fa-chevron-right arrow-indicator"></i>

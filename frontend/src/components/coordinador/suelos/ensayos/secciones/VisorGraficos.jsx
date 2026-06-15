@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Chart, registerables } from "chart.js";
 import "chartjs-adapter-luxon";
 import { calcularResultados } from "../ensayos.calculos.js";
@@ -142,40 +142,7 @@ const toFiniteNumber = (value) => {
   return Number.isFinite(normalized) ? normalized : null;
 };
 
-const isGranulometriaTrendChart = (chartConfig = {}) =>
-  chartConfig?.scope === "group" &&
-  (chartConfig?.id === "granulometria_tendencia" ||
-    String(chartConfig?.title || "").toLowerCase().includes("granulom"));
 
-const withGranulometriaTrendDatasetFallbacks = (
-  datasetConfig = {},
-  chartConfig = {},
-  sourceConfig = {},
-) => {
-  if (
-    !isGranulometriaTrendChart(chartConfig) ||
-    sourceConfig?.type !== "group_table_rows" ||
-    sourceConfig?.table_key !== "granulometria"
-  ) {
-    return datasetConfig;
-  }
-
-  const yCandidates = [
-    datasetConfig.y_key,
-    ...(Array.isArray(datasetConfig.y_keys) ? datasetConfig.y_keys : []),
-    "results.granulometria.pasa.{row_key}",
-    "granulometria.pasa.{row_key}",
-    "tables.granulometria.{row_key}.pasa",
-    "tables.granulometria.{row_key}.porc_pasa",
-  ].filter(Boolean);
-
-  return {
-    ...datasetConfig,
-    y_key: yCandidates[0],
-    y_keys: [...new Set(yCandidates.slice(1))],
-    skip_zero_y: datasetConfig.skip_zero_y ?? true,
-  };
-};
 
 const withAlpha = (color, alpha) => {
   if (typeof color !== "string" || !color.trim()) {
@@ -485,27 +452,28 @@ const buildAssayContext = (
 
   // Prioridad 1: Cálculo con la configuración propia del ensayo
   if (
-    (!resultados || !Object.keys(resultados).length) &&
     ensayo?.config_calculos &&
     Object.keys(formData).length > 0
   ) {
     try {
-      resultados = calcularResultados(ensayo.config_calculos, normalizedFormData) || {};
+      const calculado = calcularResultados(ensayo.config_calculos, normalizedFormData, ensayo?.config_tabla || ensayo?.tableConfig || fallbackTableConfig) || {};
+      // Fusionamos: los valores calculados enriquecen lo que ya existe en BD
+      resultados = { ...resultados, ...calculado };
     } catch (_error) {
       console.error(`[Visor] Error calculando resultados para ensayo ${ensayo.id}:`, _error);
-      resultados = {};
     }
   }
-  // Prioridad 2: Si no tiene config propia, probar con la del tipo de ensayo (fallback)
+  // Prioridad 2: Si no tiene config propia, calcular con la config del tipo de ensayo
   else if (
-    (!resultados || !Object.keys(resultados).length) &&
     fallbackCalculationConfig &&
     Object.keys(formData).length > 0
   ) {
     try {
-      resultados = calcularResultados(fallbackCalculationConfig, normalizedFormData) || {};
+      const calculado = calcularResultados(fallbackCalculationConfig, normalizedFormData, ensayo?.config_tabla || ensayo?.tableConfig || fallbackTableConfig) || {};
+      // Fusionamos: los valores calculados enriquecen lo que ya existe en BD
+      resultados = { ...resultados, ...calculado };
     } catch (_error) {
-      resultados = {};
+      // Silencioso: puede fallar si datos_formulario está incompleto
     }
   }
 
@@ -670,7 +638,6 @@ const buildPointsFromRowSource = (
   datasetConfig,
   context,
 ) => {
-  const isTrendDebug = isGranulometriaTrendChart(chartConfig);
   return rows
     .map((row, index) => {
       const rowContext = {
@@ -708,19 +675,7 @@ const buildPointsFromRowSource = (
             rowContext,
             undefined,
             datasetConfig.x_keys || [],
-            {
-              preferNonZero: datasetConfig.skip_zero_x === true,
-              debugMeta: isTrendDebug
-                ? {
-                  axis: "x",
-                  ensayo:
-                    context?.ensayo?.codigo_ensayo ||
-                    context?.ensayo?.codigo_generado ||
-                    context?.ensayo?.id,
-                  row_key: rowContext.row_key,
-                }
-                : null,
-            },
+            { preferNonZero: datasetConfig.skip_zero_x === true },
           ),
           y: resolveContextValueFromCandidates(
             datasetConfig.y_key,
@@ -728,19 +683,7 @@ const buildPointsFromRowSource = (
             rowContext,
             undefined,
             datasetConfig.y_keys || [],
-            {
-              preferNonZero: datasetConfig.skip_zero_y === true,
-              debugMeta: isTrendDebug
-                ? {
-                  axis: "y",
-                  ensayo:
-                    context?.ensayo?.codigo_ensayo ||
-                    context?.ensayo?.codigo_generado ||
-                    context?.ensayo?.id,
-                  row_key: rowContext.row_key,
-                }
-                : null,
-            },
+            { preferNonZero: datasetConfig.skip_zero_y === true },
           ),
         },
         chartConfig,
@@ -772,12 +715,6 @@ const buildGroupPointsFromEnsayos = (
         context.tableConfig,
       );
 
-    const datasetConfigWithFallbacks = withGranulometriaTrendDatasetFallbacks(
-      datasetConfig,
-      chartConfig,
-      sourceConfig,
-    );
-
     let points = [];
 
     if (pointBuilderType === "group_array") {
@@ -789,63 +726,20 @@ const buildGroupPointsFromEnsayos = (
       points = buildPointsFromArraySource(
         dataArray,
         chartConfig,
-        datasetConfigWithFallbacks,
+        datasetConfig,
         assayContext,
       );
-      if (
-        !points.length &&
-        String(sourceConfig.data_key || chartConfig.data_key || "").includes(
-          "curva_granulometr",
-        )
-      ) {
-        const rows = resolveRowsForSource(
-          {
-            type: "table_rows",
-            table_key: sourceConfig.table_key || "granulometria",
-            exclude_keys: ["fondo", "total", "pass_200"],
-          },
-          assayContext,
-        );
-
-        points = buildPointsFromRowSource(
-          rows,
-          chartConfig,
-          {
-            ...datasetConfigWithFallbacks,
-            x_key: datasetConfigWithFallbacks.x_key || "mm",
-            y_key: datasetConfigWithFallbacks.y_key || "tables.granulometria.{row_key}.pasa",
-            y_keys: [
-              ...(Array.isArray(datasetConfigWithFallbacks.y_keys)
-                ? datasetConfigWithFallbacks.y_keys
-                : []),
-              "tables.granulometria.{row_key}.porc_pasa",
-              "tables.granulometria.{row_key}.pasa",
-            ],
-            callback: (context) => {
-              const isTrend = isGranulometriaTrendChart(chartConfig);
-              const lines = [];
-              if (isTrend) {
-                const xLabel = chartConfig.x_axis?.label || "X";
-                const yLabel = chartConfig.y_axis?.label || "Y";
-                lines.push(`${xLabel}: ${context.parsed.x}`);
-                lines.push(`${yLabel}: ${context.parsed.y}`);
-              }
-            }
-          },
-          assayContext,
-        );
-      }
     } else if (pointBuilderType === "group_table_rows") {
       const rows = resolveRowsForSource(sourceConfig, assayContext);
       points = buildPointsFromRowSource(
         rows,
         chartConfig,
-        datasetConfigWithFallbacks,
+        datasetConfig,
         assayContext,
       );
-    } else if (Array.isArray(datasetConfigWithFallbacks.points)) {
+    } else if (Array.isArray(datasetConfig.points)) {
       points = buildPointsFromInlineConfig(
-        datasetConfigWithFallbacks.points,
+        datasetConfig.points,
         chartConfig,
         assayContext,
       );
@@ -857,7 +751,7 @@ const buildGroupPointsFromEnsayos = (
 
     return points
       .filter(Boolean)
-      .filter((p) => !shouldSkipPointByDatasetRules(p, datasetConfigWithFallbacks))
+      .filter((p) => !shouldSkipPointByDatasetRules(p, datasetConfig))
       .map((p) => ({
         ...p,
         ensayo_id: ensayo?.id,
@@ -883,22 +777,39 @@ const buildGroupSeriesDatasetsFromEnsayos = (
   return groupEnsayos.flatMap((ensayo, idx) => {
     const assayContext = context.groupAssayContexts?.[idx] || buildAssayContext(ensayo, context.calculationConfig, context.tableConfig);
 
-    const datasetConfigWithFallbacks = withGranulometriaTrendDatasetFallbacks(
-      datasetConfig,
-      chartConfig,
-      sourceConfig,
-    );
+    // [DIAG] Log del primer ensayo para entender la estructura
+    if (idx === 0) {
+      const fd = ensayo?.datos_formulario || {};
+      console.log('[DIAG PROCTOR] Primer ensayo del grupo:', {
+        id: ensayo.id,
+        config_key: ensayo.config_key,
+        tiene_tables: !!fd.tables,
+        keys_formulario: Object.keys(fd),
+        keys_tables: fd.tables ? Object.keys(fd.tables) : 'N/A',
+        calculo_humedad_m1: fd.tables?.calculo_humedad?.m1,
+        resultado: ensayo.resultado,
+        context_data_keys: Object.keys(assayContext.data || {}),
+      });
+    }
 
     let points = [];
 
     if (sourceConfig.type === "group_table_rows" || sourceConfig.type === "table_rows") {
       const rows = resolveRowsForSource(sourceConfig, assayContext);
-      points = buildPointsFromRowSource(rows, chartConfig, datasetConfigWithFallbacks, assayContext);
+      points = buildPointsFromRowSource(rows, chartConfig, datasetConfig, assayContext);
     } else if (sourceConfig.type === "group_array" || sourceConfig.type === "array") {
       const dataArray = resolveArraySourceItems(sourceConfig, chartConfig, assayContext);
-      points = buildPointsFromArraySource(dataArray, chartConfig, datasetConfigWithFallbacks, assayContext);
+      points = buildPointsFromArraySource(dataArray, chartConfig, datasetConfig, assayContext);
     } else if (Array.isArray(datasetConfig.points)) {
       points = buildPointsFromInlineConfig(datasetConfig.points, chartConfig, assayContext);
+      // [DIAG] Ver coordenadas reales de los puntos
+      if (idx === 0) {
+        console.log('[DIAG PROCTOR] Coordenadas de puntos (primer ensayo):', 
+          points.map(p => ({ x: p?.x, y: p?.y }))
+        );
+        console.log('[DIAG PROCTOR] assayContext.results completo:', assayContext.results);
+        console.log('[DIAG PROCTOR] assayContext.results.tables?.calculo_humedad:', assayContext.results?.tables?.calculo_humedad);
+      }
     }
 
     if (!points.length && (sourceConfig.data_key || "").includes("puntos_recta")) {
@@ -999,6 +910,7 @@ const buildDataset = (chartConfig, datasetConfig, context) => {
     pointRadius: datasetConfig.pointRadius ?? 3,
     showLine: datasetConfig.showLine ?? true,
     borderWidth: datasetConfig.borderWidth ?? 2,
+    _interactiveSeries: datasetConfig._interactiveSeries ?? (sourceConfig.type?.startsWith("group_") || false),
   };
 };
 
@@ -1016,14 +928,18 @@ const buildInteractiveDatasetStyles = (dataset) => {
     borderColor: (scriptableContext) => {
       const chart = scriptableContext.chart;
       const activeEnsayoId = chart?.$activeEnsayoId ?? null;
-      if (activeEnsayoId === null) return withAlpha(baseBorderColor, 0.5);
+      if (activeEnsayoId === null) return withAlpha(baseBorderColor, 0.55);
       
       const thisDataset = chart.data.datasets[scriptableContext.datasetIndex];
-      const thisEnsayoId = thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
+      const dataIndex = scriptableContext.dataIndex;
+      const point = thisDataset.data?.[dataIndex];
+      
+      // Si el punto individual tiene la propiedad ensayo_id, lo usamos. Si no, usamos el del dataset completo.
+      const thisEnsayoId = point?.ensayo_id ?? thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
       
       return thisEnsayoId === activeEnsayoId
-        ? withAlpha(baseBorderColor, 0.95)
-        : withAlpha(baseBorderColor, 0.08);
+        ? "#f59e0b" // Dorado naranja brillante
+        : withAlpha(baseBorderColor, 0.08); // Atenuado al 8%
     },
     backgroundColor: (scriptableContext) => {
       const chart = scriptableContext.chart;
@@ -1031,24 +947,54 @@ const buildInteractiveDatasetStyles = (dataset) => {
       if (activeEnsayoId === null) return withAlpha(baseBackgroundColor, 0.4);
       
       const thisDataset = chart.data.datasets[scriptableContext.datasetIndex];
-      const thisEnsayoId = thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
+      const dataIndex = scriptableContext.dataIndex;
+      const point = thisDataset.data?.[dataIndex];
+      
+      const thisEnsayoId = point?.ensayo_id ?? thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
 
       return thisEnsayoId === activeEnsayoId
-        ? withAlpha(baseBackgroundColor, 0.8)
-        : withAlpha(baseBackgroundColor, 0.05);
+        ? "rgba(245, 158, 11, 0.85)" // Dorado naranja brillante translúcido
+        : withAlpha(baseBackgroundColor, 0.05); // Atenuado
     },
-    borderWidth: baseBorderWidth,
+    borderWidth: (scriptableContext) => {
+      const chart = scriptableContext.chart;
+      const activeEnsayoId = chart?.$activeEnsayoId ?? null;
+      if (activeEnsayoId === null) return baseBorderWidth;
+
+      const thisDataset = chart.data.datasets[scriptableContext.datasetIndex];
+      const dataIndex = scriptableContext.dataIndex;
+      const point = thisDataset.data?.[dataIndex];
+      
+      const thisEnsayoId = point?.ensayo_id ?? thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
+
+      return thisEnsayoId === activeEnsayoId ? 3.5 : baseBorderWidth * 0.65;
+    },
     pointRadius: (scriptableContext) => {
       const chart = scriptableContext.chart;
       const activeEnsayoId = chart?.$activeEnsayoId ?? null;
       if (activeEnsayoId === null) return basePointRadius;
       
       const thisDataset = chart.data.datasets[scriptableContext.datasetIndex];
-      const thisEnsayoId = thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
+      const dataIndex = scriptableContext.dataIndex;
+      const point = thisDataset.data?.[dataIndex];
+      
+      const thisEnsayoId = point?.ensayo_id ?? thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
 
-      return thisEnsayoId === activeEnsayoId ? basePointRadius * 1.5 : basePointRadius * 0.7;
+      return thisEnsayoId === activeEnsayoId ? basePointRadius * 2.0 : basePointRadius * 0.6;
     },
-    pointHoverRadius: basePointHoverRadius,
+    pointHoverRadius: (scriptableContext) => {
+      const chart = scriptableContext.chart;
+      const activeEnsayoId = chart?.$activeEnsayoId ?? null;
+      if (activeEnsayoId === null) return basePointHoverRadius;
+
+      const thisDataset = chart.data.datasets[scriptableContext.datasetIndex];
+      const dataIndex = scriptableContext.dataIndex;
+      const point = thisDataset.data?.[dataIndex];
+      
+      const thisEnsayoId = point?.ensayo_id ?? thisDataset?._ensayoId ?? scriptableContext.datasetIndex;
+
+      return thisEnsayoId === activeEnsayoId ? basePointHoverRadius * 1.5 : basePointHoverRadius * 0.8;
+    },
   };
 };
 
@@ -1158,7 +1104,33 @@ const buildChartData = (chartConfig, datasets = []) => {
   return { datasets };
 };
 
-const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false) => {
+const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false, activeEnsayoId = null, theme = "light") => {
+  // --- Rango automático desde datos reales (activado con auto_max/auto_min en el JSONB) ---
+  const computeAutoAxisMax = (dataValues) => {
+    const valid = dataValues.filter(v => Number.isFinite(v) && v > 0);
+    if (!valid.length) return undefined;
+    const max = Math.max(...valid);
+    const exp = Math.floor(Math.log10(max));
+    const step = Math.pow(10, exp - 1);
+    return parseFloat((Math.ceil(max / step + 1) * step).toFixed(10));
+  };
+  const computeAutoAxisMin = (dataValues) => {
+    const valid = dataValues.filter(v => Number.isFinite(v) && v > 0);
+    if (!valid.length) return undefined;
+    const min = Math.min(...valid);
+    const exp = Math.floor(Math.log10(min));
+    const step = Math.pow(10, exp - 1);
+    return parseFloat((Math.max(0, Math.floor(min / step - 2) * step)).toFixed(10));
+  };
+  const _allDataPts = datasets.flatMap(ds => Array.isArray(ds?.data) ? ds.data : []);
+  const _xVals = _allDataPts.map(p => Number(p?.x));
+  const _yVals = _allDataPts.map(p => Number(p?.y));
+  const xAutoMax = chartConfig?.x_axis?.auto_max ? computeAutoAxisMax(_xVals) : undefined;
+  const xAutoMin = chartConfig?.x_axis?.auto_min ? computeAutoAxisMin(_xVals) : undefined;
+  const yAutoMax = chartConfig?.y_axis?.auto_max ? computeAutoAxisMax(_yVals) : undefined;
+  const yAutoMin = chartConfig?.y_axis?.auto_min ? computeAutoAxisMin(_yVals) : undefined;
+  // -----------------------------------------------------------------------------------------
+
   const topBands = Array.isArray(chartConfig?.decorations?.topBands)
     ? chartConfig.decorations.topBands
     : [];
@@ -1193,10 +1165,10 @@ const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false) => {
     },
     layout: {
       padding: {
-        top: topBands.length ? 40 : 12,
-        right: isPrintMode ? 16 : 12,
-        bottom: isPrintMode ? 28 : 12,
-        left: isPrintMode ? 16 : 8,
+        top: topBands.length ? (isPrintMode ? 15 : 40) : (isPrintMode ? 4 : 12),
+        right: isPrintMode ? 8 : 12,
+        bottom: isPrintMode ? 4 : 12,
+        left: isPrintMode ? 8 : 8,
       },
     },
     interaction: {
@@ -1204,6 +1176,17 @@ const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false) => {
       intersect: false,
     },
     onHover: (event, activeElements, chart) => {
+      // Si ya hay un ensayo seleccionado fijamente en la prop activeEnsayoId,
+      // no permitimos que el hover sobre la curva cambie el activeEnsayoId.
+      if (activeEnsayoId !== null) {
+        if (event?.native?.target) {
+          event.native.target.style.cursor = activeElements?.length
+            ? "pointer"
+            : "default";
+        }
+        return;
+      }
+
       const activeDataset = activeElements?.length
         ? chart.data.datasets[activeElements[0].datasetIndex]
         : null;
@@ -1238,9 +1221,9 @@ const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false) => {
       title: {
         display: !!chartConfig.title,
         text: chartConfig.title,
-        color: "#334155",
-        font: { size: 17, weight: "800" },
-        padding: { top: 8, bottom: 14 },
+        color: theme === "dark" ? "#ffffff" : "#334155",
+        font: { size: isPrintMode ? 9.5 : 17, weight: "800" },
+        padding: { top: isPrintMode ? 2 : 8, bottom: isPrintMode ? 4 : 14 },
       },
       legend: {
         display: chartConfig.show_legend !== false,
@@ -1260,11 +1243,11 @@ const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false) => {
           : undefined,
         labels: {
           usePointStyle: true,
-          boxWidth: 12,
-          boxHeight: 12,
-          color: "#475569",
-          font: { size: 12, weight: "600" },
-          padding: 16,
+          boxWidth: isPrintMode ? 6 : 12,
+          boxHeight: isPrintMode ? 6 : 12,
+          color: theme === "dark" ? "#cbd5e1" : "#475569",
+          font: { size: isPrintMode ? 7.5 : 12, weight: "600" },
+          padding: isPrintMode ? 4 : 16,
           generateLabels: isGroupedLegend
             ? (chart) => {
               const uniqueGroups = new Map();
@@ -1330,6 +1313,10 @@ const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false) => {
         display: false,
       },
       engineeringDecorations: {
+        background: true,
+        backgroundColorTop: theme === "dark" ? "#0b1329" : "#f9fcff",
+        backgroundColorBottom: theme === "dark" ? "#0f172a" : "#eef6ff",
+        gridGlow: theme === "dark" ? "rgba(56, 189, 248, 0.16)" : "rgba(56, 189, 248, 0.10)",
         ...(chartConfig.decorations || {}),
         topBands,
       },
@@ -1340,23 +1327,25 @@ const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false) => {
         title: {
           display: !!chartConfig?.x_axis?.label,
           text: chartConfig?.x_axis?.label || "",
-          color: "#2563eb",
-          font: { size: 13, weight: "700" },
-          padding: { top: isPrintMode ? 4 : 12 },
+          color: theme === "dark" ? "#38bdf8" : "#2563eb",
+          font: { size: isPrintMode ? 8.5 : 13, weight: "700" },
+          padding: { top: isPrintMode ? 2 : 12 },
         },
         reverse: chartConfig?.x_axis?.reverse || false,
         min: chartConfig?.x_axis?.min,
         max: chartConfig?.x_axis?.max,
+        suggestedMin: chartConfig?.x_axis?.suggestedMin ?? xAutoMin,
+        suggestedMax: chartConfig?.x_axis?.suggestedMax ?? xAutoMax,
         grid: {
-          color: "rgba(148, 163, 184, 0.18)",
+          color: theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(148, 163, 184, 0.18)",
           drawBorder: false,
         },
         border: {
-          color: "rgba(148, 163, 184, 0.25)",
+          color: theme === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(148, 163, 184, 0.25)",
         },
         ticks: {
-          color: "#64748b",
-          font: { size: 11, weight: "600" },
+          color: theme === "dark" ? "#94a3b8" : "#64748b",
+          font: { size: isPrintMode ? 7.5 : 11, weight: "600" },
           maxRotation: 45,
           minRotation: 0,
           callback: function callback(value) {
@@ -1389,22 +1378,24 @@ const buildChartOptions = (chartConfig, datasets = [], isPrintMode = false) => {
         title: {
           display: !!chartConfig?.y_axis?.label,
           text: chartConfig?.y_axis?.label || "",
-          color: "#2563eb",
-          font: { size: 13, weight: "700" },
+          color: theme === "dark" ? "#38bdf8" : "#2563eb",
+          font: { size: isPrintMode ? 8.5 : 13, weight: "700" },
         },
         reverse: chartConfig?.y_axis?.reverse || false,
         min: chartConfig?.y_axis?.min,
         max: chartConfig?.y_axis?.max,
+        suggestedMin: chartConfig?.y_axis?.suggestedMin ?? yAutoMin,
+        suggestedMax: chartConfig?.y_axis?.suggestedMax ?? yAutoMax,
         grid: {
-          color: "rgba(148, 163, 184, 0.20)",
+          color: theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(148, 163, 184, 0.20)",
           drawBorder: false,
         },
         border: {
-          color: "rgba(148, 163, 184, 0.25)",
+          color: theme === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(148, 163, 184, 0.25)",
         },
         ticks: {
-          color: "#64748b",
-          font: { size: 11, weight: "600" },
+          color: theme === "dark" ? "#94a3b8" : "#64748b",
+          font: { size: isPrintMode ? 7.5 : 11, weight: "600" },
           callback: (value) => formatNumericLabel(value),
           ...(chartConfig?.y_axis?.ticks || {}),
         },
@@ -1464,9 +1455,15 @@ const VisorGraficos = ({
   targetChartId = null,
   isPrintMode = false,
   printHeight = null, // Altura de impresión forzada desde el reportConfig (ej: '95mm')
+  customHeight = null, // Altura personalizada opcional
+  activeEnsayoId = null,
+  theme = "light",
 }) => {
   const chartRefs = useRef({});
+  const chartInstancesRef = useRef({});
+  const [chartImages, setChartImages] = useState({});
   const getChartHeight = (chartConfig = {}) => {
+    if (customHeight) return customHeight;
     if (isPrintMode) {
       // Prioridad 1: altura forzada desde el padre (reportConfig)
       if (printHeight) return printHeight;
@@ -1498,14 +1495,6 @@ const VisorGraficos = ({
   // OPTIMIZACIÓN: Pre-calculamos los contextos de todos los ensayos una sola vez
   const groupAssayContexts = useMemo(() => {
     if (!groupEnsayos || !groupEnsayos.length) return [];
-    if (groupEnsayos.length > 0) {
-      console.log("[Visor] DEBUG - Estructura del primer ensayo:", {
-        id: groupEnsayos[0].id,
-        keys_datos_formulario: Object.keys(groupEnsayos[0].datos_formulario || {}),
-        keys_resultado: Object.keys(groupEnsayos[0].resultado || {}),
-        first_assay_raw: groupEnsayos[0]
-      });
-    }
     return groupEnsayos.map((ensayo) =>
       buildAssayContext(ensayo, calculationConfig, tableConfig),
     );
@@ -1535,7 +1524,15 @@ const VisorGraficos = ({
   const preparedCharts = useMemo(() => {
     const prepared = charts
       .map((chartConfig) => {
-        const datasets = buildChartDatasets(chartConfig, context);
+        let datasets = buildChartDatasets(chartConfig, context);
+        if (isPrintMode) {
+          datasets = datasets.map(ds => ({
+            ...ds,
+            borderWidth: typeof ds.borderWidth === 'number' ? Math.max(1, ds.borderWidth * 0.6) : ds.borderWidth,
+            pointRadius: typeof ds.pointRadius === 'number' ? Math.max(1.5, ds.pointRadius * 0.5) : ds.pointRadius,
+            pointHoverRadius: typeof ds.pointHoverRadius === 'number' ? Math.max(2, ds.pointHoverRadius * 0.5) : ds.pointHoverRadius,
+          }));
+        }
         if (datasets.length === 0) {
           console.warn(`[Visor] Gráfico "${chartConfig.title || chartConfig.id}" descartado: 0 datasets generados.`);
         }
@@ -1545,7 +1542,7 @@ const VisorGraficos = ({
 
     console.log(`[Visor] Gráficos finales a renderizar: ${prepared.length}`, prepared.map(p => p.chartConfig.title));
     return prepared;
-  }, [charts, context]);
+  }, [charts, context, isPrintMode]);
 
   useEffect(() => {
     const chartInstances = {};
@@ -1553,21 +1550,52 @@ const VisorGraficos = ({
     preparedCharts.forEach(({ chartConfig, datasets }, index) => {
       const chartId = chartConfig.id || `grafico-${index}`;
       const canvas = chartRefs.current[chartId];
-      const ctx = canvas?.getContext("2d");
+      if (!canvas) return;
+
+      // Destrucción preventiva robusta de cualquier gráfico de Chart.js asociado a este canvas
+      const existingChart = Chart.getChart(canvas);
+      if (existingChart) {
+        existingChart.destroy();
+      }
+
+      const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-
-      chartInstances[chartId] = new Chart(ctx, {
+      const chartInstance = new Chart(ctx, {
         type: chartConfig.type || "line",
         data: buildChartData(chartConfig, datasets),
-        options: buildChartOptions(chartConfig, datasets, isPrintMode),
+        options: buildChartOptions(chartConfig, datasets, isPrintMode, activeEnsayoId, theme),
       });
+      chartInstance.$activeEnsayoId = activeEnsayoId;
+      chartInstances[chartId] = chartInstance;
+      chartInstancesRef.current[chartId] = chartInstance;
+
+      if (isPrintMode) {
+        setTimeout(() => {
+          try {
+            const imgData = canvas.toDataURL("image/png");
+            setChartImages((prev) => ({ ...prev, [chartId]: imgData }));
+          } catch (e) {
+            console.error("Error capturando imagen del gráfico:", e);
+          }
+        }, 150);
+      }
     });
 
     return () => {
       Object.values(chartInstances).forEach((chart) => chart.destroy());
+      chartInstancesRef.current = {};
     };
   }, [preparedCharts]);
+
+  useEffect(() => {
+    Object.values(chartInstancesRef.current).forEach((chart) => {
+      if (chart) {
+        chart.$activeEnsayoId = activeEnsayoId;
+        chart.update("none");
+      }
+    });
+  }, [activeEnsayoId]);
 
   if (!charts.length) {
     return (
@@ -1594,6 +1622,7 @@ const VisorGraficos = ({
       <div className="visor-graficos-print-wrapper" style={{ width: "100%", height: "100%", padding: 0, margin: 0 }}>
         {preparedCharts.map(({ chartConfig }, index) => {
           const chartId = chartConfig.id || `grafico-${index}`;
+          const hasImage = !!chartImages[chartId];
           return (
             <div 
               key={chartId} 
@@ -1608,11 +1637,29 @@ const VisorGraficos = ({
                 boxSizing: "border-box"
               }}
             >
+              {hasImage && (
+                <img 
+                  src={chartImages[chartId]} 
+                  alt={chartConfig.title || "Gráfico"} 
+                  className="img-print-source"
+                  style={{ 
+                    width: "100%", 
+                    height: "100%", 
+                    display: "none",
+                    objectFit: "contain"
+                  }} 
+                />
+              )}
               <canvas
                 ref={(element) => {
                   chartRefs.current[chartId] = element;
                 }}
-                style={{ width: "100%", height: "100%" }}
+                className="canvas-print-target"
+                style={{ 
+                  width: "100%", 
+                  height: "100%",
+                  display: "block"
+                }}
               />
             </div>
           );

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import axiosInstance from '../../../../../api/axios';
 
-const TrafficUploadModalV2 = ({ isOpen, onClose, entityId, moduleConfig, onUploadSuccess }) => {
+const TrafficUploadModalV2 = ({ isOpen, onClose, entityId, moduleConfig, onUploadSuccess, setExtractedTrafficData }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [groupDescription, setGroupDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);

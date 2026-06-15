@@ -26,7 +26,7 @@ const ResultadosBrevesModal = ({ ensayo, onClose }) => {
       console.log('[RESULTADOS BREVES] Resultados persistidos son NULL. Calculando al vuelo...');
       try {
         // calcularResultados devuelve un objeto { results: ... } o la estructura que defina la config
-        const calculados = calcularResultados(ensayo.config_calculos, ensayo.datos_formulario);
+        const calculados = calcularResultados(ensayo.config_calculos, ensayo.datos_formulario, ensayo.config_tabla);
         console.log('[RESULTADOS BREVES] Resultado del cálculo al vuelo:', calculados);
 
         // Ajuste importante: Si el motor nuevo devuelve { "results": { "granulometria": ... } }

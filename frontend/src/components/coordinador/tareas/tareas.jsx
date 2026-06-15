@@ -138,7 +138,7 @@ export default function Tareas() {
       return;
     }
     try {
-      const res = await axios.get(`${API_BASE}/usuarios`, {
+      const res = await axios.get(`${API_BASE}/api/usuarios`, {
         headers: {
           'Authorization': `Bearer ${user.token}`
         }

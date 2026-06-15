@@ -82,12 +82,17 @@ const AdminProjectsView = () => {
             const projectData = {
                 nombre_tramo: formData.nombre_tramo,
                 proyecto_nom: formData.proyecto_nom,
-                // Defaults for shell
+                // Valid dummy data for shell to pass backend validations
+                departamento: '08',
+                provincia: '0801',
+                distrito: '080101',
                 estado: 'Activo',
-                longitud_total: null,
-                tipo_via: null,
+                longitud_total: 0,
+                tipo_via: '500',
                 progresiva_inicial: '0+000',
-                descripcion_larga: '',
+                intervalo_manual: null,
+                isIntervalManual: false,
+                descripcion_larga: 'Proyecto creado desde vista básica',
                 // Auto-fill new fields
                 nombre_proyecto: formData.nombre_tramo, // Default to tramo name
                 codigo: `PROJ-${Date.now().toString().slice(-4)}`, // Temp code
@@ -96,14 +101,25 @@ const AdminProjectsView = () => {
 
             const parentProgresiva = {
                 nombre: 'Progresiva Principal', // Placeholder
-                estado: 'activo'
-                // minimal fields
+                estado: 'activo',
+                codigo: 'PROG-MAIN',
+                linea: '18L'
             };
+
+            const generatedChildren = [
+                {
+                    codigo: '0+000',
+                    nombre: 'Progresiva 0+000',
+                    descripcion: 'Inicio',
+                    estado: 'activo',
+                    linea: '18L'
+                }
+            ];
 
             // Create Shell
             const res = await axios.post(`${API_URL}/api/proyectos/create-full`, {
                 projectData,
-                progresivaData: { parentProgresiva, generatedChildren: [] }
+                progresivaData: { parentProgresiva, generatedChildren }
             }, { headers });
 
             const newProjectId = res.data.projectId || res.data.id; // Check backend response structure if possible, usually projectId or id

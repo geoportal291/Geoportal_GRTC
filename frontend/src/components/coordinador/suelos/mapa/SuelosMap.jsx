@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { MapContainer, TileLayer, LayersControl, useMap, FeatureGroup } from 'react-leaflet';
+import { MapContainer, TileLayer, LayersControl, useMap, FeatureGroup, ZoomControl } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -15,6 +15,7 @@ import axiosInstance from '../../../../api/axios';
 import './SuelosMap.css';
 import CanteraMapPopup from './CanteraMapPopup';
 import ProgresivaMapPopup from './ProgresivaMapPopup';
+import FuenteMapPopup from './FuenteMapPopup';
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import MapControls from './MapControls';
 
@@ -62,6 +63,7 @@ const MapLogic = ({
   cantera,        // Info adicional de la cantera para tooltip
   progresivasData, // DATA DE PROGRESIVAS (para colorear si tienen datos)
   canterasData,    // DATA DE CANTERAS (Dashboard)
+  fuentesData,     // DATA DE FUENTES (Dashboard/Gestor)
   onMapReady,
 
   onMapClick,
@@ -73,6 +75,7 @@ const MapLogic = ({
   isSelecting, // NEW: If true, change cursor to crosshair
   authToken, // NEW: User token for image fetching
   transientGeoJson, // NUEVO: GeoJSON temporal (ej. subido en form)
+  isExternalView, // NUEVO: Determina si es vista externa premium
 
   // NUEVO: Refs pasadas por el padre
   displayLayersRef,
@@ -82,6 +85,7 @@ const MapLogic = ({
   markerLayerRef,
   progresivasLayerRef,
   activeCanterasLayerRef,
+  activeFuentesLayerRef,
 }) => {
   const map = useMap();
   const navigate = useNavigate();
@@ -206,7 +210,7 @@ const MapLogic = ({
   // Listener for Layer Toggles (Remounting)
   useEffect(() => {
     const handleRefresh = (e) => {
-      if (e.detail === 'suelosProgresivasLayerGroup' || e.detail === 'suelosCanterasLayerGroup') {
+      if (e.detail === 'suelosProgresivasLayerGroup' || e.detail === 'suelosCanterasLayerGroup' || e.detail === 'suelosFuentesLayerGroup') {
         // console.log(`[SuelosMap] Layer ${e.detail} refreshed. Redrawing...`);
         setForceUpdate(prev => prev + 1);
       }
@@ -240,16 +244,35 @@ const MapLogic = ({
     if (!useGlobalLayers || !window.suelosCanterasLayerGroup) {
       activeCanterasLayerRef.current.addTo(map);
     }
+    if (!useGlobalLayers || !window.suelosFuentesLayerGroup) {
+      activeFuentesLayerRef.current.addTo(map);
+    }
 
-    // --- COORDENADAS EN PANTALLA ---
-    const coordContainer = L.DomUtil.create('div', 'leaflet-control-coordinates', map.getContainer());
+  }, [map, onMapReady]); // Fin Init Effect
 
-    // Estilo coords - Esquina Inferior Izquierda (Separado del borde)
+  // --- COORDENADAS EN PANTALLA REACTIVAS ---
+  useEffect(() => {
+    if (!map) return;
+
+    let coordContainer = map.getContainer().querySelector('.leaflet-control-coordinates');
+    if (!coordContainer) {
+      coordContainer = L.DomUtil.create('div', 'leaflet-control-coordinates', map.getContainer());
+      
+      map.on('mousemove', (e) => {
+        coordContainer.style.display = 'block';
+        coordContainer.innerHTML = `Lat: ${e.latlng.lat.toFixed(5)}, Lon: ${e.latlng.lng.toFixed(5)}`;
+      });
+      map.on('mouseout', () => { coordContainer.style.display = 'none'; });
+    }
+
+    // Estilo coords - Esquina Inferior Izquierda o Centro Inferior según la vista
     Object.assign(coordContainer.style, {
       position: 'absolute',
-      bottom: '25px',
-      left: '140px',
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      bottom: isExternalView ? '25px' : '37px', // Mismo bottom de los botones en la vista externa
+      left: isExternalView ? '50%' : '140px',
+      right: 'auto',
+      transform: isExternalView ? 'translateX(-50%)' : 'none',
+      backgroundColor: 'rgba(15, 23, 42, 0.9)', // Fondo oscuro elegante a juego
       color: 'white',
       padding: '5px 15px',
       borderRadius: '20px',
@@ -258,16 +281,11 @@ const MapLogic = ({
       display: 'none',
       zIndex: 2000,
       whiteSpace: 'nowrap',
+      border: '1px solid #334155', // Bordes sutiles
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
       pointerEvents: 'none' // Click through
     });
-
-    map.on('mousemove', (e) => {
-      coordContainer.style.display = 'block';
-      coordContainer.innerHTML = `Lat: ${e.latlng.lat.toFixed(5)}, Lon: ${e.latlng.lng.toFixed(5)}`;
-    });
-    map.on('mouseout', () => { coordContainer.style.display = 'none'; });
-
-  }, [map, onMapReady]); // Fin Init Effect
+  }, [map, isExternalView]);
 
   // --- Prepare KML ID Sets ---
   const effectiveKmlIds = useMemo(() => {
@@ -374,6 +392,94 @@ const MapLogic = ({
     });
 
   }, [canterasData, map, forceUpdate, defaultZone]); // forceUpdate triggers redraw on toggle
+
+  // --- NUEVA LÓGICA: DIBUJAR FUENTES DE AGUA ---
+  useEffect(() => {
+    if (!map) return;
+
+    const layer = (useGlobalLayers && window.suelosFuentesLayerGroup) ? window.suelosFuentesLayerGroup : activeFuentesLayerRef.current;
+
+    if (layer) layer.clearLayers();
+
+    if (!fuentesData || fuentesData.length === 0) return;
+
+    fuentesData.forEach(f => {
+      let lat, lon;
+
+      if (f.latitud && f.longitud) {
+        lat = parseFloat(f.latitud);
+        lon = parseFloat(f.longitud);
+      } else if (f.coordenada_este && f.coordenada_norte && (f.lado || defaultZone)) {
+        try {
+          const z = f.lado || defaultZone || '18L';
+          const zNum = parseInt(z.replace(/[A-Za-z]/g, ''));
+          const zLet = z.replace(/[0-9]/g, '') || 'L';
+          const res = toLatLon(parseFloat(f.coordenada_este), parseFloat(f.coordenada_norte), zNum, zLet);
+          lat = res.latitude;
+          lon = res.longitude;
+        } catch (e) {
+          console.warn('Invalid coords fallback for fuente:', f.nombre, e);
+          return;
+        }
+      }
+
+      if (lat && lon) {
+        const icon = L.divIcon({
+          className: 'suelos-fuente-marker-icon',
+          html: `<div style="
+                  background-color: #0d47a1;
+                  color: white;
+                  width: 30px; height: 30px;
+                  border-radius: 50%;
+                  display: flex; align-items: center; justify-content: center;
+                  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+                  border: 2px solid white;
+                "><i class="fas fa-tint"></i></div>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        const marker = L.marker([lat, lon], {
+          icon: icon,
+          title: f.nombre || 'Fuente de Agua'
+        });
+
+        marker.bindTooltip(`<b>${f.nombre || 'Fuente de Agua'}</b>`, {
+          permanent: false,
+          direction: 'right',
+          className: 'geol-kmz-tooltip-label',
+          offset: [15, 0]
+        });
+
+        if (layer) marker.addTo(layer);
+
+        const container = document.createElement('div');
+        const root = createRoot(container);
+
+        root.render(
+          <FuenteMapPopup
+            fuenteAgua={f}
+            onNavigate={(fuente) => {
+              navigate('/coordinador/suelos/gestor-fuentes', {
+                state: {
+                  fuenteId: fuente.id,
+                  selectedProjectId: fuente.proyecto_id
+                }
+              });
+            }}
+          />
+        );
+
+        marker.bindPopup(container, {
+          minWidth: 300,
+          maxWidth: 300,
+          closeButton: false,
+          className: 'suelos-premium-popup'
+        });
+      }
+    });
+
+  }, [fuentesData, map, forceUpdate, defaultZone]);
 
   // --- NUEVA LÓGICA: DIBUJAR PROGRESIVAS DESDE DB ---
   useEffect(() => {
@@ -568,6 +674,38 @@ const MapLogic = ({
               className: 'suelos-premium-popup'
             });
 
+            // Lógica de "Hover Bridge" para abrir popup interactivo al hacer hover
+            marker.on('mouseover', function () {
+              if (marker._closePopupTimeout) {
+                clearTimeout(marker._closePopupTimeout);
+              }
+              marker.openPopup();
+            });
+
+            marker.on('mouseout', function () {
+              marker._closePopupTimeout = setTimeout(() => {
+                marker.closePopup();
+              }, 300); // 300ms de puente para trasladar el cursor al popup
+            });
+
+            marker.on('popupopen', function (e) {
+              const popupElement = e.popup.getElement();
+              if (popupElement) {
+                // Cancelar cierre si el cursor entra al popup
+                popupElement.addEventListener('mouseenter', () => {
+                  if (marker._closePopupTimeout) {
+                    clearTimeout(marker._closePopupTimeout);
+                  }
+                });
+                // Iniciar temporizador de cierre al salir del popup
+                popupElement.addEventListener('mouseleave', () => {
+                  marker._closePopupTimeout = setTimeout(() => {
+                    marker.closePopup();
+                  }, 300);
+                });
+              }
+            });
+
             marker.on('click', () => {
               if (onMapClick) {
                 onMapClick({
@@ -720,6 +858,38 @@ const MapLogic = ({
                     marker = L.marker(latlng, { icon, zIndexOffset: zIndex });
                     marker.bindPopup(popupNode, { minWidth: 300, maxWidth: 300, closeButton: false, className: 'suelos-premium-popup' });
 
+                    // Lógica de "Hover Bridge" para abrir popup interactivo al hacer hover (KML)
+                    marker.on('mouseover', function () {
+                      if (marker._closePopupTimeout) {
+                        clearTimeout(marker._closePopupTimeout);
+                      }
+                      marker.openPopup();
+                    });
+
+                    marker.on('mouseout', function () {
+                      marker._closePopupTimeout = setTimeout(() => {
+                        marker.closePopup();
+                      }, 300); // 300ms de puente para trasladar el cursor al popup
+                    });
+
+                    marker.on('popupopen', function (e) {
+                      const popupElement = e.popup.getElement();
+                      if (popupElement) {
+                        // Cancelar cierre si el cursor entra al popup
+                        popupElement.addEventListener('mouseenter', () => {
+                          if (marker._closePopupTimeout) {
+                            clearTimeout(marker._closePopupTimeout);
+                          }
+                        });
+                        // Iniciar temporizador de cierre al salir del popup
+                        popupElement.addEventListener('mouseleave', () => {
+                          marker._closePopupTimeout = setTimeout(() => {
+                            marker.closePopup();
+                          }, 300);
+                        });
+                      }
+                    });
+
                     // Tooltip Permanente para Progresivas del KML (Mismatch coords)
                     marker.bindTooltip(`<b>${progWithCoords.nombre || progWithCoords.codigo}</b>`, {
                       permanent: false, direction: 'right', className: 'geol-kmz-tooltip-label', offset: [15, 0]
@@ -868,6 +1038,9 @@ const SuelosMap = (props) => {
   const activeCanterasLayerRef = useRef(
     (useGlobalLayers && window.suelosCanterasLayerGroup) ? window.suelosCanterasLayerGroup : new L.FeatureGroup()
   );
+  const activeFuentesLayerRef = useRef(
+    (useGlobalLayers && window.suelosFuentesLayerGroup) ? window.suelosFuentesLayerGroup : new L.FeatureGroup()
+  );
 
   useEffect(() => {
     // If explicitly 'modal' or 'modal-canteras', hide controls by default or specific rule
@@ -879,15 +1052,20 @@ const SuelosMap = (props) => {
   }, [props.layerContext]);
 
   return (
-    <div className={`suelos-map-wrapper ${props.className || ''}`} style={props.style}>
+    <div className={`suelos-map-wrapper ${props.className || ''} ${props.isExternalView ? 'external-view-active' : ''} ${props.isSidebarOpen && props.isExternalView ? 'sidebar-open-shift' : ''}`} style={props.style}>
       <MapContainer
         center={[-12.930, -72.630]} // Centro aprox Quillabamba
         zoom={13}
         maxZoom={21}
         style={{ height: '100%', width: '100%' }}
-        zoomControl={true} // Enabled native zoom (topleft)
+        zoomControl={false} // Desactivar permanentemente el zoom nativo no-reactivo de Leaflet
         ref={mapRef}
       >
+        {!props.isExternalView ? (
+          <ZoomControl position="topleft" />
+        ) : (
+          <ZoomControl position="bottomright" />
+        )}
         {!showLayersControl && (
           <TileLayer 
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
@@ -926,6 +1104,9 @@ const SuelosMap = (props) => {
             <LayersControl.Overlay checked name="Canteras">
               <FeatureGroupWithRef globalKey="suelosCanterasLayerGroup" />
             </LayersControl.Overlay>
+            <LayersControl.Overlay checked name="Fuentes de Agua">
+              <FeatureGroupWithRef globalKey="suelosFuentesLayerGroup" />
+            </LayersControl.Overlay>
           </LayersControl>
         )}
 
@@ -939,6 +1120,7 @@ const SuelosMap = (props) => {
           markerLayerRef={markerLayerRef}
           progresivasLayerRef={progresivasLayerRef}
           activeCanterasLayerRef={activeCanterasLayerRef}
+          activeFuentesLayerRef={activeFuentesLayerRef}
         />
 
         {/* --- NUEVO: Capturar comandos externos de Zoom/Foco --- */}

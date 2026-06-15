@@ -11,10 +11,10 @@
 }
 
 .ensayo-detalle-modal-dialog {
-  --ensayo-accent-strong: #2563eb;
-  --ensayo-accent-mid: #3b82f6;
-  --ensayo-accent-soft: #60a5fa;
-  --ensayo-accent-surface: #eff6ff;
+  --ensayo-accent-strong: #1e293b;
+  --ensayo-accent-mid: #2d3748;
+  --ensayo-accent-soft: #4a5568;
+  --ensayo-accent-surface: #f7fafc;
   width: min(1380px, 100%);
   max-height: calc(100vh - 40px);
   display: flex;

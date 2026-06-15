@@ -2321,11 +2321,21 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
         const loadKmlFromUrl = async (url, showAlerts = true) => {
             try {
                 if (showAlerts) alertify.message(`Descargando KML desde la URL...`);
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`Error en la red: ${response.statusText}`);
+                let kmlText;
+                try {
+                    const proxyResponse = await axiosInstance.get('/api/proxy', {
+                        params: { url: url },
+                        responseType: 'text'
+                    });
+                    kmlText = proxyResponse.data;
+                } catch (proxyError) {
+                    console.warn('[GeologiaGeoite] Fallo proxy, intentando fetch directo:', proxyError);
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Error en la red: ${response.statusText}`);
+                    }
+                    kmlText = await response.text();
                 }
-                const kmlText = await response.text();
 
                 const parser = new DOMParser();
                 const kmlDoc = parser.parseFromString(kmlText, 'text/xml');
@@ -2550,6 +2560,47 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                 alertify.error('Ocurrió un error al subir el archivo.');
             }
         };
+
+        // --- AUTO CARGAR KML DEL PROYECTO ---
+        if (!map._kmlAutoLoaded && projectIdRef.current) {
+            map._kmlAutoLoaded = true;
+            const fetchProjectKml = async () => {
+                try {
+                    let kmlUrlToLoad = '';
+                    
+                    // 1. Intentar cargar desde la BD interna si el Vercel Blob falla o expiró
+                    try {
+                        const projectRes = await axiosInstance.get(`/api/proyectos/${projectIdRef.current}`);
+                        const kmlTrazadoId = projectRes.data?.kml_trazado_id || null;
+                        if (kmlTrazadoId) {
+                            const storedKmlRes = await axiosInstance.get(`/api/kml-trazados/${kmlTrazadoId}/content`);
+                            const storedKmlText = storedKmlRes.data?.kmlContent;
+                            if (storedKmlText && storedKmlText.includes('<kml')) {
+                                const blob = new Blob([storedKmlText], { type: 'text/xml' });
+                                kmlUrlToLoad = URL.createObjectURL(blob);
+                            }
+                        }
+                    } catch (dbError) {
+                        console.warn('[GeologiaGeoite] Falló carga de KML por BD, intentando fallback de URL externa:', dbError);
+                    }
+
+                    // 2. Si no hay KML en BD, intentar la URL externa original
+                    if (!kmlUrlToLoad) {
+                        const kmlRes = await axiosInstance.get(`/api/proyectos/${projectIdRef.current}/kml`, {
+                            params: { section: 'invvial' }
+                        });
+                        kmlUrlToLoad = kmlRes.data?.url || '';
+                    }
+
+                    if (kmlUrlToLoad) {
+                        await loadKmlFromUrl(kmlUrlToLoad, false);
+                    }
+                } catch (error) {
+                    console.warn('[GeologiaGeoite] No se pudo cargar el KML del proyecto automáticamente:', error);
+                }
+            };
+            fetchProjectKml();
+        }
 
         uploadModal.innerHTML = `
             <div class="geolmap-card-header geolmap-header-purple">
@@ -4389,6 +4440,7 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
         };
     }, [mapData, map]);
 
+
     return (
         <>
             {createPortal(
@@ -4461,6 +4513,7 @@ const MapLogic = ({ tabName, projectId, section, geologiaCapaUrl, geologiaGeojso
                 ) : null,
                 popupContainer
             )}
+
             {enlargedImage && createPortal(
                 <ImagePreviewModal image={enlargedImage} onClose={() => setEnlargedImage(null)} />,
                 document.body

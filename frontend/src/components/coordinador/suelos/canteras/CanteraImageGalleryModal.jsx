@@ -241,14 +241,32 @@ const CanteraImageGalleryModal = ({ isOpen, onClose, cantera, onDataChange }) =>
                         </div>
                     )}
                 </div>
-                <div className="gallery-modal-footer">
-                    <label htmlFor="add-image-input" className={`btn-add-image ${isUploading ? 'disabled' : ''}`}>
-                        {isUploading ? 'Subiendo...' : 'Añadir Imagen'}
+                <div className="gallery-modal-footer" style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    {/* Botón para Añadir Archivos */}
+                    <label htmlFor="add-image-input" className={`btn-add-image ${isUploading ? 'disabled' : ''}`} style={{ cursor: isUploading ? 'not-allowed' : 'pointer' }}>
+                        <i className="fas fa-images" style={{ marginRight: '6px' }}></i>
+                        {isUploading ? 'Subiendo...' : 'Añadir Archivos'}
                     </label>
                     <input
                         id="add-image-input"
                         type="file"
                         accept="image/*,.zip,.rar"
+                        multiple
+                        onChange={handleFileChange}
+                        style={{ display: 'none' }}
+                        disabled={isUploading}
+                    />
+
+                    {/* Botón para Subir Carpeta */}
+                    <label htmlFor="add-folder-input" className={`btn-add-image ${isUploading ? 'disabled' : ''}`} style={{ background: '#f59e0b', borderColor: '#d97706', cursor: isUploading ? 'not-allowed' : 'pointer' }}>
+                        <i className="fas fa-folder-open" style={{ marginRight: '6px' }}></i>
+                        {isUploading ? 'Subiendo...' : 'Subir Carpeta'}
+                    </label>
+                    <input
+                        id="add-folder-input"
+                        type="file"
+                        webkitdirectory="true"
+                        directory="true"
                         multiple
                         onChange={handleFileChange}
                         style={{ display: 'none' }}

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { GeoJSON, MapContainer, ScaleControl, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
+import { GeoJSON, MapContainer, ScaleControl, TileLayer, ZoomControl, useMap, useMapEvents, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -1184,6 +1184,7 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
   const [showLabelTable, setShowLabelTable] = useState(true);
   const [mapZoom, setMapZoom] = useState(6);
   const [isThreeDMode, setIsThreeDMode] = useState(false);
+  const [rutasKml, setRutasKml] = useState([]);
 
   useEffect(() => {
     selectedFeatureIdRef.current = selectedFeatureId;
@@ -1253,6 +1254,23 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
       ignore = true;
     };
   }, [selectedProjectId, user?.token]);
+
+  // Nuevo efecto para cargar el trazado del proyecto (línea global)
+  useEffect(() => {
+    let ignore = false;
+    const fetchRutaKml = async () => {
+      try {
+        const response = await axiosInstance.get('/api/ruta-kml');
+        if (!ignore) {
+          setRutasKml(response.data || []);
+        }
+      } catch (err) {
+        console.warn('No se pudo cargar la ruta KML global en vista externa:', err);
+      }
+    };
+    fetchRutaKml();
+    return () => { ignore = true; };
+  }, []);
 
   const filteredLayers = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -1383,11 +1401,29 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
   };
 
   const combinedGeojson = useMemo(() => {
+    const features = visibleLayers.flatMap(layer => Array.isArray(layer.geojson_data?.features) ? layer.geojson_data.features : []);
+    
+    // Añadir el trazado global al mapa 3D
+    rutasKml.forEach((ruta) => {
+      if (ruta.positions && ruta.positions.length > 0) {
+        // Convertir [lat, lng] a [lng, lat] para GeoJSON
+        const coordinates = ruta.positions.map(p => [p[1], p[0]]);
+        features.push({
+          type: 'Feature',
+          properties: { stroke: '#ef4444', 'stroke-width': 5, dg_is_global_route: true },
+          geometry: {
+            type: 'LineString',
+            coordinates
+          }
+        });
+      }
+    });
+
     return {
       type: 'FeatureCollection',
-      features: visibleLayers.flatMap(layer => Array.isArray(layer.geojson_data?.features) ? layer.geojson_data.features : [])
+      features
     };
-  }, [visibleLayers]);
+  }, [visibleLayers, rutasKml]);
 
   const shellClassName = [
     'dg-mode-shell',
@@ -1595,6 +1631,17 @@ export default function DisenoGeometricoExternal({ onBack, onSwitchMode, canRetu
           <ScaleControl position="bottomleft" />
           <MapZoomTracker onZoomChange={setMapZoom} />
           <ExternalMapClickDeselect onDeselect={handleMapDeselect} measurementMode={measurementMode} />
+
+          {/* Trazado del Proyecto (ruta global) - Siempre visible */}
+          {rutasKml.map((ruta, idx) => (
+            ruta.positions && ruta.positions.length > 0 && (
+              <Polyline 
+                key={`ruta-global-${idx}`} 
+                positions={ruta.positions} 
+                pathOptions={{ color: '#ef4444', weight: 5, zIndex: 900 }} 
+              />
+            )
+          ))}
 
           {visibleLayers.map((layer, index) => {
             const rawLabelConfig = getPointLabelConfig(layer.geojson_data);

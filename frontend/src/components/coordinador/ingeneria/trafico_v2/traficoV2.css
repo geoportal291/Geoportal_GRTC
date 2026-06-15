@@ -316,6 +316,10 @@
   grid-column: span 5;
 }
 
+.traffic-v2-span-12 {
+  grid-column: span 12;
+}
+
 .traffic-v2-span-4 {
   grid-column: span 4;
 }
@@ -1867,20 +1871,110 @@
 
 /* Print optimizations */
 @media print {
+  body, html, #root, .principal, .main-content,
+  .geoportal-layout-root, .geoportal-layout-flex, .content-wrapper {
+    height: auto !important;
+    overflow: visible !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  
+  /* Ocultar el Sidebar y cabeceras explícitamente en el layout */
+  .geoportal-sidebar-wrapper, header, nav, .topbar {
+    display: none !important;
+  }
+  
   body * {
     visibility: hidden;
   }
+  
   .traffic-v2-grid-sub-parent, .traffic-v2-grid-sub-parent * {
     visibility: visible;
   }
+  
   .traffic-v2-grid-sub-parent {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
+  
   .traffic-v2-report-toolbar {
-    display: none;
+    display: none !important;
+  }
+  
+  /* Convertimos la grilla principal y subgrillas en layout apilado verticalmente */
+  .traffic-v2-grid.report,
+  .traffic-v2-grid-sub {
+    display: block !important;
+    width: 100% !important;
+  }
+  
+  /* Hacer que todas las columnas ocupen el 100% del ancho y se apilen */
+  .traffic-v2-span-5, .traffic-v2-span-7, .traffic-v2-span-12, .traffic-v2-span-4, .traffic-v2-span-8 {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+    display: block !important;
+    margin-bottom: 25px !important;
+  }
+
+  .traffic-v2-panel {
+    display: block !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+    margin-bottom: 20px !important;
+    padding: 0 !important;
+  }
+  
+  /* Desactivamos grid interno de KPIs para que usen flex o block seguro */
+  .traffic-v2-kpi-grid {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 15px !important;
+  }
+
+  .traffic-v2-kpi-card {
+    flex: 1 1 calc(50% - 15px) !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #f8fafc !important;
+    margin-bottom: 10px !important;
+  }
+  
+  .traffic-v2-card,
+  .traffic-v2-chart-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-column-break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+    margin-bottom: 30px !important;
+    display: block !important;
+  }
+  
+  .traffic-v2-chart-container,
+  .chart-container {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-column-break-inside: avoid;
+    margin-bottom: 40px !important;
+    width: 100% !important;
+    display: block !important;
+  }
+  
+  /* Asegurar que las tipografías sean legibles en papel */
+  body, .traffic-v2-grid-sub-parent {
+    background-color: white !important;
+    color: #0f172a !important;
   }
 }
 

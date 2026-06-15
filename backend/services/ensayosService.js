@@ -993,8 +993,25 @@ const buildImportPayloadFromRow = (row, keysMap, tipoConfig) => {
             return;
         }
 
-        const internalKey = remapExportKeyFromConfig(exportKey, tipoConfig);
-        if (!isImportablePath(internalKey, tipoConfig)) return;
+        let internalKey = remapExportKeyFromConfig(exportKey, tipoConfig);
+        let importable = isImportablePath(internalKey, tipoConfig);
+
+        if (!importable && headerConfig.header) {
+            const mappedHeader = resolveAliasWithConfig(headerConfig.header, tipoConfig);
+            if (mappedHeader) {
+                const parts = exportKey.split('.');
+                if (parts.length >= 2) {
+                    parts[parts.length - 1] = mappedHeader;
+                    const fallbackKey = parts.join('.');
+                    if (isImportablePath(fallbackKey, tipoConfig)) {
+                        internalKey = fallbackKey;
+                        importable = true;
+                    }
+                }
+            }
+        }
+
+        if (!importable) return;
         setNestedValue(ensayoDraft.datos_formulario, internalKey, value);
     });
 
@@ -1667,7 +1684,29 @@ const getEnsayoDetailsById = async (id) => {
                 ) as proyecto_nombre_cantera,
                 COALESCE(dep_prog.nombre, dep_can.nombre, proy_prog.departamento, proy_can.departamento) as departamento,
                 COALESCE(prov_prog.nombre, prov_can.nombre, proy_prog.provincia, proy_can.provincia) as provincia,
-                COALESCE(dist_prog.nombre, dist_can.nombre, proy_prog.distrito, proy_can.distrito) as distrito
+                COALESCE(dist_prog.nombre, dist_can.nombre, proy_prog.distrito, proy_can.distrito) as distrito,
+                -- Fuentes de Agua
+                fa.id as fuente_agua_id,
+                fa.nombre as fuente_agua_nombre,
+                fa.coordenada_este as fa_coordenada_este,
+                fa.coordenada_norte as fa_coordenada_norte,
+                fa.latitud as fa_latitud,
+                fa.longitud as fa_longitud,
+                fa.lado as fa_lado,
+                fa.desplazamiento_km as fa_desplazamiento_km,
+                fa.tramo_id as fa_tramo_id,
+                fa.id_progresiva_referencia as fa_progresiva_referencia_id,
+                fa_pref.codigo as fa_progresiva_ref_codigo,
+                fa_pref.nombre as fa_progresiva_ref_nombre,
+                fa_tramo.nombre as fa_tramo_nombre,
+                fa_tramo.id as fa_tramo_id_val,
+                (SELECT COUNT(*) FROM estratos WHERE parent_type = 'fuente_agua' AND parent_id = fa.id) as fa_total_muestras,
+                proy_fa.id as proyecto_id_fa,
+                COALESCE(
+                    to_jsonb(proy_fa)->>'nombre',
+                    to_jsonb(proy_fa)->>'nombre_proyecto',
+                    to_jsonb(proy_fa)->>'proyecto_nom'
+                ) as proyecto_nombre_fa
             FROM ensayos ens
             LEFT JOIN tipo_ensayo te ON ens.tipo_ensayo = te.id
             LEFT JOIN estratos est ON ens.estrato_id = est.id
@@ -1683,25 +1722,30 @@ const getEnsayoDetailsById = async (id) => {
             LEFT JOIN codigo_departamentos dep_can ON TRIM(BOTH FROM proy_can.departamento::text) = TRIM(BOTH FROM dep_can.codigo_departamento::text)
             LEFT JOIN provincias prov_can ON TRIM(BOTH FROM proy_can.provincia::text) = TRIM(BOTH FROM prov_can.codigo_provincia::text)
             LEFT JOIN distritos dist_can ON TRIM(BOTH FROM proy_can.distrito::text) = TRIM(BOTH FROM dist_can.codigo_distrito::text)
+            LEFT JOIN fuentes_agua_suelos fa ON est.parent_type = 'fuente_agua' AND est.parent_id = fa.id
+            LEFT JOIN progresivas fa_pref ON fa.id_progresiva_referencia = fa_pref.id
+            LEFT JOIN progresivas fa_tramo ON fa.tramo_id = fa_tramo.id
+            LEFT JOIN proyectos proy_fa ON fa.id_proyecto = proy_fa.id
             WHERE ens.id = $1
         `, [id]);
         const row = result.rows[0];
         if (!row) return null;
         const hydratedRow = await ensureEnsayoDerivedFields(row, db);
 
-        const coordE = hydratedRow.prog_coordenada_este || hydratedRow.tramo_coordenada_este || hydratedRow.can_coordenada_este || hydratedRow.can_longitud || null;
-        const coordN = hydratedRow.prog_coordenada_norte || hydratedRow.tramo_coordenada_norte || hydratedRow.can_coordenada_norte || hydratedRow.can_latitud || null;
-        const lado = hydratedRow.prog_lado || hydratedRow.can_lado || hydratedRow.lado || null;
+        const coordE = hydratedRow.prog_coordenada_este || hydratedRow.tramo_coordenada_este || hydratedRow.can_coordenada_este || hydratedRow.fa_coordenada_este || null;
+        const coordN = hydratedRow.prog_coordenada_norte || hydratedRow.tramo_coordenada_norte || hydratedRow.can_coordenada_norte || hydratedRow.fa_coordenada_norte || null;
+        const lado = hydratedRow.prog_lado || hydratedRow.can_lado || hydratedRow.fa_lado || hydratedRow.lado || null;
+
 
         return {
             ...hydratedRow,
             // Compatibilidad con el frontend actual.
             datos_ensayo: hydratedRow.datos_formulario,
             tipo_ensayo_id: hydratedRow.tipo_ensayo,
-            proyecto_id: hydratedRow.proyecto_id_progresiva || hydratedRow.proyecto_id_cantera || hydratedRow.proyecto_id || null,
-            proyecto_nombre: hydratedRow.proyecto_nombre_progresiva || hydratedRow.proyecto_nombre_cantera || null,
-            tramo_id: hydratedRow.tramo_id || hydratedRow.progresiva_referencia_id || null,
-            tramo_nombre: hydratedRow.tramo_nombre || null,
+            proyecto_id: hydratedRow.proyecto_id_progresiva || hydratedRow.proyecto_id_cantera || hydratedRow.proyecto_id_fa || hydratedRow.proyecto_id || null,
+            proyecto_nombre: hydratedRow.proyecto_nombre_progresiva || hydratedRow.proyecto_nombre_cantera || hydratedRow.proyecto_nombre_fa || null,
+            tramo_id: hydratedRow.tramo_id || hydratedRow.progresiva_referencia_id || hydratedRow.fa_tramo_id_val || null,
+            tramo_nombre: hydratedRow.tramo_nombre || hydratedRow.fa_tramo_nombre || null,
             config_reporte_pdf: hydratedRow.config_reporte_pdf,
             // Campos para el reporte de impresión
             estrato_profundidad_min: hydratedRow.estrato_profundidad_min,
@@ -1709,13 +1753,20 @@ const getEnsayoDetailsById = async (id) => {
             lado: lado,
             coordenada_este: coordE,
             coordenada_norte: coordN,
-            longitud: coordE, // Mapeamos a longitud para compatibilidad del reporte
-            latitud: coordN,  // Mapeamos a latitud para compatibilidad del reporte
+            longitud: coordE,
+            latitud: coordN,
             departamento: hydratedRow.departamento || null,
             provincia: hydratedRow.provincia || null,
             distrito: hydratedRow.distrito || null,
             fecha_muestreo: hydratedRow.fecha_ejecucion || hydratedRow.fecha || hydratedRow.created_at,
-            calicata: hydratedRow.progresiva_descripcion || hydratedRow.progresiva_nombre || hydratedRow.cantera_nombre || null,
+            calicata: hydratedRow.progresiva_descripcion || hydratedRow.progresiva_nombre || hydratedRow.cantera_nombre || hydratedRow.fuente_agua_nombre || null,
+            // Campos específicos de Fuente de Agua
+            fuente_agua_nombre: hydratedRow.fuente_agua_nombre || null,
+            fa_progresiva_ref_codigo: hydratedRow.fa_progresiva_ref_codigo || null,
+            fa_progresiva_ref_nombre: hydratedRow.fa_progresiva_ref_nombre || null,
+            fa_desplazamiento_km: hydratedRow.fa_desplazamiento_km || null,
+            fa_lado: hydratedRow.fa_lado || null,
+            fa_total_muestras: hydratedRow.fa_total_muestras ? Number(hydratedRow.fa_total_muestras) : null,
         };
     } catch (error) {
         console.error(`[ERROR] getEnsayoDetailsById ${id}:`, error);

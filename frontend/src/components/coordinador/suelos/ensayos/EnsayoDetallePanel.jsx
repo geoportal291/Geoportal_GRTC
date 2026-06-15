@@ -328,6 +328,20 @@ export default function EnsayoDetallePanel({
   const [ensayoDetails, setEnsayoDetails] = useState(initialEnsayoDetails);
   const [activeTab, setActiveTab] = useState("formulario");
   const [initialFormSnapshot, setInitialFormSnapshot] = useState("{}");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = React.useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const API_URL = process.env.REACT_APP_API_BASE ?? "";
 
@@ -472,6 +486,13 @@ export default function EnsayoDetallePanel({
             cantera: data.cantera_codigo,
             estrato: data.estrato_orden,
           });
+        } else if (data.parent_type === "fuente_agua") {
+          setInfoGeneral({
+            proyecto: data.proyecto_nombre,
+            tramo: data.tramo_nombre,
+            fuente_agua: data.fuente_agua_nombre,
+            estrato: data.estrato_orden,
+          });
         } else {
           setInfoGeneral({});
         }
@@ -507,16 +528,13 @@ export default function EnsayoDetallePanel({
               if (!normalizedData.tables) {
                 normalizedData.tables = { ...formDataObject };
               }
-              console.log("[PANEL DETALLE] Recalculando en CARGA inicial del ensayo...");
-              const calculatedRes = calcularResultados(cfg.calculationConfig, normalizedData);
+              const calculatedRes = calcularResultados(cfg.calculationConfig, normalizedData, finalTableConfig);
               finalResultados = calculatedRes || {};
-              console.log("[PANEL DETALLE] Resultados finales recalculados en carga exitosamente:", finalResultados);
             } catch (err) {
               console.error("[PANEL DETALLE - ERROR] Error al recalcular en carga inicial:", err);
               finalResultados = data.resultado || {};
             }
           } else {
-            console.log("[PANEL DETALLE] No hay configuración de cálculo o datos en la carga del ensayo.");
             finalResultados = data.resultado || {};
           }
 
@@ -590,19 +608,16 @@ export default function EnsayoDetallePanel({
 
   useEffect(() => {
     if (!calculationConfig || !formData || Object.keys(formData).length === 0) {
-      console.log("[PANEL DETALLE - EFFECT] Ignorando recálculo en useEffect: formData o calculationConfig no listos/vacíos", { formData, calculationConfig });
       setResultados({});
       return;
     }
 
     try {
-      console.log("[PANEL DETALLE - EFFECT] Detectado cambio en formData. Iniciando recálculo dinámico automático...", { formData });
       let resultadosCalculados = calcularResultados(
         calculationConfig,
         formData,
+        tableConfig,
       );
-
-      console.log("[PANEL DETALLE - EFFECT] Recálculo completado. Seteando nuevos resultados calculados en el estado:", resultadosCalculados);
       setResultados(resultadosCalculados);
     } catch (err) {
       console.error("[PANEL DETALLE - EFFECT - ERROR] Falló el cálculo automático reactivo en useEffect:", err);
@@ -640,8 +655,7 @@ export default function EnsayoDetallePanel({
 
       if (calculationConfig && generalFieldsList.length > 0) {
         try {
-          console.log(`[PANEL DETALLE - INPUT_CHANGE] Evaluando sincronización de campos generales autocalculados por cambio en: "${name}"`);
-          const tempResults = calcularResultados(calculationConfig, newState);
+          const tempResults = calcularResultados(calculationConfig, newState, tableConfig);
 
           generalFieldsList.forEach((field) => {
             const fieldPath = `general_fields.${field.key}`;
@@ -650,7 +664,6 @@ export default function EnsayoDetallePanel({
             if (calculationConfig[fieldPath] !== undefined && name !== fieldPath) {
               const calculatedValue = getValueAtPath(tempResults, fieldPath);
               if (calculatedValue !== undefined && calculatedValue !== null) {
-                console.log(`[PANEL DETALLE - INPUT_CHANGE] Sincronizando campo autocalculado "${fieldPath}" -> Nuevo valor calculado:`, calculatedValue);
                 setValueAtPath(newState, fieldPath, calculatedValue);
               }
             }
@@ -702,6 +715,36 @@ export default function EnsayoDetallePanel({
     }
   };
 
+  const handleEstadoChange = async (nuevoEstado) => {
+    setDropdownOpen(false);
+    try {
+      alertify.message("Actualizando estado...");
+      const headers = getAuthHeaders();
+      await axios.put(
+        `${API_URL}/api/ensayos/${ensayoId}/base`,
+        { 
+          nombre_ensayo: ensayoDetails?.nombre_ensayo,
+          estado: nuevoEstado 
+        },
+        { headers }
+      );
+      
+      setEnsayoDetails(prev => ({
+        ...prev,
+        estado: nuevoEstado
+      }));
+      
+      alertify.success(`Estado actualizado a: ${nuevoEstado}`);
+      
+      if (typeof onSaved === "function") {
+        onSaved();
+      }
+    } catch (err) {
+      console.error("Error al actualizar el estado del ensayo:", err);
+      alertify.error("No se pudo actualizar el estado del ensayo.");
+    }
+  };
+
   if (loading)
     return <div className="ensayo-detail-loading">Cargando ensayo...</div>;
 
@@ -743,8 +786,7 @@ export default function EnsayoDetallePanel({
           </button>
           <button
             onClick={handleExportarInforme}
-            className="btn btn-primary btn-expandable"
-            style={{ backgroundColor: "#2563eb", borderColor: "#1d4ed8" }}
+            className="btn-pdf-premium btn-expandable"
           >
             <i className="fas fa-file-pdf"></i>
             <span className="btn-text">Exportar Informe</span>
@@ -767,10 +809,9 @@ export default function EnsayoDetallePanel({
           </div>
           <button
             onClick={handleExportarInforme}
-            className="btn btn-primary btn-sm ms-auto me-2"
-            style={{ backgroundColor: "#2563eb", borderColor: "#1d4ed8", color: "white" }}
+            className="btn-pdf-premium ms-auto me-2"
           >
-            <i className="fas fa-file-pdf me-1"></i> Informe PDF
+            <i className="fas fa-file-pdf"></i> Informe PDF
           </button>
         </div>
       )}
@@ -779,45 +820,284 @@ export default function EnsayoDetallePanel({
         <div className="col-md-6">
           <div className="card h-100">
             <div className="card-header">
-              <i className="fas fa-info-circle me-1"></i> Información General
+              <i className="fas fa-info-circle"></i> Información General
             </div>
             <div className="card-body">
-              <p>
-                <strong>Proyecto:</strong> {infoGeneral.proyecto || "N/A"}
-              </p>
-              <p>
-                <strong>Tramo:</strong> {infoGeneral.tramo || "N/A"}
-              </p>
+              <div className="metadata-grid">
+                <div className="metadata-item">
+                  <span className="metadata-label">
+                    <i className="fas fa-folder"></i> Proyecto
+                  </span>
+                  <span className="metadata-value">
+                    {infoGeneral.proyecto || <span className="metadata-na">N/A</span>}
+                  </span>
+                </div>
+                <div className="metadata-item">
+                  <span className="metadata-label">
+                    <i className="fas fa-road"></i> Tramo
+                  </span>
+                  <span className="metadata-value">
+                    {infoGeneral.tramo || <span className="metadata-na">N/A</span>}
+                  </span>
+                </div>
+                <div className="metadata-item">
+                  <span className="metadata-label">
+                    <i className="fas fa-flask"></i> Tipo de Ensayo
+                  </span>
+                  <span className="metadata-value" title={ensayoDetails?.tipo_ensayo_descripcion || ""}>
+                    {ensayoDetails?.tipo_ensayo_descripcion || ensayoDetails?.tipo_ensayo_nombre || <span className="metadata-na">N/A</span>}
+                  </span>
+                </div>
+                <div className="metadata-item">
+                  <span className="metadata-label">
+                    <i className="fas fa-barcode"></i> Código / Nombre
+                  </span>
+                  <span className="metadata-value">
+                    {ensayoDetails?.nombre_ensayo || <span className="metadata-na">N/A</span>}
+                  </span>
+                </div>
+                <div className="metadata-item">
+                  <span className="metadata-label">
+                    <i className="fas fa-calendar-alt"></i> Fecha de Muestreo
+                  </span>
+                  <span className="metadata-value">
+                    {ensayoDetails?.fecha_muestreo ? (
+                      new Date(ensayoDetails.fecha_muestreo).toLocaleDateString('es-ES', { 
+                        day: '2-digit', 
+                        month: '2-digit', 
+                        year: 'numeric' 
+                      })
+                    ) : (
+                      <span className="metadata-na">N/A</span>
+                    )}
+                  </span>
+                </div>
+                <div className="metadata-item" ref={dropdownRef}>
+                  <span className="metadata-label">
+                    <i className="fas fa-tasks"></i> Estado
+                  </span>
+                  <div className="metadata-value" style={{ position: "relative", width: "100%" }}>
+                    <button
+                      type="button"
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      className={`select-estado-premium ${String(ensayoDetails?.estado || 'pendiente').toLowerCase().trim().replace(/\s+/g, '-')}`}
+                      style={{ width: "100%", justifyContent: "space-between" }}
+                    >
+                      <span>{ensayoDetails?.estado || "Pendiente"}</span>
+                      <i className={`fas fa-chevron-${dropdownOpen ? "up" : "down"}`} style={{ fontSize: "0.75rem", opacity: 0.8 }}></i>
+                    </button>
+                    {dropdownOpen && (
+                      <div className="estado-dropdown-menu">
+                        {["Pendiente", "En Progreso", "Completado", "Aprobado", "Rechazado"].map((opcion) => (
+                          <button
+                            key={opcion}
+                            type="button"
+                            onClick={() => handleEstadoChange(opcion)}
+                            className={`estado-dropdown-item ${String(opcion).toLowerCase().trim().replace(/\s+/g, '-')}`}
+                          >
+                            <span className="status-dot"></span>
+                            {opcion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
         <div className="col-md-6">
           <div className="card h-100">
             <div className="card-header">
-              <i className="fas fa-map-marker-alt me-1"></i> Ubicación
+              <i className="fas fa-map-marker-alt"></i> Ubicación
             </div>
             <div className="card-body">
               {ensayoDetails?.parent_type === "progresiva" ? (
-                <>
-                  <p>
-                    <strong>Progresiva:</strong>{" "}
-                    {formatProgresiva(infoGeneral.progresiva)}
-                  </p>
-                  <p>
-                    <strong>Estrato:</strong> {infoGeneral.estrato}
-                  </p>
-                </>
+                <div className="metadata-grid">
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-route"></i> Progresiva
+                    </span>
+                    <span className="metadata-value">
+                      {formatProgresiva(infoGeneral.progresiva)}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-compass"></i> Calicata / Exploración
+                    </span>
+                    <span className="metadata-value" title={ensayoDetails?.calicata || ""}>
+                      {ensayoDetails?.calicata || <span className="metadata-na">N/A</span>}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-layer-group"></i> Estrato / Muestra
+                    </span>
+                    <span className="metadata-value">
+                      {ensayoDetails?.estrato_nombre ? (
+                        `${ensayoDetails.estrato_nombre} (Orden: ${infoGeneral.estrato})`
+                      ) : (
+                        `Estrato ${infoGeneral.estrato}`
+                      )}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-arrows-up-down"></i> Profundidad (Rango)
+                    </span>
+                    <span className="metadata-value">
+                      {hasValue(ensayoDetails?.estrato_profundidad_min) && hasValue(ensayoDetails?.estrato_profundidad_max) ? (
+                        `${Number(ensayoDetails.estrato_profundidad_min).toFixed(2)} m - ${Number(ensayoDetails.estrato_profundidad_max).toFixed(2)} m`
+                      ) : (
+                        <span className="metadata-na">N/A</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-globe"></i> Coordenadas UTM
+                    </span>
+                    <span className="metadata-value metadata-value-coordinates">
+                      {ensayoDetails?.coordenada_este && ensayoDetails?.coordenada_norte ? (
+                        <div>
+                          <span style={{color: '#64748b', fontWeight: 600}}>E:</span> {ensayoDetails.coordenada_este}
+                          <br />
+                          <span style={{color: '#64748b', fontWeight: 600}}>N:</span> {ensayoDetails.coordenada_norte}
+                        </div>
+                      ) : (
+                        <span className="metadata-na">N/A</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
               ) : ensayoDetails?.parent_type === "cantera" ? (
-                <>
-                  <p>
-                    <strong>Cantera:</strong> {infoGeneral.cantera}
-                  </p>
-                  <p>
-                    <strong>Estrato:</strong> {infoGeneral.estrato}
-                  </p>
-                </>
+                <div className="metadata-grid">
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-mountain"></i> Cantera
+                    </span>
+                    <span className="metadata-value">
+                      {infoGeneral.cantera || <span className="metadata-na">N/A</span>}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-compass"></i> Calicata / Exploración
+                    </span>
+                    <span className="metadata-value" title={ensayoDetails?.calicata || ""}>
+                      {ensayoDetails?.calicata || <span className="metadata-na">N/A</span>}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-layer-group"></i> Estrato / Muestra
+                    </span>
+                    <span className="metadata-value">
+                      {ensayoDetails?.estrato_nombre ? (
+                        `${ensayoDetails.estrato_nombre} (Orden: ${infoGeneral.estrato})`
+                      ) : (
+                        `Estrato ${infoGeneral.estrato}`
+                      )}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-arrows-up-down"></i> Profundidad (Rango)
+                    </span>
+                    <span className="metadata-value">
+                      {hasValue(ensayoDetails?.estrato_profundidad_min) && hasValue(ensayoDetails?.estrato_profundidad_max) ? (
+                        `${Number(ensayoDetails.estrato_profundidad_min).toFixed(2)} m - ${Number(ensayoDetails.estrato_profundidad_max).toFixed(2)} m`
+                      ) : (
+                        <span className="metadata-na">N/A</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-globe"></i> Coordenadas UTM
+                    </span>
+                    <span className="metadata-value metadata-value-coordinates">
+                      {ensayoDetails?.coordenada_este && ensayoDetails?.coordenada_norte ? (
+                        <div>
+                          <span style={{color: '#64748b', fontWeight: 600}}>E:</span> {ensayoDetails.coordenada_este}
+                          <br />
+                          <span style={{color: '#64748b', fontWeight: 600}}>N:</span> {ensayoDetails.coordenada_norte}
+                        </div>
+                      ) : (
+                        <span className="metadata-na">N/A</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              ) : ensayoDetails?.parent_type === "fuente_agua" ? (
+                <div className="metadata-grid">
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-tint"></i> Fuente de Agua
+                    </span>
+                    <span className="metadata-value">
+                      {ensayoDetails?.fuente_agua_nombre || <span className="metadata-na">N/A</span>}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-route"></i> Progresiva Ref.
+                    </span>
+                    <span className="metadata-value">
+                      {ensayoDetails?.fa_progresiva_ref_codigo
+                        ? formatProgresiva(ensayoDetails.fa_progresiva_ref_codigo)
+                        : <span className="metadata-na">N/A</span>}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-arrows-alt-h"></i> Desplazamiento
+                    </span>
+                    <span className="metadata-value">
+                      {hasValue(ensayoDetails?.fa_desplazamiento_km)
+                        ? `${ensayoDetails.fa_desplazamiento_km} km`
+                        : <span className="metadata-na">N/A</span>}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-map-signs"></i> Lado
+                    </span>
+                    <span className="metadata-value">
+                      {ensayoDetails?.fa_lado || <span className="metadata-na">N/A</span>}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-vials"></i> N° de Muestras / Testigos
+                    </span>
+                    <span className="metadata-value">
+                      {ensayoDetails?.fa_total_muestras != null
+                        ? ensayoDetails.fa_total_muestras
+                        : <span className="metadata-na">N/A</span>}
+                    </span>
+                  </div>
+                  <div className="metadata-item">
+                    <span className="metadata-label">
+                      <i className="fas fa-globe"></i> Coordenadas UTM
+                    </span>
+                    <span className="metadata-value metadata-value-coordinates">
+                      {ensayoDetails?.coordenada_este && ensayoDetails?.coordenada_norte ? (
+                        <div>
+                          <span style={{color: '#64748b', fontWeight: 600}}>E:</span> {ensayoDetails.coordenada_este}
+                          <br />
+                          <span style={{color: '#64748b', fontWeight: 600}}>N:</span> {ensayoDetails.coordenada_norte}
+                        </div>
+                      ) : (
+                        <span className="metadata-na">N/A</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
               ) : (
-                <p>Ubicación no disponible</p>
+                <p className="text-center text-muted py-4">Ubicación no disponible</p>
               )}
             </div>
           </div>

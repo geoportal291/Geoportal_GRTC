@@ -656,7 +656,7 @@ useEffect(() => {
               borderRadius: '8px',
               boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
               padding: '20px',
-              marginTop: '20px' // Add margin-top to separate it from the stations box
+              marginTop: '20px' 
             }}>
               <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px' }}>
                 Gráficos e Información de Estación
@@ -838,7 +838,7 @@ useEffect(() => {
           </div>
                    {currentStationData && (
             <button
-              onClick={() => alert('Descargar Reporte Clicked!')} // Placeholder for future functionality
+              onClick={() => alert('Descargar Reporte Clicked! no funcional por el momento V2 trabajado')} // Placeholder for future functionality
               style={{
                   backgroundColor: '#28a745',
                   color: 'white',

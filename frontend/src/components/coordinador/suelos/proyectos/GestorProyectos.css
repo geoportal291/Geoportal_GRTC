@@ -1,19 +1,19 @@
 /* GestorProyectos.css - Blue Theme & Thinner Panel - V2 */
 
-/* Color Variables - Blue Theme */
+/* Color Variables - Slate Navy Theme */
 :root {
-    --primary: #0d47a1; /* Dark Blue */
-    --secondary: #1976d2; /* Medium Blue */
-    --accent: #42a5f5; /* Light Blue */
-    --light: #cbeaff; /* Very Light Blue */
-    --dark: #0d47a1; /* Alias for primary */
-    --gray: #607d8b;
-    --light-gray: #e0e0e0;
+    --primary: #1e293b; /* Slate 800 - matches navbar */
+    --secondary: #1e3a8a; /* Navy Blue */
+    --accent: #3b82f6; /* Accent Blue */
+    --light: #f1f5f9; /* Soft grey/blue background */
+    --dark: #0f172a; /* Slate 900 - matches darker navbar */
+    --gray: #64748b;
+    --light-gray: #e2e8f0;
     --shadow: 0 4px 6px rgba(0,0,0,0.1);
     --radius: 8px;
-    --info: #2196f3;
-    --danger: #f44336;
-    --header-background: #86c1e0; /* New variable for header background color */
+    --info: #3b82f6;
+    --danger: #ef4444;
+    --header-background: #1e293b;
 }
 
 .gestor-proyectos-container {
@@ -101,8 +101,8 @@
 
 .tramo-list-item:hover {
     background-color: var(--light);
-    color: var(--primary);
-    border-color: #347fa7   ;
+    color: var(--secondary);
+    border-color: var(--secondary);
 }
 
 .tramo-list-item.active {
@@ -114,12 +114,12 @@
 /* Right Panel */
 .panel-header {
     padding: 12px 25px; /* Más compacto */
-    background: linear-gradient(to bottom, #ffffff, #f8fafc); /* Gradiente suave */
-    color: #1e293b; /* Texto pizarra oscuro */
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); /* Azul marino a juego con el navbar */
+    color: #ffffff; /* Texto en blanco para alto contraste */
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 2px solid #0f172a;
     gap: 20px;
 }
 
@@ -171,11 +171,12 @@
 }
 
 .panel-header h2 {
-    color: var(--dark);
-    font-size: 1.5rem;
+    color: #ffffff; /* Título blanco */
+    font-size: 1.35rem;
     display: flex;
     align-items: center;
     gap: 10px;
+    margin: 0;
 }
 
 .btn {
@@ -193,7 +194,7 @@
 }
 
 .btn:hover {
-    background-color: #0b3b84;
+    background-color: var(--secondary);
 }
 
 .tabs {

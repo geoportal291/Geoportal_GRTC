@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import {
   LayersControl,
@@ -13,6 +13,7 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../invvial/ExternalView.css';
+import axiosInstance from '../../../../api/axios';
 import {
   enrichEntitiesWithMapData,
   formatDate,
@@ -310,6 +311,23 @@ const TraficoV2External = ({ projectName, dataset, isLoading, error, onBack, onS
   const [rightOpen, setRightOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [rutasKml, setRutasKml] = useState([]);
+
+  useEffect(() => {
+    let ignore = false;
+    const fetchRutaKml = async () => {
+      try {
+        const response = await axiosInstance.get('/api/ruta-kml');
+        if (!ignore) {
+          setRutasKml(response.data || []);
+        }
+      } catch (err) {
+        console.warn('No se pudo cargar la ruta KML global en vista externa de trafico:', err);
+      }
+    };
+    fetchRutaKml();
+    return () => { ignore = true; };
+  }, []);
 
   const stations = useMemo(() => enrichEntitiesWithMapData(dataset.stations), [dataset.stations]);
   const sections = useMemo(() => enrichEntitiesWithMapData(dataset.sections), [dataset.sections]);
@@ -499,6 +517,17 @@ const TraficoV2External = ({ projectName, dataset, isLoading, error, onBack, onS
 
           {mapBounds && <FitBounds bounds={mapBounds} />}
           <CoordsBar />
+
+          {/* Trazado del Proyecto (ruta global) - Siempre visible */}
+          {rutasKml.map((ruta, idx) => (
+            ruta.positions && ruta.positions.length > 0 && (
+              <Polyline 
+                key={`ruta-global-${idx}`} 
+                positions={ruta.positions} 
+                pathOptions={{ color: '#ef4444', weight: 5, zIndex: 900 }} 
+              />
+            )
+          ))}
 
           {/* Station markers */}
           {mappedStations.map((entity) => (

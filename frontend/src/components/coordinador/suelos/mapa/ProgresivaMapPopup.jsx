@@ -55,6 +55,14 @@ const ProgresivaMapPopup = ({ progresiva, onNavigate, token }) => {
     const isFirst = currentIndex === 0;
     const isLast = !hasImages || currentIndex === imagenes.length - 1;
 
+    const handleClosePopup = (e) => {
+        e.stopPropagation();
+        const mapContainer = e.target.closest('.leaflet-container');
+        if (mapContainer && mapContainer._leaflet_map) {
+            mapContainer._leaflet_map.closePopup();
+        }
+    };
+
     const handleViewDetail = () => {
         if (onNavigate) {
             onNavigate(progresiva);
@@ -93,6 +101,9 @@ const ProgresivaMapPopup = ({ progresiva, onNavigate, token }) => {
                 <span className="cmp-title" title={progresiva.nombre}>
                     {progresiva.nombre?.toUpperCase() || 'PROGRESIVA'}
                 </span>
+                <button className="cmp-close-btn" onClick={handleClosePopup} title="Cerrar">
+                    <i className="fas fa-times"></i>
+                </button>
             </div>
 
             {/* Gallery Section */}

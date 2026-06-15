@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../data/contexts/AuthContext';
 import axiosInstance from '../../api/axios'; // Importar instancia de axios
+import Xarrow, { Xwrapper } from 'react-xarrows';
+import domtoimage from 'dom-to-image';
+import jsPDF from 'jspdf';
 
 export default function DashPrincipal() {
-    const [activeTab, setActiveTab] = useState('tab1');
+    const [activeTab, setActiveTab] = useState('tab4');
     const [showNotifications, setShowNotifications] = useState(false);
     const navigate = useNavigate();
     const { user, selectedProjectName, selectedProjectId } = useAuth();
+    const diagramRef = useRef(null);
 
     // Estados para KPIs
     const [kpiData, setKpiData] = useState({
@@ -100,8 +104,50 @@ export default function DashPrincipal() {
         }
     };
 
+    const handleDownloadPdf = async () => {
+        if (!diagramRef.current) return;
+        try {
+            // Usamos dom-to-image porque html2canvas suele tener problemas con los SVGs absolutos de react-xarrows
+            const scale = 2; // Para mejor resolución
+            const node = diagramRef.current;
+            
+            const style = {
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+                width: `${node.offsetWidth}px`,
+                height: `${node.offsetHeight}px`
+            };
+
+            const param = {
+                height: node.offsetHeight * scale,
+                width: node.offsetWidth * scale,
+                quality: 1,
+                style,
+                bgcolor: '#ffffff'
+            };
+
+            const imgData = await domtoimage.toPng(node, param);
+            
+            const pdf = new jsPDF('landscape', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            
+            const img = new Image();
+            img.src = imgData;
+            
+            await new Promise((resolve) => {
+                img.onload = resolve;
+            });
+            
+            const pdfHeight = (img.height * pdfWidth) / img.width;
+            pdf.addImage(imgData, 'PNG', 0, 10, pdfWidth, pdfHeight);
+            pdf.save('Diagrama_Procesos.pdf');
+        } catch (error) {
+            console.error('Error generating PDF', error);
+        }
+    };
+
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-white font-inter">
+        <div className="flex flex-col h-full overflow-hidden bg-slate-50 font-inter">
             {/* Header personalizado del diseño nuevo */}
             <header className="bg-white border-b border-gray-200 h-20 flex items-center justify-between px-8 shrink-0 z-20 shadow-sm relative">
                 <div>
@@ -194,6 +240,15 @@ export default function DashPrincipal() {
                 {/* Barra de Pestañas */}
                 <div className="bg-gray-50 border-b border-gray-200 px-8 pt-6 pb-0 shrink-0">
                     <div className="flex gap-2">
+                        <button
+                            onClick={() => handleTabChange('tab4')}
+                            className={`px-6 py-3 rounded-t-lg font-bold text-sm transition-all relative top-[1px] z-10 ${activeTab === 'tab4'
+                                ? 'bg-white text-blue-900 border-t border-l border-r border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.02)]'
+                                : 'bg-gray-200 text-gray-500 border border-transparent hover:bg-gray-300 hover:text-gray-700'
+                                }`}
+                        >
+                            Diagrama de Procesos
+                        </button>
                         <button
                             onClick={() => handleTabChange('tab1')}
                             className={`px-6 py-3 rounded-t-lg font-bold text-sm transition-all relative top-[1px] z-10 ${activeTab === 'tab1'
@@ -498,6 +553,253 @@ export default function DashPrincipal() {
                                     </label>
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Contenido TAB 4: Flujo de Procesos */}
+                    {activeTab === 'tab4' && (
+                        <div className="animate-fadeIn bg-white p-6 rounded-xl border border-gray-200 shadow-sm overflow-x-auto relative">
+                            <div className="flex justify-end mb-4 min-w-[1350px]">
+                                <button onClick={handleDownloadPdf} className="bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-4 py-2 rounded-lg border border-red-200 shadow-sm font-bold flex items-center gap-2 transition-colors">
+                                    <i className="fa-solid fa-file-pdf text-lg"></i> Generar PDF
+                                </button>
+                            </div>
+                            <Xwrapper>
+                                <div className="w-[1350px] relative bg-white p-2" ref={diagramRef}>
+                                    {/* Header */}
+                                    <div className="flex bg-[#2c3e50] text-white font-bold text-xs text-center uppercase tracking-wider rounded-t-lg overflow-hidden">
+                                        <div className="w-12 bg-[#1a252f] shrink-0"></div>
+                                        <div className="w-[414px] py-3 border-r border-[#34495e]">Estudios Básicos Ingeniería</div>
+                                        <div className="w-[600px] py-3 border-r border-[#34495e]">Diseño en Ingeniería</div>
+                                        <div className="w-36 py-3 border-r border-[#34495e]">Costos</div>
+                                        <div className="w-36 py-3">Aprobación</div>
+                                    </div>
+                                    
+                                    {/* Sub Header Procedimientos */}
+                                    <div className="flex bg-gray-100 text-gray-600 text-[10px] font-bold text-center uppercase border-b border-l border-r border-gray-300">
+                                        <div className="w-12 shrink-0 border-r border-gray-300"></div>
+                                        <div className="w-[414px] py-2 border-r border-gray-300 border-dashed">Procedimiento 2<br/>160 Días</div>
+                                        <div className="w-[150px] py-2 border-r border-gray-300 border-dashed">Procedimiento 3<br/>60 Días</div>
+                                        <div className="w-[150px] py-2 border-r border-gray-300 border-dashed">Procedimiento 4<br/>70 Días</div>
+                                        <div className="w-[150px] py-2 border-r border-gray-300 border-dashed">Procedimiento 5<br/>160 Días</div>
+                                        <div className="w-[150px] py-2 border-r border-gray-300 border-dashed">Procedimiento 6<br/>30 Días</div>
+                                        <div className="w-36 py-2 border-r border-gray-300 border-dashed">Procedimiento 7<br/>50 Días</div>
+                                        <div className="w-36 py-2"></div>
+                                    </div>
+
+                                    {/* Body Rows */}
+                                    <div className="border-l border-r border-b border-gray-300 flex flex-col bg-gray-50/30">
+                                        {/* Row 1: Estudios Básicos */}
+                                        <div className="flex border-b border-gray-300 relative min-h-[400px]">
+                                            <div className="w-12 shrink-0 bg-gray-200 border-r border-gray-300 flex items-center justify-center relative">
+                                                <span className="transform -rotate-90 whitespace-nowrap font-bold text-gray-600 tracking-widest text-xs">ESTUDIOS BÁSICOS INGENIERÍA</span>
+                                            </div>
+                                            <div className="w-[414px] border-r border-gray-300 border-dashed p-4 flex flex-col gap-3 relative">
+                                                <div className="flex flex-row items-center justify-between w-full gap-3">
+                                                    <div className="flex-1 bg-white border border-gray-200 p-2 rounded text-[9px] shadow-sm text-left">
+                                                        <div className="font-bold text-blue-600 mb-0.5">AVANCE: 85%</div>
+                                                        <p className="text-gray-500 font-normal leading-tight">Estado: En ejecución.<br/>Levantamiento de puntos de control al 85%.</p>
+                                                    </div>
+                                                    <div id="n_geo" onClick={() => navigate('/ingenieria/georeferenciacion')} className="shrink-0 relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 shadow-sm cursor-pointer hover:bg-blue-600 transition">
+                                                        GEOREFERENCIACION
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-row items-center justify-between w-full gap-3">
+                                                    <div className="flex-1 bg-white border border-gray-200 p-2 rounded text-[9px] shadow-sm text-left">
+                                                        <div className="font-bold text-blue-600 mb-0.5">AVANCE: 60%</div>
+                                                        <p className="text-gray-500 font-normal leading-tight">Estado: Próximamente.<br/>Equipos topográficos asignados y en fase inicial.</p>
+                                                    </div>
+                                                    <div id="n_topo" onClick={() => navigate('/ingenieria/topografia')} className="shrink-0 relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 shadow-sm cursor-pointer hover:bg-blue-600 transition">
+                                                        TOPOGRAFIA
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-row items-center justify-between w-full gap-3">
+                                                    <div className="flex-1 bg-white border border-gray-200 p-2 rounded text-[9px] shadow-sm text-left">
+                                                        <div className="font-bold text-blue-600 mb-0.5">AVANCE: 20%</div>
+                                                        <p className="text-gray-500 font-normal leading-tight">Estado: En Trabajo.<br/>Mapeo geológico superficial en progreso.</p>
+                                                    </div>
+                                                    <div id="n_geol" onClick={() => navigate('/ingenieria/geologia')} className="shrink-0 relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 shadow-sm cursor-pointer hover:bg-blue-600 transition">
+                                                        GEOLOGIA
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-row items-center justify-between w-full gap-3">
+                                                    <div className="flex-1 bg-white border border-gray-200 p-2 rounded text-[9px] shadow-sm text-left">
+                                                        <div className="font-bold text-blue-600 mb-0.5">AVANCE: 40%</div>
+                                                        <p className="text-gray-500 font-normal leading-tight">Estado: Próximamente.<br/>Recopilación de información pluviométrica.</p>
+                                                    </div>
+                                                    <div id="n_hidro" onClick={() => navigate('/ingenieria/hidrologia')} className="shrink-0 relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 shadow-sm cursor-pointer hover:bg-blue-600 transition">
+                                                        HIDROLOGIA
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-row items-center justify-between w-full gap-3">
+                                                    <div className="flex-1 bg-white border border-gray-200 p-2 rounded text-[9px] shadow-sm text-left">
+                                                        <div className="font-bold text-blue-600 mb-0.5">AVANCE: 90%</div>
+                                                        <p className="text-gray-500 font-normal leading-tight">Estado: Operativo.<br/>Estaciones de aforo funcionando y transmitiendo datos.</p>
+                                                    </div>
+                                                    <div id="n_traf" onClick={() => navigate('/coordinador/ingenieria/trafico/trafico')} className="shrink-0 relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 shadow-sm cursor-pointer hover:bg-blue-600 transition">
+                                                        TRAFICO
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-row items-center justify-between w-full gap-3">
+                                                    <div className="flex-1 bg-white border border-gray-200 p-2 rounded text-[9px] shadow-sm text-left">
+                                                        <div className="font-bold text-blue-600 mb-0.5">AVANCE: 70%</div>
+                                                        <p className="text-gray-500 font-normal leading-tight">Estado: Operativo.<br/>Relevamiento de obras de arte y señales avanzando.</p>
+                                                    </div>
+                                                    <div id="n_invvial" onClick={() => navigate('/ingenieria/inventario-vial')} className="shrink-0 relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 shadow-sm cursor-pointer hover:bg-blue-600 transition">
+                                                        INV. VIAL
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-row items-center justify-between w-full gap-3">
+                                                    <div className="flex-1 bg-white border border-gray-200 p-2 rounded text-[9px] shadow-sm text-left">
+                                                        <div className="font-bold text-blue-600 mb-0.5">AVANCE: 30%</div>
+                                                        <p className="text-gray-500 font-normal leading-tight">Estado: Próximamente.<br/>Auditoría de puntos críticos iniciada.</p>
+                                                    </div>
+                                                    <div id="n_segvial" onClick={() => navigate('/ingenieria/seguridad-vial')} className="shrink-0 relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 shadow-sm cursor-pointer hover:bg-blue-600 transition">
+                                                        SEG. VIAL
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-row items-center justify-between w-full gap-3">
+                                                    <div className="flex-1 bg-white border border-gray-200 p-2 rounded text-[9px] shadow-sm text-left">
+                                                        <div className="font-bold text-blue-600 mb-0.5">AVANCE: 50%</div>
+                                                        <p className="text-gray-500 font-normal leading-tight">Estado: En Trabajo.<br/>Ejecución de calicatas y toma de muestras de suelo.</p>
+                                                    </div>
+                                                    <div id="n_ems1" onClick={() => navigate('/coordinador/recoleccion-datos')} className="shrink-0 relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 shadow-sm cursor-pointer hover:bg-blue-600 transition">
+                                                        EMS
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {/* Proc 3 */}
+                                            <div className="w-[150px] border-r border-gray-300 border-dashed p-4 flex items-center justify-center relative">
+                                                <div id="n_disgeom" className="relative z-10 bg-gray-400 text-white text-[10px] font-bold py-3 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-gray-500 transition">DISEÑO GEOMETRICO</div>
+                                            </div>
+                                            {/* Proc 4 */}
+                                            <div className="w-[150px] border-r border-gray-300 border-dashed p-4 flex flex-col gap-8 justify-center relative">
+                                                <div id="n_geotecnia" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-3 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">GEOTECNIA</div>
+                                                <div id="n_hidraulica" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-3 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">HIDRAULICA</div>
+                                                <div id="n_ems2" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-3 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">EMS<br/><span className="text-[8px] font-normal">MECANICA DE SUELOS</span></div>
+                                            </div>
+                                            {/* Proc 5 */}
+                                            <div className="w-[150px] border-r border-gray-300 border-dashed p-4 flex flex-col gap-6 justify-center relative">
+                                                <div id="n_drenaje" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">DRENAJE Y PROTECCION</div>
+                                                <div id="n_estruct" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">ESTRUCTURAS Y OBRAS DE ARTE</div>
+                                                <div id="n_mant" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">MANT. Y CONSERVACION</div>
+                                                <div id="n_pav" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">DISEÑO DE PAVIMENTOS</div>
+                                                <div id="n_riesgos" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">GESTION DE RIESGOS</div>
+                                                <div id="n_evar" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">EVAR</div>
+                                            </div>
+                                            {/* Proc 6 */}
+                                            <div className="w-[150px] border-r border-gray-300 border-dashed p-4 flex flex-col gap-12 justify-center relative">
+                                                <div id="n_delim" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-3 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">DELIM. DE DERECHO DE VIA</div>
+                                                <div id="n_disgeom_cons" className="relative z-10 bg-gray-400 text-white text-[10px] font-bold py-3 px-2 rounded text-center w-full shadow-sm mt-4 cursor-pointer hover:bg-gray-500 transition">DISEÑO GEOMETRICO CONSOLIDADO</div>
+                                            </div>
+                                            {/* Proc 7 */}
+                                            <div className="w-36 border-r border-gray-300 border-dashed p-4 flex items-center justify-center relative">
+                                                <div id="n_metrados" className="relative z-10 bg-gray-400 text-white text-[10px] font-bold py-3 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-gray-500 transition">METRADOS Y PRESUPUESTOS</div>
+                                            </div>
+                                            {/* Aprobacion */}
+                                            <div className="w-36 p-4 flex items-center justify-center relative">
+                                                <div id="n_aprob" className="relative z-10 bg-gray-600 text-white text-[10px] font-bold py-3 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-gray-700 transition">APROBACION DE E.T.</div>
+                                            </div>
+                                        </div>
+                                    
+                                    {/* Row 2: Ambiental y Arq */}
+                                    <div className="flex border-b border-gray-300 relative min-h-[140px]">
+                                        <div className="w-12 shrink-0 bg-gray-200 border-r border-gray-300 flex items-center justify-center relative">
+                                            <span className="transform -rotate-90 whitespace-nowrap font-bold text-gray-600 tracking-widest text-xs">AMBIENTAL Y ARQ</span>
+                                        </div>
+                                        <div className="w-[414px] border-r border-gray-300 border-dashed p-4 flex flex-col justify-center gap-4">
+                                            <div id="n_arq" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 mx-auto shadow-sm cursor-pointer hover:bg-blue-600 transition">ARQUEOLOGIA</div>
+                                            <div id="n_estamb" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 mx-auto shadow-sm cursor-pointer hover:bg-blue-600 transition">ESTUDIO AMBIENTAL</div>
+                                        </div>
+                                        <div className="w-[150px] border-r border-gray-300 border-dashed p-4 flex flex-col justify-center gap-4">
+                                            <div id="n_evalpre" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">EVALUACIONES PRELIMINARES</div>
+                                            <div id="n_tramamb" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">TRAMITES AMBIENTALES</div>
+                                        </div>
+                                        <div className="w-[150px] border-r border-gray-300 border-dashed p-4"></div>
+                                        <div className="w-[150px] border-r border-gray-300 border-dashed p-4 flex flex-col justify-center gap-4">
+                                            <div id="n_pma" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">PMA Y CIRA</div>
+                                            <div id="n_sensamb" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">SENSIBILIZACION AMBIENTAL</div>
+                                        </div>
+                                        <div className="w-[150px] border-r border-gray-300 border-dashed p-4 flex items-center">
+                                            <div id="n_plan_afec" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm translate-y-6 cursor-pointer hover:bg-blue-600 transition">PLAN DE AFECTACIONES</div>
+                                        </div>
+                                        <div className="w-36 border-r border-gray-300 border-dashed p-4 flex flex-col items-center justify-center">
+                                            <div id="n_estimpamb" className="relative z-10 bg-gray-400 text-white text-[10px] font-bold py-3 px-2 rounded text-center w-full shadow-sm -translate-y-4 cursor-pointer hover:bg-gray-500 transition">ESTUDIO IMPACTO AMBIENTAL</div>
+                                        </div>
+                                        <div className="w-36 p-4"></div>
+                                    </div>
+                                    
+                                    {/* Row 3: Social */}
+                                    <div className="flex relative min-h-[100px]">
+                                        <div className="w-12 shrink-0 bg-gray-200 border-r border-gray-300 flex items-center justify-center relative">
+                                            <span className="transform -rotate-90 whitespace-nowrap font-bold text-gray-600 tracking-widest text-xs">SOCIAL</span>
+                                        </div>
+                                        <div className="w-[414px] border-r border-gray-300 border-dashed p-4 flex items-center justify-center">
+                                            <div id="n_social" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-3 rounded text-center w-36 shadow-sm cursor-pointer hover:bg-blue-600 transition">SOCIAL</div>
+                                        </div>
+                                        <div className="w-[150px] border-r border-gray-300 border-dashed p-4"></div>
+                                        <div className="w-[150px] border-r border-gray-300 border-dashed p-4"></div>
+                                        <div className="w-[150px] border-r border-gray-300 border-dashed p-4 flex items-center justify-center">
+                                            <div id="n_senssoc1" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">SENSIBILIZACION SOCIAL</div>
+                                        </div>
+                                        <div className="w-[150px] border-r border-gray-300 border-dashed p-4 flex items-center justify-center">
+                                            <div id="n_senssoc2" className="relative z-10 bg-[#2c3e50] text-white text-[10px] font-bold py-2 px-2 rounded text-center w-full shadow-sm cursor-pointer hover:bg-blue-600 transition">SENSIBILIZACION SOCIAL</div>
+                                        </div>
+                                        <div className="w-36 border-r border-gray-300 border-dashed p-4"></div>
+                                        <div className="w-36 p-4"></div>
+                                    </div>
+
+                                </div>
+
+                                {/* Xarrows Connections */}
+                                <Xarrow start="n_topo" end="n_disgeom" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_traf" end="n_disgeom" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_invvial" end="n_disgeom" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_segvial" end="n_disgeom" color="#94a3b8" strokeWidth={2} path="grid" />
+
+                                <Xarrow start="n_geol" end="n_geotecnia" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_hidro" end="n_hidraulica" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_ems1" end="n_ems2" color="#94a3b8" strokeWidth={2} path="grid" />
+
+                                <Xarrow start="n_disgeom" end="n_geotecnia" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_disgeom" end="n_hidraulica" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_disgeom" end="n_ems2" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_disgeom" end="n_disgeom_cons" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_disgeom" end="n_evar" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+
+                                <Xarrow start="n_geotecnia" end="n_drenaje" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_geotecnia" end="n_estruct" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_hidraulica" end="n_drenaje" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_hidraulica" end="n_mant" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_ems2" end="n_pav" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_ems2" end="n_riesgos" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+
+                                <Xarrow start="n_estruct" end="n_delim" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_drenaje" end="n_delim" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_mant" end="n_disgeom_cons" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_pav" end="n_disgeom_cons" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_riesgos" end="n_disgeom_cons" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_evar" end="n_disgeom_cons" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+
+                                <Xarrow start="n_delim" end="n_disgeom_cons" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_disgeom_cons" end="n_metrados" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                <Xarrow start="n_metrados" end="n_aprob" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                
+                                {/* Row 2 connections */}
+                                <Xarrow start="n_arq" end="n_evalpre" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_evalpre" end="n_pma" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_estamb" end="n_tramamb" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_tramamb" end="n_sensamb" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_sensamb" end="n_plan_afec" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_plan_afec" end="n_estimpamb" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_estimpamb" end="n_metrados" color="#94a3b8" strokeWidth={2} path="grid" headSize={4} />
+                                
+                                {/* Row 3 connections */}
+                                <Xarrow start="n_social" end="n_senssoc1" color="#94a3b8" strokeWidth={2} path="grid" />
+                                <Xarrow start="n_senssoc1" end="n_senssoc2" color="#94a3b8" strokeWidth={2} path="grid" />
+
+                                </div>
+                            </Xwrapper>
                         </div>
                     )}
 

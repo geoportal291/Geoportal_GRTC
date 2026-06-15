@@ -59,8 +59,8 @@
                   { "label": "Peso Total =", "source": "formData.peso_total", "format": "0.1", "suffix": " g" },
                   { "label": "Peso de muestra lavada =", "source": "formData.peso_muestra_lavada", "format": "0.1", "suffix": " g" },
                   { "label": "Peso de la Fracción Gruesa =", "source": "formData.peso_fraccion_gruesa", "format": "0.1", "suffix": " g" },
-                  { "label": "Peso de fracción Fina =", "source": "resultados.peso_fina_calculado", "format": "0.1", "suffix": " g", "highlight": true },
-                  { "label": "Peso de la fracción Fina =", "source": "formData.peso_fraccion_fina", "format": "0.1", "suffix": " g" },
+                  { "label": "Peso de fracción Fina =", "source": "resultados.peso_fraccion_fina", "format": "0.1", "suffix": " g", "highlight": true },
+                  { "label": "Peso de la fracción Fina =", "source": "formData.peso_fina_tamizada", "format": "0.1", "suffix": " g" },
                   { "label": "Coeficiente =", "source": "resultados.coeficiente", "format": "0.02", "suffix": "" }
                 ]
               },
@@ -115,17 +115,17 @@
             "title": "Datos para la clasificación AASHTO",
             "fields": [
               { "header": "T.M. Nominal", "source": "resultados.calculated_values.sucs.tm_nominal" },
-              { "header": "% pasa malla N° 10", "source": "resultados.calculated_values.sucs.pasa_10", "format": "0.1" },
-              { "header": "% pasa malla N° 40", "source": "resultados.calculated_values.sucs.pasa_40", "format": "0.1" },
-              { "header": "% pasa malla N° 200", "source": "resultados.calculated_values.sucs.pasa_200", "format": "0.1" }
+              { "header": "% pasa malla N° 10", "source": "resultados.tables.granulometria.malla_10.pasa", "format": "0.1" },
+              { "header": "% pasa malla N° 40", "source": "resultados.tables.granulometria.malla_40.pasa", "format": "0.1" },
+              { "header": "% pasa malla N° 200", "source": "resultados.tables.granulometria.malla_200.pasa", "format": "0.1" }
             ]
           },
           {
             "title": "Datos para la clasificación SUCS",
             "fields": [
-              { "header": "% Grava", "source": "resultados.calculated_values.sucs.porcentaje_grava", "format": "0.1" },
-              { "header": "% Arena", "source": "resultados.calculated_values.sucs.porcentaje_arena", "format": "0.1" },
-              { "header": "% Finos", "source": "resultados.calculated_values.sucs.porcentaje_finos", "format": "0.1" }
+              { "header": "% Grava", "source": "resultados.calculated_values.sucs.grava", "format": "0.1" },
+              { "header": "% Arena", "source": "resultados.calculated_values.sucs.arena", "format": "0.1" },
+              { "header": "% Finos", "source": "resultados.calculated_values.sucs.finos", "format": "0.1" }
             ]
           }
         ],

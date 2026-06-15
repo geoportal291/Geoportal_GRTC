@@ -78,22 +78,36 @@ const ConfirmationModal = ({
     <div className="import-modal-overlay">
       <div className="import-modal-content">
         <h2>Confirmar Importación</h2>
-        <ul>
-          <li>Crear: {summary?.ensayosParaCrear || 0}</li>
-          <li>Actualizar: {summary?.ensayosParaActualizar || 0}</li>
-        </ul>
-        <div className="modal-actions">
-          <button onClick={onClose} className="btn btn-outline">
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            className="btn btn-primary"
-            disabled={loading}
-          >
-            Confirmar
-          </button>
-        </div>
+        {!loading ? (
+          <>
+            <ul>
+              <li>Crear: {summary?.ensayosParaCrear || 0}</li>
+              <li>Actualizar: {summary?.ensayosParaActualizar || 0}</li>
+            </ul>
+            <div className="modal-actions">
+              <button onClick={onClose} className="btn btn-outline" disabled={loading}>
+                Cancelar
+              </button>
+              <button
+                onClick={onConfirm}
+                className="btn btn-primary"
+                disabled={loading}
+              >
+                Confirmar
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="loading-spinner-modal" style={{ padding: "30px 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <div className="loading-spinner" style={{ width: "50px", height: "50px", borderWidth: "5px", marginBottom: "20px" }}></div>
+            <p style={{ fontWeight: "600", fontSize: "1.1em", color: "#2c3e50", textAlign: "center", margin: 0 }}>
+              Los ensayos identificados se están importando con éxito.
+            </p>
+            <p style={{ fontSize: "0.95em", color: "#7f8c8d", marginTop: "8px", textAlign: "center", marginBottom: 0 }}>
+              Por favor, espere un momento...
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -232,6 +246,7 @@ const VistaEnsayosCantera = () => {
   const [isResultsModalOpen, setResultsModalOpen] = useState(false);
   const [selectedAssayForResults, setSelectedAssayForResults] = useState(null);
   const [selectedAssayForDetail, setSelectedAssayForDetail] = useState(null);
+  const [activeObjectiveIndex, setActiveObjectiveIndex] = useState(0);
 
   const [isImportModalOpen, setImportModalOpen] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -290,7 +305,10 @@ const VistaEnsayosCantera = () => {
   );
 
   const isDone = useCallback(
-    (ensayo) => getEnsayoStatus(ensayo) === "COMPLETADO",
+    (ensayo) => {
+      const st = getEnsayoStatus(ensayo);
+      return st === "COMPLETADO" || st === "APROBADO";
+    },
     [getEnsayoStatus],
   );
 
@@ -404,10 +422,30 @@ const VistaEnsayosCantera = () => {
     (a, g) => a + g.ensayos.length,
     0,
   );
-  const done = Object.values(ensayosAgrupados).reduce(
-    (a, g) => a + g.ensayos.filter((e) => isDone(e)).length,
+  const aprobado = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.filter((e) => getEnsayoStatus(e) === "APROBADO").length,
     0,
   );
+  const completado = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.filter((e) => getEnsayoStatus(e) === "COMPLETADO").length,
+    0,
+  );
+  const enProgreso = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.filter((e) => {
+      const st = getEnsayoStatus(e);
+      return st === "EN PROGRESO" || st === "EN_PROGRESO" || st === "EN PROCESO";
+    }).length,
+    0,
+  );
+  const rechazado = Object.values(ensayosAgrupados).reduce(
+    (a, g) => a + g.ensayos.filter((e) => {
+      const st = getEnsayoStatus(e);
+      return st === "RECHAZADO" || st === "INCOMPLETO";
+    }).length,
+    0,
+  );
+  const pendiente = total - aprobado - completado - enProgreso - rechazado;
+  const done = aprobado + completado;
   const colors = [
     "#54a0ca",
     "#28a745",
@@ -472,28 +510,50 @@ const VistaEnsayosCantera = () => {
                 <PieChart>
                   <Pie
                     data={[
-                      { name: "Hecho", value: done },
-                      { name: "Pend", value: total - done },
-                    ]}
+                      { name: "Pendientes", value: pendiente, color: "#eab308" },
+                      { name: "En Progreso", value: enProgreso, color: "#3b82f6" },
+                      { name: "Completados", value: completado, color: "#10b981" },
+                      { name: "Aprobados", value: aprobado, color: "#059669" },
+                      { name: "Rechazados", value: rechazado, color: "#ef4444" },
+                    ].filter((item) => item.value > 0)}
                     cx="50%"
                     cy="50%"
                     innerRadius={40}
                     outerRadius={60}
                     paddingAngle={5}
+                    minAngle={15}
                     dataKey="value"
                   >
-                    <Cell fill="#28a745" />
-                    <Cell fill="#ffc107" />
+                    {[
+                      { name: "Pendientes", value: pendiente, color: "#eab308" },
+                      { name: "En Progreso", value: enProgreso, color: "#3b82f6" },
+                      { name: "Completados", value: completado, color: "#10b981" },
+                      { name: "Aprobados", value: aprobado, color: "#059669" },
+                      { name: "Rechazados", value: rechazado, color: "#ef4444" },
+                    ]
+                      .filter((item) => item.value > 0)
+                      .map((entry, idx) => (
+                        <Cell key={`cell-${idx}`} fill={entry.color} />
+                      ))}
                   </Pie>
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
               <div className="chart-labels">
                 <div className="label-item">
-                  <span className="dot dot-success"></span> {done} Hechos
+                  <span className="dot" style={{ backgroundColor: "#eab308" }}></span> {pendiente} Pendientes
                 </div>
                 <div className="label-item">
-                  <span className="dot dot-warning"></span> {total - done} Pend.
+                  <span className="dot" style={{ backgroundColor: "#3b82f6" }}></span> {enProgreso} En Progreso
+                </div>
+                <div className="label-item">
+                  <span className="dot" style={{ backgroundColor: "#10b981" }}></span> {completado} Completados
+                </div>
+                <div className="label-item">
+                  <span className="dot" style={{ backgroundColor: "#059669" }}></span> {aprobado} Aprobados
+                </div>
+                <div className="label-item">
+                  <span className="dot" style={{ backgroundColor: "#ef4444" }}></span> {rechazado} Rechazados
                 </div>
               </div>
             </div>
@@ -516,33 +576,90 @@ const VistaEnsayosCantera = () => {
             </div>
           </div>
           <div className="analitica-col">
-            <div className="stat-card-premium milestone-card">
-              <div className="stat-header">
-                <span className="stat-label">PRÓXIMO HITO</span>
-                <i className="fas fa-flag-checkered stat-icon"></i>
-              </div>
-              <div className="milestone-content">
-                {(() => {
-                  const h = Object.values(ensayosAgrupados)
-                    .map((g) => ({
-                      desc: g.descripcion,
-                      p:
-                        g.ensayos.length -
-                        g.ensayos.filter((e) => isDone(e)).length,
-                    }))
-                    .filter((i) => i.p > 0)
-                    .sort((a, b) => a.p - b.p)[0];
-                  return h ? (
-                    <>
-                      <div className="milestone-name">{h.desc}</div>
-                      <div className="milestone-sub">Faltan {h.p} ensayos</div>
-                    </>
-                  ) : (
-                    <div className="milestone-name">Completado</div>
-                  );
-                })()}
-              </div>
-            </div>
+            {(() => {
+              const objectives = Object.values(ensayosAgrupados).map((g) => {
+                const totalGrupo = g.ensayos.length;
+                const hechosGrupo = g.ensayos.filter((e) => isDone(e)).length;
+                const pendGrupo = totalGrupo - hechosGrupo;
+                return {
+                  desc: g.descripcion,
+                  pend: pendGrupo,
+                  hechos: hechosGrupo,
+                  total: totalGrupo
+                };
+              });
+
+              const safeIndex = activeObjectiveIndex < objectives.length ? activeObjectiveIndex : 0;
+
+              return (
+                <div className="stat-card-premium milestone-card carrusel-card">
+                  <div className="stat-header">
+                    <span className="stat-label">OBJETIVOS DE ENSAYOS</span>
+                    <i className="fas fa-flag-checkered stat-icon"></i>
+                  </div>
+                  <div className="milestone-carrusel-wrapper">
+                    {objectives.length > 0 ? (
+                      <>
+                        <button
+                          className="carrusel-btn prev"
+                          onClick={() => setActiveObjectiveIndex((prev) => (prev === 0 ? objectives.length - 1 : prev - 1))}
+                          title="Objetivo anterior"
+                        >
+                          <i className="fas fa-chevron-left"></i>
+                        </button>
+                        
+                        <div className="milestone-content carrusel-slide">
+                          <div className="milestone-name">{objectives[safeIndex]?.desc}</div>
+                          <div className="milestone-sub">
+                            {objectives[safeIndex]?.pend > 0 ? (
+                              <span className="objective-pending-label">
+                                Faltan {objectives[safeIndex]?.pend} de {objectives[safeIndex]?.total} ensayos
+                              </span>
+                            ) : (
+                              <span className="objective-completed-label">
+                                <i className="fas fa-check-circle"></i> ¡Meta Lograda!
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="objective-mini-bar-container">
+                            <div 
+                              className="objective-mini-bar-fill" 
+                              style={{ 
+                                width: `${objectives[safeIndex]?.total > 0 ? (objectives[safeIndex]?.hechos / objectives[safeIndex]?.total) * 100 : 0}%`,
+                                backgroundColor: objectives[safeIndex]?.pend > 0 ? "#54a0ca" : "#28a745"
+                              }}
+                            ></div>
+                          </div>
+                          
+                          <div className="carrusel-dots">
+                            {objectives.map((_, idx) => (
+                              <span 
+                                key={idx} 
+                                className={`carrusel-dot ${idx === safeIndex ? 'active' : ''}`}
+                                onClick={() => setActiveObjectiveIndex(idx)}
+                              ></span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <button
+                          className="carrusel-btn next"
+                          onClick={() => setActiveObjectiveIndex((prev) => (prev === objectives.length - 1 ? 0 : prev + 1))}
+                          title="Siguiente objetivo"
+                        >
+                          <i className="fas fa-chevron-right"></i>
+                        </button>
+                      </>
+                    ) : (
+                      <div className="milestone-content">
+                        <div className="milestone-name">Sin objetivos configurados</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -550,6 +667,14 @@ const VistaEnsayosCantera = () => {
       <main className="ensayos-grid">
         {Object.entries(ensayosAgrupados).map(([key, grupo], index) => {
           const accent = colors[index % colors.length];
+          const hechosGrupo = grupo.ensayos.filter((e) => isDone(e)).length;
+          const totalGrupo = grupo.ensayos.length;
+          const pctGrupo = totalGrupo > 0 ? (hechosGrupo / totalGrupo) * 100 : 0;
+          const rechazadosGrupo = grupo.ensayos.filter((e) => {
+            const st = getEnsayoStatus(e);
+            return st === "RECHAZADO" || st === "INCOMPLETO";
+          }).length;
+
           return (
             <div
               className="card-ensayo-tipo"
@@ -561,8 +686,16 @@ const VistaEnsayosCantera = () => {
                   <h2>{grupo.descripcion}</h2>
                   <div className="header-subtitle">
                     <span className="ensayo-count-badge">
-                      {grupo.ensayos.length} ensayos
+                      {totalGrupo} ensayos
                     </span>
+                    <span className="mini-progress-text">
+                      {hechosGrupo}/{totalGrupo} completados
+                    </span>
+                    {rechazadosGrupo > 0 && (
+                      <span className="mini-rejected-badge">
+                        <i className="fas fa-times-circle"></i> {rechazadosGrupo} rechaz.
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="header-actions-main">
@@ -595,6 +728,14 @@ const VistaEnsayosCantera = () => {
                   <i className="fas fa-chevron-right arrow-indicator"></i>
                 </div>
               </div>
+
+              <div className="card-progress-bar">
+                <div
+                  className="card-progress-fill"
+                  style={{ width: `${pctGrupo}%` }}
+                ></div>
+              </div>
+
               <div className="card-content">
                 {grupo.ensayos.slice(0, 5).map((ensayo) => (
                   <div

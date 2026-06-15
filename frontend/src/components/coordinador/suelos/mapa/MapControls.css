@@ -308,3 +308,191 @@
     gap: 10px;
     margin-bottom: 10px;
 }
+
+/* ESTILOS HORIZONTALES PREMIUM PARA VISTA EXTERNA */
+.horizontal-controls-premium {
+    display: flex;
+    flex-direction: row !important;
+    background: rgba(15, 23, 42, 0.95) !important; /* Mismo fondo azul oscuro de los botones Salir/Volver */
+    border-radius: 8px !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+    overflow: hidden;
+    border: 1px solid #334155 !important;
+    height: 44px !important;
+    align-items: center;
+    width: auto !important;
+    margin: 0 !important; /* Quitar márgenes por defecto de Leaflet */
+}
+
+.horizontal-controls-premium .leaflet-control-custom-button-premium {
+    width: 44px !important;
+    height: 44px !important;
+    border-bottom: none !important;
+    border-right: 1px solid #334155 !important;
+    color: #94a3b8 !important;
+}
+
+.horizontal-controls-premium .leaflet-control-custom-button-premium:last-child {
+    border-right: none !important;
+}
+
+.horizontal-controls-premium .leaflet-control-custom-button-premium:hover {
+    background-color: #1e293b !important;
+    color: white !important;
+}
+
+.horizontal-controls-premium .leaflet-control-custom-button-premium.active-tool {
+    background: rgba(37, 99, 235, 0.9) !important;
+    color: white !important;
+}
+
+/* POPOVER PARA LAYOUT HORIZONTAL (ABRE HACIA ARRIBA) */
+.horizontal-popover .map-popover-premium {
+    margin-bottom: 5px !important;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3) !important;
+    animation: popPopoverUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+
+@keyframes popPopoverUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.horizontal-popover .map-popover-premium::before {
+    left: 20px !important;
+    top: auto !important;
+    bottom: -8px !important;
+    border-left: 8px solid transparent !important;
+    border-right: 8px solid transparent !important;
+    border-top: 8px solid var(--popover-color) !important;
+    border-bottom: none !important;
+}
+
+/* DESPLAZAMIENTO DE CONTROLES DERECHOS CUANDO LA BARRA LATERAL ESTÁ ABIERTA */
+.suelos-map-wrapper.external-view-active .leaflet-right {
+    right: 20px !important;
+    transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.suelos-map-wrapper.external-view-active.sidebar-open-shift .leaflet-right {
+    right: 420px !important;
+}
+
+.suelos-map-wrapper.external-view-active .leaflet-right .leaflet-control {
+    margin-right: 0 !important;
+}
+
+/* OCULTAR ZOOM SUPERIOR IZQUIERDO DUPLICADO EN VISTA EXTERNA */
+.external-view-active .leaflet-left .leaflet-control-zoom {
+    display: none !important;
+}
+
+/* ==========================================================================
+   TEMA PREMIUM AZUL MARINO PARA CONTROLES DE LEAFLET EN VISTA EXTERNA
+   ========================================================================== */
+
+/* Botones de Zoom (+ / -) */
+.suelos-map-wrapper .leaflet-control-zoom {
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+    width: 44px !important; /* MATCH RESET BUTTON WIDTH! */
+}
+
+.suelos-map-wrapper .leaflet-control-zoom a {
+    background-color: rgba(15, 23, 42, 0.95) !important; /* Azul marino / pizarra oscuro */
+    color: #94a3b8 !important; /* Letras/iconos claros */
+    width: 44px !important; /* MATCH RESET BUTTON WIDTH! */
+    height: 44px !important; /* MATCH RESET BUTTON HEIGHT! */
+    line-height: 44px !important;
+    font-size: 1.2rem !important;
+    border-bottom: 1px solid #334155 !important;
+    transition: all 0.2s ease !important;
+}
+
+.suelos-map-wrapper .leaflet-control-zoom a:last-child {
+    border-bottom: none !important;
+}
+
+.suelos-map-wrapper .leaflet-control-zoom a:hover {
+    background-color: #1e293b !important;
+    color: white !important;
+}
+
+/* Control de Capas (LayersControl) */
+.suelos-map-wrapper .leaflet-control-layers {
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+    border-radius: 8px !important;
+    background-color: rgba(15, 23, 42, 0.95) !important;
+    overflow: hidden;
+    transition: all 0.2s ease !important;
+}
+
+.suelos-map-wrapper .leaflet-control-layers-toggle {
+    background-color: rgba(15, 23, 42, 0.95) !important;
+    width: 44px !important;
+    height: 44px !important;
+    background-size: 26px 26px !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+}
+
+.suelos-map-wrapper .leaflet-control-layers-toggle:hover {
+    background-color: #1e293b !important;
+}
+
+/* Cuando el control de capas está expandido */
+.suelos-map-wrapper .leaflet-control-layers-expanded {
+    padding: 12px !important;
+    background-color: rgba(15, 23, 42, 0.95) !important;
+    color: #e2e8f0 !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.85rem !important;
+    border: 1px solid #334155 !important;
+}
+
+.suelos-map-wrapper .leaflet-control-layers-expanded label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-bottom: 6px !important;
+    cursor: pointer !important;
+    color: #cbd5e1 !important;
+}
+
+.suelos-map-wrapper .leaflet-control-layers-expanded label:last-child {
+    margin-bottom: 0 !important;
+}
+
+.suelos-map-wrapper .leaflet-control-layers-expanded input {
+    accent-color: #2563eb !important; /* Checkbox azul premium */
+}
+
+/* Botón de centrado general del mapa (Estilo Azul Marino Premium) */
+.btn-compress-center-premium {
+    background-color: rgba(15, 23, 42, 0.95) !important;
+    color: #94a3b8 !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+    border-radius: 8px !important;
+    width: 44px !important;
+    height: 44px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1), bottom 0.3s ease, background-color 0.2s, color 0.2s, transform 0.2s !important;
+}
+
+.btn-compress-center-premium:hover {
+    background-color: #1e293b !important;
+    color: white !important;
+    transform: scale(1.05) !important;
+}

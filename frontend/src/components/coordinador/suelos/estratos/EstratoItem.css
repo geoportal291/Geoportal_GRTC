@@ -4,12 +4,12 @@
 
 /* Variables de tema (se pueden ajustar o heredar) */
 :root {
-    --estrato-primary-color: #0d47a1;
-    --estrato-secondary-color: #1976d2;
-    --estrato-accent-color: #42a5f5;
-    --estrato-light-color: #eaf3fa;
-    --estrato-gray-color: #607d8b;
-    --estrato-light-gray-color: #e0e0e0;
+    --estrato-primary-color: #1e293b;
+    --estrato-secondary-color: #1e3a8a;
+    --estrato-accent-color: #3b82f6;
+    --estrato-light-color: #f1f5f9;
+    --estrato-gray-color: #64748b;
+    --estrato-light-gray-color: #e2e8f0;
     --estrato-radius: 8px;
     --estrato-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }

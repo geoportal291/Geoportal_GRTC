@@ -16,74 +16,80 @@ const defaultSubtabByTopLevel = {
   reporte: REPORT_SUBTABS[0].id
 };
 
-const TraficoV2Internal = ({
-  projectName,
-  projectId,
-  dataset,
-  isLoading,
-  error,
-  onReload,
-  onBack,
-  onSwitchMode
-}) => {
-  const [activeTopTab, setActiveTopTab] = useState('resumen');
-  const [activeSubTab, setActiveSubTab] = useState(defaultSubtabByTopLevel.resumen);
-
-  const currentSubTabs = useMemo(() => {
-    if (activeTopTab === 'procesamiento') return PROCESSING_SUBTABS;
-    if (activeTopTab === 'reporte') return REPORT_SUBTABS;
-    return SUMMARY_SUBTABS;
-  }, [activeTopTab]);
-
-  const handleTopTabChange = (nextTopTab) => {
-    setActiveTopTab(nextTopTab);
-    setActiveSubTab(defaultSubtabByTopLevel[nextTopTab]);
-  };
-
-  const modeOptions = [
-    {
-      id: 'internal',
-      label: 'Gestión Interna',
-      active: true,
-      onClick: onSwitchMode
-    },
-    {
-      id: 'external',
-      label: 'Vista Externa',
-      active: false,
-      onClick: onSwitchMode
-    }
-  ];
-
-  const renderCurrentView = () => {
-    if (isLoading) {
-      return <div className="traffic-v2-loader">Cargando información de Tráfico V2...</div>;
-    }
-
-    if (error) {
-      return <div className="traffic-v2-error-box">{error}</div>;
-    }
-
-    if (activeTopTab === 'procesamiento') {
-      return (
-        <RecoleccionProcesamientoV2
-          activeSubTab={activeSubTab}
-          stations={dataset.stations}
-          sections={dataset.sections}
-          onReload={onReload}
-        />
-      );
-    }
-
-    if (activeTopTab === 'reporte') {
-      return (
-        <ReporteFinalV2
-          activeSubTab={activeSubTab}
-          stations={dataset.stations}
-          sections={dataset.sections}
-        />
-      );
-    }
+  const TraficoV2Internal = ({
+    projectName,
+    projectId,
+    dataset,
+    isLoading,
+    error,
+    onReload,
+    onBack,
+    onSwitchMode,
+    extractedTrafficData,
+    setExtractedTrafficData
+  }) => {
+    const [activeTopTab, setActiveTopTab] = useState('resumen');
+    const [activeSubTab, setActiveSubTab] = useState(defaultSubtabByTopLevel.resumen);
+  
+    const currentSubTabs = useMemo(() => {
+      if (activeTopTab === 'procesamiento') return PROCESSING_SUBTABS;
+      if (activeTopTab === 'reporte') return REPORT_SUBTABS;
+      return SUMMARY_SUBTABS;
+    }, [activeTopTab]);
+  
+    const handleTopTabChange = (nextTopTab) => {
+      setActiveTopTab(nextTopTab);
+      setActiveSubTab(defaultSubtabByTopLevel[nextTopTab]);
+    };
+  
+    const modeOptions = [
+      {
+        id: 'internal',
+        label: 'Gestión Interna',
+        active: true,
+        onClick: onSwitchMode
+      },
+      {
+        id: 'external',
+        label: 'Vista Externa',
+        active: false,
+        onClick: onSwitchMode
+      }
+    ];
+  
+    const renderCurrentView = () => {
+      if (isLoading) {
+        return <div className="traffic-v2-loader">Cargando información de Tráfico V2...</div>;
+      }
+  
+      if (error) {
+        return <div className="traffic-v2-error-box">{error}</div>;
+      }
+  
+      if (activeTopTab === 'procesamiento') {
+        return (
+          <RecoleccionProcesamientoV2
+            activeSubTab={activeSubTab}
+            stations={dataset.stations}
+            sections={dataset.sections}
+            onReload={onReload}
+            extractedTrafficData={extractedTrafficData}
+            setExtractedTrafficData={setExtractedTrafficData}
+          />
+        );
+      }
+  
+      if (activeTopTab === 'reporte') {
+        return (
+          <ReporteFinalV2
+            activeSubTab={activeSubTab}
+            stations={dataset.stations}
+            sections={dataset.sections}
+            extractedTrafficData={extractedTrafficData}
+            setExtractedTrafficData={setExtractedTrafficData}
+          />
+        );
+      }
 
     return (
       <ResumenGeneralV2
@@ -92,6 +98,7 @@ const TraficoV2Internal = ({
         stations={dataset.stations}
         sections={dataset.sections}
         summary={dataset.summary}
+        extractedTrafficData={extractedTrafficData}
       />
     );
   };

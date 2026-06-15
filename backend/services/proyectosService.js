@@ -4,7 +4,7 @@ const { DateTime } = require('luxon'); // Assuming DateTime is used in project l
 const { v4: uuidv4 } = require('uuid'); // Assuming uuidv4 is used in project logic
 const kmlService = require('./kmlService'); // NEW: Import kmlService
 const utm = require('utm'); // NEW: Import UTM for coordinate conversion
-const { uploadFileToNAS } = require('./nasStorageService');
+const { put } = require('@vercel/blob');
 
 const sanitizeProjectStorageSegment = (value) => String(value || '')
     .normalize('NFD')
@@ -853,20 +853,25 @@ const uploadKmlToProyecto = async (proyectoId, file, userId) => {
         const kmlTrazado = await kmlService.createKmlTrazado(file, userId);
         const newKmlTrazadoId = kmlTrazado.id;
 
-        // 2. Upload original file to NAS and keep its public URL on the project record
+        // 2. Upload original file to Vercel Blob and keep its public URL on the project record
         const safeFilename = file.originalname.replace(/[^a-zA-Z0-9-._]/g, '_');
         const finalFilename = `${Date.now()}_${sanitizeProjectStorageSegment(kmlTrazado.kml_filename)}_${safeFilename}`;
         const targetFolder = getProjectKmlStorageFolder(proyectoId);
         const fileBuffer = file.buffer;
 
         if (!fileBuffer) {
-            const error = new Error('El archivo KML no contiene datos para subir al NAS.');
+            const error = new Error('El archivo KML no contiene datos para subir a Vercel Blob.');
             error.statusCode = 400;
             error.isCustomError = true;
             throw error;
         }
 
-        const kmlUrl = await uploadFileToNAS(fileBuffer, targetFolder, finalFilename);
+        const blobOptions = {
+            access: 'public',
+            token: process.env.BLOB_READ_WRITE_TOKEN_PROYECTOS || process.env.BLOB_READ_WRITE_TOKEN
+        };
+        const blobResult = await put(`proyectos/kml/${finalFilename}`, fileBuffer, blobOptions);
+        const kmlUrl = blobResult.url;
 
         // 3. Update proyecto with kml_trazado_id AND url_kml
         const result = await client.query(
