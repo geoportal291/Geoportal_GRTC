@@ -4,431 +4,485 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal 3D - Plan Maestro Estratégico</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+    <title>Hogar Inteligente - Dashboard Principal</title>
     <style>
         :root {
-            --bg-dark: #050505;
-            --accent-cyan: #00f2ff;
-            --accent-purple: #7000ff;
-            --text-main: #ffffff;
-            --text-dim: #a0a0a0;
-            --glass: rgba(255, 255, 255, 0.05);
-            --glass-border: rgba(255, 255, 255, 0.1);
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --status-online: #10b981;
+            --status-bluetooth: #3b82f6;
+            --status-offline: #ef4444;
         }
 
         * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
         }
 
         body {
-            background-color: var(--bg-dark);
+            background-color: var(--bg-primary);
             color: var(--text-main);
-            overflow-x: hidden;
-        }
-
-        /* Hero Section */
-        #hero {
-            height: 100vh;
-            width: 100%;
-            position: relative;
+            min-height: 100vh;
             display: flex;
+            justify-content: center;
             align-items: center;
-            justify-content: flex-start;
-            padding: 0 10%;
-            background: radial-gradient(circle at 80% 50%, rgba(112, 0, 255, 0.15), transparent);
-            z-index: 2;
+            padding: 20px;
         }
 
-        #canvas-container {
-            position: absolute;
-            top: 0;
-            right: 0;
+        /* Contenedor Mockup Celular */
+        .app-container {
             width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-
-        .hero-content {
-            max-width: 600px;
-            z-index: 10;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 5px 15px;
-            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 20px;
-            box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
-        }
-
-        h1 {
-            font-size: 4rem;
-            font-weight: 800;
-            line-height: 1.1;
-            margin-bottom: 20px;
-            background: linear-gradient(to bottom, #fff, #888);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .hero-desc {
-            font-size: 1.2rem;
-            color: var(--text-dim);
-            margin-bottom: 40px;
-        }
-
-        /* Roadmap Grid */
-        .section-title {
-            text-align: center;
-            padding: 100px 0 50px;
-            font-size: 2.5rem;
-        }
-
-        .roadmap-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 25px;
-            padding: 0 10% 100px;
-        }
-
-        .card {
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 30px;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-            position: relative;
+            max-width: 410px;
+            height: 820px;
+            background-color: #020617;
+            border-radius: 40px;
+            border: 8px solid #334155;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             overflow: hidden;
-        }
-
-        .card:hover {
-            transform: translateY(-10px);
-            border-color: var(--accent-cyan);
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .card h3 {
-            color: var(--accent-cyan);
-            margin-bottom: 15px;
-            font-size: 1.5rem;
-        }
-
-        .card p {
-            color: var(--text-dim);
-            font-size: 1rem;
-            line-height: 1.6;
-        }
-
-        .card .status {
-            font-size: 0.7rem;
-            font-weight: 600;
-            margin-bottom: 15px;
             display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .status.done {
-            color: #00ff88;
-        }
-
-        .status.pending {
-            color: #ffcc00;
-        }
-
-        .status.proceso {
-            color: #00a2ff;
-        }
-
-        .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: currentColor;
-            box-shadow: 0 0 10px currentColor;
-        }
-
-        /* AI Section Highlighting NLP */
-        #ai-highlight {
-            padding: 100px 10%;
-            background: linear-gradient(180deg, transparent, rgba(112, 0, 255, 0.05), transparent);
-            text-align: center;
-        }
-
-        .ai-box {
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--accent-purple);
-            border-radius: 30px;
-            padding: 60px;
+            flex-direction: column;
             position: relative;
-            max-width: 900px;
-            margin: 0 auto;
-            box-shadow: 0 0 50px rgba(112, 0, 255, 0.2);
         }
 
-        .ai-icon {
-            font-size: 3rem;
+        /* Pantallas */
+        .screen {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        /* ENCABEZADOS */
+        .dash-header {
             margin-bottom: 20px;
+            margin-top: 10px;
         }
 
-        /* Risk Mitigation */
-        .risks-section {
-            padding: 100px 10%;
+        .dash-header h2 {
+            font-size: 24px;
+            font-weight: 600;
         }
 
-        .risk-item {
+        .dash-header p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .section-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            margin-top: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 30px;
-            border-bottom: 1px solid var(--glass-border);
         }
 
-        .risk-item h4 {
-            width: 30%;
-            font-size: 1.3rem;
-        }
-
-        .risk-item .solution {
-            width: 65%;
-            color: var(--text-dim);
-            font-size: 1rem;
-        }
-
-        .highlight-success {
-            color: #00ff88;
+        /* BOTONES DE CONTROL DE PANTALLA */
+        .btn-nav {
+            background-color: var(--accent);
+            border: none;
+            color: white;
+            padding: 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 14px;
             font-weight: 600;
-        }
-
-        footer {
-            padding: 50px;
             text-align: center;
-            color: var(--text-dim);
-            font-size: 0.8rem;
-            border-top: 1px solid var(--glass-border);
+            margin-top: auto;
+            margin-bottom: 10px;
+            transition: background 0.2s;
         }
 
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 2.5rem;
-            }
+        .btn-nav:hover {
+            background-color: var(--accent-hover);
+        }
 
-            .hero-content {
-                text-align: center;
-            }
+        .btn-back {
+            background-color: var(--bg-secondary);
+            border: none;
+            color: var(--text-main);
+            padding: 8px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            align-self: flex-start;
+            margin-bottom: 20px;
+        }
 
-            #hero {
-                justify-content: center;
-            }
+        /* REJILLA DE DISPOSITIVOS */
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 10px;
+        }
 
-            .risk-item {
-                flex-direction: column;
-                text-align: center;
-            }
+        .device-card {
+            background-color: var(--bg-secondary);
+            border-radius: 20px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 130px;
+            position: relative;
+            transition: all 0.2s ease;
+        }
 
-            .risk-item h4,
-            .risk-item .solution {
-                width: 100%;
-                margin-bottom: 10px;
-            }
+        /* Estados visuales activos */
+        .device-card.active-on {
+            background: linear-gradient(145deg, #1e293b, #1e3a8a);
+            border: 1px solid #3b82f644;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            position: absolute;
+            top: 18px;
+            right: 18px;
+        }
+
+        .status-dot.wifi {
+            background-color: var(--status-online);
+            box-shadow: 0 0 8px var(--status-online);
+        }
+
+        .status-dot.bt {
+            background-color: var(--status-bluetooth);
+            box-shadow: 0 0 8px var(--status-bluetooth);
+        }
+
+        .status-dot.off {
+            background-color: var(--status-offline);
+        }
+
+        .device-icon {
+            font-size: 24px;
+            margin-bottom: 12px;
+            opacity: 0.6;
+        }
+
+        .device-card.active-on .device-icon {
+            opacity: 1;
+        }
+
+        .device-info h4 {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+
+        .device-info p {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* SWITCH UI */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+            margin-top: 10px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #475569;
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: var(--accent);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(20px);
+        }
+
+        /* PANTALLA: SELECCIÓN DE USUARIO (HABITACIONES) */
+        .profiles-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .profile-card {
+            background-color: var(--bg-secondary);
+            border-radius: 20px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .profile-card:hover {
+            border-color: var(--accent);
+        }
+
+        .profile-avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border-radius: 50%;
+            margin: 0 auto 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .profile-card.admin .profile-avatar {
+            background: linear-gradient(135deg, #f59e0b, #e11d48);
+        }
+
+        .profile-name {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Scrollbar estética */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
         }
     </style>
 </head>
 
 <body>
 
-    <div id="canvas-container"></div>
+    <div class="app-container">
 
-    <section id="hero">
-        <div class="hero-content">
-            <span class="badge">Digital Twin Engineering</span>
-            <h1>Geoportal 3D<br>Next-Gen BIM</h1>
-            <p class="hero-desc">Visualización avanzada, integración de datos geotécnicos y motor de IA para el futuro
-                de la ingeniería civil.</p>
-            <div style="display: flex; gap: 15px;">
-                <button onclick="document.getElementById('roadmap').scrollIntoView({behavior: 'smooth'})"
-                    style="padding: 15px 30px; border-radius: 10px; border: none; background: #fff; color: #000; font-weight: 600; cursor: pointer;">Ver
-                    Plan Maestro</button>
+        <div id="screen-main-dash" class="screen active">
+            <div class="dash-header">
+                <h2>Hogar Central</h2>
+                <p>Control rápido de áreas compartidas</p>
             </div>
-        </div>
-    </section>
 
-    <h2 class="section-title" id="roadmap">Hoja de Ruta Tecnológica</h2>
-    <div class="roadmap-container">
-        <!-- Fase 1 -->
-        <div class="card">
-            <div class="status done"><span class="dot"></span> COMPLETADO / EN EJECUCIÓN</div>
-            <h3>Fase 1: Estabilización</h3>
-            <p>Importación LandXML exitosa, mapas de color HSL por altitud y motor <b>NLP (IA)</b> para clasificación
-                dinámica de suelos.</p>
-        </div>
-        <!-- Fase 2 -->
-        <div class="card">
-            <div class="status proceso"><span class="dot"></span> MEDIO PLAZO</div>
-            <h3>Fase 2: Fotogrametría</h3>
-            <p>Inmersión total: Mapeo de texturas satelitales (UV Mapping) y puntos de vista 360° interactivos dentro
-                del modelo.</p>
-        </div>
-        <!-- Fase 3 -->
-        <div class="card">
-            <div class="status pending"><span class="dot"></span> MEDIO/LARGO PLAZO</div>
-            <h3>Fase 3: Integración BIM</h3>
-            <p>Carga de archivos IFC (estructuras) en coordenadas UTM. Visualización de cimientos bajo tierra con
-                transparencia dinámica.</p>
-        </div>
-        <!-- Fase 4 -->
-        <div class="card">
-            <div class="status pending"><span class="dot"></span> ESCALADO</div>
-            <h3>Fase 4: Chunks & Streaming</h3>
-            <p>Arquitectura de renderizado por sectores (1x1 km) para carreteras de larga distancia sin degradar el
-                rendimiento.</p>
-        </div>
-        <!-- Fase 5 -->
-        <div class="card">
-            <div class="status pending"><span class="dot"></span> GLOBAL</div>
-            <h3>Fase 5: CesiumJS Earth</h3>
-            <p>Salto al entorno real global sincronizado con mapas topográficos en vivo tipo Google Earth.</p>
-        </div>
-    </div>
-
-    <section id="ai-highlight">
-        <div class="ai-box">
-            <div class="ai-icon">🧠</div>
-            <h2 style="font-size: 2.5rem; margin-bottom: 20px;">Motor NLP: IA de Clasificación</h2>
-            <p style="font-size: 1.2rem; margin-bottom: 30px; color: var(--text-dim);">
-                Nuestro mayor avance preventivo. La IA ahora actúa como un traductor inteligente que unifica la
-                inconsistencia del lenguaje técnico humano.
-            </p>
-            <div style="display: flex; justify-content: center; gap: 40px; margin-top: 20px;">
-                <div style="text-align: center;">
-                    <div style="font-size: 0.8rem; color: var(--accent-cyan);">ENTRADA (Caos)</div>
-                    <div
-                        style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; margin-top: 5px;">
-                        "Piedra dura", "Boloneria", "Gravel mix"</div>
+            <h3 class="section-title">Primer Piso</h3>
+            <div class="devices-grid">
+                <div class="device-card" id="main-sala">
+                    <div class="status-dot wifi" title="Conectado por Wi-Fi"></div>
+                    <div class="device-icon">💡</div>
+                    <div class="device-info">
+                        <h4>Luz Principal</h4>
+                        <p>Sala</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" onchange="toggleDevice('main-sala')">
+                        <span class="slider"></span>
+                    </label>
                 </div>
-                <div style="font-size: 1.5rem; display: flex; align-items: center;">➔</div>
-                <div style="text-align: center;">
-                    <div style="font-size: 0.8rem; color: #00ff88;">SALIDA (Estandarizado)</div>
-                    <div
-                        style="background: rgba(0,255,136,0.1); padding: 10px; border-radius: 5px; margin-top: 5px; color: #00ff88;">
-                        GP-GM (SUCS) / #E07A5F (Hex)</div>
+
+                <div class="device-card" id="main-cocina">
+                    <div class="status-dot wifi" title="Conectado por Wi-Fi"></div>
+                    <div class="device-icon">🔌</div>
+                    <div class="device-info">
+                        <h4>Extractor</h4>
+                        <p>Cocina</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" onchange="toggleDevice('main-cocina')">
+                        <span class="slider"></span>
+                    </label>
                 </div>
             </div>
-        </div>
-    </section>
 
-    <div class="risks-section">
-        <h2 class="section-title">Análisis de Riesgos Críticos</h2>
-        <div class="risk-item">
-            <h4>Crasheo de Memoria (RAM)</h4>
-            <div class="solution">Solución mediante el sistema de <b>Chunks</b> y Level of Detail (LOD) estricto.</div>
+            <h3 class="section-title">Pasillos y Exteriores</h3>
+            <div class="devices-grid">
+                <div class="device-card" id="main-pasillo">
+                    <div class="status-dot bt" title="Respaldo Bluetooth activo"></div>
+                    <div class="device-icon">💡</div>
+                    <div class="device-info">
+                        <h4>Luz Escalera</h4>
+                        <p>Pasadizo</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" onchange="toggleDevice('main-pasillo')">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="device-card" id="main-terma">
+                    <div class="status-dot wifi" title="Conectado por Wi-Fi"></div>
+                    <div class="device-icon">⚡</div>
+                    <div class="device-info">
+                        <h4>Terma Baño</h4>
+                        <p>Área Común</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" onchange="toggleDevice('main-terma')">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <button class="btn-nav" onclick="goToProfiles()">🔑 Ingresar a Habitaciones Privadas</button>
         </div>
-        <div class="risk-item">
-            <h4>Conflicto de Coordenadas</h4>
-            <div class="solution">Estandarización forzada a <b>EPSG:32718 (UTM 18S)</b> en tiempo real durante la carga.
+
+        <div id="screen-select-user" class="screen">
+            <button class="btn-back" onclick="goBackToMain()">⬅ Volver a Áreas Comunes</button>
+            <div class="dash-header">
+                <h2>¿A qué cuarto ingresas?</h2>
+                <p>Se requiere verificación de perfil privado</p>
+            </div>
+
+            <div class="profiles-grid">
+                <div class="profile-card admin" onclick="openPrivateRoom('John')">
+                    <div class="profile-avatar">J</div>
+                    <div class="profile-name">Cuarto John</div>
+                </div>
+                <div class="profile-card" onclick="openPrivateRoom('Hermana 1')">
+                    <div class="profile-avatar">H1</div>
+                    <div class="profile-name">Cuarto Hermana 1</div>
+                </div>
+                <div class="profile-card" onclick="openPrivateRoom('Hermana 2')">
+                    <div class="profile-avatar">H2</div>
+                    <div class="profile-name">Cuarto Hermana 2</div>
+                </div>
+                <div class="profile-card" onclick="openPrivateRoom('Papás')">
+                    <div class="profile-avatar">P</div>
+                    <div class="profile-name">Cuarto Papás</div>
+                </div>
             </div>
         </div>
-        <div class="risk-item">
-            <h4>Error Humano (Texto libre)</h4>
-            <div class="solution" class="highlight-success">
-                <span class="highlight-success">● SOLUCIONADO:</span> Motor NLP integrado que pre-clasifica y valida
-                colores antes del renderizado.
+
+        <div id="screen-room-view" class="screen">
+            <button class="btn-back" onclick="goToProfiles()">⬅ Volver a Cuartos</button>
+            <div class="dash-header">
+                <p>Habitación Privada</p>
+                <h2 id="room-title">Cuarto de...</h2>
+            </div>
+
+            <h3 class="section-title">Dispositivos Vinculados</h3>
+            <div class="devices-grid" id="private-devices-container">
             </div>
         </div>
+
     </div>
-
-    <footer>
-        <p>Propuesta Estratégica Geoportal 3D © 2026 - Plan Maestro BIM</p>
-    </footer>
 
     <script>
-        // Interactive 3D Background with Three.js
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        // Simulador de la base de datos local SQLite para Cuartos Privados
+        const baseDatosCuartos = {
+            'John': [
+                { id: 'j-luz', nombre: 'Luz Escritorio', sub: 'Mesa de Trabajo', icon: '💡', status: 'wifi' },
+                { id: 'j-pc', nombre: 'Tomacorriente PC', sub: 'Setup Principal', icon: '🔌', status: 'wifi' }
+            ],
+            'Hermana 1': [
+                { id: 'h1-luz', nombre: 'Luz Principal', sub: 'Techo', icon: '💡', status: 'bt' },
+                { id: 'h1-parlante', nombre: 'Audio/Espejo', sub: 'Tocador', icon: '⚡', status: 'wifi' }
+            ],
+            'Hermana 2': [
+                { id: 'h2-luz', nombre: 'Luz Noche', sub: 'Cabecera', icon: '💡', status: 'off' }
+            ],
+            'Papás': [
+                { id: 'p-luz', nombre: 'Luz Techo', sub: 'Principal', icon: '💡', status: 'wifi' },
+                { id: 'p-tv', nombre: 'Smart TV', sub: 'Tomacorriente', icon: '🔌', status: 'wifi' }
+            ]
+        };
 
-        // Ground Wireframe (Terrain simulation)
-        const geometry = new THREE.PlaneGeometry(100, 100, 40, 40);
-        const material = new THREE.MeshBasicMaterial({
-            color: 0x7000ff,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.15
-        });
-        const plane = new THREE.Mesh(geometry, material);
-        plane.rotation.x = -Math.PI / 2.5;
-        scene.add(plane);
-
-        // Deform plane once to look like terrain
-        const positions = plane.geometry.attributes.position.array;
-        for (let i = 0; i < positions.length; i += 3) {
-            positions[i + 2] = Math.sin(positions[i] * 0.1) * Math.cos(positions[i + 1] * 0.1) * 3;
+        // Navegación
+        function goToProfiles() {
+            hideAllScreens();
+            document.getElementById('screen-select-user').classList.add('active');
         }
-        plane.geometry.attributes.position.needsUpdate = true;
 
-        // Boreholes (Cylinders) simulation
-        const cylinderGroup = new THREE.Group();
-        const cylinderColors = [0x00f2ff, 0x00ff88, 0x7000ff, 0xffcc00];
+        function goBackToMain() {
+            hideAllScreens();
+            document.getElementById('screen-main-dash').classList.add('active');
+        }
 
-        for (let i = 0; i < 15; i++) {
-            const h = Math.random() * 5 + 2;
-            const cylGeom = new THREE.CylinderGeometry(0.5, 0.5, h, 8);
-            const cylMat = new THREE.MeshBasicMaterial({
-                color: cylinderColors[Math.floor(Math.random() * cylinderColors.length)],
-                transparent: true,
-                opacity: 0.6
+        function openPrivateRoom(nombreCuarto) {
+            hideAllScreens();
+            document.getElementById('screen-room-view').classList.add('active');
+            document.getElementById('room-title').innerText = `Cuarto de ${nombreCuarto}`;
+
+            // Renderizar los dispositivos específicos del archivo SQLite/JSON local
+            const container = document.getElementById('private-devices-container');
+            container.innerHTML = '';
+
+            const dispositivos = baseDatosCuartos[nombreCuarto] || [];
+            dispositivos.forEach(dev => {
+                container.innerHTML += `
+                    <div class="device-card" id="${dev.id}">
+                        <div class="status-dot ${dev.status}"></div>
+                        <div class="device-icon">${dev.icon}</div>
+                        <div class="device-info">
+                            <h4>${dev.nombre}</h4>
+                            <p>${dev.sub}</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" onchange="toggleDevice('${dev.id}')">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                `;
             });
-            const cyl = new THREE.Mesh(cylGeom, cylMat);
-
-            cyl.position.x = (Math.random() - 0.5) * 40;
-            cyl.position.z = (Math.random() - 0.5) * 40;
-            cyl.position.y = -h / 2 + 2;
-            cylinderGroup.add(cyl);
         }
-        scene.add(cylinderGroup);
 
-        camera.position.z = 30;
-        camera.position.y = 15;
-        camera.lookAt(0, 0, 0);
-
-        function animate() {
-            requestAnimationFrame(animate);
-            plane.rotation.z += 0.001;
-            cylinderGroup.rotation.y += 0.002;
-            renderer.render(scene, camera);
+        function hideAllScreens() {
+            document.getElementById('screen-main-dash').classList.remove('active');
+            document.getElementById('screen-select-user').classList.remove('active');
+            document.getElementById('screen-room-view').classList.remove('active');
         }
-        animate();
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // Animations on load
-        gsap.from(".hero-content > *", {
-            duration: 1,
-            y: 50,
-            opacity: 0,
-            stagger: 0.2,
-            ease: "power3.out"
-        });
+        // Lógica binaria visual (0 y 1)
+        function toggleDevice(id) {
+            document.getElementById(id).classList.toggle('active-on');
+        }
     </script>
 </body>
 

@@ -23,7 +23,7 @@ const { kml } = require('@tmcw/togeojson');
 const { DOMParser } = require('xmldom');
 const tokml = require('tokml');
 const archiver = require('archiver');
-const FormData = require('form-data'); // Import FormData
+const FormData = require('form-data');
 const db = require('./conexion');
 
 // Inyección temporal de la migración de Fuentes de Agua
@@ -69,7 +69,7 @@ const db = require('./conexion');
 
 const distritosService = require('./services/distritosService');
 const ensayosService = require('./services/ensayosService');
-const granulometriaService = require('./services/granulometriaService'); // Keeping imports clean
+const granulometriaService = require('./services/granulometriaService');
 const limiteLiquidoService = require('./services/limiteLiquidoService');
 const limitePlasticoService = require('./services/limitePlasticoService');
 const kmlService = require('./services/kmlService');
@@ -89,19 +89,19 @@ const interferenciasService = require('./services/interferenciasService');
 const badenesService = require('./services/badenesService');
 const puentesService = require('./services/puentesService');
 const murosService = require('./services/murosService');
-const senalesPreventivasService = require('./services/senalesPreventivasService'); // Import new service
+const senalesPreventivasService = require('./services/senalesPreventivasService');
 const canterasFuentesService = require('./services/canterasyfuentesdeaguainvvialService');
 const zonasCriticasService = require('./services/zonasCriticasService');
 const estructurasExistentesService = require('./services/estructurasExistentesService');
 const senalesInformativasService = require('./services/senalesInformativasService');
 const hitosKilometricosService = require('./services/hitosKilometricosService');
 const senalesReguladorasService = require('./services/senalesReguladorasService');
-const observacionesService = require('./services/observacionesService'); // NEW
+const observacionesService = require('./services/observacionesService');
 const amigoSecretoService = require('./services/amigoSecretoService');
 const wishlistService = require('./services/wishlistService');
 const modelos3DService = require('./services/modelos3DService');
-const geologiaCapasService = require('./services/geologiaCapasService'); // NEW
-const { uploadFileToNAS, deleteFileFromNAS } = require('./services/nasStorageService'); // NEW NAS Storage
+const geologiaCapasService = require('./services/geologiaCapasService');
+const { uploadFileToNAS, deleteFileFromNAS } = require('./services/nasStorageService');
 
 console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
@@ -260,12 +260,11 @@ const whitelist = [
     'http://localhost:3000',
     'https://geoportalbetav3.fly.dev',
     'https://geoportal-frontend-1.fly.dev',
-    'https://geoportal-frontend-e5f5.fly.dev'
+    'https://geoportal-frontend-julio.fly.dev'
 ];
 
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
 
         if (whitelist.indexOf(origin) !== -1) {
@@ -282,7 +281,7 @@ const corsOptions = {
 const app = express();
 const server = http.createServer(app);
 
-app.options('*', cors(corsOptions)); // enable pre-flight
+app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -453,15 +452,13 @@ app.post('/api/utils/test-ocr', authenticateToken, upload.single('image'), async
         formData.append('file', req.file.buffer, req.file.originalname);
 
         console.log('Enviando imagen a Python OCR Service...');
-        // Make sure Python service is reachable at localhost:8000
         const pythonResponse = await axios.post('http://127.0.0.1:8000/process-image', formData, {
             headers: {
                 ...formData.getHeaders()
             },
-            responseType: 'arraybuffer' // We get the processed image back, and headers
+            responseType: 'arraybuffer'
         });
 
-        // Extract metadata from headers
         const detectedIndex = pythonResponse.headers['x-detected-index'];
         const ocrText = pythonResponse.headers['x-ocr-text'];
 
@@ -479,7 +476,6 @@ app.post('/api/utils/test-ocr', authenticateToken, upload.single('image'), async
 
 // Bulk OCR Extraction Route
 app.post('/api/utils/bulk-ocr', authenticateToken, uploadDisk.array('files'), async (req, res) => {
-    // If no files, return error
     if (!req.files || req.files.length === 0) {
         return res.status(400).json({ error: 'Se requieren archivos de imagen (.jpg, .png) o comprimidos (.zip, .rar).' });
     }
@@ -490,11 +486,9 @@ app.post('/api/utils/bulk-ocr', authenticateToken, uploadDisk.array('files'), as
     }
 
     try {
-        // Create a unique temp directory for this batch
         const batchDir = path.join('/tmp', `bulk_batch_${Date.now()}_${require('uuid').v4()}`);
         await fsp.mkdir(batchDir, { recursive: true });
 
-        // Move all uploaded files from temp disk storage to the batch directory
         for (const file of req.files) {
             const destPath = path.join(batchDir, file.originalname);
             await fsp.rename(file.path, destPath);
@@ -506,14 +500,12 @@ app.post('/api/utils/bulk-ocr', authenticateToken, uploadDisk.array('files'), as
             userId: req.user.id
         };
 
-        // Pass projectId from request
         const newJob = await db.query(
             `INSERT INTO processing_jobs (job_type, project_id, status, payload) VALUES ($1, $2, $3, $4) RETURNING id`,
             ['bulk_ocr', projectId, 'pending', jobPayload]
         );
         const jobId = newJob.rows[0].id;
 
-        // Trigger async processing
         alcantarillasGraphicsService.processBulkOcrJob(jobId).catch(err => console.error('Error en proceso background bulk ocr:', err));
 
         res.status(202).json({
@@ -524,7 +516,6 @@ app.post('/api/utils/bulk-ocr', authenticateToken, uploadDisk.array('files'), as
 
     } catch (err) {
         console.error('Error iniciando carga masiva:', err);
-        // Cleanup multer files if error
         if (req.files) {
             for (const file of req.files) {
                 if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
@@ -838,14 +829,9 @@ app.post('/api/senales-preventivas', authenticateToken, senalesPreventivasServic
 app.put('/api/senales-preventivas/:id', authenticateToken, senalesPreventivasService.updateSenal);
 
 app.delete('/api/senales-preventivas/project/:projectId', authenticateToken, async (req, res) => {
-    // Delete by project specific logic kept inline or needs service function
     const { projectId } = req.params;
     try {
-        await senalesPreventivasService.deleteSenal(req, res); // Warning: deleteSenal assumes :id param, not project.
-        // If delete by project is needed, we need to export it or implementing it here via pool.
-        // For now, let's assume we want to call a specific function or default to individual delete.
-        // But the route is /project/:projectId. The service only has deleteSenal by ID.
-        // Let's implement the SQL directly here to be safe and quick, matching the previous attempt's intent.
+        await senalesPreventivasService.deleteSenal(req, res);
         const pool = require('./conexion');
         await pool.query('DELETE FROM senales_preventivas WHERE id_proyecto = $1', [projectId]);
         res.json({ message: 'Señales preventivas deleted successfully' });
@@ -1783,7 +1769,6 @@ app.delete('/api/zonas-criticas/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/zonas-criticas/delete-excel/:projectId', authenticateToken, async (req, res) => {
     try {
-        // This handles "delete excel" request which in this context means deleting all data
         await zonasCriticasService.deleteExcelAndZonasCriticas(req.params.projectId);
         res.json({ message: 'Datos eliminados correctamente' });
     } catch (err) {
@@ -2543,7 +2528,6 @@ app.post('/api/kml/upload', authenticateToken, authorizePermission('proyectos', 
         res.status(201).json({ url: kmlUrl });
     } catch (error) {
         console.error('Error en el endpoint /api/kml/upload:', error);
-        // Ensure the temporary file is cleaned up on error as well
         if (req.file && req.file.path) {
             await fsp.unlink(req.file.path).catch(err => console.error("Error cleaning up temp file on failure:", err));
         }
@@ -2584,7 +2568,7 @@ async function uploadAlcantarillasExcelToVercelBlob(fileBuffer, originalFilename
 // Nuevo endpoint para subir archivos Excel de alcantarillas
 app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermission('alcantarillas', 'edicion'), upload.single('excelFile'), async (req, res) => {
     const { projectId, utmZone, entregableNum } = req.body;
-    const userId = req.user.id; // Get authenticated user ID
+    const userId = req.user.id;
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
@@ -2652,7 +2636,6 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
     }
 });
 
-// Helper function to upload a temporary file to Vercel Blob
 async function uploadTempFileToVercelBlob(fileBuffer, originalFilename, folder = 'temp') {
     try {
         const originalExtension = path.extname(originalFilename);
@@ -2681,8 +2664,6 @@ app.post('/api/alcantarillas/upload-graphics-excel', authenticateToken, authoriz
             return res.status(400).json({ error: 'projectId es requerido.' });
         }
 
-        // The file is saved to /tmp by the 'upload' middleware.
-        // We'll create a job to process it, similar to the chunked upload completion.
         const jobPayload = {
             filePath: req.file.path,
             originalName: req.file.originalname,
@@ -2699,7 +2680,6 @@ app.post('/api/alcantarillas/upload-graphics-excel', authenticateToken, authoriz
         );
         const jobId = newJob.rows[0].id;
 
-        // Trigger the processing in the background
         if (jobType === 'rar_extraction') {
             alcantarillasGraphicsService.processRarExtractionJob(jobId).catch(err => console.error(`Error no controlado en el job de extracción RAR (Job ID: ${jobId}):`, err));
         } else {
@@ -2717,10 +2697,8 @@ app.post('/api/alcantarillas/upload-graphics-excel', authenticateToken, authoriz
     }
 });
 
-// NEW: Multer configuration for chunked uploads - Use memory storage to access body fields
 const uploadChunk = multer({ storage: multer.memoryStorage() });
 
-// NEW ENDPOINT: For receiving file chunks
 app.post('/api/alcantarillas/upload-chunk', authenticateToken, authorizePermission('alcantarillas', 'edicion'), uploadChunk.single('fileChunk'), async (req, res) => {
     try {
         const { uploadId, chunkIndex } = req.body;
@@ -2741,7 +2719,6 @@ app.post('/api/alcantarillas/upload-chunk', authenticateToken, authorizePermissi
     }
 });
 
-// NEW ENDPOINT: For finalizing a chunked upload
 app.post('/api/alcantarillas/complete-upload', authenticateToken, authorizePermission('alcantarillas', 'edicion'), async (req, res) => {
     const { projectId, uploadId, originalFilename, entregable } = req.body;
     const userId = req.user.id;
@@ -2752,14 +2729,13 @@ app.post('/api/alcantarillas/complete-upload', authenticateToken, authorizePermi
 
     try {
         const result = await alcantarillasGraphicsService.reassembleAndProcessChunks(projectId, uploadId, originalFilename, userId, entregable);
-        res.status(202).json(result); // 202 Accepted, as the processing is async
+        res.status(202).json(result);
     } catch (error) {
         console.error('Error al completar la subida por chunks:', error);
         res.status(500).json({ status: 'error', message: error.message || 'Error al ensamblar el archivo.' });
     }
 });
 
-// NEW: Endpoint for simple (non-chunked) file uploads
 app.post('/api/alcantarillas/upload-images', authenticateToken, authorizePermission('alcantarillas', 'edicion'), uploadDisk.single('files'), async (req, res) => {
     const { projectId, entregable } = req.body;
     const userId = req.user.id;
@@ -2781,13 +2757,11 @@ app.post('/api/alcantarillas/upload-images', authenticateToken, authorizePermiss
             return res.status(400).json({ error: 'projectId es requerido.' });
         }
 
-        // The file is saved to /tmp by the 'upload' middleware.
-        // Create a job to process it
         const jobPayload = {
             filePath: req.file.path,
             originalName: req.file.originalname,
             userId: userId,
-            entregable: entregable || null // Pass entregable to payload
+            entregable: entregable || null
         };
         const jobType = path.extname(req.file.originalname).toLowerCase() === '.rar' ? 'rar_extraction' : 'simple_file_upload';
 
@@ -2799,7 +2773,6 @@ app.post('/api/alcantarillas/upload-images', authenticateToken, authorizePermiss
         );
         const jobId = newJob.rows[0].id;
 
-        // Trigger the processing in the background
         if (jobType === 'rar_extraction') {
             alcantarillasGraphicsService.processRarExtractionJob(jobId).catch(err => console.error(`Error no controlado en el job de extracción RAR (Job ID: ${jobId}):`, err));
         } else {
@@ -2818,11 +2791,10 @@ app.post('/api/alcantarillas/upload-images', authenticateToken, authorizePermiss
     }
 });
 
-// NEW: Endpoint to delete a single graphic image
 app.delete('/api/alcantarillas/graphics/:imageId', authenticateToken, async (req, res) => {
     const { imageId } = req.params;
-    const { projectId } = req.query; // Assuming projectId is passed as a query parameter
-    const userId = req.user.id; // Get authenticated user ID
+    const { projectId } = req.query;
+    const userId = req.user.id;
 
     try {
         const result = await alcantarillasGraphicsService.deleteGraphicImage(imageId, projectId);
@@ -2841,10 +2813,9 @@ app.delete('/api/alcantarillas/graphics/:imageId', authenticateToken, async (req
     }
 });
 
-// NEW: Endpoint to delete all graphic images for a project
 app.delete('/api/alcantarillas/graphics/all/:projectId', authenticateToken, async (req, res) => {
     const { projectId } = req.params;
-    const userId = req.user.id; // Get authenticated user ID
+    const userId = req.user.id;
 
     try {
         const result = await alcantarillasGraphicsService.deleteAllGraphicImages(projectId);
@@ -3009,8 +2980,6 @@ app.delete('/api/alcantarillas/delete-excel/:projectId', authenticateToken, asyn
 
     try {
         // entregableNum es opcional para Canteras/Fuentes global
-        // if (!entregableNum) { ... } removed
-
         const typesToDelete = tipos ? tipos.split(',') : [];
         if (typesToDelete.length === 0) {
             return res.status(400).json({ error: 'Debe especificar al menos un tipo de dato para eliminar (alcantarillas, badenes).' });
@@ -3681,7 +3650,7 @@ app.get('/api/proyectos/:projectId/history', authenticateToken, authorizeAdminOr
 app.post('/api/proyectos/:proyectoId/upload-kml', authenticateToken, authorizePermission('proyectos', 'edicion'), upload.single('kmlFile'), async (req, res) => {
     const { proyectoId } = req.params;
     const { file } = req; // Multer places the file here
-    const userId = req.user.id; // Get authenticated user ID
+    const userId = req.user.id;
 
     try {
         if (!file) {

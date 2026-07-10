@@ -523,16 +523,17 @@ const getSubProgresivas = async (req, res) => {
 
         if (searchTerm) {
             const cleanSearchTerm = `%${searchTerm.replace(/\+/g, '')}%`;
-            const whereClause = "WHERE p.parent_id = $1 AND REPLACE(p.codigo, '+', '') ILIKE $2";
+            const rawSearchTerm = `%${searchTerm}%`;
+            const whereClause = "WHERE p.parent_id = $1 AND (REPLACE(p.codigo, '+', '') ILIKE $2 OR p.nombre ILIKE $3)";
 
-            countResult = await db.query(`SELECT COUNT(*) FROM progresivas p ${whereClause}`, [Number(id), cleanSearchTerm]);
-            progresivasResult = await db.query(`${baseQuery} ${whereClause} ORDER BY p.id ASC LIMIT $3 OFFSET $4`, [Number(id), cleanSearchTerm, limit, offset]);
+            countResult = await db.query(`SELECT COUNT(*) FROM progresivas p ${whereClause}`, [Number(id), cleanSearchTerm, rawSearchTerm]);
+            progresivasResult = await db.query(`${baseQuery} ${whereClause} ORDER BY NULLIF(regexp_replace(p.codigo, '[^0-9]', '', 'g'), '')::numeric ASC, p.id ASC LIMIT $4 OFFSET $5`, [Number(id), cleanSearchTerm, rawSearchTerm, limit, offset]);
 
         } else {
             const whereClause = "WHERE p.parent_id = $1";
 
             countResult = await db.query(`SELECT COUNT(*) FROM progresivas p ${whereClause}`, [Number(id)]);
-            progresivasResult = await db.query(`${baseQuery} ${whereClause} ORDER BY p.id ASC LIMIT $2 OFFSET $3`, [Number(id), limit, offset]);
+            progresivasResult = await db.query(`${baseQuery} ${whereClause} ORDER BY NULLIF(regexp_replace(p.codigo, '[^0-9]', '', 'g'), '')::numeric ASC, p.id ASC LIMIT $2 OFFSET $3`, [Number(id), limit, offset]);
         }
 
         const total = parseInt(countResult.rows[0].count, 10);

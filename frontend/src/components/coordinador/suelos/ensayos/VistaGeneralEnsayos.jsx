@@ -12,7 +12,6 @@ import "./VistaGeneralEnsayos.css";
 import "./ResultadosBrevesModal.css";
 import "./ensayos.css";
 
-// Helper para comprimir IDs consecutivos en rangos (ej. 2251,2252,2253 -> 2251-2253)
 const compressIds = (ids) => {
   if (!ids || ids.length === 0) return "";
   const sorted = [...ids].map(Number).sort((a, b) => a - b);
@@ -37,7 +36,6 @@ const compressIds = (ids) => {
   return ranges.join(",");
 };
 
-// ========== ImportModal ==========
 const ImportModal = ({ isOpen, onClose, onImport, loading, errors }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const handleFileChange = (e) => setSelectedFile(e.target.files[0]);
@@ -92,7 +90,6 @@ const ImportModal = ({ isOpen, onClose, onImport, loading, errors }) => {
   );
 };
 
-// ========== ConfirmationModal ==========
 const ConfirmationModal = ({
   isOpen,
   onClose,
@@ -189,7 +186,6 @@ const ConfirmationModal = ({
   );
 };
 
-// ========== EnsayosFullListModal ==========
 const hasGroupChartsConfig = (graficosConfig) => {
   if (!graficosConfig) return false;
   if (Array.isArray(graficosConfig)) {
@@ -495,7 +491,6 @@ const EnsayosFullListModal = ({
   );
 };
 
-// ========== VistaGeneralEnsayos ==========
 const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const { tramoId } = useParams();
   const navigate = useNavigate();
@@ -549,7 +544,6 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
       let ensayosList = data.ensayos || data.ensayosList || [];
       const tramoInfo = data.tramo || data.tramoInfo || {};
 
-      // Ordenar ensayos por progresiva y estrato
       ensayosList.sort((a, b) => {
         const progA = (a.progresiva_nombre || "").localeCompare(
           b.progresiva_nombre || "",
@@ -562,7 +556,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
         const key = tipo.config_key || tipo.id;
         const filtrados = ensayosList.filter((e) => {
           const eKey = e.config_key || e.tipo_ensayo_id;
-          return eKey == key || e.tipo_ensayo == tipo.id; // Flexibilidad en el match
+          return eKey == key || e.tipo_ensayo == tipo.id;
         });
 
         acc[key] = {

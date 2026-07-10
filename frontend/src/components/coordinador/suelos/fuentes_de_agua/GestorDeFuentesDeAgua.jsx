@@ -523,10 +523,12 @@ export default function GestorDeFuentesDeAgua() {
                       {fuenteSeleccionada.estratos_perfil?.length || 0} Muestra(s)
                     </span>
                   </div>
-                  
+
                   <div className="strata-timeline">
                     {fuenteSeleccionada.estratos_perfil && fuenteSeleccionada.estratos_perfil.length > 0 ? (
-                      fuenteSeleccionada.estratos_perfil.map((est, i) => (
+                      [...fuenteSeleccionada.estratos_perfil]
+                        .sort((a, b) => (Number(a.cota_inicial ?? a.orden ?? 0)) - (Number(b.cota_inicial ?? b.orden ?? 0)))
+                        .map((est, i) => (
                         <div key={i} className="strata-node">
                           <div className="strata-color-bar" style={{ backgroundColor: '#0d47a1' }}></div>
                           <div className="strata-info" style={{ padding: '8px 0' }}>
@@ -656,10 +658,10 @@ export default function GestorDeFuentesDeAgua() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <button 
-                  onClick={() => { setShowEstratosEnsayosModal(false); handleOpenGestionarEstratos(fuenteSeleccionada); }} 
-                  className="btn-add-estrato-premium" 
-                  style={{ padding: '8px 16px', fontSize: '0.85rem', background: '#0d47a1', borderColor: '#0d47a1' }}
+                <button
+                  onClick={() => { setShowEstratosEnsayosModal(false); handleOpenGestionarEstratos(fuenteSeleccionada); }}
+                  className="btn-add-estrato-premium"
+                  style={{ padding: '8px 16px', fontSize: '0.85rem', background: '#ffffffff', borderColor: '#0d47a1' }}
                 >
                   <i className="fas fa-cog"></i> Administrar Sondeos
                 </button>
@@ -668,8 +670,10 @@ export default function GestorDeFuentesDeAgua() {
             </div>
             <div className="perfil-content-custom custom-scrollbar" style={{ padding: '25px', overflowY: 'auto', backgroundColor: '#f8fafc', flex: 1 }}>
               <div className="estratos-list" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {fuenteSeleccionada.estratos_perfil && fuenteSeleccionada.estratos_perfil.length > 0 ? (
-                  fuenteSeleccionada.estratos_perfil.map((muestra) => {
+                  {fuenteSeleccionada.estratos_perfil && fuenteSeleccionada.estratos_perfil.length > 0 ? (
+                  [...fuenteSeleccionada.estratos_perfil]
+                    .sort((a, b) => (Number(a.cota_inicial ?? a.orden ?? 0)) - (Number(b.cota_inicial ?? b.orden ?? 0)))
+                    .map((muestra) => {
                     if (!muestra || muestra.id === undefined || muestra.id === null) return null;
                     return (
                       <FuenteMuestraItem

@@ -1,24 +1,23 @@
-# fly.toml app configuration file generated for geoportalbetav3 on 2026-01-21T10:19:10-05:00
+# fly.toml app configuration file generated for geoportal-frontend-julio on 2026-07-01T18:46:15-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'geoportal-frontend-e5f5'
+app = 'geoportal-frontend-julio'
 primary_region = 'gru'
 
 [build]
-  [build.args]
-    REACT_APP_API_BASE = "https://geoportal-backend-u3zi.fly.dev"
 
 [http_service]
   internal_port = 80
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 0
   processes = ['app']
 
 [[vm]]
-  cpu_kind = "shared"
-  cpus = 2
-  memory_mb = 2048
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024

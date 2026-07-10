@@ -35,7 +35,6 @@ try:
         
         print("--- CONTENT ANALYSIS SEQUENCE ---")
         
-        # Helper to extract text from a node
         def get_text(node):
             texts = []
             for t in node.findall('.//w:t', ns):
@@ -43,7 +42,6 @@ try:
                     texts.append(t.text)
             return "".join(texts)
 
-        # Helper to find images in a node
         def get_images(node):
             imgs = []
             # blip usually in a:blip with r:embed

@@ -751,67 +751,50 @@
 .btn-expandable {
   display: inline-flex;
   align-items: center;
-  /* justify-content: center; Removed */
   padding: 0;
   border-radius: 8px;
-  /* Square with rounded corners */
   width: 40px;
-  /* Smaller square */
   height: 40px;
   overflow: hidden;
   transition: all 1s ease-out;
   white-space: nowrap;
   font-size: 1rem;
-  /* Adjust icon size slightly */
 }
 
 .btn-expandable .btn-text {
   opacity: 0;
   max-width: 0;
-  /* Use max-width for smooth transition */
   overflow: hidden;
-  /* Hide overflowing text during transition */
   white-space: nowrap;
-  /* Ensure text doesn't wrap */
   transition:
     opacity 0.9s ease-out,
     max-width 1.2s ease-out;
-  /* Animate both properties */
   margin-left: 0;
   font-size: 0.9rem;
-  /* Smaller text size */
   font-weight: 500;
 }
 
 .btn-expandable:hover {
   width: auto;
   border-radius: 8px;
-  /* Keep rounded corners on hover */
   padding: 0 0.8rem;
-  /* Adjust padding for expanded state */
 }
 
 .btn-expandable:hover .btn-text {
   opacity: 1;
   max-width: 250px;
-  /* Increased max-width to accommodate longer text */
   margin-left: 0.6rem;
-  /* Space between icon and text */
 }
 
 .btn-expandable i {
   flex-shrink: 0;
-  /* Prevent icon from shrinking */
   display: flex;
   align-items: center;
   justify-content: center;
   width: 40px;
-  /* Give it a fixed width matching the collapsed button */
   height: 40px;
-  /* Give it a fixed height */
   font-size: 1.2rem;
   color: white;
-  /* Make the icon white */
 }
 
 .vista-general-header div {
@@ -1365,4 +1348,3 @@
     transform: translateY(0);
   }
 }
-

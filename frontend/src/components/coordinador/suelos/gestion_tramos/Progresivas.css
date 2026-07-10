@@ -1,12 +1,12 @@
 /* Progresivas.css */
 
 .progresivas-container {
-  padding: 20px;
-  background-color: #f0f2f5;
+  padding: 30px; /* Un poco más de respiro a los lados */
   padding-top: 80px;
-  max-width: 1200px;
-  margin: 0 auto;
+  background-color: transparent; /* Quitamos el plomo para que se mezcle con el fondo de la app */
+  width: 100%;
   min-height: 100vh;
+  box-sizing: border-box; /* Asegurar que el padding no desborde el ancho */
 }
 
 .progresivas-header {
@@ -370,44 +370,85 @@
 }
 
 .status-badge {
-  padding: 5px 12px;
-  border-radius: 15px;
+  padding: 6px 14px;
+  border-radius: 20px;
   color: white;
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
-  font-size: 0.8em;
+  font-size: 0.75em;
   display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .status-activo {
-  background-color: #d4edda;
-  color: #155724;
+  background-color: #28a745;
+  color: #ffffff;
 }
 
 .status-inactivo {
-  background-color: #f8d7da;
-  color: #721c24;
+  background-color: #dc3545;
+  color: #ffffff;
 }
 
 .status-completado {
-  background-color: #d1ecf1;
-  color: #0c5460;
+  background-color: #0d6efd;
+  color: #ffffff;
 }
 
 .status-pendiente {
-  background-color: #fff3cd;
-  color: #856404;
+  background-color: #ffc107;
+  color: #212529;
 }
 
 .status-en-revicion {
-  background-color: #cce5ff;
-  color: #004085;
+  background-color: #17a2b8;
+  color: #ffffff;
 }
 
 .actions-cell {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
+  justify-content: flex-start;
+}
+
+.manage-btn {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: #495057;
+  font-weight: 600;
+  font-size: 0.8em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.manage-btn:hover {
+  background-color: #e2e6ea;
+  border-color: #dae0e5;
+  color: #1a237e;
+  transform: translateY(-1px);
+}
+
+.gallery-btn {
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  color: #0d6efd;
+  font-size: 1.1em;
+  transition: transform 0.2s;
+}
+
+.gallery-btn:hover {
+  transform: scale(1.15);
+  color: #0b5ed7;
 }
 
 .edit-btn,
@@ -519,19 +560,31 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
+.modal-tramo-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .batch-details-modal {
-  background: linear-gradient(145deg, #ffffff, #f0f0f0);
-  padding: 35px;
-  border-radius: 15px;
-  width: 90%;
-  max-width: 1300px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
-  max-height: 90vh;
-  overflow-y: auto;
+  background: #ffffff;
+  padding: 25px 35px;
+  border-radius: 8px;
+  width: 98vw;
+  height: 98vh;
+  max-width: none;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
   position: relative;
-  animation: fadeInScale 0.3s ease-out;
+  animation: fadeInScale 0.2s ease-out;
 }
 
 @keyframes fadeInScale {
@@ -568,15 +621,11 @@
 }
 
 .batch-details-modal .progresivas-table {
-  margin-top: 25px;
-  border: none;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin-top: 0;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
-  /* Add this line */
   width: 100%;
-  /* Ensure it takes full width */
 }
 
 .batch-details-modal .progresivas-table th,
@@ -584,27 +633,34 @@
   padding: 14px 18px;
   border-bottom: 1px solid #f0f0f0;
   white-space: nowrap;
-  /* Prevent text wrapping */
   overflow: hidden;
-  /* Hide overflow text */
   text-overflow: ellipsis;
-  /* Add ellipsis for overflow text */
 }
 
 .batch-details-modal .progresivas-table th {
-  background-color: #e8eaf6;
-  color: #1a237e;
+  background-color: #2c3e50;
+  color: #ffffff;
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.95em;
+  font-size: 0.85em;
+  letter-spacing: 0.5px;
+  border: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Efecto de flotado sobre las filas */
+}
+
+.batch-details-modal .progresivas-table tbody tr {
+  transition: background-color 0.2s ease;
 }
 
 .batch-details-modal .progresivas-table tbody tr:nth-child(even) {
-  background-color: #fcfcfc;
+  background-color: #f8f9fa;
 }
 
 .batch-details-modal .progresivas-table tbody tr:hover {
-  background-color: #e0e0e0;
+  background-color: #e3f2fd;
   cursor: pointer;
 }
 
@@ -870,14 +926,12 @@
   width: 100%;
   overflow-x: auto;
   margin-top: 20px;
-  max-height: 400px;
-  /* Altura fija para parecer Excel */
+  flex: 1;
   overflow-y: auto;
-  /* Scroll vertical */
   border: 1px solid #e0e0e0;
-  /* Borde para el "Excel" */
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-height: 200px;
 }
 
 .progresivas-table.horizontal-estratos {
@@ -1559,4 +1613,310 @@
   color: #666;
   height: 1.2em;
   /* Reserve space for text lines */
+}
+
+/* ==============================================================
+   DASHBOARD MODERN REDESIGN (TRAMOS UNIVERSAL)
+   ============================================================== */
+
+.dashboard-header-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  padding: 20px;
+  margin-bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.dashboard-header-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1a237e;
+  text-transform: uppercase;
+  border-bottom: 2px solid #eaedf1;
+  padding-bottom: 10px;
+}
+
+.dashboard-header-content {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.dashboard-project-info {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dashboard-project-stats {
+  flex: 1;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid #e9ecef;
+}
+
+.tramos-grid-container {
+  margin-top: 20px;
+}
+
+.tramos-grid-header {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 15px;
+  text-transform: uppercase;
+  background: #fff;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+}
+
+.tramos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.tramo-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  border: 1px solid #eaedf1;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.tramo-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.tramo-card-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  background-color: #fafbfc;
+}
+
+.tramo-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a237e;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.tramo-card-subtitle {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-top: 5px;
+}
+
+.tramo-card-body {
+  padding: 20px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.tramo-card-body p {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tramo-card-body p strong {
+  font-size: 0.8rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+
+.tramo-card-footer {
+  padding: 15px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: center;
+}
+
+.btn-detalles-completos {
+  width: 100%;
+  background-color: #1a237e;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-detalles-completos:hover {
+  background-color: #283593;
+}
+
+.tramo-checkbox-container {
+  display: flex;
+  align-items: center;
+  margin-right: 10px;
+}
+
+.tramo-quick-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px dashed #eaedf1;
+}
+
+.tramo-quick-actions button {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid #eaedf1;
+  background: #f8f9fa;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #495057;
+  display: flex;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.tramo-quick-actions button:hover {
+  background: #e2e6ea;
+  color: #1a237e;
+}
+
+/* ==============================================================
+   MODAL TRAMO DETAILS REDESIGN & PAGINATION
+   ============================================================== */
+
+.modal-tramo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.modal-tramo-info h3 {
+  color: #1a237e;
+  margin: 0 0 10px 0;
+  font-size: 1.6em;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  border: none;
+  padding: 0;
+}
+
+.tramo-badge {
+  font-size: 0.5em;
+  background-color: #ffd700;
+  color: #856404;
+  padding: 4px 10px;
+  border-radius: 12px;
+  margin-left: 15px;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+
+.modal-tramo-meta {
+  display: flex;
+  gap: 20px;
+  color: #555;
+  font-size: 0.95em;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+
+.modal-tramo-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.modal-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  margin-top: 25px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.pagination-btn {
+  background-color: #607d8b;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: #455a64;
+}
+
+.pagination-btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.pagination-total {
+  color: #777;
+  font-size: 0.85rem;
+  margin-left: 5px;
+}
+
+.btn-close-modal-top {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #888;
+  margin-left: 20px;
+  padding: 5px;
+  transition: color 0.2s, transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-close-modal-top:hover {
+  color: #d32f2f;
+  transform: scale(1.1);
 }

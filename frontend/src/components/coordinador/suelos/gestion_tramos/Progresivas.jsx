@@ -268,6 +268,10 @@ const Progresivas = () => {
   const [estratosPerfil, setEstratosPerfil] = useState([]);
   const [viewingEstratos, setViewingEstratos] = useState(null);
   const [viewingDetails, setViewingDetails] = useState(null); // Added to fix ReferenceError
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalSubProgresivas, setTotalSubProgresivas] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const itemsPerPage = 20;
   const [expandedEnsayos, setExpandedEnsayos] = useState({});
   const [isExporting, setIsExporting] = useState(false);
   const [showProjectSelectionForImport, setShowProjectSelectionForImport] = useState(false);
@@ -753,24 +757,25 @@ const Progresivas = () => {
     ).set('labels', { ok: 'Sí', cancel: 'No' });
   };
 
-  const handleViewDetails = async (progresiva) => {
+  const fetchPaginatedSubProgresivas = useCallback(async (progresivaId, page, search = '') => {
     setIsLoadingAction(true);
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/api/progresivas/${progresiva.id}/children/all`, { headers });
-
-      const subProgresivasData = Array.isArray(res.data) ? res.data : [];
+      const res = await axios.get(`${API_URL}/api/progresivas/${progresivaId}/children?page=${page}&limit=${itemsPerPage}&search=${encodeURIComponent(search)}`, { headers });
+      
+      const subProgresivasData = Array.isArray(res.data.data) ? res.data.data : [];
+      const total = res.data.total || 0;
+      
       const processedSubProgresivas = subProgresivasData.map(subProg => ({
         ...subProg,
         estratos_perfil: (subProg.estratos_perfil || []).map(estrato => ({
           ...estrato,
-          ensayos: estrato.ensayos || [] // Initialize ensayos if not present
+          ensayos: estrato.ensayos || []
         }))
       }));
 
-      setProgresivaDetails(progresiva);
       setSubProgresivas(processedSubProgresivas);
-      setViewingDetails(progresiva.id);
+      setTotalSubProgresivas(total);
     } catch (err) {
       if (err.message !== 'Token no proporcionado') {
         setComponentError(err.response?.data?.error || err.message);
@@ -778,7 +783,20 @@ const Progresivas = () => {
     } finally {
       setIsLoadingAction(false);
     }
+  }, [itemsPerPage]);
+
+  const handleViewDetails = (progresiva) => {
+    setProgresivaDetails(progresiva);
+    setViewingDetails(progresiva.id);
+    setCurrentPage(1);
+    setSearchTerm('');
   };
+
+  useEffect(() => {
+    if (viewingDetails) {
+      fetchPaginatedSubProgresivas(viewingDetails, currentPage, searchTerm);
+    }
+  }, [viewingDetails, currentPage, searchTerm, fetchPaginatedSubProgresivas]);
 
   const handleManageProgresiva = (progresiva) => {
     setProgresivaFormData({ ...progresiva, lado: progresiva.lado || '' });
@@ -1770,6 +1788,10 @@ const Progresivas = () => {
   }, [viewingDetails, location.state, subProgresivas]);
 
 
+  // Lógica de Paginación para el Modal de Detalles (Server-Side)
+  const totalPages = Math.ceil(totalSubProgresivas / itemsPerPage);
+  const paginatedSubProgresivas = subProgresivas; // Ya vienen paginadas desde el backend
+
   return (
     <div className="progresivas-container">
       <SeleccionarEstratosModal
@@ -2044,12 +2066,27 @@ const Progresivas = () => {
         document.body
       )}
 
-      {viewingDetails && progresivaDetails && (
-        <div className="overlay" onClick={() => setViewingDetails(null)}>
+      {viewingDetails && progresivaDetails && createPortal(
+        <div className="modal-tramo-overlay" onClick={() => setViewingDetails(null)}>
           <div className="batch-details-modal" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <h3>Detalles de {progresivaDetails.nombre}</h3>
-              <div style={{ display: 'flex', gap: '10px' }}>
+            <div className="modal-tramo-header">
+              <div className="modal-tramo-info">
+                <h3>TRAMO: {progresivaDetails.nombre}</h3>
+                <div className="modal-tramo-meta">
+                  <span><strong>Total:</strong> {progresivaDetails.longitud_total}m</span>
+                  <span><strong>Intervalo:</strong> {progresivaDetails.intervalo_manual || progresivaDetails.tipo_via}</span>
+                  <span><strong>Coord:</strong> {progresivaDetails.coordenada_este}, {progresivaDetails.coordenada_norte}</span>
+                  <span className={`status-badge ${getStatusClass(progresivaDetails.estado)}`} style={{ marginLeft: '10px' }}>{progresivaDetails.estado}</span>
+                </div>
+              </div>
+              <div className="modal-tramo-actions" style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Buscar progresiva (código o nombre)..."
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ccc', minWidth: '260px' }}
+                />
                 <input
                   type="file"
                   id="import-kml-points"
@@ -2059,15 +2096,23 @@ const Progresivas = () => {
                 />
                 <button
                   className="btn-warning"
-                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', fontSize: '0.9rem' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 15px', fontSize: '0.9rem', borderRadius: '6px', fontWeight: 'bold' }}
                   onClick={() => document.getElementById('import-kml-points').click()}
                 >
-                  <ImportIcon /> Importar Puntos KML
+                  <ImportIcon /> Importar KML
+                </button>
+                <button 
+                  className="btn-close-modal-top" 
+                  onClick={() => setViewingDetails(null)}
+                  title="Cerrar Detalles"
+                >
+                  ✖
                 </button>
               </div>
             </div>
+            
             <div className="table-wrapper">
-              {subProgresivas.length > 0 ? (
+              {paginatedSubProgresivas.length > 0 ? (
                 <table className="progresivas-table horizontal-estratos">
                   <thead>
                     <tr>
@@ -2085,9 +2130,9 @@ const Progresivas = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {subProgresivas.map((p, subIndex) => (
+                    {paginatedSubProgresivas.map((p, subIndex) => (
                       <tr key={p.id} id={`prog-row-${p.id}`}>
-                        <td>{subIndex + 1}</td>
+                        <td>{(currentPage - 1) * itemsPerPage + subIndex + 1}</td>
                         <td>
                           {(() => {
                             const displayCode = p.codigo;
@@ -2105,7 +2150,7 @@ const Progresivas = () => {
                         <td>{formatNumber(p.coordenada_norte)}</td>
                         <td>{p.linea}</td>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '40px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
                             {p.estratos_perfil ? p.estratos_perfil.length : 0}
                             {p.estratos_perfil && p.estratos_perfil.length > 0 && (
                               <button className="view-strata-btn" onClick={(e) => { e.stopPropagation(); handleViewEstratos(p); }}>
@@ -2132,12 +2177,38 @@ const Progresivas = () => {
                   </tbody>
                 </table>
               ) : (
-                <p>No hay progresivas.</p>
+                <p style={{ textAlign: 'center', padding: '20px' }}>No hay progresivas registradas.</p>
               )}
             </div>
-            <button onClick={() => setViewingDetails(null)} className="close-btn">Cerrar</button>
+            
+            {totalPages > 1 && (
+              <div className="modal-pagination">
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                  disabled={currentPage === 1}
+                  className="pagination-btn"
+                >
+                  Anterior
+                </button>
+                <span className="pagination-info">
+                  Página <strong>{currentPage}</strong> de {totalPages} <span className="pagination-total">({totalSubProgresivas} registros totales)</span>
+                </span>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                  disabled={currentPage === totalPages}
+                  className="pagination-btn"
+                >
+                  Siguiente
+                </button>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '25px' }}>
+              <button onClick={() => setViewingDetails(null)} className="close-btn" style={{ margin: 0, padding: '12px 40px' }}>Cerrar Detalles</button>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {managingProgresiva && progresivaFormData && (
@@ -2380,31 +2451,52 @@ const Progresivas = () => {
         </div>
       )}
 
-      <div className="progresivas-table-container">
+      {selectedProjectId && (
+        <div className="dashboard-header-card">
+          <div className="dashboard-header-title">
+            GEOPORTAL: DETALLE DEL PROYECTO ASIGNADO
+          </div>
+          <div className="dashboard-header-content">
+            <div className="dashboard-project-info">
+              <h3 style={{ margin: 0, color: '#333' }}>PROYECTO: {selectedProjectName || 'Nombre del Proyecto no disponible'}</h3>
+              <p style={{ margin: '5px 0 0 0', color: '#666' }}>Tramos registrados en el catálogo: {progresivas.length}</p>
+            </div>
+            <div className="dashboard-project-stats">
+              <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 'bold' }}>AVANCE ESTIMADO</p>
+              <div style={{ background: '#e9ecef', borderRadius: '10px', height: '10px', width: '100%' }}>
+                <div style={{ background: '#1a237e', width: '0%', height: '100%', borderRadius: '10px' }}></div>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: '#666' }}>ESTADO GLOBAL: <span className="status-badge status-en-revicion" style={{ marginLeft: '5px' }}>En Progreso</span></p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="tramos-grid-container">
+        <div className="tramos-grid-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>CATÁLOGO DE TRAMOS DEL PROYECTO ASIGNADO</span>
+          <label style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', textTransform: 'none', fontWeight: 'normal', color: '#555' }}>
+            <input type="checkbox" onChange={handleSelectAll} /> Seleccionar Todos
+          </label>
+        </div>
+        
         {loading ? (
           <p>Cargando...</p>
         ) : error ? (
           <p>Error: {error}</p>
         ) : (
-          <table className="progresivas-table">
-            <thead>
-              <tr>
-                <th><input type="checkbox" onChange={handleSelectAll} /></th>
-                <th>Tramo</th>
-                <th>Detalles</th>
-                <th>Valor total</th>
-                <th>Intervalo</th>
-                <th>Proyecto</th>
-                <th>Coord. Este</th>
-                <th>Coord. Norte</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {progresivas.map((p) => (
-                <tr key={p.id} className={selectedIds.includes(p.id) ? 'selected' : ''}>
-                  <td>
+          <div className="tramos-grid">
+            {progresivas.map((p) => (
+              <div key={p.id} className="tramo-card">
+                <div className="tramo-card-header">
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <h3 className="tramo-card-title">
+                      {p.nombre}
+                      {p.es_principal && <span style={{ color: 'gold', marginLeft: '5px' }} title="Tramo Principal">⭐</span>}
+                    </h3>
+                    <span className="tramo-card-subtitle">{p.proyecto_nombre || selectedProjectName || 'N/A'}</span>
+                  </div>
+                  <div className="tramo-checkbox-container">
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(p.id)}
@@ -2412,28 +2504,30 @@ const Progresivas = () => {
                       disabled={p.es_principal}
                       title={p.es_principal ? "Tramo Principal (Indestructible)" : "Seleccionar"}
                     />
-                  </td>
-                  <td><div className="caja-sombreada" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    {p.nombre} {p.es_principal && <span style={{ color: 'gold', cursor: 'help' }} title="Tramo Principal">⭐</span>}
-                  </div></td>
-                  <td><div className="caja-sombreada">{p.descripcion}</div></td>
-                  <td><div className="caja-sombreada">{p.longitud_total}</div></td>
-                  <td><div className="caja-sombreada">{p.intervalo_manual || p.tipo_via}</div></td>
-                  <td><div className="caja-sombreada">{p.proyecto_nombre || 'N/A'}</div></td>
-                  <td><div className="caja-sombreada">{p.coordenada_este}</div></td>
-                  <td><div className="caja-sombreada">{p.coordenada_norte}</div></td>
-                  <td>
-                    <div className={`status-badge ${getStatusClass(p.estado)}`}>
+                  </div>
+                </div>
+                
+                <div className="tramo-card-body">
+                  <p><strong>Detalles:</strong> {p.descripcion || 'Sin descripción'}</p>
+                  <p><strong>Valor Total:</strong> {p.longitud_total}</p>
+                  <p><strong>Intervalo:</strong> {p.intervalo_manual || p.tipo_via}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
+                    <p><strong>Coord. Este:</strong> {p.coordenada_este}</p>
+                    <p><strong>Coord. Norte:</strong> {p.coordenada_norte}</p>
+                  </div>
+                  <div style={{ marginTop: '5px', display: 'flex', alignItems: 'center' }}>
+                    <strong>Estado:</strong>
+                    <div className={`status-badge ${getStatusClass(p.estado)}`} style={{ marginLeft: '10px' }}>
                       {p.estado}
                     </div>
-                  </td>
-                  <td className="actions-cell">
-                    <button className="view-btn" onClick={() => handleViewDetails(p)} title="Ver Detalles"><EyeIcon /></button>
-                    <button className="edit-btn" onClick={() => handleEdit(p)} title="Editar"><EditIcon /></button>
-                    {p.kml_trazado_id && ( // Conditionally render if KML exists
-                      <button className="map-btn" onClick={() => handleViewKmlMap(p)} title="Ver KML en Mapa"><MapIcon /></button>
+                  </div>
+                  
+                  <div className="tramo-quick-actions">
+                    <button onClick={() => handleEdit(p)} title="Editar Tramo"><EditIcon /></button>
+                    {p.kml_trazado_id && (
+                      <button onClick={() => handleViewKmlMap(p)} title="Ver KML en Mapa"><MapIcon /></button>
                     )}
-                    <label className="docx-upload-btn" title="Importar Panel Fotográfico (Word)" style={{ marginLeft: '5px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: '#2b5797' }} onClick={(e) => e.stopPropagation()}>
+                    <label title="Importar Panel Fotográfico (Word)" style={{ flex: 1, padding: '6px', border: '1px solid #eaedf1', background: '#f8f9fa', borderRadius: '4px', cursor: 'pointer', display: 'flex', justifyContent: 'center', color: '#495057', transition: 'all 0.2s' }} onClick={(e) => e.stopPropagation()}>
                       <input
                         type="file"
                         accept=".docx"
@@ -2443,11 +2537,17 @@ const Progresivas = () => {
                       />
                       {isUploadingDocx ? <span style={{ fontSize: '10px' }}>...</span> : <WordIcon />}
                     </label>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+
+                <div className="tramo-card-footer">
+                  <button className="btn-detalles-completos" onClick={() => handleViewDetails(p)}>
+                    VER DETALLES COMPLETOS
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
