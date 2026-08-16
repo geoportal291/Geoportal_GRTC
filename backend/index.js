@@ -25,48 +25,6 @@ const tokml = require('tokml');
 const archiver = require('archiver');
 const FormData = require('form-data');
 const db = require('./conexion');
-
-// Inyección temporal de la migración de Fuentes de Agua
-(async () => {
-    try {
-        console.log('[MIGRATION] Verificando e inyectando tablas de Fuentes de Agua...');
-        const sql = `
-        CREATE TABLE IF NOT EXISTS fuentes_agua_suelos (
-            id SERIAL PRIMARY KEY,
-            id_proyecto INTEGER REFERENCES proyectos(id) ON DELETE CASCADE,
-            nombre VARCHAR(255) NOT NULL,
-            descripcion TEXT,
-            estado VARCHAR(50) DEFAULT 'Activa',
-            coordenada_este DECIMAL(12, 3),
-            coordenada_norte DECIMAL(12, 3),
-            id_progresiva_referencia INTEGER REFERENCES progresivas(id) ON DELETE SET NULL,
-            desplazamiento_km DECIMAL(8, 2),
-            lado VARCHAR(20),
-            kml_id INTEGER,
-            latitud DECIMAL(10, 8),
-            longitud DECIMAL(11, 8),
-            tramo_id INTEGER REFERENCES progresivas(id) ON DELETE CASCADE,
-            codigo VARCHAR(50),
-            propietario VARCHAR(255),
-            CONSTRAINT uq_fuentes_agua_suelos_tramo_codigo UNIQUE (tramo_id, codigo)
-        );
-
-        CREATE TABLE IF NOT EXISTS fuente_agua_imagenes_suelos (
-            id SERIAL PRIMARY KEY,
-            fuente_agua_id INTEGER REFERENCES fuentes_agua_suelos(id) ON DELETE CASCADE,
-            imagen_url VARCHAR(255) NOT NULL,
-            descripcion TEXT,
-            nombre_archivo VARCHAR(255),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        `;
-        await db.query(sql);
-        console.log('[MIGRATION] Tablas de Fuentes de Agua verificadas/creadas con éxito.');
-    } catch (err) {
-        console.error('[MIGRATION ERROR] Error al crear tablas de Fuentes de Agua:', err.message);
-    }
-})();
-
 const distritosService = require('./services/distritosService');
 const ensayosService = require('./services/ensayosService');
 const granulometriaService = require('./services/granulometriaService');
@@ -355,7 +313,8 @@ const authenticateToken = async (req, res, next) => {
     }
 };
 
-// Middleware de autorización específico para Geología
+
+
 const authorizeGeologyManage = async (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'No autenticado' });
 

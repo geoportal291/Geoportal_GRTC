@@ -1303,3 +1303,22 @@ CREATE POLICY "Autenticados pueden gestionar cotizaciones" ON cotizaciones FOR A
 CREATE POLICY "Autenticados pueden gestionar detalle_cotizacion" ON detalle_cotizacion FOR ALL TO authenticated USING (true);
 CREATE POLICY "Autenticados pueden gestionar configuracion" ON configuracion FOR ALL TO authenticated USING (true);
 
+
+-- Corrige URLs de CineHDPlus que se guardaron mal como /ver-pelicula/
+UPDATE movies 
+SET url = REPLACE(url, '/ver-pelicula/', '/pelicula/') || '.html'
+WHERE provider = 'cinehdplus' 
+  AND url LIKE '%/ver-pelicula/%' 
+  AND url NOT LIKE '%.html';
+
+-- Consulta para ver qué películas de CineHDPlus tienen la URL incorrecta
+SELECT id, title, slug, url, provider
+FROM movies
+WHERE provider = 'cinehdplus' 
+  AND url LIKE '%/ver-pelicula/%' 
+  AND url NOT LIKE '%.html';
+
+-- Consulta para verificar que la URL guardada por el scraper es correcta
+SELECT title, url, synopsis, provider
+FROM movies
+WHERE slug = '75754-posesion-infernal-en-llamas-ver-online-hd';
