@@ -6,7 +6,7 @@ import { useAuth } from '../../../../data/contexts/AuthContext';
 import CanteraFormModal from './CanteraFormModal';
 import SuelosMap from '../mapa/SuelosMap';
 import './GestorDeCanteras.css';
-import '../proyectos/GestorProyectos.css';
+import '../ui/GestorProyectos.css';
 import '../ui/DashboardSuelos.css';
 import FormularioEnsayo from '../ensayos/FormularioEnsayo';
 import EnsayoDetalleModal from '../ensayos/EnsayoDetalleModal';

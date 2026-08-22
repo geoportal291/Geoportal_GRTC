@@ -9,7 +9,7 @@ import DashboardSuelos from './DashboardSuelos'; // NEW: Import Dashboard
 import Vista3D from '../3d/Vista3D'; // IMPORTAR VISTA 3D
 import EnsayosContainer from '../ensayos/EnsayosContainer';
 
-import '../proyectos/GestorProyectos.css'; // Importar los estilos de navegación unificada
+import './GestorProyectos.css'; // Importar los estilos de navegación unificada
 
 export default function RecoleccionDeDatosContainer({ viewMode }) {
   const navigate = useNavigate();

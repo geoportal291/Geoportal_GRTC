@@ -6,7 +6,7 @@ import { useAuth } from '../../../../data/contexts/AuthContext';
 import FuenteFormModal from './FuenteFormModal';
 import SuelosMap from '../mapa/SuelosMap';
 import './GestorDeFuentesDeAgua.css';
-import '../proyectos/GestorProyectos.css';
+import '../ui/GestorProyectos.css';
 import '../ui/DashboardSuelos.css';
 import FormularioEnsayo from '../ensayos/FormularioEnsayo';
 import EnsayoDetalleModal from '../ensayos/EnsayoDetalleModal';

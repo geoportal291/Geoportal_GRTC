@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import '../../suelos/proyectos/GestorProyectos.css';
+import '../ui/GestorProyectos.css';
 import alertify from 'alertifyjs';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../../data/contexts/AuthContext';
