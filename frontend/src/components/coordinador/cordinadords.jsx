@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardActual from './DashboardActual'; // Import the new component
-import IndiceExpedienteSPP from './ingeneria/IndiceExpedienteSPP'; // Import the new component
+import IndiceExpedienteSPP from './ingenieria/IndiceExpedienteSPP'; // Import the new component
 
 export default function CoordinadorDashboard() {
   const [sidebarCollapsed] = useState(false);

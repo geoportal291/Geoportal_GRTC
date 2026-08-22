@@ -13,7 +13,7 @@ import FrmUsuarios from './components/coordinador/config/frmusuarios';
 import FrmUsuarios2 from './components/coordinador/config/frmusuarios2';
 import Tareas from './components/coordinador/tareas/tareas';
 import Layout from './components/coordinador/layout';
-import Mdesuelos from './components/coordinador/ingeneria/mecanicadesuelos';
+import Mdesuelos from './components/coordinador/ingenieria/mecanicadesuelos';
 import RutaPrivada from './components/RutaPrivada';
 import Perfil from './components/Perfil'; // Nuevo componente de perfil
 import PermisosManagement from './components/coordinador/config/PermisosManagement';
@@ -35,15 +35,15 @@ import EnsayoReporteImprimible from './components/coordinador/suelos/ensayos/Ens
 // Visitante
 
 
-import Traficods from './components/coordinador/ingeneria/trafico/trafico.jsx';
-import TraficoV2 from './components/coordinador/ingeneria/trafico_v2/TraficoV2.jsx';
-import GeoTestPage from './components/coordinador/ingeneria/trafico/GeoTestPage.jsx'; // <-- Importar página de prueba
+import Traficods from './components/coordinador/ingenieria/trafico/trafico.jsx';
+import TraficoV2 from './components/coordinador/ingenieria/trafico_v2/TraficoV2.jsx';
+import GeoTestPage from './components/coordinador/ingenieria/trafico/GeoTestPage.jsx'; // <-- Importar página de prueba
 import TestMapWithRoute from './components/coordinador/testmapa'; // <-- Importar componente de mapa de prueba
 import Geoite from './components/coordinador/pruebas/geoite'; // <-- Importar componente de mapa de prueba
-import Vialds from './components/coordinador/ingeneria/invvial/vial.jsx'; // <-- NUEVO: Importar Vialds
-import Geologia from './components/coordinador/ingeneria/geologia/Geologia.jsx'; // <-- NUEVO: Importar Geologia
-import DisenosIngenieria from './components/coordinador/ingeneria/DisenosIngenieria.jsx';
-import DisenoGeometricoModule from './components/coordinador/ingeneria/disenos_ingenieria/disenos_geometricos/DisenoGeometricoModule.jsx';
+import Vialds from './components/coordinador/ingenieria/invvial/vial.jsx'; // <-- NUEVO: Importar Vialds
+import Geologia from './components/coordinador/ingenieria/geologia/Geologia.jsx'; // <-- NUEVO: Importar Geologia
+import DisenosIngenieria from './components/coordinador/ingenieria/DisenosIngenieria.jsx';
+import DisenoGeometricoModule from './components/coordinador/ingenieria/disenos_ingenieria/disenos_geometricos/DisenoGeometricoModule.jsx';
 
 // Ensayos
 import Ensayos from './ensayos/layout.jsx';
