@@ -1,70 +1,68 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { PageTitleProvider, usePageTitle } from '@/data/contexts/PageTitleContext';
-import { useAuth } from './data/contexts/AuthContext';
+import { useAuth, AuthProvider } from './data/contexts/AuthContext';
 import { logAuditEvent } from './api/audit';
-
-// Importa tus componentes
-import Login from './components/login';
-import Menu from './components/menu';
-import FrmUsuarios from './components/coordinador/config/frmusuarios';
-import FrmUsuarios2 from './components/coordinador/config/frmusuarios2';
-import Tareas from './components/coordinador/tareas/tareas';
-import Layout from './components/coordinador/layout';
-import Mdesuelos from './components/coordinador/ingenieria/mecanicadesuelos';
-import RutaPrivada from './components/RutaPrivada';
-import Perfil from './components/Perfil'; // Nuevo componente de perfil
-import PermisosManagement from './components/coordinador/config/PermisosManagement';
-import NavbarVisibilityManagement from './components/coordinador/config/NavbarVisibilityManagement'; // Nuevo
-import UserProjectAssignment from './components/coordinador/config/UserProjectAssignment'; // Nuevo
-import Auditoria from './components/coordinador/config/Auditoria'; // Nuevo
-import Calendario from './components/coordinador/calendario/calendar.jsx';
-import CoordinadorDashboard from './components/coordinador/cordinadords.jsx';
-import DashPrincipal from './components/coordinador/DashPrincipal.jsx'; // NUEVO: Importar DashPrincipal
-import AmigoSecretoDashboard from './components/eventos/AmigoSecretoDashboard'; // NUEVO
-import GestionarParticipantes from './components/eventos/GestionarParticipantes'; // NUEVO
-// Coordinado
-import Proyectos from './components/coordinador/suelos/proyectosv2/ProyectosV2';
-import SuelosIndex from './components/coordinador/suelos/SuelosIndex';
-import Progresivas from './components/coordinador/suelos/gestion_tramos/Progresivas';
-import EnsayosContainer from './components/coordinador/suelos/ensayos/EnsayosContainer';
-import EnsayoReporteImprimible from './components/coordinador/suelos/ensayos/EnsayoReporteImprimible'; // NUEVO REPORT A4
-//import GestorDeMaterialesContainer from './components/coordinador/suelos/GestorDeMaterialesContainer'; // NUEVO: Importar  
-// Visitante
-
-
-import Traficods from './components/coordinador/ingenieria/trafico/trafico.jsx';
-import TraficoV2 from './components/coordinador/ingenieria/trafico_v2/TraficoV2.jsx';
-import GeoTestPage from './components/coordinador/ingenieria/trafico/GeoTestPage.jsx'; // <-- Importar página de prueba
-import TestMapWithRoute from './components/coordinador/testmapa'; // <-- Importar componente de mapa de prueba
-import Geoite from './components/coordinador/pruebas/geoite'; // <-- Importar componente de mapa de prueba
-import Vialds from './components/coordinador/ingenieria/invvial/vial.jsx'; // <-- NUEVO: Importar Vialds
-import Geologia from './components/coordinador/ingenieria/geologia/Geologia.jsx'; // <-- NUEVO: Importar Geologia
-import DisenosIngenieria from './components/coordinador/ingenieria/DisenosIngenieria.jsx';
-import DisenoGeometricoModule from './components/coordinador/ingenieria/disenos_ingenieria/disenos_geometricos/DisenoGeometricoModule.jsx';
-
-// Ensayos
-import Ensayos from './ensayos/layout.jsx';
-
-// Página No Encontrada
-import NotFound from './components/coordinador/NotFound';
-
-
-
-import ChangelogManagement from './components/coordinador/config/ChangelogManagement';
-import Reportes from './components/coordinador/reportes/Reportes';
-import ProjectSelectionModal from './components/ProjectSelectionModal'; // NEW: Import ProjectSelectionModal
-
-
-
-
-
-
-import { AuthProvider } from './data/contexts/AuthContext';
-
 import { HelmetProvider } from 'react-helmet-async';
+
+// --- Carga inmediata ---
+// Solo lo que se necesita en el primer render: la pantalla de acceso, el guardián
+// de rutas, la cáscara común y la pantalla de error. El resto va más abajo, diferido.
+import Login from './components/login';
+import RutaPrivada from './components/RutaPrivada';
+import Layout from './components/coordinador/layout';
+import NotFound from './components/coordinador/NotFound';
+import ProjectSelectionModal from './components/ProjectSelectionModal';
+import CargandoPantalla from './components/CargandoPantalla';
+
+// --- Carga diferida (un archivo por pantalla, se descarga al entrar) ---
+const Menu = lazy(() => import('./components/menu'));
+const Perfil = lazy(() => import('./components/Perfil'));
+const Calendario = lazy(() => import('./components/coordinador/calendario/calendar.jsx'));
+const CoordinadorDashboard = lazy(() => import('./components/coordinador/cordinadords.jsx'));
+const DashPrincipal = lazy(() => import('./components/coordinador/DashPrincipal.jsx'));
+const Tareas = lazy(() => import('./components/coordinador/tareas/tareas'));
+const Reportes = lazy(() => import('./components/coordinador/reportes/Reportes'));
+
+// Configuración
+const FrmUsuarios = lazy(() => import('./components/coordinador/config/frmusuarios'));
+const FrmUsuarios2 = lazy(() => import('./components/coordinador/config/frmusuarios2'));
+const PermisosManagement = lazy(() => import('./components/coordinador/config/PermisosManagement'));
+const NavbarVisibilityManagement = lazy(() => import('./components/coordinador/config/NavbarVisibilityManagement'));
+const UserProjectAssignment = lazy(() => import('./components/coordinador/config/UserProjectAssignment'));
+const Auditoria = lazy(() => import('./components/coordinador/config/Auditoria'));
+const ChangelogManagement = lazy(() => import('./components/coordinador/config/ChangelogManagement'));
+
+// Eventos
+const AmigoSecretoDashboard = lazy(() => import('./components/eventos/AmigoSecretoDashboard'));
+const GestionarParticipantes = lazy(() => import('./components/eventos/GestionarParticipantes'));
+
+// Suelos
+const Proyectos = lazy(() => import('./components/coordinador/suelos/proyectosv2/ProyectosV2'));
+const SuelosIndex = lazy(() => import('./components/coordinador/suelos/SuelosIndex'));
+const Progresivas = lazy(() => import('./components/coordinador/suelos/gestion_tramos/Progresivas'));
+const EnsayosContainer = lazy(() => import('./components/coordinador/suelos/ensayos/EnsayosContainer'));
+const EnsayoReporteImprimible = lazy(() => import('./components/coordinador/suelos/ensayos/EnsayoReporteImprimible'));
+
+// Ingeniería
+const Mdesuelos = lazy(() => import('./components/coordinador/ingenieria/mecanicadesuelos'));
+const Geologia = lazy(() => import('./components/coordinador/ingenieria/geologia/Geologia.jsx'));
+const DisenosIngenieria = lazy(() => import('./components/coordinador/ingenieria/DisenosIngenieria.jsx'));
+const DisenoGeometricoModule = lazy(() => import('./components/coordinador/ingenieria/disenos_ingenieria/disenos_geometricos/DisenoGeometricoModule.jsx'));
+
+// Tráfico e inventario vial: estas 3 las monta Layout por su cuenta según la URL
+// (ver layout.jsx), pero se declaran aquí para que las rutas existan.
+const Traficods = lazy(() => import('./components/coordinador/ingenieria/trafico/trafico.jsx'));
+const TraficoV2 = lazy(() => import('./components/coordinador/ingenieria/trafico_v2/TraficoV2.jsx'));
+const Vialds = lazy(() => import('./components/coordinador/ingenieria/invvial/vial.jsx'));
+
+// Pantallas de prueba (sin enlace en el menú, ver docs/rutas-y-modulos.md)
+const GeoTestPage = lazy(() => import('./components/coordinador/ingenieria/trafico/GeoTestPage.jsx'));
+const TestMapWithRoute = lazy(() => import('./components/coordinador/testmapa'));
+const Geoite = lazy(() => import('./components/coordinador/pruebas/geoite'));
+const Ensayos = lazy(() => import('./ensayos/layout.jsx'));
 
 function App() {
     return (
@@ -134,6 +132,7 @@ function AppContent() {
 
     return (
         <div className="principal">
+          <Suspense fallback={<CargandoPantalla />}>
             <Routes>
                 {/* Login */}
                 <Route path="/" element={<Login />} />
@@ -203,6 +202,7 @@ function AppContent() {
                 {/* Página No Encontrada */}
                 <Route path="*" element={<NotFound />} />
             </Routes>
+          </Suspense>
             {/* <div className="app-version">
                 Versión: 0.1.0-alpha.3
             </div> */}

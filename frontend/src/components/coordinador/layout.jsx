@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import Header from './header';
 import Navbar from './navbar';
 import ChangelogModal from '../ChangelogModal';
-import Traficods from './ingenieria/trafico/trafico.jsx';
-import TraficoV2 from './ingenieria/trafico_v2/TraficoV2.jsx';
-import Vialds from './ingenieria/invvial/vial.jsx';
 import { TrafficOptionProvider } from '../../data/contexts/TrafficOptionContext';
 import { VialOptionProvider } from '../../data/contexts/VialOptionContext';
 import { useAuth } from '../../data/contexts/AuthContext';
+import CargandoPantalla from '../CargandoPantalla';
 import '../ChangelogModal.css';
+
+// Diferidos: Layout los monta según la URL, pero Layout se usa en TODAS las páginas.
+// Importarlos de forma directa metía tráfico e inventario vial en el paquete inicial.
+const Traficods = lazy(() => import('./ingenieria/trafico/trafico.jsx'));
+const TraficoV2 = lazy(() => import('./ingenieria/trafico_v2/TraficoV2.jsx'));
+const Vialds = lazy(() => import('./ingenieria/invvial/vial.jsx'));
 
 const EXPANDED_SIDEBAR_WIDTH = '275px';
 const COLLAPSED_SIDEBAR_WIDTH = '60px';
@@ -99,19 +103,21 @@ export default function Layout({ children, setPageTitle }) {
             zIndex: 0
           }}
         >
-          {location.pathname === '/coordinador/ingenieria/trafico/trafico' ? (
-            <TrafficOptionProvider value={trafficOption}>
-              <Traficods isNavbarExpanded={!collapsed} />
-            </TrafficOptionProvider>
-          ) : location.pathname === '/coordinador/ingenieria/trafico/traficov2' ? (
-            <TraficoV2 isNavbarExpanded={!collapsed} />
-          ) : location.pathname === '/ingenieria/inventario-vial' ? (
-            <VialOptionProvider value={{ vialHeaderOption: vialOption, setVialHeaderOption: setVialOption }}>
-              <Vialds isNavbarExpanded={!collapsed} />
-            </VialOptionProvider>
-          ) : (
-            React.cloneElement(children, { isSidebarCollapsed: collapsed })
-          )}
+          <Suspense fallback={<CargandoPantalla />}>
+            {location.pathname === '/coordinador/ingenieria/trafico/trafico' ? (
+              <TrafficOptionProvider value={trafficOption}>
+                <Traficods isNavbarExpanded={!collapsed} />
+              </TrafficOptionProvider>
+            ) : location.pathname === '/coordinador/ingenieria/trafico/traficov2' ? (
+              <TraficoV2 isNavbarExpanded={!collapsed} />
+            ) : location.pathname === '/ingenieria/inventario-vial' ? (
+              <VialOptionProvider value={{ vialHeaderOption: vialOption, setVialHeaderOption: setVialOption }}>
+                <Vialds isNavbarExpanded={!collapsed} />
+              </VialOptionProvider>
+            ) : (
+              React.cloneElement(children, { isSidebarCollapsed: collapsed })
+            )}
+          </Suspense>
         </div>
       </div>
       <ChangelogModal />
