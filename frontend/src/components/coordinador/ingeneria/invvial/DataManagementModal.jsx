@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { toLatLon } from 'utm';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import alertify from 'alertifyjs';
 import Swal from 'sweetalert2';
 

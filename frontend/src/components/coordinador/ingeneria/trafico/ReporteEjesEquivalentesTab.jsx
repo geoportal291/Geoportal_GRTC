@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Polyline, Popup, useMap } from 'react-leaflet';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import ImageDisplayModal from './ImageDisplayModal';
 
 import alertify from 'alertifyjs';
@@ -10,7 +10,7 @@ import { CSSTransition } from 'react-transition-group';
 import * as XLSX from 'xlsx';
 import UploadTrafficDataModal from './UploadTrafficDataModal';
 import EjesEquivalentesModal from './EjesEquivalentesModal';
-import ErrorBoundary from '../../../ErrorBoundary';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Componente para manejar la vista del mapa (adaptado para sectionData)
 const MapViewController = ({ sectionData, setView, view }) => {

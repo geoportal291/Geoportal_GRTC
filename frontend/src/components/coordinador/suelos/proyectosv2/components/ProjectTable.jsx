@@ -1,7 +1,7 @@
 import React from "react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Button } from "./SharedComponents";
-import departamentosData from "../../../../../data/ubigeo/ubigeo_peru_2016_departamentos.json";
-import provinciasData from "../../../../../data/ubigeo/ubigeo_peru_2016_provincias.json";
+import departamentosData from "@/data/ubigeo/ubigeo_peru_2016_departamentos.json";
+import provinciasData from "@/data/ubigeo/ubigeo_peru_2016_provincias.json";
 
 // Helper functions (Consider moving to a utils file if used elsewhere)
 const getDepartmentName = (id) => departamentosData.find(d => d.id === id)?.name || id;

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Doughnut, Pie } from 'react-chartjs-2';
 import DashboardMap from './DashboardMap';

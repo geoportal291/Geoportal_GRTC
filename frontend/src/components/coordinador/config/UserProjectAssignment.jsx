@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import { FaUserPlus, FaSave, FaTimes } from 'react-icons/fa';
-import { useAuth } from '../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import './PermisosManagement.css'; // Reusing some styles
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE || '';

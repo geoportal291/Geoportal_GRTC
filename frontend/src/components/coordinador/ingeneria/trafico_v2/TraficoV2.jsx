@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import axiosInstance from '../../../../api/axios';
-import { useAuth } from '../../../../data/contexts/AuthContext';
-import { usePageTitle } from '../../../contexts/PageTitleContext';
+import axiosInstance from '@/api/axios';
+import { useAuth } from '@/data/contexts/AuthContext';
+import { usePageTitle } from '@/data/contexts/PageTitleContext';
 import TraficoV2Internal from './TraficoV2Internal';
 import TraficoV2External from './TraficoV2External';
 import TrafficViewSelectionModal from './components/TrafficViewSelectionModal';

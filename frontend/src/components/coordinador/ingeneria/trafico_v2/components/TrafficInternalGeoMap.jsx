@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMap, Marker, Popup } from 'react-leaflet';
 import { divIcon } from 'leaflet';
-import axiosInstance from '../../../../../api/axios';
-import ErrorBoundary from '../../../../ErrorBoundary';
+import axiosInstance from '@/api/axios';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import Geoite from '../../invvial/map/geoite';
 
 const NAS_PUBLIC_BASE_URL = 'https://files.dafe.it.com/geoportal';

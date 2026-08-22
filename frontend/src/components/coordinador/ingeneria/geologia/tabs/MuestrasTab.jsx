@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import axiosInstance from '../../../../../api/axios';
-import { useAuth } from '../../../../../data/contexts/AuthContext';
+import axiosInstance from '@/api/axios';
+import { useAuth } from '@/data/contexts/AuthContext';
 import GeologiaGeoite from '../map/GeologiaGeoite';
 import GeologiaLayerManager from '../map/GeologiaLayerManager';
 import alertify from 'alertifyjs';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axiosInstance from '../../../api/axios';
-import { usePageTitle } from '../../contexts/PageTitleContext';
+import axiosInstance from '@/api/axios';
+import { usePageTitle } from '@/data/contexts/PageTitleContext';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import './Auditoria.css';

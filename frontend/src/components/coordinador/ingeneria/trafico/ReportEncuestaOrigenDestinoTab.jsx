@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import { divIcon } from 'leaflet';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import * as XLSX from 'xlsx';
 import { Line, Bar, Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
@@ -16,7 +16,7 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 import AnalysisModal from './AnalysisModal'; // Importar el nuevo modal
 
 import './EstacionControlTab.css';
-import ErrorBoundary from '../../../ErrorBoundary';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Primero definimos el plugin
 const percentageTextPlugin = {

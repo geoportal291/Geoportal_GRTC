@@ -3,7 +3,7 @@ import axios from 'axios';
 import alertify from 'alertifyjs';
 import ProjectTable from './components/ProjectTable';
 import FullProjectForm from './components/FullProjectForm';
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 
 import ProjectDetailView from './components/ProjectDetailView';
 

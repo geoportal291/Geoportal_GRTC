@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import axiosInstance from '../../../../../api/axios';
-import { useAuth } from '../../../../../data/contexts/AuthContext';
+import axiosInstance from '@/api/axios';
+import { useAuth } from '@/data/contexts/AuthContext';
 import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';

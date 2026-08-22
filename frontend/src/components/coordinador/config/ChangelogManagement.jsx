@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
-import { usePageTitle } from '../../contexts/PageTitleContext';
+import { usePageTitle } from '@/data/contexts/PageTitleContext';
 import { useEffect } from 'react';
 
 import './ChangelogManagement.css';

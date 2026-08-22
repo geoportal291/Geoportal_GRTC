@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { API_BASE_URL } from '../../../../../api/config';
+import { API_BASE_URL } from '@/api/config';
 import TrafficKpiPanel from '../components/TrafficKpiPanel';
 import TrafficMapPanel from '../components/TrafficMapPanel';
 import TrafficInsightPanel from '../components/TrafficInsightPanel';

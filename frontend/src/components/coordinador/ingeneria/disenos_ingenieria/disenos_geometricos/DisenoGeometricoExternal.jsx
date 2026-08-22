@@ -6,8 +6,8 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
 import * as turf from '@turf/turf';
-import axiosInstance from '../../../../../api/axios';
-import { useAuth } from '../../../../../data/contexts/AuthContext';
+import axiosInstance from '@/api/axios';
+import { useAuth } from '@/data/contexts/AuthContext';
 import './DisenoGeometricoModes.css';
 import './DisenoGeometrico.css';
 

@@ -3,7 +3,7 @@ import axios from 'axios';
 import '../ui/GestorProyectos.css';
 import alertify from 'alertifyjs';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import FormularioEnsayo from '../ensayos/FormularioEnsayo';
 import EnsayoDetalleModal from '../ensayos/EnsayoDetalleModal';
 import EstratoItem from '../estratos/EstratoItem'; // Import the new EstratoItem component

@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import alertify from "alertifyjs";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { useAuth } from "../../../../data/contexts/AuthContext";
+import { useAuth } from "@/data/contexts/AuthContext";
 import ResultadosBrevesModal from "./ResultadosBrevesModal";
 import EnsayoDetalleModal from "./EnsayoDetalleModal";
 import { getEnsayoCompletionStatus } from "./ensayos.estado.js";

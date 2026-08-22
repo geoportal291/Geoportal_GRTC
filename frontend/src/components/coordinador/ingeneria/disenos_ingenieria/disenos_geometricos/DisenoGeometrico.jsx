@@ -11,9 +11,9 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import shp from 'shpjs';
 import { DOMParser } from 'xmldom';
-import axiosInstance from '../../../../../api/axios';
-import { useAuth } from '../../../../../data/contexts/AuthContext';
-import { usePageTitle } from '../../../../contexts/PageTitleContext';
+import axiosInstance from '@/api/axios';
+import { useAuth } from '@/data/contexts/AuthContext';
+import { usePageTitle } from '@/data/contexts/PageTitleContext';
 import './DisenoGeometrico.css';
 
 const ACCEPTED_FILE_TYPES = '.zip,.rar,.kml,.kmz';

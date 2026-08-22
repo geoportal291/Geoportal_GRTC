@@ -6,7 +6,7 @@ import SimpleCreateModal from './components/SimpleCreateModal';
 import AssignModal from './components/AssignModal';
 import FullProjectForm from './components/FullProjectForm';
 import { Button } from './components/SharedComponents';
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 
 const AdminProjectsView = () => {
     const API_URL = process.env.REACT_APP_API_BASE || '';

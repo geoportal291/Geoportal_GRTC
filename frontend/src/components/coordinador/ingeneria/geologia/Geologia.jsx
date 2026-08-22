@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import GeologiaInternal from './GeologiaInternal';
 import GeologiaExternal from './GeologiaExternal';
 

@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import alertify from 'alertifyjs';
 import './SeleccionarEstratosModal.css';
-import { getTiposDeEnsayo } from '../../../../api/ensayosAPI'; // Import the new API function
+import { getTiposDeEnsayo } from '@/api/ensayosAPI'; // Import the new API function
 import AssayTypeSelector from './AssayTypeSelector'; // Import the new AssayTypeSelector component
-import { cn } from '../../../../lib/utils';
+import { cn } from '@/lib/utils';
 
 const SeleccionarEstratosModal = ({ isOpen, onClose, data, onConfirm }) => {
   const [selectedEstratos, setSelectedEstratos] = useState({});

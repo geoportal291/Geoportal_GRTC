@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Doughnut, Line } from 'react-chartjs-2';
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -13,14 +13,14 @@ import {
   LineElement,
   Title
 } from 'chart.js';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import { useNavigate } from 'react-router-dom';
 import alertify from 'alertifyjs';
 import ReactDOM from 'react-dom';
 import SuelosMap from '../mapa/SuelosMap';
 import 'leaflet/dist/leaflet.css';
 import './DashboardSuelos.css';
-import useProgresivasData from '../../../../hooks/useProgresivasData';
+import useProgresivasData from '@/hooks/useProgresivasData';
 import ProgresivaImageGalleryModal from '../gestion_tramos/ProgresivaImageGalleryModal';
 import { toLatLon } from 'utm';
 import { calcularResultados } from '../ensayos/ensayos.calculos.js';

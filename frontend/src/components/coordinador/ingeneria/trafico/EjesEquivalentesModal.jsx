@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.min.css';
 import 'alertifyjs/build/css/themes/default.min.css';

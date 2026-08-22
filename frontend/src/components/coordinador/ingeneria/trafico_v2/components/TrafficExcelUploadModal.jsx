@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import axiosInstance from '../../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import * as XLSX from 'xlsx';
 
 const TrafficExcelUploadModal = ({ isOpen, onClose, entityId, selectedEntity, moduleConfig, setExtractedTrafficData }) => {

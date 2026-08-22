@@ -9,7 +9,7 @@ import { kml } from '@tmcw/togeojson';
 import { DOMParser } from 'xmldom';
 import alertify from 'alertifyjs'; // Add this line
 import './geoite.css';
-import axiosInstance from '../../../api/axios';
+import axiosInstance from '@/api/axios';
 import { saveAs } from 'file-saver';
 
 

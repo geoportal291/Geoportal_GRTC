@@ -3,7 +3,7 @@ import { FaUserShield, FaUsers, FaKey, FaSave, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import './PermisosManagement.css';
-import { useAuth } from '../../../data/contexts/AuthContext'; // Importar useAuth
+import { useAuth } from '@/data/contexts/AuthContext'; // Importar useAuth
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE || '';
 

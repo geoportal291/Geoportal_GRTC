@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
-import axiosInstance from '../../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.min.css';
 import 'alertifyjs/build/css/themes/default.min.css';
-import { useAuth } from '../../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import {
   buildProcessingPipeline,
   formatDate,

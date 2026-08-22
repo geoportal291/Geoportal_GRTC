@@ -6,7 +6,7 @@ import Geoite from '../map/geoite';
 import '../map/geoite.css';
 import ListaAlcantarillasModal from './ListaAlcantarillasModal';
 import ExportarMapaModal from './ExportarMapaModal';
-import axiosInstance from '../../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import { saveAs } from 'file-saver';
 import ImagePreviewModal from './ImagePreviewModal';
 import { fromLatLon } from 'utm';

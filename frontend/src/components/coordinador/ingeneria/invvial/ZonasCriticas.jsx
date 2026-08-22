@@ -6,7 +6,7 @@ import Geoite from './map/geoite'; // Corrected path
 import './map/geoite.css'; // Corrected path
 import ListaZonasCriticasModal from './obras/ListaZonasCriticasModal'; // Corrected path
 import ExportarMapaModal from './obras/ExportarMapaModal'; // Corrected path
-import axiosInstance from '../../../../api/axios'; // Corrected path (4 levels up to src)
+import axiosInstance from '@/api/axios'; // Corrected path (4 levels up to src)
 import { saveAs } from 'file-saver';
 import ImagePreviewModal from './obras/ImagePreviewModal';
 import ObservationsSidebar from './obras/ObservationsSidebar';

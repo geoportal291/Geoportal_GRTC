@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react'; // React imported
 import axios from 'axios';
 import AdminProjectsView from './AdminProjectsView';
 import CoordinatorProjectsView from './CoordinatorProjectsView'; // Ensure this matches filename case
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import { Button } from './components/SharedComponents'; // Import Button
-import { API_BASE_URL } from '../../../../api/config';
+import { API_BASE_URL } from '@/api/config';
 
 const ProyectosV2 = () => {
     const { user } = useAuth();

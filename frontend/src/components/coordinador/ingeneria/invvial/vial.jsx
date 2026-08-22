@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import './vial.css';
 import './map/loading.css'; // Import Full Screen Loader CSS
-import { usePageTitle } from '../../../contexts/PageTitleContext';
-import { useVialOption } from '../../../../data/contexts/VialOptionContext';
-import { useAuth } from '../../../../data/contexts/AuthContext';
-import { logAuditEvent } from '../../../../api/audit';
+import { usePageTitle } from '@/data/contexts/PageTitleContext';
+import { useVialOption } from '@/data/contexts/VialOptionContext';
+import { useAuth } from '@/data/contexts/AuthContext';
+import { logAuditEvent } from '@/api/audit';
 import { toLatLon } from 'utm';
 import L from 'leaflet';
 import * as XLSX from 'xlsx';

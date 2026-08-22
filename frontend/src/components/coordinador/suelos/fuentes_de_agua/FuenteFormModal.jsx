@@ -6,7 +6,7 @@ import SuelosMap from '../mapa/SuelosMap'; // Mapa de suelos
 import proj4 from 'proj4'; // Para conversión de coordenadas
 import { kml } from '@tmcw/togeojson'; // Conversión KML a GeoJSON
 import JSZip from 'jszip';
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import '../gestion_tramos/Progresivas.css'; // Reutilizar estilos de progresivas/canteras
 
 // Iconos (SVG)

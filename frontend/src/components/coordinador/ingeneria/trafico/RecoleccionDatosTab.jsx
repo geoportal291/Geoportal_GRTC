@@ -3,7 +3,7 @@
 import React from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from 'react-leaflet';
 
-import ErrorBoundary from '../../../ErrorBoundary';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const RecoleccionDatosTab = ({
   projectId,

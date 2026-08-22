@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useAuth } from '../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import RecoleccionDeDatosContainer from './ui/RecoleccionDeDatosContainer';
 import DashboardSuelos from './ui/DashboardSuelos';
 

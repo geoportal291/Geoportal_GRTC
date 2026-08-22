@@ -5,6 +5,13 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 module.exports = {
   webpack: {
     configure: (webpackConfig) => {
+      // 0. Alias "@/" -> src/ (ya declarado en jsconfig.json para el editor;
+      //    aquí se conecta al build para que webpack también lo resuelva)
+      webpackConfig.resolve.alias = {
+        ...webpackConfig.resolve.alias,
+        '@': path.resolve(__dirname, 'src'),
+      };
+
       // 1. Polyfills para Webpack 5 (Requeridos por Cesium)
       webpackConfig.resolve.fallback = {
         ...webpackConfig.resolve.fallback,

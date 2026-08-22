@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { PageTitleProvider, usePageTitle } from './components/contexts/PageTitleContext';
+import { PageTitleProvider, usePageTitle } from '@/data/contexts/PageTitleContext';
 import { useAuth } from './data/contexts/AuthContext';
 import { logAuditEvent } from './api/audit';
 

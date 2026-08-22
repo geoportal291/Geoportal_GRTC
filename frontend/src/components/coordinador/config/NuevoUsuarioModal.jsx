@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.min.css';
 import 'alertifyjs/build/css/themes/default.min.css';
-import axiosInstance from '../../../api/axios';
+import axiosInstance from '@/api/axios';
 
 const NuevoUsuarioModal = ({ isOpen, onClose, onUserCreated, onUserUpdated, editingUser }) => {
   const [activeTab, setActiveTab] = useState('general');

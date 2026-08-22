@@ -1,13 +1,13 @@
 import React from 'react';
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import { saveAs } from 'file-saver';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { kml } from '@tmcw/togeojson';
 import { DOMParser } from 'xmldom';
 import shp from 'shpjs';
-import ErrorBoundary from '../../../ErrorBoundary';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const GeoTestPage = () => {
   const [importedGeoJsonLayers, setImportedGeoJsonLayers] = React.useState([]); // array de capas

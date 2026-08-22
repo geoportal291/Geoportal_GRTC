@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import './frmusuarios.css';
 import alertify from 'alertifyjs';
 import axios from 'axios';
-import { useAuth } from '../../../data/contexts/AuthContext'; // Importar useAuth
+import { useAuth } from '@/data/contexts/AuthContext'; // Importar useAuth
 
 export default function FrmUsuarios() {
   const { user } = useAuth(); // Obtener el usuario del contexto

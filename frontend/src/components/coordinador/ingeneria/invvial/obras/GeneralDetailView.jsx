@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom'; // Ensure ReactDOM is imported if not already,
 import Swal from 'sweetalert2';
 import ImageCarousel from './ImageCarousel';
 import MiniMap from './MiniMap';
-import axiosInstance from '../../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import { useState, useEffect } from 'react';
 
 const ELEMENT_CONFIGS = {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import FuenteFormModal from './FuenteFormModal';
 import SuelosMap from '../mapa/SuelosMap';
 import './GestorDeFuentesDeAgua.css';

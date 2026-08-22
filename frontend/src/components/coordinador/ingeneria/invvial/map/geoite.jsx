@@ -13,7 +13,7 @@ import * as turf from '@turf/turf';
 import alertify from 'alertifyjs'; // Add this line
 import { fetchNearbyPlaces } from './mapUtils'; // NEW
 import './geoite.css';
-import axiosInstance from '../../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import { saveAs } from 'file-saver';
 
 const GEOITE_TRAFFIC_CONTROL_EVENT = 'geoite:traffic-control';

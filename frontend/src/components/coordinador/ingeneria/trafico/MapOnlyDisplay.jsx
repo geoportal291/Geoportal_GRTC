@@ -1,7 +1,7 @@
 import React from 'react';
 import { MapContainer, TileLayer, Polyline } from 'react-leaflet';
 
-import ErrorBoundary from '../../../ErrorBoundary';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const MapOnlyDisplay = () => {
   return (

@@ -11,12 +11,12 @@ import { DOMParser } from 'xmldom';
 import alertify from 'alertifyjs';
 import { saveAs } from 'file-saver';
 import { createRoot } from 'react-dom/client';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import './SuelosMap.css';
 import CanteraMapPopup from './CanteraMapPopup';
 import ProgresivaMapPopup from './ProgresivaMapPopup';
 import FuenteMapPopup from './FuenteMapPopup';
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import MapControls from './MapControls';
 
 // --- Helpers de Carga KML Seguro ---

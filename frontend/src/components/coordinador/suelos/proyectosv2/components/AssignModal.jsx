@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Badge } from './SharedComponents';
-import { useAuth } from '../../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 
 const AssignModal = ({ isOpen, onClose, project, allUsers = [] }) => {
     const API_URL = process.env.REACT_APP_API_BASE || '';

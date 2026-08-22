@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
 import '../estratos/PerfilEstratigrafico.css'; // Reutilizar los estilos
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 
 const API_URL = process.env.REACT_APP_API_BASE || '';
 

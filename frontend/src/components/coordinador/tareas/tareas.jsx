@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import alertify from 'alertifyjs';
 import axios from 'axios';
 import './tareas.css';
-import { useAuth } from '../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 
 // --- Componente Auxiliar para Renderizar Archivos Adjuntos ---
 const ArchivoAdjunto = ({ url }) => {

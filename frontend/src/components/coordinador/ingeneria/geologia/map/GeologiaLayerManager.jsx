@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axiosInstance from '../../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import alertify from 'alertifyjs';
 
 const GeologiaLayerManager = ({ tabName, projectData, onUploadSuccess, accept }) => {

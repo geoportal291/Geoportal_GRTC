@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Polyline, Popup, useMap } from 'react-leaflet';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import ImageDisplayModal from './ImageDisplayModal';
 
 import alertify from 'alertifyjs';
@@ -14,7 +14,7 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 import UploadTrafficDataModal from './UploadTrafficDataModal';
 
 import './EstacionControlTab.css';
-import ErrorBoundary from '../../../ErrorBoundary';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Primero definimos el plugin (aunque no se use directamente en este archivo, se mantiene por consistencia si se añaden gráficos)
 const percentageTextPlugin = {

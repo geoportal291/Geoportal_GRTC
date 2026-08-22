@@ -7,9 +7,9 @@ import VisorGraficos from "./secciones/VisorGraficos.jsx";
 import "./EnsayoReporteImprimible.css";
 
 // Importación de base de datos local de ubigeo para mapeo de alta fidelidad
-import departamentosData from "../../../../data/ubigeo/ubigeo_peru_2016_departamentos.json";
-import provinciasData from "../../../../data/ubigeo/ubigeo_peru_2016_provincias.json";
-import distritosData from "../../../../data/ubigeo/ubigeo_peru_2016_distritos.json";
+import departamentosData from "@/data/ubigeo/ubigeo_peru_2016_departamentos.json";
+import provinciasData from "@/data/ubigeo/ubigeo_peru_2016_provincias.json";
+import distritosData from "@/data/ubigeo/ubigeo_peru_2016_distritos.json";
 
 // Helpers para traducir codigos de ubigeo a nombres legibles
 const getDepartmentName = (idOrName) => {

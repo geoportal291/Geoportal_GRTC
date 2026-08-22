@@ -6,7 +6,7 @@ import Geoite from './map/geoite';
 import './map/geoite.css';
 import ListaInterferenciasModal from './obras/ListaInterferenciasModal';
 import ExportarMapaModal from './obras/ExportarMapaModal';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import { saveAs } from 'file-saver';
 import ImagePreviewModal from './obras/ImagePreviewModal';
 import ObservationsSidebar from './obras/ObservationsSidebar';

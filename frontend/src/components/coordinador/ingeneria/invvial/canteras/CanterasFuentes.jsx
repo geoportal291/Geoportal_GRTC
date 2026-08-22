@@ -3,7 +3,7 @@ import { CSSTransition } from 'react-transition-group';
 import Swal from 'sweetalert2';
 import Geoite from '../map/geoite'; // Reusing Geoite map component
 import '../map/geoite.css'; // Reusing map styles
-import axiosInstance from '../../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import '../obras/Alcantarillas.css'; // Reusing styles for sidebars
 
 import ListaCanterasFuentesModal from './ListaCanterasFuentesModal';

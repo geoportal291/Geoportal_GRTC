@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import axiosInstance from '../../../../api/axios';
-import { logAuditEvent } from '../../../../api/audit';
+import axiosInstance from '@/api/axios';
+import { logAuditEvent } from '@/api/audit';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.min.css';
 import 'alertifyjs/build/css/themes/default.min.css';

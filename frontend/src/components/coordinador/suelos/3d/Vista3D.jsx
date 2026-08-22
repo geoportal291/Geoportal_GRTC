@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
-import { utmToWgs84, processCoordinates, getUtmZoneFromLon, chunkedSampleTerrain, waitForTerrainReady } from '../../../../utils/geoUtils';
+import { utmToWgs84, processCoordinates, getUtmZoneFromLon, chunkedSampleTerrain, waitForTerrainReady } from '@/utils/geoUtils';
 import { FullTramoEngine } from './FullTramoEngine';
 import { applyDioramaCameraMode, clampDioramaCamera, getDioramaLocalMaxHeight } from './DioramaCameraController';
-import { useAuth } from '../../../../data/contexts/AuthContext';
-import useProgresivasData from '../../../../hooks/useProgresivasData';
+import { useAuth } from '@/data/contexts/AuthContext';
+import useProgresivasData from '@/hooks/useProgresivasData';
 import useModelLoader from './useModelLoader';
 import './Vista3D.css';
 

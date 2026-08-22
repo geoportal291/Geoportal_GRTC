@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
-import { useAuth } from '../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import './FuenteImageGalleryModal.css';
 
 const FuenteImageGalleryModal = ({ isOpen, onClose, fuenteAgua, onDataChange }) => {

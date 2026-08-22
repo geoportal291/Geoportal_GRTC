@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import GeneralDetailView from './obras/GeneralDetailView';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 
 /**
  * Modal independiente para mostrar vista detallada de elementos desde el mapa externo

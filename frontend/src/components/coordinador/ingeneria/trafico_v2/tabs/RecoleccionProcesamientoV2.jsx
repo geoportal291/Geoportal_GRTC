@@ -4,7 +4,7 @@ import TrafficProcessingStatus from '../components/TrafficProcessingStatus';
 import TrafficUploadModalV2 from '../components/TrafficUploadModalV2';
 import TrafficInternalGeoMap from '../components/TrafficInternalGeoMap';
 import { MODULE_CONFIG } from '../trafficV2Utils';
-import { useAuth } from '../../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 
 const RecoleccionProcesamientoV2 = ({ activeSubTab, stations, sections, onReload, extractedTrafficData, setExtractedTrafficData }) => {
   const { selectedProjectId } = useAuth();

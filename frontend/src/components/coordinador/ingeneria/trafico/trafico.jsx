@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import './trafico.css';
-import { usePageTitle } from '../../../contexts/PageTitleContext';
-import { useTrafficOption } from '../../../../data/contexts/TrafficOptionContext'; // Importar useTrafficOption
+import { usePageTitle } from '@/data/contexts/PageTitleContext';
+import { useTrafficOption } from '@/data/contexts/TrafficOptionContext'; // Importar useTrafficOption
 import EstacionControlTab from './EstacionControlTab';
 import MapOnlyDisplay from './MapOnlyDisplay';
 // import RecoleccionDatosTab from './RecoleccionDatosTab';
@@ -21,8 +21,8 @@ import ReportCensoDeCargasTab from './ReportCensoDeCargasTab';
 import ReportEncuestaVelocidadTab from './ReportEncuestaVelocidadTab';
 import ReporteEjesEquivalentesTab from './ReporteEjesEquivalentesTab';
 
-import { useAuth } from '../../../../data/contexts/AuthContext';
-import { logAuditEvent } from '../../../../api/audit';
+import { useAuth } from '@/data/contexts/AuthContext';
+import { logAuditEvent } from '@/api/audit';
 
 
 const Traficods = ({ isNavbarExpanded }) => {

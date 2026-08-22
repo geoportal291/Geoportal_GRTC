@@ -4,7 +4,7 @@ import alertify from 'alertifyjs';
 import { Button, Badge, Card, CardHeader, CardTitle, CardContent } from './SharedComponents';
 import AssignModal from './AssignModal';
 import FullProjectForm from './FullProjectForm';
-import { useAuth } from '../../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 
 const ProjectDetailView = ({ project, onRefresh }) => {
     const API_URL = process.env.REACT_APP_API_BASE || '';

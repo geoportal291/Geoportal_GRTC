@@ -8,7 +8,7 @@ import ListaSenalesInformativasModal from './obras/ListaSenalesInformativasModal
 import ExportarMapaModal from './obras/ExportarMapaModal';
 import ImagePreviewModal from './obras/ImagePreviewModal';
 import { saveAs } from 'file-saver';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import ObservationsSidebar from './obras/ObservationsSidebar';
 import { fromLatLon } from 'utm';
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import DisenoGeometrico from './DisenoGeometrico';
 import DisenoGeometricoExternal from './DisenoGeometricoExternal';
 import './DisenoGeometricoModes.css';

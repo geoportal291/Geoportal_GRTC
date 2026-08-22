@@ -1,5 +1,5 @@
 import React from 'react';
-import { usePageTitle } from '../../contexts/PageTitleContext';
+import { usePageTitle } from '@/data/contexts/PageTitleContext';
 import './DisenosIngenieria.css';
 
 const DISENIOS_INGENIERIA_OPCIONES_GEO = [

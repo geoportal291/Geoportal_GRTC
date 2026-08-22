@@ -5,7 +5,7 @@ import { toLatLon } from 'utm'; // Needed for coordinate conversion
 import { kml } from '@tmcw/togeojson'; // Corrected: Needed for KML processing
 import { DOMParser } from 'xmldom'; // Needed for KML processing
 import alertify from 'alertifyjs'; // Needed for alerts
-import axiosInstance from '../../../../api/axios.js'; // Import axiosInstance
+import axiosInstance from '@/api/axios.js'; // Import axiosInstance
 import { saveAs } from 'file-saver'; // Needed for KML download
 import './MapControls.css'; // Archivo CSS para los nuevos controles
 

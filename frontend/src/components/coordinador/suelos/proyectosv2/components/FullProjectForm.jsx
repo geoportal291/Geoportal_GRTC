@@ -3,7 +3,7 @@ import axios from 'axios';
 import alertify from 'alertifyjs';
 import '../ProyectosV2.css';
 
-import { useAuth } from '../../../../../data/contexts/AuthContext';
+import { useAuth } from '@/data/contexts/AuthContext';
 import { DOMParser } from 'xmldom';
 import * as toGeoJSON from '@tmcw/togeojson';
 import shp from 'shpjs';
@@ -12,9 +12,9 @@ import { Button, Input, Select, Label, Textarea, Dialog, DialogContent, DialogHe
 // Import Ubigeo JSONs (Fixing the path relative to component location)
 // Component is in frontend/src/components/coordinador/suelos/proyectosv2/components
 // JSONs are in frontend/src/data/ubigeo
-import departamentosData from '../../../../../data/ubigeo/ubigeo_peru_2016_departamentos.json';
-import provinciasData from '../../../../../data/ubigeo/ubigeo_peru_2016_provincias.json';
-import distritosData from '../../../../../data/ubigeo/ubigeo_peru_2016_distritos.json';
+import departamentosData from '@/data/ubigeo/ubigeo_peru_2016_departamentos.json';
+import provinciasData from '@/data/ubigeo/ubigeo_peru_2016_provincias.json';
+import distritosData from '@/data/ubigeo/ubigeo_peru_2016_distritos.json';
 
 const FullProjectForm = ({ isOpen, onClose, onSave, projectData }) => {
     const API_URL = process.env.REACT_APP_API_BASE || '';

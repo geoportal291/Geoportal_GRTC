@@ -3,7 +3,7 @@ import axios from 'axios';
 import alertify from 'alertifyjs';
 import { FaEye, FaEyeSlash, FaSave, FaTimes } from 'react-icons/fa';
 import './PermisosManagement.css'; // Reutilizamos el CSS de PermisosManagement
-import { useAuth } from '../../../data/contexts/AuthContext'; // Importar useAuth
+import { useAuth } from '@/data/contexts/AuthContext'; // Importar useAuth
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE || '';
 

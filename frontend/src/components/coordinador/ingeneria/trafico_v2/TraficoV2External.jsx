@@ -13,7 +13,7 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../invvial/ExternalView.css';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import {
   enrichEntitiesWithMapData,
   formatDate,

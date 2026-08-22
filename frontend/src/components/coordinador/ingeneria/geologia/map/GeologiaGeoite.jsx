@@ -13,7 +13,7 @@ import * as turf from '@turf/turf';
 import alertify from 'alertifyjs'; // Add this line
 import { fetchNearbyPlaces } from '../../invvial/map/mapUtils';
 import './GeologiaGeoite.css';
-import axiosInstance from '../../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import { saveAs } from 'file-saver';
 
 

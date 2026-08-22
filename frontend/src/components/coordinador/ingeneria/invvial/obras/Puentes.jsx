@@ -6,7 +6,7 @@ import Geoite from '../map/geoite';
 import '../map/geoite.css';
 import ListaPuentesModal from './ListaPuentesModal';
 import ExportarMapaModal from './ExportarMapaModal';
-import axiosInstance from '../../../../../api/axios';
+import axiosInstance from '@/api/axios';
 
 import { saveAs } from 'file-saver';
 import { fromLatLon } from 'utm';

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import { divIcon } from 'leaflet';
-import axiosInstance from '../../../../api/axios';
+import axiosInstance from '@/api/axios';
 import ImageDisplayModal from './ImageDisplayModal';
 import UploadTrafficDataModal from './UploadTrafficDataModal';
 import ImageFileExplorerModal from './ImageFileExplorerModal';
@@ -10,7 +10,7 @@ import 'alertifyjs/build/css/alertify.min.css';
 import 'alertifyjs/build/css/themes/default.min.css';
 import { CSSTransition } from 'react-transition-group';
 import './EstacionControlTab.css';
-import ErrorBoundary from '../../../ErrorBoundary';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import Geoite from '../invvial/map/geoite';
 // Componente para manejar la vista del mapa
 const MapViewController = ({ setView, view }) => {

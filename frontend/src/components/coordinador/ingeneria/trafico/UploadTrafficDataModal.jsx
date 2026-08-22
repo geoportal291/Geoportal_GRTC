@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import axiosInstance from '../../../../api/axios';
-import { logAuditEvent } from '../../../../api/audit';
+import axiosInstance from '@/api/axios';
+import { logAuditEvent } from '@/api/audit';
 
 const UploadTrafficDataModal = ({ isOpen, onClose, entityId, onUploadSuccess, uploadUrl, entityIdName, sourceTypeImage, sourceTypeFile }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
