@@ -1,7 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import ReactDOM from 'react-dom'; // Import ReactDOM for portals
-import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { PageTitleProvider, usePageTitle } from './components/contexts/PageTitleContext';
 import { useAuth } from './data/contexts/AuthContext';
@@ -26,26 +25,16 @@ import CoordinadorDashboard from './components/coordinador/cordinadords.jsx';
 import DashPrincipal from './components/coordinador/DashPrincipal.jsx'; // NUEVO: Importar DashPrincipal
 import AmigoSecretoDashboard from './components/eventos/AmigoSecretoDashboard'; // NUEVO
 import GestionarParticipantes from './components/eventos/GestionarParticipantes'; // NUEVO
-import VisualizacionAmigo from './components/eventos/visualizacionamigo.jsx'; // NUEVO
-import NewYearCountdown from './components/eventos/NewYearCountdown.jsx'; // NUEVO: Importar Countdown
 // Coordinado
 import Proyectos from './components/coordinador/suelos/proyectosv2/ProyectosV2';
-import GestorDeTramosActual from './components/coordinador/suelos/gestion_tramos/GestorDeTramosActual';
 import SuelosIndex from './components/coordinador/suelos/SuelosIndex';
 import Progresivas from './components/coordinador/suelos/gestion_tramos/Progresivas';
-import EnsayosSuelos from './components/coordinador/suelos/ensayos/ensayos';
-import DetalleEnsayo from './components/coordinador/suelos/ensayos/DetalleEnsayo'; // NUEVO                                
-import VistaGeneralEnsayos from './components/coordinador/suelos/ensayos/VistaGeneralEnsayos'; // NUEVO
 import EnsayosContainer from './components/coordinador/suelos/ensayos/EnsayosContainer';
 import EnsayoReporteImprimible from './components/coordinador/suelos/ensayos/EnsayoReporteImprimible'; // NUEVO REPORT A4
 //import GestorDeMaterialesContainer from './components/coordinador/suelos/GestorDeMaterialesContainer'; // NUEVO: Importar  
 // Visitante
 
 
-// Especialista
-import Ambiental from './components/especialista/ambiental';
-import Estructuras from './components/especialista/estructuras';
-import Topografico from './components/especialista/topografico';
 import Traficods from './components/coordinador/ingeneria/trafico/trafico.jsx';
 import TraficoV2 from './components/coordinador/ingeneria/trafico_v2/TraficoV2.jsx';
 import GeoTestPage from './components/coordinador/ingeneria/trafico/GeoTestPage.jsx'; // <-- Importar página de prueba
@@ -95,16 +84,6 @@ function AppContent() {
     const navigate = useNavigate();
     const { logout, showProjectSelectionModal } = useAuth(); // NEW: Get showProjectSelectionModal from useAuth
 
-    const [isInitialViz, setIsInitialViz] = useState(false);
-
-    // useEffect(() => {
-    //     // Se cambió 'showAmigoSecretoViz' a 'showNewYearViz'
-    //     if (sessionStorage.getItem('showNewYearViz') === 'true' && location.pathname !== '/') {
-    //         setIsInitialViz(true);
-    //         sessionStorage.removeItem('showNewYearViz');
-    //     }
-    // }, [location.pathname]);
-
     useEffect(() => {
         const interceptor = axios.interceptors.response.use(
             response => response,
@@ -153,11 +132,6 @@ function AppContent() {
         }
     }, [location.pathname]);
 
-    const handleCloseInitialViz = () => {
-        setIsInitialViz(false);
-        navigate('/coordinador/cordinadords'); // Navegar a la vista principal del coordinador
-    };
-
     return (
         <div className="principal">
             <Routes>
@@ -200,11 +174,6 @@ function AppContent() {
 
 
 
-                {/* Especialista 
-                <Route path="/especialista/ambiental" element={<RutaPrivada><Layout><Ambiental /></Layout></RutaPrivada>} />
-                <Route path="/especialista/estructuras" element={<RutaPrivada><Layout><Estructuras /></Layout></RutaPrivada>} />
-                <Route path="/especialista/topografico" element={<RutaPrivada><Layout><Topografico /></Layout></RutaPrivada>} />
-                <Route path="/especialista/suelos" element={<RutaPrivada><Layout><Suelos /></Layout></RutaPrivada>} />*/}
                 {/* Coordinador: Trafico */}
                 <Route path="/coordinador/ingenieria/trafico/trafico" element={<RutaPrivada><Layout><Traficods /></Layout></RutaPrivada>} />
                 <Route path="/coordinador/ingenieria/trafico/traficov2" element={<RutaPrivada><Layout><TraficoV2 /></Layout></RutaPrivada>} />
