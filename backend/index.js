@@ -1386,66 +1386,6 @@ app.get('/api/amigo-secreto/wishlist/:userId', authenticateToken, async (req, re
     }
 });
 
-
-// --- Wishlist (Lista de Deseos) ---
-app.get('/api/amigo-secreto/wishlist', authenticateToken, async (req, res) => {
-    try {
-        const wishlist = await wishlistService.getWishlistByUserId(req.user.id);
-        res.json(wishlist);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/amigo-secreto/wishlist', authenticateToken, async (req, res) => {
-    try {
-        const newItem = await wishlistService.addWishlistItem(req.user.id, req.body);
-        res.status(201).json(newItem);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.delete('/api/amigo-secreto/wishlist/:itemId', authenticateToken, async (req, res) => {
-    try {
-        const { itemId } = req.params;
-        const rowCount = await wishlistService.deleteWishlistItem(itemId, req.user.id);
-        if (rowCount === 0) {
-            return res.status(404).json({ error: 'Deseo no encontrado o no tienes permiso para eliminarlo.' });
-        }
-        res.status(204).send(); // No Content
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.get('/api/amigo-secreto/wishlist/:userId', authenticateToken, async (req, res) => {
-    const { userId } = req.params;
-    const requesterId = req.user.id;
-
-    try {
-        // Lógica de autorización: solo puedes ver la lista de la persona que te tocó
-        const asignacionResult = await db.query(
-            `SELECT 1 FROM amigo_secreto_asignaciones
-             WHERE evento_id = 1 AND dador_usuario_id = $1 AND receptor_usuario_id = $2`,
-            [requesterId, userId]
-        );
-
-        const isAuthorized = asignacionResult.rows.length > 0;
-
-        if (!isAuthorized) {
-            return res.status(403).json({ error: 'No tienes permiso para ver esta lista de deseos.' });
-        }
-
-        const wishlist = await wishlistService.getWishlistByUserId(userId);
-        res.json(wishlist);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-
-
 // --------------------- ENSAYOS ---------------------
 // Get all assays for a specific tramo
 app.get('/api/tramos/:tramoId/ensayos', authenticateToken, async (req, res) => {
@@ -2494,19 +2434,6 @@ app.post('/api/kml/upload', authenticateToken, authorizePermission('proyectos', 
     }
 });
 
-app.get('/api/tipos-ensayo', authenticateToken, async (req, res) => {
-    try {
-        const result = await db.query('SELECT * FROM tipo_ensayo ORDER BY descripcion');
-        console.log('DEBUG: Backend /api/tipos-ensayo response rows:', result.rows.length);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('❌ Error al obtener tipos de ensayo:', err);
-        res.status(500).json({
-            error: 'Error al obtener tipos de ensayo',
-            details: err.message
-        });
-    }
-});
 
 // Nueva función para subir archivos Excel de alcantarillas a Vercel Blob
 async function uploadAlcantarillasExcelToVercelBlob(fileBuffer, originalFilename, projectId) {
@@ -3757,15 +3684,6 @@ app.get('/api/proyectos/:id/map-data', authenticateToken, async (req, res) => {
 });
 
 // NEW: Endpoint to get Project Statistics (Ensuring it exists)
-app.get('/api/proyectos/:id/estadisticas', authenticateToken, async (req, res) => {
-    try {
-        const stats = await proyectosService.getProjectStatistics(req.params.id);
-        res.json(stats);
-    } catch (error) {
-        console.error('Error fetching project statistics:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
 
 // DELETE the KML for a project (section-aware)
 app.delete('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
@@ -3853,20 +3771,6 @@ app.get('/api/user-projects', authenticateToken, async (req, res) => {
 });
 
 // NEW: Ruta para obtener un proyecto por ID
-app.get('/api/proyectos/:id', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const project = await proyectosService.getProyectoById(id);
-        if (project) {
-            res.json(project);
-        } else {
-            res.status(404).json({ error: 'Proyecto no encontrado' });
-        }
-    } catch (err) {
-        console.error(`Error al obtener proyecto ${id}:`, err);
-        res.status(500).json({ error: 'Error al obtener el proyecto', details: err.message });
-    }
-});
 
 // --------------------- CANTERAS ---------------------
 // --- NEW: Endpoints for Calibration Data ---
@@ -3993,15 +3897,6 @@ app.post('/api/canteras', authenticateToken, async (req, res) => {
 });
 
 // NEW: CREATE Cantera
-app.post('/api/canteras', authenticateToken, async (req, res) => {
-    try {
-        const newCantera = await canterasService.createCantera(req.body);
-        res.status(201).json(newCantera);
-    } catch (error) {
-        console.error('Error al crear cantera:', error);
-        res.status(500).json({ error: 'Error al crear la cantera.', details: error.message });
-    }
-});
 
 // NEW: UPDATE Cantera
 app.put('/api/canteras/:id', authenticateToken, async (req, res) => {
@@ -4415,48 +4310,10 @@ app.put('/api/progresivas/importar-con-ensayos/:overwriteProgresivaId', authenti
 
 
 // NEW: Endpoint to get KML content by kml_trazado_id
-app.get('/api/kml-trazados/:id/content', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const kmlContent = await kmlService.getKmlContentById(id);
-        if (kmlContent) {
-            res.json({ kmlContent });
-        } else {
-            res.status(404).json({ error: 'Contenido KML no encontrado' });
-        }
-    } catch (err) {
-        console.error(`Error al obtener contenido KML para el trazado ${id}:`, err);
-        const statusCode = err.isCustomError ? err.statusCode : 500;
-        res.status(statusCode).json({ error: 'Error al obtener el contenido KML', details: err.message });
-    }
-});
 
 // NEW: Endpoint to delete KML from a progresiva
-app.delete('/api/progresivas/:progresivaId/kml', authenticateToken, async (req, res) => {
-    const { progresivaId } = req.params;
-    try {
-        const result = await progresivasService.deleteKmlFromProgresiva(progresivaId);
-        res.status(200).json(result);
-    } catch (error) {
-        console.error(`Error al eliminar KML de la progresiva ${progresivaId}:`, error);
-        if (error.isCustomError) {
-            return res.status(error.statusCode || 400).json({ error: error.message });
-        }
-        res.status(500).json({ error: 'Error interno del servidor al eliminar KML de la progresiva.' });
-    }
-});
 
 // Obtener progresivas principales
-app.get('/api/progresivas', authenticateToken, async (req, res) => {
-    try {
-        const { selectedProjectId } = req.query; // Get selectedProjectId from query parameters
-        const progresivas = await progresivasService.getProgresivas(req.user, selectedProjectId);
-        res.json(progresivas);
-    } catch (err) {
-        console.error('Error al obtener progresivas:', err);
-        res.status(500).json({ error: 'Error al obtener progresivas', details: err.message });
-    }
-});
 
 app.get('/api/progresivas/:id/children', authenticateToken, progresivasService.getSubProgresivas);
 
@@ -4783,22 +4640,6 @@ app.put('/api/ensayos/limite-plastico/:ensayo_id', authenticateToken, async (req
 });
 
 // NEW: Ruta para obtener todos los ensayos de un tramo específico
-app.get('/api/tramos/:tramoId/ensayos', authenticateToken, async (req, res) => {
-    const { tramoId } = req.params;
-    try {
-        // También necesitamos obtener el nombre del tramo para mostrarlo en el frontend
-        const tramoResult = await db.query('SELECT nombre, codigo FROM progresivas WHERE id = $1', [tramoId]);
-        if (tramoResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Tramo no encontrado.' });
-        }
-        const tramo = tramoResult.rows[0];
-        const ensayos = await ensayosService.getEnsayosByTramoId(tramoId);
-        res.json({ tramo, ensayos });
-    } catch (err) {
-        console.error(`Error al obtener ensayos para el tramo ${tramoId}:`, err);
-        res.status(500).json({ error: 'Error al obtener ensayos por tramo', details: err.message });
-    }
-});
 
 // NEW: Export assays by tramo to Excel
 app.get('/api/tramos/:tramoId/ensayos/export-excel', authenticateToken, async (req, res) => {
@@ -5131,28 +4972,6 @@ app.post('/api/admin/changelog', authenticateToken, authorizeAdminOrCoordinator,
             return res.status(409).json({ error: 'La versión del changelog ya existe.' });
         }
         res.status(500).json({ error: 'Error al crear changelog' });
-    }
-});
-
-// --------------------- ALCANTARILLAS (GENERAL) ---------------------
-app.post('/api/alcantarillas/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
-        }
-        const { projectId, utmZone } = req.body;
-        if (!projectId) {
-            return res.status(400).json({ error: 'El ID del proyecto es requerido.' });
-        }
-
-        // Default UTM zone if not provided (though frontend sends it)
-        const zone = utmZone || '18L';
-
-        const result = await alcantarillasService.processExcelAndSaveAlcantarillas(req.file.buffer, projectId, zone);
-        res.status(200).json({ status: 'ok', message: result.message, count: result.count });
-    } catch (error) {
-        console.error('Error en /api/alcantarillas/upload-excel:', error);
-        res.status(500).json({ status: 'error', message: error.message || 'Error al procesar el archivo Excel.' });
     }
 });
 
@@ -5684,37 +5503,8 @@ async function uploadBadenesExcelToVercelBlob(fileBuffer, originalFilename, proj
     }
 }
 
-app.get('/api/proyectos/:projectId/badenes', authenticateToken, async (req, res) => {
-    try {
-        const { projectId } = req.params;
-        const badenes = await badenesService.getBadenesByProjectId(projectId);
-        res.json(badenes);
-    } catch (error) {
-        console.error('Error al obtener badenes:', error);
-        res.status(500).json({ error: 'Error al obtener badenes.' });
-    }
-});
 
-app.post('/api/badenes', authenticateToken, async (req, res) => {
-    try {
-        const newBaden = await badenesService.createBaden(req.body);
-        res.status(201).json(newBaden);
-    } catch (error) {
-        console.error('Error al crear badén:', error);
-        res.status(500).json({ error: 'Error al crear badén.' });
-    }
-});
 
-app.put('/api/badenes/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const updatedBaden = await badenesService.updateBaden(id, req.body);
-        res.json(updatedBaden);
-    } catch (error) {
-        console.error('Error al actualizar badén:', error);
-        res.status(500).json({ error: 'Error al actualizar badén.' });
-    }
-});
 
 app.post('/api/badenes/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
     try {
@@ -5949,10 +5739,6 @@ app.delete('/api/muros/project/:projectId', authenticateToken, async (req, res) 
 });
 
 // --------------------- SENALES PREVENTIVAS ---------------------
-app.post('/api/senales-preventivas/upload-excel', upload.single('file'), senalesPreventivasService.uploadExcel);
-app.get('/api/senales-preventivas/:projectId', senalesPreventivasService.getAllSenales);
-app.post('/api/senales-preventivas', senalesPreventivasService.createSenal); // Optional manual create
-app.put('/api/senales-preventivas/:id', senalesPreventivasService.updateSenal);
 app.delete('/api/senales-preventivas/:id', senalesPreventivasService.deleteSenal);
 
 // --------------------- ZONAS CRITICAS ---------------------
@@ -5967,19 +5753,6 @@ app.get('/api/zonas-criticas/by-project/:projectId', authenticateToken, async (r
     }
 });
 
-app.post('/api/zonas-criticas/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
-    const { projectId, utmZone } = req.body;
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-    }
-    try {
-        const result = await zonasCriticasService.processExcelAndSaveZonasCriticas(req.file.buffer, projectId, utmZone);
-        res.json(result);
-    } catch (err) {
-        console.error('Error uploading zonas criticas excel:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
 
 app.post('/api/zonas-criticas', authenticateToken, async (req, res) => {
     try {
@@ -5991,16 +5764,6 @@ app.post('/api/zonas-criticas', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/api/zonas-criticas/:id', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const updatedZona = await zonasCriticasService.updateZonaCritica(id, req.body);
-        res.json(updatedZona);
-    } catch (err) {
-        console.error('Error updating zona critica:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
 
 app.delete('/api/zonas-criticas/project/:projectId', authenticateToken, async (req, res) => {
     const { projectId } = req.params;
@@ -6180,15 +5943,6 @@ app.delete('/api/muros/:id', authenticateToken, async (req, res) => {
 });
 
 // ZONAS CRITICAS
-app.delete('/api/zonas-criticas/:id', authenticateToken, async (req, res) => {
-    try {
-        await zonasCriticasService.deleteZonaCritica(req.params.id);
-        res.json({ message: 'Eliminado correctamente' });
-    } catch (err) {
-        console.error(`Error deleting zona critica ${req.params.id}:`, err);
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // ESTRUCTURAS EXISTENTES
 app.delete('/api/estructuras-existentes/:id', authenticateToken, async (req, res) => {
@@ -6197,35 +5951,6 @@ app.delete('/api/estructuras-existentes/:id', authenticateToken, async (req, res
         res.json({ message: 'Eliminado correctamente' });
     } catch (err) {
         console.error(`Error deleting estructura existente ${req.params.id}:`, err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// HITOS KILOMETRICOS
-app.post('/api/hitos-kilometricos', authenticateToken, hitosKilometricosService.createHito);
-app.put('/api/hitos-kilometricos/:id', authenticateToken, hitosKilometricosService.updateHito);
-app.delete('/api/hitos-kilometricos/:id', authenticateToken, hitosKilometricosService.deleteHito);
-
-// SENALES INFORMATIVAS
-app.post('/api/senales-informativas', authenticateToken, senalesInformativasService.createSenal);
-app.put('/api/senales-informativas/:id', authenticateToken, senalesInformativasService.updateSenal);
-app.delete('/api/senales-informativas/:id', authenticateToken, senalesInformativasService.deleteSenal);
-
-// --------------------------------------------------------------------------------
-
-// NUEVA RUTA: Obtener proyectos detallados asignados (usada por DashboardSuelos y otros)
-app.get('/api/proyectos/assigned-detailed', authenticateToken, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        if (req.user.rol_nombre === 'ADMIN') {
-            const allProjects = await proyectosService.getDetailedProyectos();
-            res.json(allProjects);
-        } else {
-            const userProjects = await proyectosService.getAssignedDetailedProyectos(userId);
-            res.json(userProjects);
-        }
-    } catch (err) {
-        console.error('Error getting assigned detailed projects:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -7233,35 +6958,8 @@ app.patch('/api/proyectos/:id/geologia-capas/:tabName/drive-link', authenticateT
 
 // EXPORTACIÓN DE ENSAYOS DE TRAMO (POR TRAMO SELECCIONADO)
 // Exportar un tipo específico de ensayo para un tramo
-app.get('/api/tramos/:tramoId/ensayos/export-excel/:tipoEnsayoId', authenticateToken, async (req, res) => {
-    const { tramoId, tipoEnsayoId } = req.params;
-    try {
-        const fileBuffer = await ensayosService.exportEnsayosToExcelByTipo(tramoId, tipoEnsayoId);
-        console.log(`[EXPORT ROUTE] Buffer generado para tipo ${tipoEnsayoId}: ${fileBuffer ? fileBuffer.length : 0} bytes`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="ensayos_tramo_${tramoId}_tipo_${tipoEnsayoId}.xlsx"`);
-        res.end(fileBuffer, 'binary');
-    } catch (err) {
-        console.error(`Error al exportar ensayos de tramo ${tramoId} por tipo ${tipoEnsayoId}:`, err);
-        res.status(500).json({ error: 'Error al exportar ensayos a Excel', details: err.message });
-    }
-});
 
 // Exportar todos los ensayos de un tramo
-app.get('/api/tramos/:tramoId/ensayos/export-excel', authenticateToken, async (req, res) => {
-    const { tramoId } = req.params;
-    console.log(`[DEBUG ROUTE] Recibida petición de exportación total para tramo: ${tramoId}`);
-    try {
-        const fileBuffer = await ensayosService.exportEnsayosToExcelByTramo(tramoId);
-        console.log(`[EXPORT ROUTE] Buffer generado para tramo ${tramoId}: ${fileBuffer ? fileBuffer.length : 0} bytes`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="todos_los_ensayos_tramo_${tramoId}.xlsx"`);
-        res.end(fileBuffer, 'binary');
-    } catch (err) {
-        console.error(`Error al exportar todos los ensayos del tramo ${tramoId}:`, err);
-        res.status(500).json({ error: 'Error al exportar ensayos a Excel', details: err.message });
-    }
-});
 
 // EXPORTACIÓN DE ENSAYOS DE CANTERAS (POR TIPO DE ENSAYO GLOBAL)
 app.get('/api/ensayos/canteras/exportar-tipo/:tipoEnsayoId', authenticateToken, async (req, res) => {
