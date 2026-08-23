@@ -37,3 +37,16 @@ geoportal-drive-b69b29c0bfa0.json
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Entornos virtuales de Python
+.venv/
+venv/
+__pycache__/
+
+# Credenciales y configuraciones de red (NUNCA versionar)
+*.conf
+!nginx.conf
+*.key
+*.pem
+credenciales*
+clave*
