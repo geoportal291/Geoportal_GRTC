@@ -1,0 +1,355 @@
+# Inventario de rutas de backend/index.js
+# 341 rutas alcanzables + 8 middlewares de nivel app
+# 34 rutas TAPADAS (registradas dos veces; en express gana la primera)
+#
+# El orden es el de registro, y ese orden importa: no ordenar este archivo.
+
+0001  USE     /                                                    query:37884ea1
+0002  USE     /                                                    expressInit:c64fd995
+0003  OPTIONS *                                                    corsMiddleware:6f49c2d9
+0004  USE     /                                                    corsMiddleware:6f49c2d9
+0005  USE     /                                                    jsonParser:0ff1d9aa
+0006  USE     /                                                    urlencodedParser:568dba95
+0007  USE     /                                                    serveStatic:0cb5668e
+0008  USE     /formats                                             serveStatic:0cb5668e
+0009  USE     /uploads                                             serveStatic:0cb5668e
+0010  GET     /                                                    <anon>:2e2fdfb4
+0011  GET     /health                                              <anon>:248041be
+0012  POST    /api/utils/test-ocr                                  authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:83f4258e
+0013  POST    /api/utils/bulk-ocr                                  authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:8c2de253
+0014  GET     /api/url-preview                                     <anon>:0f61c54b
+0015  GET     /api/proxy                                           <anon>:e024e907
+0016  GET     /api/config/cesium                                   authenticateToken:ec6094e5 > <anon>:812ce4d6
+0017  GET     /api/settings/global                                 authenticateToken:ec6094e5 > <anon>:b3089c1f
+0018  POST    /api/settings/global                                 authenticateToken:ec6094e5 > <anon>:87c09284
+0019  POST    /login                                               <anon>:3765893b
+0020  POST    /verify-2fa                                          <anon>:6237b4b3
+0021  POST    /api/senales-preventivas/upload-excel                authenticateToken:ec6094e5 > multerMiddleware:207a095f > uploadExcel:cef2562c
+0022  GET     /api/senales-preventivas/:projectId                  authenticateToken:ec6094e5 > getAllSenales:a4feb399
+0023  POST    /api/senales-preventivas                             authenticateToken:ec6094e5 > createSenal:e86cbfcd
+0024  PUT     /api/senales-preventivas/:id                         authenticateToken:ec6094e5 > updateSenal:fe7368a5
+0025  DELETE  /api/senales-preventivas/project/:projectId          authenticateToken:ec6094e5 > <anon>:127c63d0
+0026  POST    /api/senales-reguladoras/upload-excel                authenticateToken:ec6094e5 > multerMiddleware:207a095f > uploadExcel:3345234e
+0027  GET     /api/senales-reguladoras/:projectId                  authenticateToken:ec6094e5 > getAllSenales:7e446853
+0028  POST    /api/senales-reguladoras                             authenticateToken:ec6094e5 > createSenal:c38f34c7
+0029  PUT     /api/senales-reguladoras/:id                         authenticateToken:ec6094e5 > updateSenal:859efc8e
+0030  DELETE  /api/senales-reguladoras/:id                         authenticateToken:ec6094e5 > deleteSenal:9e7cab7b
+0031  GET     /api/observaciones/:projectId/:tipo/:elementoId      authenticateToken:ec6094e5 > <anon>:30957b94
+0032  POST    /api/observaciones                                   authenticateToken:ec6094e5 > <anon>:a88c4fb0
+0033  GET     /api/modelos-3d                                      authenticateToken:ec6094e5 > <anon>:b7372f86
+0034  GET     /api/modelos-3d/:id/obj                              authenticateToken:ec6094e5 > <anon>:1eb9eb73
+0035  POST    /api/modelos-3d                                      authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:035e4c88
+0036  DELETE  /api/modelos-3d/:id                                  authenticateToken:ec6094e5 > <anon>:7247f0eb
+0037  GET     /api/3d/datos-suelos/:proyectoId                     authenticateToken:ec6094e5 > <anon>:744e6fe9
+0038  POST    /api/proyectos/:id/panel-fotografico/upload-kmz      authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > multerMiddleware:207a095f > <anon>:ca4300cb
+0039  GET     /api/proyectos/:id/panel-fotografico                 authenticateToken:ec6094e5 > <anon>:d5e79705
+0040  DELETE  /api/proyectos/:id/panel-fotografico                 authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:04d7597d
+0041  GET     /api/amigo-secreto/participantes                     authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:86a0b18c
+0042  POST    /api/amigo-secreto/participantes                     authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:801e017c
+0043  GET     /api/eventos/:eventoId/asignacion                    authenticateToken:ec6094e5 > <anon>:591b7e76
+0044  GET     /api/amigo-secreto/wishlist                          authenticateToken:ec6094e5 > <anon>:a1adf8c6
+0045  POST    /api/amigo-secreto/wishlist                          authenticateToken:ec6094e5 > <anon>:5d6e5e1f
+0046  DELETE  /api/amigo-secreto/wishlist/:itemId                  authenticateToken:ec6094e5 > <anon>:c93dee75
+0047  GET     /api/amigo-secreto/wishlist/:userId                  authenticateToken:ec6094e5 > <anon>:a0f6c2c9
+0048  GET     /api/amigo-secreto/wishlist                          authenticateToken:ec6094e5 > <anon>:a1adf8c6   [TAPADA por #0044]
+0049  POST    /api/amigo-secreto/wishlist                          authenticateToken:ec6094e5 > <anon>:5d6e5e1f   [TAPADA por #0045]
+0050  DELETE  /api/amigo-secreto/wishlist/:itemId                  authenticateToken:ec6094e5 > <anon>:c93dee75   [TAPADA por #0046]
+0051  GET     /api/amigo-secreto/wishlist/:userId                  authenticateToken:ec6094e5 > <anon>:b7fdd516   [TAPADA por #0047]
+0052  GET     /api/tramos/:tramoId/ensayos                         authenticateToken:ec6094e5 > <anon>:7bbc034b
+0053  GET     /api/ensayos/canteras                                authenticateToken:ec6094e5 > <anon>:6f6b76ea
+0054  GET     /api/tipos-ensayo                                    authenticateToken:ec6094e5 > <anon>:75a42b67
+0055  GET     /api/config/ensayo-tipos                             authenticateToken:ec6094e5 > <anon>:16b5bb3f
+0056  GET     /api/config/ensayo-tipos/:id                         authenticateToken:ec6094e5 > <anon>:58ffca76
+0057  POST    /api/ensayos/base                                    authenticateToken:ec6094e5 > <anon>:73775f1f
+0058  PUT     /api/ensayos/:id/base                                authenticateToken:ec6094e5 > <anon>:5d04c019
+0059  GET     /ensayos                                             handleGetEnsayos:098597b0
+0060  GET     /api/ensayos                                         authenticateToken:ec6094e5 > handleGetEnsayos:098597b0
+0061  GET     /api/ensayos/details                                 <anon>:8bc4d327
+0062  GET     /api/ensayos/details/:id                             <anon>:54851b03
+0063  POST    /api/ensayos/full-assay                              authenticateToken:ec6094e5 > <anon>:68bf10a1
+0064  PUT     /api/ensayos/full-assay/:id                          authenticateToken:ec6094e5 > <anon>:ed097998
+0065  DELETE  /api/ensayos/:id                                     authenticateToken:ec6094e5 > <anon>:c1552603
+0066  POST    /api/ensayos/bulk-delete                             authenticateToken:ec6094e5 > <anon>:b6e9b149
+0067  POST    /api/canteras-fuentes/upload-excel                   authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:0d470b0d
+0068  GET     /api/canteras-fuentes/canteras/:projectId            authenticateToken:ec6094e5 > <anon>:e5aea377
+0069  GET     /api/canteras-fuentes/fuentes/:projectId             authenticateToken:ec6094e5 > <anon>:421fd070
+0070  POST    /api/zonas-criticas/upload-excel                     authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:2d25a696
+0071  GET     /api/zonas-criticas/:projectId                       authenticateToken:ec6094e5 > <anon>:8cc472fa
+0072  PUT     /api/zonas-criticas/:id                              authenticateToken:ec6094e5 > <anon>:9efd1050
+0073  DELETE  /api/zonas-criticas/:id                              authenticateToken:ec6094e5 > <anon>:27c71c35
+0074  DELETE  /api/zonas-criticas/delete-excel/:projectId          authenticateToken:ec6094e5 > <anon>:de292565
+0075  GET     /api/senales-informativas/:projectId                 authenticateToken:ec6094e5 > getAllSenales:175205a8
+0076  POST    /api/senales-informativas                            authenticateToken:ec6094e5 > createSenal:09070ee7
+0077  POST    /api/senales-informativas/upload-excel               authenticateToken:ec6094e5 > multerMiddleware:207a095f > uploadExcel:35888442
+0078  DELETE  /api/senales-informativas/:id                        authenticateToken:ec6094e5 > deleteSenal:94c3214d
+0079  PUT     /api/senales-informativas/:id                        authenticateToken:ec6094e5 > updateSenal:7689ff79
+0080  GET     /api/hitos-kilometricos/:projectId                   authenticateToken:ec6094e5 > getAllHitos:b435f3fe
+0081  POST    /api/hitos-kilometricos                              authenticateToken:ec6094e5 > createHito:bc7f9d8e
+0082  POST    /api/hitos-kilometricos/upload-excel                 authenticateToken:ec6094e5 > multerMiddleware:207a095f > uploadExcel:5e864f28
+0083  DELETE  /api/hitos-kilometricos/:id                          authenticateToken:ec6094e5 > deleteHito:26aa4a58
+0084  PUT     /api/hitos-kilometricos/:id                          authenticateToken:ec6094e5 > updateHito:ec55d5d5
+0085  GET     /api/roles                                           <anon>:6ce5ee10
+0086  GET     /api/especialidades                                  <anon>:08c97cb4
+0087  POST    /api/usuarios                                        authenticateToken:ec6094e5 > <anon>:7f5a1217 > <anon>:3e3856e5
+0088  GET     /api/usuarios                                        authenticateToken:ec6094e5 > <anon>:7f5a1217 > <anon>:58441906
+0089  GET     /api/usuarios/dni/:dni                               authenticateToken:ec6094e5 > <anon>:a588a39f
+0090  GET     /api/usuarios/:id                                    authenticateToken:ec6094e5 > <anon>:7f5a1217 > <anon>:4680872a
+0091  GET     /api/usuarios/por-proyecto                           authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:338d43d6
+0092  DELETE  /api/usuarios/:dni                                   authenticateToken:ec6094e5 > <anon>:7f5a1217 > <anon>:98856abf
+0093  PUT     /api/usuarios/:dni                                   authenticateToken:ec6094e5 > <anon>:7f5a1217 > <anon>:e21cb8b8
+0094  GET     /api/users/simple                                    authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:a3cbc368
+0095  GET     /api/permissions/all                                 authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:fcf482f0
+0096  GET     /api/permissions/role/:roleId                        authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:cee02a75
+0097  POST    /api/permissions/role/:roleId                        authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:44f8e9c7
+0098  GET     /api/permissions/user/:userId                        authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:f42e5a63
+0099  POST    /api/permissions/user/:userId                        authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:923afc82
+0100  GET     /api/perfil                                          <anon>:28b34395
+0101  GET     /api/user/:userId/default-project-entity             authenticateToken:ec6094e5 > <anon>:07aa1ae1
+0102  POST    /anuncios                                            authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:45e4ae02
+0103  POST    /api/trafico/upload-image                            multerMiddleware:207a095f > <anon>:185e3475
+0104  POST    /api/trafico/estacion/upload-image                   authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:59b9f891
+0105  POST    /api/trafico/tramo/upload-image                      authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:70ec62b0
+0106  POST    /api/trafico/conteovehicular/upload-file             authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:862a60ef
+0107  POST    /api/trafico/conteovehicular/upload-excel            authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:d32dc2e7
+0108  POST    /api/trafico/encuestaorigendestino/upload-excel      authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:cfb0ca99
+0109  POST    /api/trafico/censodecargas/upload-excel              authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:cd19478d
+0110  POST    /api/trafico/encuestavelocidad/upload-excel          authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:59cb9f6f
+0111  POST    /api/kml/upload                                      authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:28b4806f
+0112  GET     /api/tipos-ensayo                                    authenticateToken:ec6094e5 > <anon>:45b667b2   [TAPADA por #0054]
+0113  POST    /api/alcantarillas/upload-excel                      authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:88d9fe23
+0114  POST    /api/alcantarillas/upload-graphics-excel             authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:3d009fcd
+0115  POST    /api/alcantarillas/upload-chunk                      authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:94cc7e03
+0116  POST    /api/alcantarillas/complete-upload                   authenticateToken:ec6094e5 > <anon>:7f5a1217 > <anon>:b92902f9
+0117  POST    /api/alcantarillas/upload-images                     authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:91edebbc
+0118  DELETE  /api/alcantarillas/graphics/:imageId                 authenticateToken:ec6094e5 > <anon>:064dd9ec
+0119  DELETE  /api/alcantarillas/graphics/all/:projectId           authenticateToken:ec6094e5 > <anon>:70c64550
+0120  DELETE  /api/alcantarillas/graphics/folder/:projectId        authenticateToken:ec6094e5 > <anon>:daa85608
+0121  GET     /api/alcantarillas/graphics/:projectId               authenticateToken:ec6094e5 > <anon>:02cbf18e
+0122  GET     /api/jobs/:jobId/status                              authenticateToken:ec6094e5 > <anon>:03d0ab80
+0123  GET     /api/proyectos/:projectId/alcantarillas              authenticateToken:ec6094e5 > <anon>:69597143
+0124  POST    /api/alcantarillas                                   authenticateToken:ec6094e5 > <anon>:6b38b5ba
+0125  PUT     /api/alcantarillas/:id                               authenticateToken:ec6094e5 > <anon>:5ca5aa89
+0126  GET     /api/proyectos/:projectId/badenes                    authenticateToken:ec6094e5 > <anon>:747e2afc
+0127  POST    /api/badenes                                         authenticateToken:ec6094e5 > <anon>:99634bb4
+0128  PUT     /api/badenes/:id                                     authenticateToken:ec6094e5 > <anon>:442a4288
+0129  DELETE  /api/alcantarillas/delete-excel/:projectId           authenticateToken:ec6094e5 > <anon>:a3194951
+0130  GET     /api/alcantarillas/excel-info/:projectId/:entregableNum authenticateToken:ec6094e5 > <anon>:2294b989
+0131  GET     /api/trafico/conteovehicular/latest-excel/:stationId <anon>:06db9b14
+0132  POST    /api/trafico/encuestaorigendestino/upload-file       authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:176bd4dc
+0133  POST    /api/trafico/censodecargas/upload-file               authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:8bf2f5bd
+0134  POST    /api/trafico/encuestavelocidad/upload-file           authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:c97da016
+0135  DELETE  /api/trafico/delete-image-group                      <anon>:3a3f47a7
+0136  DELETE  /api/trafico/delete-image                            <anon>:ab602fd8
+0137  GET     /anuncios/activos                                    <anon>:7632196b
+0138  GET     /debug/anuncios                                      <anon>:f4d4ef4e
+0139  GET     /api/progresivas/:id/imagenes                        authenticateToken:ec6094e5 > <anon>:636a7f8b
+0140  POST    /api/progresiva-imagen/upload                        authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:f40861cf
+0141  DELETE  /api/progresiva-imagen/:id                           authenticateToken:ec6094e5 > <anon>:a8144200
+0142  POST    /api/tramos/:tramoId/upload-docx-photos              authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:bde8472f
+0143  GET     /api/ruta-kml                                        <anon>:20e3c3bf
+0144  GET     /anuncios                                            <anon>:593939a5
+0145  DELETE  /anuncios/:id                                        <anon>:78203306
+0146  PUT     /anuncios/:id                                        authenticateToken:ec6094e5 > <anon>:58e592b3
+0147  GET     /debug/tables                                        <anon>:0c9e2a5b
+0148  GET     /debug/tipo-ensayo-schema                            <anon>:f4d704cf
+0149  GET     /debug/progresivas-schema                            authenticateToken:ec6094e5 > <anon>:fbae2d00
+0150  GET     /debug/elementos-trafico-schema                      authenticateToken:ec6094e5 > <anon>:95c1fa2d
+0151  GET     /debug/usuariost                                     <anon>:3afbfdc7
+0152  GET     /api/proyectos/detallado                             authenticateToken:ec6094e5 > <anon>:2e6abe2d
+0153  GET     /api/proyectos/assigned-detailed                     authenticateToken:ec6094e5 > <anon>:af76df54
+0154  GET     /api/proyectos                                       authenticateToken:ec6094e5 > <anon>:fe39766c
+0155  GET     /api/proyectos/:id                                   authenticateToken:ec6094e5 > <anon>:f1dc1c18
+0156  POST    /api/proyectos/create-full                           authenticateToken:ec6094e5 > <anon>:c8dcb2a8
+0157  GET     /api/proyectos/:id/estadisticas                      authenticateToken:ec6094e5 > <anon>:c896e174
+0158  PUT     /api/proyectos/:id                                   authenticateToken:ec6094e5 > <anon>:5d382f3e
+0159  DELETE  /api/proyectos/:id                                   authenticateToken:ec6094e5 > <anon>:98bdd66f
+0160  GET     /api/proyectos/:proyectoId/tramos                    authenticateToken:ec6094e5 > <anon>:514a247d
+0161  POST    /api/proyectos/:projectId/assignUser                 authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:853e78eb
+0162  DELETE  /api/proyectos/:projectId/removeUser/:userId         authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:3a8539a4
+0163  GET     /api/proyectos/:projectId/assignments                authenticateToken:ec6094e5 > <anon>:ead926fa
+0164  GET     /api/proyectos/:projectId/history                    authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:6e32ea91
+0165  POST    /api/proyectos/:proyectoId/upload-kml                authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:8ce89fcb
+0166  GET     /api/proyectos/:id/kml                               authenticateToken:ec6094e5 > <anon>:27cbe497
+0167  POST    /api/proyectos/:projectId/kml                        authenticateToken:ec6094e5 > <anon>:7f5a1217 > <anon>:f29164ad
+0168  POST    /api/proyectos/:projectId/upload-kml                 authenticateToken:ec6094e5 > <anon>:7f5a1217 > multerMiddleware:207a095f > <anon>:12f5bfe8
+0169  GET     /api/proyectos/:id/map-data                          authenticateToken:ec6094e5 > <anon>:a2c53a73
+0170  GET     /api/proyectos/:id/estadisticas                      authenticateToken:ec6094e5 > <anon>:2504889f   [TAPADA por #0157]
+0171  DELETE  /api/proyectos/:id/kml                               authenticateToken:ec6094e5 > <anon>:b4de01b4
+0172  POST    /proyectos/import                                    authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:04c92429
+0173  GET     /api/proyectos/export                                authenticateToken:ec6094e5 > <anon>:29e491f1
+0174  GET     /api/user-projects                                   authenticateToken:ec6094e5 > <anon>:3d44581e
+0175  GET     /api/proyectos/:id                                   authenticateToken:ec6094e5 > <anon>:7b7dea67   [TAPADA por #0155]
+0176  GET     /api/proyectos/:id/calibracion                       authenticateToken:ec6094e5 > <anon>:9dc94722
+0177  POST    /api/proyectos/:id/calibracion                       authenticateToken:ec6094e5 > <anon>:fb400bed
+0178  DELETE  /api/proyectos/:id/calibracion                       authenticateToken:ec6094e5 > <anon>:d96e70a9
+0179  GET     /api/proyectos/:proyectoId/canteras                  authenticateToken:ec6094e5 > <anon>:473b212a
+0180  POST    /api/canteras/upload-image                           authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:fd85019e
+0181  POST    /api/canteras/:canteraId/upload-bulk                 authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:d73ce7a4
+0182  DELETE  /api/canteras/imagenes/:id                           authenticateToken:ec6094e5 > <anon>:442c5987
+0183  POST    /api/canteras/imagenes/bulk-delete                   authenticateToken:ec6094e5 > <anon>:3da06406
+0184  POST    /api/canteras                                        authenticateToken:ec6094e5 > <anon>:9444fb9b
+0185  POST    /api/canteras                                        authenticateToken:ec6094e5 > <anon>:9d1dd3a4   [TAPADA por #0184]
+0186  PUT     /api/canteras/:id                                    authenticateToken:ec6094e5 > <anon>:916daff9
+0187  GET     /api/canteras/:canteraId/details                     authenticateToken:ec6094e5 > <anon>:3c77680e
+0188  DELETE  /api/canteras/:id                                    authenticateToken:ec6094e5 > <anon>:f82e21e2
+0189  POST    /api/canteras/:canteraId/estratos                    authenticateToken:ec6094e5 > <anon>:779b4116
+0190  PUT     /api/canteras/estratos/:estratoId                    authenticateToken:ec6094e5 > <anon>:d80a46d7
+0191  DELETE  /api/canteras/estratos/:estratoId                    authenticateToken:ec6094e5 > <anon>:f5f6890a
+0192  GET     /api/tramos/:tramoId/canteras                        authenticateToken:ec6094e5 > <anon>:15840eed
+0193  POST    /api/canteras/:id/kml                                authenticateToken:ec6094e5 > <anon>:54a4c64f
+0194  GET     /api/tramos/:tramoId/fuentes-agua                    authenticateToken:ec6094e5 > <anon>:04152fd5
+0195  POST    /api/fuentes-agua                                    authenticateToken:ec6094e5 > <anon>:1e5df907
+0196  PUT     /api/fuentes-agua/:id                                authenticateToken:ec6094e5 > <anon>:a67be78a
+0197  GET     /api/fuentes-agua/:fuenteId/details                  authenticateToken:ec6094e5 > <anon>:c82e7c2c
+0198  DELETE  /api/fuentes-agua/:id                                authenticateToken:ec6094e5 > <anon>:9bd24008
+0199  POST    /api/fuentes-agua/:fuenteId/upload-bulk              authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:e5adc3f9
+0200  DELETE  /api/fuentes-agua/imagenes/:id                       authenticateToken:ec6094e5 > <anon>:d6aaca16
+0201  POST    /api/fuentes-agua/imagenes/bulk-delete               authenticateToken:ec6094e5 > <anon>:3f6af764
+0202  POST    /api/fuentes-agua/:fuenteId/estratos                 authenticateToken:ec6094e5 > <anon>:34b1f4c2
+0203  PUT     /api/fuentes-agua/estratos/:estratoId                authenticateToken:ec6094e5 > <anon>:d4fbf652
+0204  DELETE  /api/fuentes-agua/estratos/:estratoId                authenticateToken:ec6094e5 > <anon>:1d4fe8f5
+0205  GET     /api/tramos/:id                                      authenticateToken:ec6094e5 > <anon>:1e181273
+0206  GET     /api/kml-trazados/:id/content                        authenticateToken:ec6094e5 > <anon>:6c04270a
+0207  POST    /api/progresivas/:id/upload-kml                      authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:25e8b23c
+0208  DELETE  /api/progresivas/:progresivaId/kml                   authenticateToken:ec6094e5 > <anon>:fcfd4c03
+0209  GET     /api/progresivas                                     authenticateToken:ec6094e5 > <anon>:6999c6a1
+0210  POST    /api/progresivas                                     authenticateToken:ec6094e5 > <anon>:d5543c85
+0211  POST    /api/progresivas/bulk-delete                         authenticateToken:ec6094e5 > <anon>:83d0a60f
+0212  POST    /api/progresivas/importar-con-ensayos                authenticateToken:ec6094e5 > <anon>:ba574d98
+0213  PUT     /api/progresivas/importar-con-ensayos/:overwriteProgresivaId authenticateToken:ec6094e5 > <anon>:20902134
+0214  GET     /api/kml-trazados/:id/content                        authenticateToken:ec6094e5 > <anon>:6c04270a   [TAPADA por #0206]
+0215  DELETE  /api/progresivas/:progresivaId/kml                   authenticateToken:ec6094e5 > <anon>:fcfd4c03   [TAPADA por #0208]
+0216  GET     /api/progresivas                                     authenticateToken:ec6094e5 > <anon>:6999c6a1   [TAPADA por #0209]
+0217  GET     /api/progresivas/:id/children                        authenticateToken:ec6094e5 > getSubProgresivas:5079a28c
+0218  GET     /api/progresivas/:id/children/all                    authenticateToken:ec6094e5 > getAllSubProgresivas:cbba1c10
+0219  GET     /api/progresivas/:id                                 authenticateToken:ec6094e5 > <anon>:e3d1a1dd
+0220  GET     /api/progresivas/:progresivaId/page                  authenticateToken:ec6094e5 > <anon>:886d9b8b
+0221  GET     /api/progresivas/proyecto/:proyectoId                authenticateToken:ec6094e5 > <anon>:b18aad87
+0222  GET     /api/user/tramos                                     authenticateToken:ec6094e5 > <anon>:2ea67f8b
+0223  DELETE  /api/progresivas/:id                                 authenticateToken:ec6094e5 > <anon>:799ca6a7
+0224  POST    /progresivas/bulk-delete                             authenticateToken:ec6094e5 > <anon>:83d0a60f
+0225  PUT     /api/progresivas/:id                                 authenticateToken:ec6094e5 > <anon>:43a5bbf5
+0226  PUT     /api/progresivas/child/:id                           authenticateToken:ec6094e5 > <anon>:0ef52d81
+0227  GET     /api/entidades-solicitantes                          authenticateToken:ec6094e5 > <anon>:43d8eff3
+0228  GET     /api/otras-entidades                                 authenticateToken:ec6094e5 > <anon>:d28e9435
+0229  GET     /codigo_departamentos                                authenticateToken:ec6094e5 > <anon>:f1e0d84e
+0230  GET     /provincias/:codigo_departamento                     authenticateToken:ec6094e5 > <anon>:14995138
+0231  GET     /distritos/:codigo_provincia                         authenticateToken:ec6094e5 > <anon>:fb3309a7
+0232  GET     /estratos                                            authenticateToken:ec6094e5 > <anon>:426e13a4
+0233  POST    /estratos                                            authenticateToken:ec6094e5 > <anon>:4b1ccc4c
+0234  PUT     /estratos/:id                                        authenticateToken:ec6094e5 > <anon>:52007b86
+0235  DELETE  /estratos/:id                                        authenticateToken:ec6094e5 > <anon>:c71e370e
+0236  GET     /estratos/progresiva/:progresivaId                   authenticateToken:ec6094e5 > <anon>:d9225672
+0237  GET     /ensayos/estrato/:estratoId                          authenticateToken:ec6094e5 > <anon>:e58e9732
+0238  POST    /ensayos                                             authenticateToken:ec6094e5 > <anon>:d97192a0
+0239  POST    /api/ensayos/granulometria                           authenticateToken:ec6094e5 > <anon>:39d9c2bb
+0240  POST    /api/ensayos/limite-liquido                          authenticateToken:ec6094e5 > <anon>:f1ab00ea
+0241  POST    /api/ensayos/limite-plastico                         authenticateToken:ec6094e5 > <anon>:56c57841
+0242  PUT     /api/ensayos/granulometria/:ensayo_id                authenticateToken:ec6094e5 > <anon>:4190d7a4
+0243  PUT     /api/ensayos/limite-liquido/:ensayo_id               authenticateToken:ec6094e5 > <anon>:e502fa4e
+0244  PUT     /api/ensayos/limite-plastico/:ensayo_id              authenticateToken:ec6094e5 > <anon>:736adedd
+0245  GET     /api/tramos/:tramoId/ensayos                         authenticateToken:ec6094e5 > <anon>:3b7ac97b   [TAPADA por #0052]
+0246  GET     /api/tramos/:tramoId/ensayos/export-excel            authenticateToken:ec6094e5 > <anon>:de58ef95
+0247  GET     /api/tramos/:tramoId/ensayos/export-excel/:tipoEnsayoId authenticateToken:ec6094e5 > <anon>:2c9b1b42
+0248  POST    /api/proyectos/:proyectoId/tramos/:tramoId/ensayos/importar authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:5d863587
+0249  GET     /api/navbar-options                                  authenticateToken:ec6094e5 > authorizeAdmin:db0d9dd2 > <anon>:8b3097b6
+0250  GET     /api/navbar-visibility/user/:userId                  authenticateToken:ec6094e5 > <anon>:7d391033
+0251  GET     /api/navbar-visibility/:roleId                       authenticateToken:ec6094e5 > authorizeAdmin:db0d9dd2 > <anon>:5379c9fc
+0252  POST    /api/navbar-visibility/:roleId                       authenticateToken:ec6094e5 > authorizeAdmin:db0d9dd2 > <anon>:e1b6aac4
+0253  GET     /api/navbar-visibility/specialty/:specialtyId        authenticateToken:ec6094e5 > authorizeAdmin:db0d9dd2 > <anon>:ab22d4fa
+0254  POST    /api/navbar-visibility/specialty/:specialtyId        authenticateToken:ec6094e5 > authorizeAdmin:db0d9dd2 > <anon>:f033c1fa
+0255  POST    /api/audit/log                                       authenticateToken:ec6094e5 > <anon>:6fe71424
+0256  DELETE  /api/audit/logs                                      authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:514cfcad
+0257  GET     /api/audit/logs                                      authenticateToken:ec6094e5 > <anon>:1030b7f7
+0258  GET     /api/changelog/latest                                authenticateToken:ec6094e5 > <anon>:22d40aca
+0259  POST    /api/admin/changelog                                 authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:94c7f71e
+0260  POST    /api/alcantarillas/upload-excel                      authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:e7255320   [TAPADA por #0113]
+0261  POST    /api/upload-alcantarillas-e1                         authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > multerMiddleware:207a095f > <anon>:05f402a0
+0262  GET     /api/alcantarillas-e1                                authenticateToken:ec6094e5 > <anon>:cdcbdf93
+0263  POST    /api/trafico/exportar-kml                            authenticateToken:ec6094e5 > <anon>:75fc47ac
+0264  POST    /api/trafico/exportar-shapefile                      authenticateToken:ec6094e5 > <anon>:1f0a7b34
+0265  GET     /api/elementos-trafico                               authenticateToken:ec6094e5 > <anon>:7b5555ef
+0266  GET     /api/trafico/obtener-trazado                         authenticateToken:ec6094e5 > <anon>:7bc9c1ef
+0267  POST    /api/trafico/guardar-trazado                         authenticateToken:ec6094e5 > authorizeAdminOrCoordinator:8f985b69 > <anon>:5f7e2120
+0268  DELETE  /api/trafico/delete-image                            authenticateToken:ec6094e5 > <anon>:bb7862f7   [TAPADA por #0136]
+0269  DELETE  /api/trafico/delete-image-group                      authenticateToken:ec6094e5 > <anon>:204aa4bb   [TAPADA por #0135]
+0270  GET     /api/trafico/download-excel                          <anon>:33514850
+0271  GET     /api/proyectos/:projectId/badenes                    authenticateToken:ec6094e5 > <anon>:1e3a63a6   [TAPADA por #0126]
+0272  POST    /api/badenes                                         authenticateToken:ec6094e5 > <anon>:d7b38406   [TAPADA por #0127]
+0273  PUT     /api/badenes/:id                                     authenticateToken:ec6094e5 > <anon>:13bf8d1b   [TAPADA por #0128]
+0274  POST    /api/badenes/upload-excel                            authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:4632c51f
+0275  GET     /api/badenes/excel-info/:projectId/:entregableNum    authenticateToken:ec6094e5 > <anon>:b69bd209
+0276  DELETE  /api/badenes/delete-excel/:projectId                 authenticateToken:ec6094e5 > <anon>:a32d74a3
+0277  GET     /api/puentes/by-project/:projectId                   authenticateToken:ec6094e5 > <anon>:98c2150b
+0278  POST    /api/puentes/upload-excel                            authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:1d67ead5
+0279  POST    /api/puentes                                         authenticateToken:ec6094e5 > <anon>:14ec3a61
+0280  PUT     /api/puentes/:id                                     authenticateToken:ec6094e5 > <anon>:308aeb89
+0281  DELETE  /api/puentes/project/:projectId                      authenticateToken:ec6094e5 > <anon>:a85b035a
+0282  GET     /api/muros/by-project/:projectId                     authenticateToken:ec6094e5 > <anon>:07c1e9e0
+0283  POST    /api/muros/upload-excel                              authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:f173f132
+0284  POST    /api/muros                                           authenticateToken:ec6094e5 > <anon>:387fecba
+0285  PUT     /api/muros/:id                                       authenticateToken:ec6094e5 > <anon>:5bb334a1
+0286  DELETE  /api/muros/project/:projectId                        authenticateToken:ec6094e5 > <anon>:885095c6
+0287  POST    /api/senales-preventivas/upload-excel                multerMiddleware:207a095f > uploadExcel:cef2562c   [TAPADA por #0021]
+0288  GET     /api/senales-preventivas/:projectId                  getAllSenales:a4feb399   [TAPADA por #0022]
+0289  POST    /api/senales-preventivas                             createSenal:e86cbfcd   [TAPADA por #0023]
+0290  PUT     /api/senales-preventivas/:id                         updateSenal:fe7368a5   [TAPADA por #0024]
+0291  DELETE  /api/senales-preventivas/:id                         deleteSenal:340c2fa2
+0292  GET     /api/zonas-criticas/by-project/:projectId            authenticateToken:ec6094e5 > <anon>:a84311dd
+0293  POST    /api/zonas-criticas/upload-excel                     authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:0cf792a7   [TAPADA por #0070]
+0294  POST    /api/zonas-criticas                                  authenticateToken:ec6094e5 > <anon>:8f402e65
+0295  PUT     /api/zonas-criticas/:id                              authenticateToken:ec6094e5 > <anon>:2f1d96f5   [TAPADA por #0072]
+0296  DELETE  /api/zonas-criticas/project/:projectId               authenticateToken:ec6094e5 > <anon>:e01148e2
+0297  GET     /api/estructuras-existentes/by-project/:projectId    authenticateToken:ec6094e5 > <anon>:f1b161a2
+0298  POST    /api/estructuras-existentes/upload-excel             authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:257264f6
+0299  POST    /api/estructuras-existentes                          authenticateToken:ec6094e5 > <anon>:b8249605
+0300  PUT     /api/estructuras-existentes/:id                      authenticateToken:ec6094e5 > <anon>:46c0b86c
+0301  DELETE  /api/estructuras-existentes/project/:projectId       authenticateToken:ec6094e5 > <anon>:269bbf3f
+0302  GET     /api/interferencias/project/:projectId               authenticateToken:ec6094e5 > <anon>:9819d1e3
+0303  POST    /api/interferencias                                  authenticateToken:ec6094e5 > <anon>:fc6aaf22
+0304  PUT     /api/interferencias/:id                              authenticateToken:ec6094e5 > <anon>:7575d149
+0305  POST    /api/interferencias/upload-excel                     authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:2bd44652
+0306  DELETE  /api/interferencias/project/:projectId               authenticateToken:ec6094e5 > <anon>:187b7cf3
+0307  DELETE  /api/alcantarillas/:id                               authenticateToken:ec6094e5 > <anon>:e0c1da6a
+0308  DELETE  /api/badenes/:id                                     authenticateToken:ec6094e5 > <anon>:87d6a7ae
+0309  DELETE  /api/puentes/:id                                     authenticateToken:ec6094e5 > <anon>:4f0b97eb
+0310  DELETE  /api/muros/:id                                       authenticateToken:ec6094e5 > <anon>:816659ac
+0311  DELETE  /api/zonas-criticas/:id                              authenticateToken:ec6094e5 > <anon>:d83c09ef   [TAPADA por #0073]
+0312  DELETE  /api/estructuras-existentes/:id                      authenticateToken:ec6094e5 > <anon>:a51b1f38
+0313  POST    /api/hitos-kilometricos                              authenticateToken:ec6094e5 > createHito:bc7f9d8e   [TAPADA por #0081]
+0314  PUT     /api/hitos-kilometricos/:id                          authenticateToken:ec6094e5 > updateHito:ec55d5d5   [TAPADA por #0084]
+0315  DELETE  /api/hitos-kilometricos/:id                          authenticateToken:ec6094e5 > deleteHito:26aa4a58   [TAPADA por #0083]
+0316  POST    /api/senales-informativas                            authenticateToken:ec6094e5 > createSenal:09070ee7   [TAPADA por #0076]
+0317  PUT     /api/senales-informativas/:id                        authenticateToken:ec6094e5 > updateSenal:7689ff79   [TAPADA por #0079]
+0318  DELETE  /api/senales-informativas/:id                        authenticateToken:ec6094e5 > deleteSenal:94c3214d   [TAPADA por #0078]
+0319  GET     /api/proyectos/assigned-detailed                     authenticateToken:ec6094e5 > <anon>:fecc978e   [TAPADA por #0153]
+0320  POST    /api/proyectos/:id/geologia-capas                    authenticateToken:ec6094e5 > authorizeGeologyManage:844140de > multerMiddleware:207a095f > <anon>:1148d92a
+0321  POST    /api/proyectos/:id/diseno-geometrico-capas/blank     authenticateToken:ec6094e5 > authorizeDisenoGeometricoManage:0969f8ae > <anon>:acfc593f
+0322  POST    /api/proyectos/:id/diseno-geometrico-capas           authenticateToken:ec6094e5 > authorizeDisenoGeometricoManage:0969f8ae > multerMiddleware:207a095f > <anon>:8150b249
+0323  GET     /api/proyectos/:id/diseno-geometrico-capas           authenticateToken:ec6094e5 > <anon>:df6d7859
+0324  GET     /api/proyectos/:id/diseno-geometrico-capas/:tabName  authenticateToken:ec6094e5 > <anon>:ced30eac
+0325  PATCH   /api/proyectos/:id/diseno-geometrico-capas/:tabName/rename authenticateToken:ec6094e5 > authorizeDisenoGeometricoManage:0969f8ae > <anon>:a403739a
+0326  PATCH   /api/proyectos/:id/diseno-geometrico-capas/:tabName/drive-link authenticateToken:ec6094e5 > authorizeDisenoGeometricoManage:0969f8ae > <anon>:8a471a54
+0327  PATCH   /api/proyectos/:id/diseno-geometrico-capas/:tabName/geojson authenticateToken:ec6094e5 > authorizeDisenoGeometricoManage:0969f8ae > <anon>:6bde6088
+0328  DELETE  /api/proyectos/:id/diseno-geometrico-capas/:tabName  authenticateToken:ec6094e5 > authorizeDisenoGeometricoManage:0969f8ae > <anon>:f6ff1fda
+0329  GET     /api/proyectos/:id/diseno-geometrico-versiones       authenticateToken:ec6094e5 > <anon>:4e960f89
+0330  POST    /api/proyectos/:id/diseno-geometrico-versiones       authenticateToken:ec6094e5 > authorizeDisenoGeometricoManage:0969f8ae > multerMiddleware:207a095f > <anon>:db501df0
+0331  DELETE  /api/proyectos/:id/diseno-geometrico-versiones/:versionId authenticateToken:ec6094e5 > authorizeDisenoGeometricoManage:0969f8ae > <anon>:81dca9d9
+0332  GET     /api/proyectos/:id/geologia-capas/:tabName           authenticateToken:ec6094e5 > <anon>:9bbdbab2
+0333  GET     /api/proyectos/:id/geologia-capas                    authenticateToken:ec6094e5 > <anon>:989f7255
+0334  DELETE  /api/proyectos/:id/geologia-capas/:tabName           authenticateToken:ec6094e5 > authorizeGeologyManage:844140de > <anon>:860fa63e
+0335  PATCH   /api/proyectos/:id/geologia-capas/:tabName/rename    authenticateToken:ec6094e5 > authorizeGeologyManage:844140de > <anon>:98ed9326
+0336  PATCH   /api/proyectos/:id/geologia-capas/:tabName/drive-link authenticateToken:ec6094e5 > authorizeGeologyManage:844140de > <anon>:232de80d
+0337  GET     /api/tramos/:tramoId/ensayos/export-excel/:tipoEnsayoId authenticateToken:ec6094e5 > <anon>:1a511426   [TAPADA por #0247]
+0338  GET     /api/tramos/:tramoId/ensayos/export-excel            authenticateToken:ec6094e5 > <anon>:25a7228d   [TAPADA por #0246]
+0339  GET     /api/ensayos/canteras/exportar-tipo/:tipoEnsayoId    authenticateToken:ec6094e5 > <anon>:984def0a
+0340  GET     /api/proyectos/:id/geologia-muestras                 authenticateToken:ec6094e5 > <anon>:5683911c
+0341  POST    /api/proyectos/:id/geologia-muestras                 authenticateToken:ec6094e5 > authorizeGeologyManage:844140de > multerMiddleware:207a095f > <anon>:b1c05ca4
+0342  DELETE  /api/proyectos/:id/geologia-muestras/:muestraId      authenticateToken:ec6094e5 > authorizeGeologyManage:844140de > <anon>:228627bb
+0343  GET     /api/proyectos/:id/clasificacion-materiales          authenticateToken:ec6094e5 > <anon>:9e52d2eb
+0344  POST    /api/proyectos/:id/clasificacion-materiales          authenticateToken:ec6094e5 > <anon>:3c21adc0
+0345  POST    /api/proyectos/:id/clasificacion-materiales/upload-excel authenticateToken:ec6094e5 > multerMiddleware:207a095f > <anon>:392deb3e
+0346  DELETE  /api/proyectos/:id/clasificacion-materiales/:registroId authenticateToken:ec6094e5 > <anon>:80b2d653
+0347  DELETE  /api/proyectos/:id/clasificacion-materiales          authenticateToken:ec6094e5 > <anon>:1ff06652
+0348  POST    /api/clasificar-suelo-nlp                            authenticateToken:ec6094e5 > <anon>:cea55a66
+0349  POST    /api/clasificar-suelo-nlp-batch                      authenticateToken:ec6094e5 > <anon>:0a0cfaf0
