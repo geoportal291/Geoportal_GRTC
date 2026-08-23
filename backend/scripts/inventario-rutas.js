@@ -6,17 +6,18 @@
  * el orden de sus middlewares y un hash del código de cada handler.
  *
  * Uso:
- *   node scripts/inventario-rutas.js                  -> escribe scripts/inventario-rutas.txt
- *   node scripts/inventario-rutas.js otro.txt         -> escribe otro.txt
+ *   node scripts/inventario-rutas.js            -> regenera la línea base (scripts/inventario-rutas.txt)
+ *   node scripts/inventario-rutas.js otro.txt   -> la escribe en otro sitio
+ *   node scripts/inventario-rutas.js --verificar
+ *        -> compara contra la línea base guardada SIN tocarla.
+ *           Sale con código 0 si son idénticas, 1 si algo cambió.
  *
- * Para verificar un refactor:
- *   node scripts/inventario-rutas.js antes.txt        (antes de tocar nada)
- *   ...mover código...
- *   node scripts/inventario-rutas.js despues.txt
- *   diff antes.txt despues.txt                        -> tiene que salir vacío
+ * Flujo de un refactor: mover código, `--verificar`, y sólo regenerar la línea
+ * base cuando el cambio de inventario sea deliberado (p.ej. borrar una ruta
+ * duplicada en B2).
  *
  * El hash es de fn.toString(): mover un handler tal cual lo conserva, editarlo
- * lo cambia. Así el diff distingue "moviste código" de "tocaste código".
+ * lo cambia. Así la verificación distingue "moviste código" de "tocaste código".
  */
 
 const path = require('path');
@@ -25,7 +26,11 @@ const net = require('net');
 const crypto = require('crypto');
 
 const BACKEND = path.join(__dirname, '..');
-const salida = path.resolve(process.argv[2] || path.join(__dirname, 'inventario-rutas.txt'));
+const LINEA_BASE = path.join(__dirname, 'inventario-rutas.txt');
+const verificar = process.argv.includes('--verificar');
+const salida = path.resolve(
+    (!verificar && process.argv[2]) ? process.argv[2] : LINEA_BASE
+);
 
 // --- 1. Que nada abra un puerto -------------------------------------------
 net.Server.prototype.listen = function () { return this; };
@@ -149,6 +154,44 @@ const cabecera = [
     '',
 ];
 
-fs.writeFileSync(salida, cabecera.concat(lineas).join('\n') + '\n', 'utf8');
-console.log(`${rutas.length} rutas, ${tapadas.length} tapadas -> ${path.relative(BACKEND, salida)}`);
-process.exit(0);
+const contenido = cabecera.concat(lineas).join('\n') + '\n';
+
+if (!verificar) {
+    fs.writeFileSync(salida, contenido, 'utf8');
+    console.log(`${rutas.length} rutas, ${tapadas.length} tapadas -> ${path.relative(BACKEND, salida)}`);
+    process.exit(0);
+}
+
+// --- Modo verificación: comparar contra la línea base sin tocarla ---------
+if (!fs.existsSync(LINEA_BASE)) {
+    console.error(`FALLO: no existe la línea base ${path.relative(BACKEND, LINEA_BASE)}.`);
+    console.error('Genérala primero con: node scripts/inventario-rutas.js');
+    process.exit(1);
+}
+
+// Normalizamos CRLF: da igual cómo git haya dejado el archivo en disco.
+const normalizar = (s) => s.split('\r\n').join('\n');
+const base = normalizar(fs.readFileSync(LINEA_BASE, 'utf8')).split('\n');
+const ahora = normalizar(contenido).split('\n');
+
+const difs = [];
+for (let i = 0; i < Math.max(base.length, ahora.length); i++) {
+    if (base[i] !== ahora[i]) {
+        difs.push({ n: i + 1, antes: base[i], despues: ahora[i] });
+    }
+}
+
+if (difs.length === 0) {
+    console.log(`OK: ${rutas.length} rutas idénticas a la línea base. Nada cambió.`);
+    process.exit(0);
+}
+
+console.error(`FALLO: ${difs.length} línea(s) distintas respecto a la línea base.\n`);
+for (const d of difs.slice(0, 40)) {
+    if (d.antes !== undefined) console.error(`  ${String(d.n).padStart(4)} -  ${d.antes}`);
+    if (d.despues !== undefined) console.error(`  ${String(d.n).padStart(4)} +  ${d.despues}`);
+}
+if (difs.length > 40) console.error(`  ... y ${difs.length - 40} más`);
+console.error('\nSi el cambio es deliberado, regenera la línea base con:');
+console.error('  node scripts/inventario-rutas.js');
+process.exit(1);
