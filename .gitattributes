@@ -1,0 +1,4 @@
+# El inventario de rutas lo genera Node con LF. Con core.autocrlf=true, git lo
+# devolvería en CRLF al hacer checkout, y el diff contra un inventario recién
+# generado saldría falseado (todas las líneas distintas sin haber cambiado nada).
+backend/scripts/inventario-rutas.txt text eol=lf
