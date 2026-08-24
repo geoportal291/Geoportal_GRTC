@@ -314,7 +314,6 @@ const authenticateToken = async (req, res, next) => {
 };
 
 
-
 const authorizeGeologyManage = async (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'No autenticado' });
 
@@ -1768,6 +1767,17 @@ app.get('/api/usuarios/dni/:dni', authenticateToken, async (req, res) => {
     }
 });
 
+// Obtener usuarios agrupados por proyecto
+app.get('/api/usuarios/por-proyecto', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
+    try {
+        const usersByProject = await usuariosService.getUsersGroupedByProject();
+        res.json(usersByProject);
+    } catch (err) {
+        console.error('Error al obtener usuarios por proyecto:', err);
+        res.status(500).json({ status: 'error', mensaje: 'Error al obtener usuarios por proyecto' });
+    }
+});
+
 app.get('/api/usuarios/:id', authenticateToken, authorizePermission('usuarios', 'lectura'), async (req, res) => {
     const { id } = req.params;
     try {
@@ -1783,16 +1793,6 @@ app.get('/api/usuarios/:id', authenticateToken, authorizePermission('usuarios', 
     }
 });
 
-// Obtener usuarios agrupados por proyecto
-app.get('/api/usuarios/por-proyecto', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
-    try {
-        const usersByProject = await usuariosService.getUsersGroupedByProject();
-        res.json(usersByProject);
-    } catch (err) {
-        console.error('Error al obtener usuarios por proyecto:', err);
-        res.status(500).json({ status: 'error', mensaje: 'Error al obtener usuarios por proyecto' });
-    }
-});
 
 app.delete('/api/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
     const { dni } = req.params;
@@ -3463,7 +3463,6 @@ app.delete('/api/proyectos/:id', authenticateToken, async (req, res) => {
 });
 
 
-
 app.get('/api/proyectos/:proyectoId/tramos', authenticateToken, async (req, res) => {
     const { proyectoId } = req.params;
     try {
@@ -3651,26 +3650,6 @@ app.post('/api/proyectos/:projectId/kml', authenticateToken, authorizePermission
 });
 
 // NEW: Endpoint to upload KML file for a project
-app.post('/api/proyectos/:projectId/upload-kml', authenticateToken, authorizePermission('proyectos', 'edicion'), upload.single('kmlFile'), async (req, res) => {
-    const { projectId } = req.params;
-    const userId = req.user.id;
-
-    if (!req.file) {
-        return res.status(400).json({ error: 'No se proporcionó ningún archivo KML/KMZ.' });
-    }
-
-    try {
-        const result = await proyectosService.uploadKmlToProyecto(projectId, req.file, userId);
-        res.status(200).json(result);
-
-    } catch (error) {
-        console.error(`Error uploading KML for project ${projectId}:`, error);
-        if (error.isCustomError) {
-            return res.status(error.statusCode || 400).json({ error: error.message });
-        }
-        res.status(error.statusCode || 500).json({ error: error.message || 'Error interno al procesar KML.' });
-    }
-});
 
 // NEW: Endpoint to get consolidated Map Data for Dashboard
 app.get('/api/proyectos/:id/map-data', authenticateToken, async (req, res) => {
@@ -4306,7 +4285,6 @@ app.put('/api/progresivas/importar-con-ensayos/:overwriteProgresivaId', authenti
         }
     }
 });
-
 
 
 // NEW: Endpoint to get KML content by kml_trazado_id
@@ -5254,237 +5232,6 @@ app.get('/api/trafico/download-excel', async (req, res) => {
 });
 
 
-
-// Socket.IO CORS options should be defined before io initialization
-const ioCorsOptions = {
-    origin: function (origin, callback) {
-        if (!origin || whitelist.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    methods: ['GET', 'POST']
-};
-
-const io = new Server(server, {
-    cors: ioCorsOptions
-});
-
-// In-memory data for Amigo Secreto - only for tracking currently connected users
-let participantesSorteo = [];
-
-// ===== SOCKET.IO AUTHENTICATION MIDDLEWARE =====
-io.use(async (socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-        return next(new Error('Authentication error: Token not provided.'));
-    }
-    try {
-        const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-        const userResult = await db.query(`
-            SELECT u.id, u.nombre, u.ap_paterno, r.nombre as rol_nombre, u.rol_id
-            FROM usuariost u
-            JOIN roles r ON u.rol_id = r.id
-            WHERE u.id = $1
-        `, [decodedToken.id]);
-
-        if (userResult.rows.length === 0) {
-            return next(new Error('Authentication error: User not found.'));
-        }
-        socket.data.user = userResult.rows[0];
-        next();
-    } catch (err) {
-        console.error('Socket authentication error:', err.message);
-        return next(new Error('Authentication error: Invalid token.'));
-    }
-});
-
-// ===== SOCKET.IO CONNECTION LOGIC (DATABASE PERSISTENT) =====
-io.on('connection', async (socket) => {
-    console.log(`🔌 Usuario autenticado conectado: ${socket.data.user.nombre} (ID: ${socket.id})`);
-
-    const isOrganizer = ['ADMIN', 'COORDINADOR PROYECTO'].includes(socket.data.user.rol_nombre);
-
-    try {
-        // --- Autorización para participar ---
-        const participantCheck = await db.query('SELECT 1 FROM amigo_secreto_participantes WHERE usuario_id = $1', [socket.data.user.id]);
-        const isParticipant = participantCheck.rows.length > 0;
-
-        if (!isParticipant && !isOrganizer) {
-            console.log(`🚫 Usuario no autorizado ${socket.data.user.nombre} intentó conectarse.`);
-            socket.emit('error_event', { message: 'No estás en la lista de participantes para este evento.' });
-            return socket.disconnect();
-        }
-
-        // Add user to the in-memory list of connected participants if not already there
-        if (!participantesSorteo.some(p => p.id === socket.data.user.id)) {
-            participantesSorteo.push(socket.data.user);
-        }
-
-        // --- Fetch initial state from DB ---
-        const eventoResult = await db.query('SELECT es_sorteo_iniciado FROM amigo_secreto_eventos WHERE id = 1');
-        const esSorteoIniciado = eventoResult.rows[0]?.es_sorteo_iniciado || false;
-
-        let asignacion = null;
-        if (esSorteoIniciado) {
-            const asignacionResult = await db.query(
-                `SELECT u.nombre, asa.receptor_usuario_id AS receptor_id
-                 FROM amigo_secreto_asignaciones asa
-                 JOIN usuariost u ON asa.receptor_usuario_id = u.id
-                 WHERE asa.evento_id = 1 AND asa.dador_usuario_id = $1`,
-                [socket.data.user.id]
-            );
-            if (asignacionResult.rows.length > 0) {
-                const row = asignacionResult.rows[0];
-                asignacion = {
-                    nombre: row.nombre,
-                    receptorId: row.receptor_id
-                };
-            }
-        }
-
-        socket.emit('initial_state', {
-            participantes: participantesSorteo,
-            esSorteoIniciado,
-            isOrganizer,
-            asignacion: asignacion // Send existing assignment if any
-        });
-
-        // Broadcast updated participant list to everyone
-        io.emit('update_participants', participantesSorteo);
-
-    } catch (dbError) {
-        console.error("Error fetching initial state from DB:", dbError);
-        socket.emit('error_event', { message: 'Error de servidor al obtener estado del sorteo.' });
-    }
-
-    // --- Event Handlers ---
-
-    socket.on('start_draw', async () => {
-        const isOrganizer = ['ADMIN', 'COORDINADOR PROYECTO'].includes(socket.data.user.rol_nombre);
-        if (!isOrganizer) { // Re-check authorization
-            return socket.emit('error_event', { message: 'No tienes permiso para iniciar el sorteo.' });
-        }
-
-        const client = await db.connect();
-        try {
-            // Obtener participantes autorizados desde la base de datos
-            const { rows: authorizedParticipants } = await client.query(`
-                SELECT u.id, u.nombre, u.ap_paterno FROM usuariost u
-                JOIN amigo_secreto_participantes asp ON u.id = asp.usuario_id
-            `);
-
-            if (authorizedParticipants.length < 2) {
-                return io.emit('error_event', { message: 'No hay suficientes participantes seleccionados para el sorteo (mínimo 2).' });
-            }
-
-            console.log(`🎉 Sorteo iniciado por ${socket.data.user.nombre}! con ${authorizedParticipants.length} participantes.`);
-
-            let receptores = [...authorizedParticipants];
-            let asignacionesTemp = {};
-            let asignacionValida = false;
-            let attempts = 0;
-
-            // Lógica de Sorteo Robusta (Fisher-Yates shuffle con prevención de auto-asignación)
-            // Se hacen varios intentos por si el shuffle inicial produce auto-asignaciones
-            while (!asignacionValida && attempts < 100) { // Limitar intentos para evitar bucles infinitos
-                // 1. Barajar la lista de receptores
-                for (let i = receptores.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [receptores[i], receptores[j]] = [receptores[j], receptores[i]];
-                }
-
-                // 2. Verificar si hay auto-asignaciones
-                let hayConflictos = false;
-                for (let i = 0; i < authorizedParticipants.length; i++) {
-                    if (authorizedParticipants[i].id === receptores[i].id) {
-                        hayConflictos = true;
-                        // Intentar una corrección local simple para este conflicto
-                        if (receptores.length > 1) { // Asegurarse de que haya al menos dos elementos para intercambiar
-                            const swapIndex = (i + 1) % receptores.length; // Intercambiar con el siguiente (circularmente)
-                            [receptores[i], receptores[swapIndex]] = [receptores[swapIndex], receptores[i]];
-                            // Tras el swap, se podría haber creado un nuevo conflicto o no haber resuelto el original.
-                            // Por simplicidad, si hubo un conflicto y lo 'corregimos', asumimos que necesitamos verificar de nuevo o re-shuffulear.
-                            // Si se quiere una solución 100% garantizada en pocos pasos, se requiere un algoritmo más complejo (e.g., matching bipartito).
-                            // Para 'amigo secreto', re-shuffulear es aceptable si hay pocos conflictos.
-                        }
-                    }
-                }
-
-                // Después de intentar corregir conflictos, re-verificamos la validez de toda la asignación
-                hayConflictos = false;
-                for (let i = 0; i < authorizedParticipants.length; i++) {
-                    if (authorizedParticipants[i].id === receptores[i].id) {
-                        hayConflictos = true;
-                        break;
-                    }
-                }
-
-                if (!hayConflictos) {
-                    asignacionValida = true;
-                }
-                attempts++;
-            }
-
-            if (!asignacionValida) {
-                // Si después de varios intentos no se logra, emitir un error.
-                console.error('No se pudo realizar el sorteo sin conflictos después de múltiples intentos.');
-                return io.emit('error_event', { message: 'No se pudo realizar el sorteo sin conflictos. Inténtalo de nuevo.' });
-            }
-
-            // 3. Crear el mapa de asignaciones
-            authorizedParticipants.forEach((dador, index) => {
-                const receptor = receptores[index];
-                asignacionesTemp[dador.id] = { nombre: `${receptor.nombre} ${receptor.ap_paterno}`.trim(), id: receptor.id };
-            });
-
-            // 4. Guardar en la Base de Datos
-            await client.query('BEGIN');
-            await client.query('DELETE FROM amigo_secreto_asignaciones WHERE evento_id = 1'); // Limpiar asignaciones anteriores
-
-            const insertPromises = Object.entries(asignacionesTemp).map(([dadorId, receptorData]) => {
-                return client.query(
-                    'INSERT INTO amigo_secreto_asignaciones (evento_id, dador_usuario_id, receptor_usuario_id) VALUES (1, $1, $2)',
-                    [parseInt(dadorId, 10), receptorData.id]
-                );
-            });
-            await Promise.all(insertPromises);
-
-            await client.query('UPDATE amigo_secreto_eventos SET es_sorteo_iniciado = true WHERE id = 1');
-            await client.query('COMMIT');
-            console.log("Asignaciones guardadas en la DB.");
-
-            // 5. Notificar a los clientes
-            io.emit('draw_started'); // Notificar que el sorteo ha comenzado
-
-            setTimeout(async () => {
-                const allSockets = await io.fetchSockets();
-                allSockets.forEach(sock => {
-                    const miAsignacion = asignacionesTemp[sock.data.user.id];
-                    if (miAsignacion) {
-                        sock.emit('final_assignment', { nombre: `¡${miAsignacion.nombre}!`, receptorId: miAsignacion.id });
-                    }
-                });
-            }, 3000); // Delay para la animación
-
-        } catch (e) {
-            await client.query('ROLLBACK');
-            console.error('Fallo la transacción del sorteo:', e);
-            io.emit('error_event', { message: 'Error en el servidor al realizar el sorteo.' });
-            socket.emit('error_event', { message: 'Error en el servidor al reiniciar el sorteo.' });
-        } finally {
-            client.release();
-        }
-    });
-
-    socket.on('disconnect', () => {
-        console.log(`🔌 Usuario desconectado: ${socket.data.user.nombre}`);
-        participantesSorteo = participantesSorteo.filter(p => p.id !== socket.data.user.id);
-        io.emit('update_participants', participantesSorteo);
-    });
-});
-
 // --------------------- BADENES ---------------------
 
 // Helper function for Badenes Excel upload
@@ -5502,8 +5249,6 @@ async function uploadBadenesExcelToVercelBlob(fileBuffer, originalFilename, proj
         throw new Error('Error al subir archivo Excel de badenes a Vercel Blob');
     }
 }
-
-
 
 
 app.post('/api/badenes/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
@@ -5891,9 +5636,6 @@ app.delete('/api/interferencias/project/:projectId', authenticateToken, async (r
         res.status(500).json({ error: err.message });
     }
 });
-
-const PORT = process.env.PORT || 5000;
-
 
 
 // --------------------- DELETE ROUTES FOR INDIVIDUAL ELEMENTS ---------------------
@@ -7327,6 +7069,238 @@ app.post('/api/clasificar-suelo-nlp-batch', authenticateToken, async (req, res) 
         res.status(500).json({ error: error.message || 'Error interno del servidor NLP.' });
     }
 });
+
+// Socket.IO CORS options should be defined before io initialization
+const ioCorsOptions = {
+    origin: function (origin, callback) {
+        if (!origin || whitelist.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST']
+};
+
+const io = new Server(server, {
+    cors: ioCorsOptions
+});
+
+// In-memory data for Amigo Secreto - only for tracking currently connected users
+let participantesSorteo = [];
+
+// ===== SOCKET.IO AUTHENTICATION MIDDLEWARE =====
+io.use(async (socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        return next(new Error('Authentication error: Token not provided.'));
+    }
+    try {
+        const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+        const userResult = await db.query(`
+            SELECT u.id, u.nombre, u.ap_paterno, r.nombre as rol_nombre, u.rol_id
+            FROM usuariost u
+            JOIN roles r ON u.rol_id = r.id
+            WHERE u.id = $1
+        `, [decodedToken.id]);
+
+        if (userResult.rows.length === 0) {
+            return next(new Error('Authentication error: User not found.'));
+        }
+        socket.data.user = userResult.rows[0];
+        next();
+    } catch (err) {
+        console.error('Socket authentication error:', err.message);
+        return next(new Error('Authentication error: Invalid token.'));
+    }
+});
+
+// ===== SOCKET.IO CONNECTION LOGIC (DATABASE PERSISTENT) =====
+io.on('connection', async (socket) => {
+    console.log(`🔌 Usuario autenticado conectado: ${socket.data.user.nombre} (ID: ${socket.id})`);
+
+    const isOrganizer = ['ADMIN', 'COORDINADOR PROYECTO'].includes(socket.data.user.rol_nombre);
+
+    try {
+        // --- Autorización para participar ---
+        const participantCheck = await db.query('SELECT 1 FROM amigo_secreto_participantes WHERE usuario_id = $1', [socket.data.user.id]);
+        const isParticipant = participantCheck.rows.length > 0;
+
+        if (!isParticipant && !isOrganizer) {
+            console.log(`🚫 Usuario no autorizado ${socket.data.user.nombre} intentó conectarse.`);
+            socket.emit('error_event', { message: 'No estás en la lista de participantes para este evento.' });
+            return socket.disconnect();
+        }
+
+        // Add user to the in-memory list of connected participants if not already there
+        if (!participantesSorteo.some(p => p.id === socket.data.user.id)) {
+            participantesSorteo.push(socket.data.user);
+        }
+
+        // --- Fetch initial state from DB ---
+        const eventoResult = await db.query('SELECT es_sorteo_iniciado FROM amigo_secreto_eventos WHERE id = 1');
+        const esSorteoIniciado = eventoResult.rows[0]?.es_sorteo_iniciado || false;
+
+        let asignacion = null;
+        if (esSorteoIniciado) {
+            const asignacionResult = await db.query(
+                `SELECT u.nombre, asa.receptor_usuario_id AS receptor_id
+                 FROM amigo_secreto_asignaciones asa
+                 JOIN usuariost u ON asa.receptor_usuario_id = u.id
+                 WHERE asa.evento_id = 1 AND asa.dador_usuario_id = $1`,
+                [socket.data.user.id]
+            );
+            if (asignacionResult.rows.length > 0) {
+                const row = asignacionResult.rows[0];
+                asignacion = {
+                    nombre: row.nombre,
+                    receptorId: row.receptor_id
+                };
+            }
+        }
+
+        socket.emit('initial_state', {
+            participantes: participantesSorteo,
+            esSorteoIniciado,
+            isOrganizer,
+            asignacion: asignacion // Send existing assignment if any
+        });
+
+        // Broadcast updated participant list to everyone
+        io.emit('update_participants', participantesSorteo);
+
+    } catch (dbError) {
+        console.error("Error fetching initial state from DB:", dbError);
+        socket.emit('error_event', { message: 'Error de servidor al obtener estado del sorteo.' });
+    }
+
+    // --- Event Handlers ---
+
+    socket.on('start_draw', async () => {
+        const isOrganizer = ['ADMIN', 'COORDINADOR PROYECTO'].includes(socket.data.user.rol_nombre);
+        if (!isOrganizer) { // Re-check authorization
+            return socket.emit('error_event', { message: 'No tienes permiso para iniciar el sorteo.' });
+        }
+
+        const client = await db.connect();
+        try {
+            // Obtener participantes autorizados desde la base de datos
+            const { rows: authorizedParticipants } = await client.query(`
+                SELECT u.id, u.nombre, u.ap_paterno FROM usuariost u
+                JOIN amigo_secreto_participantes asp ON u.id = asp.usuario_id
+            `);
+
+            if (authorizedParticipants.length < 2) {
+                return io.emit('error_event', { message: 'No hay suficientes participantes seleccionados para el sorteo (mínimo 2).' });
+            }
+
+            console.log(`🎉 Sorteo iniciado por ${socket.data.user.nombre}! con ${authorizedParticipants.length} participantes.`);
+
+            let receptores = [...authorizedParticipants];
+            let asignacionesTemp = {};
+            let asignacionValida = false;
+            let attempts = 0;
+
+            // Lógica de Sorteo Robusta (Fisher-Yates shuffle con prevención de auto-asignación)
+            // Se hacen varios intentos por si el shuffle inicial produce auto-asignaciones
+            while (!asignacionValida && attempts < 100) { // Limitar intentos para evitar bucles infinitos
+                // 1. Barajar la lista de receptores
+                for (let i = receptores.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [receptores[i], receptores[j]] = [receptores[j], receptores[i]];
+                }
+
+                // 2. Verificar si hay auto-asignaciones
+                let hayConflictos = false;
+                for (let i = 0; i < authorizedParticipants.length; i++) {
+                    if (authorizedParticipants[i].id === receptores[i].id) {
+                        hayConflictos = true;
+                        // Intentar una corrección local simple para este conflicto
+                        if (receptores.length > 1) { // Asegurarse de que haya al menos dos elementos para intercambiar
+                            const swapIndex = (i + 1) % receptores.length; // Intercambiar con el siguiente (circularmente)
+                            [receptores[i], receptores[swapIndex]] = [receptores[swapIndex], receptores[i]];
+                            // Tras el swap, se podría haber creado un nuevo conflicto o no haber resuelto el original.
+                            // Por simplicidad, si hubo un conflicto y lo 'corregimos', asumimos que necesitamos verificar de nuevo o re-shuffulear.
+                            // Si se quiere una solución 100% garantizada en pocos pasos, se requiere un algoritmo más complejo (e.g., matching bipartito).
+                            // Para 'amigo secreto', re-shuffulear es aceptable si hay pocos conflictos.
+                        }
+                    }
+                }
+
+                // Después de intentar corregir conflictos, re-verificamos la validez de toda la asignación
+                hayConflictos = false;
+                for (let i = 0; i < authorizedParticipants.length; i++) {
+                    if (authorizedParticipants[i].id === receptores[i].id) {
+                        hayConflictos = true;
+                        break;
+                    }
+                }
+
+                if (!hayConflictos) {
+                    asignacionValida = true;
+                }
+                attempts++;
+            }
+
+            if (!asignacionValida) {
+                // Si después de varios intentos no se logra, emitir un error.
+                console.error('No se pudo realizar el sorteo sin conflictos después de múltiples intentos.');
+                return io.emit('error_event', { message: 'No se pudo realizar el sorteo sin conflictos. Inténtalo de nuevo.' });
+            }
+
+            // 3. Crear el mapa de asignaciones
+            authorizedParticipants.forEach((dador, index) => {
+                const receptor = receptores[index];
+                asignacionesTemp[dador.id] = { nombre: `${receptor.nombre} ${receptor.ap_paterno}`.trim(), id: receptor.id };
+            });
+
+            // 4. Guardar en la Base de Datos
+            await client.query('BEGIN');
+            await client.query('DELETE FROM amigo_secreto_asignaciones WHERE evento_id = 1'); // Limpiar asignaciones anteriores
+
+            const insertPromises = Object.entries(asignacionesTemp).map(([dadorId, receptorData]) => {
+                return client.query(
+                    'INSERT INTO amigo_secreto_asignaciones (evento_id, dador_usuario_id, receptor_usuario_id) VALUES (1, $1, $2)',
+                    [parseInt(dadorId, 10), receptorData.id]
+                );
+            });
+            await Promise.all(insertPromises);
+
+            await client.query('UPDATE amigo_secreto_eventos SET es_sorteo_iniciado = true WHERE id = 1');
+            await client.query('COMMIT');
+            console.log("Asignaciones guardadas en la DB.");
+
+            // 5. Notificar a los clientes
+            io.emit('draw_started'); // Notificar que el sorteo ha comenzado
+
+            setTimeout(async () => {
+                const allSockets = await io.fetchSockets();
+                allSockets.forEach(sock => {
+                    const miAsignacion = asignacionesTemp[sock.data.user.id];
+                    if (miAsignacion) {
+                        sock.emit('final_assignment', { nombre: `¡${miAsignacion.nombre}!`, receptorId: miAsignacion.id });
+                    }
+                });
+            }, 3000); // Delay para la animación
+
+        } catch (e) {
+            await client.query('ROLLBACK');
+            console.error('Fallo la transacción del sorteo:', e);
+            io.emit('error_event', { message: 'Error en el servidor al realizar el sorteo.' });
+            socket.emit('error_event', { message: 'Error en el servidor al reiniciar el sorteo.' });
+        } finally {
+            client.release();
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log(`🔌 Usuario desconectado: ${socket.data.user.nombre}`);
+        participantesSorteo = participantesSorteo.filter(p => p.id !== socket.data.user.id);
+        io.emit('update_participants', participantesSorteo);
+    });
+});
+
+const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Listening on port ${PORT}`);
