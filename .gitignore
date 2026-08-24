@@ -37,3 +37,12 @@ geoportal-drive-b69b29c0bfa0.json
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Python: bytecode y entornos virtuales
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Restos de herramientas de despliegue
+.fly-temp/

@@ -15,7 +15,7 @@
 0009  USE     /uploads                                             serveStatic:0cb5668e
 0010  GET     /                                                    <anon>:47809e0c
 0011  GET     /health                                              <anon>:a95a2b46
-0012  POST    /api/utils/test-ocr                                  authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:0e0caaec
+0012  POST    /api/utils/test-ocr                                  authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:db35bb74
 0013  POST    /api/utils/bulk-ocr                                  authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:ee10f125
 0014  GET     /api/url-preview                                     <anon>:a9c7633a
 0015  GET     /api/proxy                                           <anon>:3af999ed
@@ -38,7 +38,7 @@
 0032  POST    /api/observaciones                                   authenticateToken:bca7c87d > <anon>:9ce245a8
 0033  GET     /api/modelos-3d                                      authenticateToken:bca7c87d > <anon>:777bceda
 0034  GET     /api/modelos-3d/:id/obj                              authenticateToken:bca7c87d > <anon>:4c4a265d
-0035  POST    /api/modelos-3d                                      authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:32cdf198
+0035  POST    /api/modelos-3d                                      authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:9b71e454
 0036  DELETE  /api/modelos-3d/:id                                  authenticateToken:bca7c87d > <anon>:f65a16c6
 0037  GET     /api/3d/datos-suelos/:proyectoId                     authenticateToken:bca7c87d > <anon>:a12c7039
 0038  POST    /api/proyectos/:id/panel-fotografico/upload-kmz      authenticateToken:bca7c87d > authorizeAdminOrCoordinator:1e585444 > multerMiddleware:207a095f > <anon>:f4bda1c1

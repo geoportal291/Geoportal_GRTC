@@ -62,6 +62,10 @@ console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
 const emailService = require('./services/emailService');
 
+// El worker de Python corre en la misma máquina, en el puerto 8000. Mismo nombre
+// de variable que usa services/suelosNlpService.js, que ya lo hacía así.
+const PYTHON_WORKER_URL = process.env.PYTHON_WORKER_URL || 'http://127.0.0.1:8000';
+
 function simplifyObjContent(objContent, maxFaces = 120000) {
     if (!objContent || typeof objContent !== 'string') {
         return '';
@@ -269,7 +273,7 @@ app.post('/api/utils/test-ocr', authenticateToken, upload.single('image'), async
         formData.append('file', req.file.buffer, req.file.originalname);
 
         console.log('Enviando imagen a Python OCR Service...');
-        const pythonResponse = await axios.post('http://127.0.0.1:8000/process-image', formData, {
+        const pythonResponse = await axios.post(`${PYTHON_WORKER_URL}/process-image`, formData, {
             headers: {
                 ...formData.getHeaders()
             },
@@ -798,8 +802,8 @@ app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (
             console.log("Extensión procesada:", ext);
 
             if (ext === 'XML') { // LandXML
-                console.log("Enviando a http://127.0.0.1:8000/3d/analizar-landxml");
-                pythonResponse = await axios.post('http://127.0.0.1:8000/3d/analizar-landxml', formData, {
+                console.log(`Enviando a ${PYTHON_WORKER_URL}/3d/analizar-landxml`);
+                pythonResponse = await axios.post(`${PYTHON_WORKER_URL}/3d/analizar-landxml`, formData, {
                     headers: { ...formData.getHeaders() },
                     maxBodyLength: Infinity,
                     maxContentLength: Infinity
@@ -843,8 +847,8 @@ app.post('/api/modelos-3d', authenticateToken, upload.single('archivo'), async (
                     }
                 }
             } else if (ext === 'IFC') {
-                console.log("Enviando a http://127.0.0.1:8000/3d/analizar-ifc");
-                pythonResponse = await axios.post('http://127.0.0.1:8000/3d/analizar-ifc', formData, {
+                console.log(`Enviando a ${PYTHON_WORKER_URL}/3d/analizar-ifc`);
+                pythonResponse = await axios.post(`${PYTHON_WORKER_URL}/3d/analizar-ifc`, formData, {
                     headers: { ...formData.getHeaders() }
                 });
                 console.log("Respuesta Exitosa de Python:", pythonResponse.data);
@@ -4183,7 +4187,7 @@ server.listen(PORT, '0.0.0.0', () => {
     const checkPythonWorker = async (retries = 5, delay = 5000) => {
         for (let i = 0; i < retries; i++) {
             try {
-                const response = await axios.get('http://127.0.0.1:8000/health');
+                const response = await axios.get(`${PYTHON_WORKER_URL}/health`);
                 console.log('✅ Python Worker (FastAPI) is CONNECTED:', response.data);
                 return;
             } catch (error) {
