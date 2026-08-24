@@ -135,6 +135,53 @@ filas.forEach((f, i) => {
     }
 });
 
+// --- 5b. Pares con solape de patrón --------------------------------------
+// Dos rutas distintas pueden casar con la misma URL concreta: /api/proyectos/:id
+// se traga /api/proyectos/assigned-detailed si se registra antes. Ahí el orden
+// relativo es comportamiento, no estilo. Esta lista es lo que hay que conservar
+// al reordenar el archivo (fase B3): si un par cambia de sentido, una ruta
+// desaparece en silencio.
+const segmentos = (ruta) => ruta.split('/').filter(Boolean);
+const esParam = (s) => s.startsWith(':') || s === '*';
+
+// ¿`a` engulle a `b`? Es decir: ¿toda URL que casa con `b` casa también con `a`?
+// Sólo eso es peligroso. Que dos patrones se rocen en algún caso raro no lo es:
+// /api/ensayos/:id/base y /api/ensayos/full-assay/:id comparten únicamente la URL
+// /api/ensayos/full-assay/base, y ninguna deja inalcanzable a la otra.
+function engulle(a, b) {
+    if (a.metodo !== b.metodo) return false;
+    const sa = segmentos(a.ruta);
+    const sb = segmentos(b.ruta);
+    if (sa.length !== sb.length) return false;
+    return sa.every((s, i) => esParam(s) || s === sb[i]);
+}
+
+const rutasOrdenadas = filas.filter((f) => f.tipo === 'RUTA');
+const paresSolape = [];
+for (let i = 0; i < rutasOrdenadas.length; i++) {
+    for (let j = i + 1; j < rutasOrdenadas.length; j++) {
+        const a = rutasOrdenadas[i];   // registrada antes
+        const b = rutasOrdenadas[j];   // registrada después
+        if (a.ruta === b.ruta) continue;              // eso es una tapada, ya marcada
+        const aEngulleB = engulle(a, b);
+        const bEngulleA = engulle(b, a);
+        if (!aEngulleB && !bEngulleA) continue;
+
+        const par = `${a.metodo} ${a.ruta}  ->  ${b.metodo} ${b.ruta}`;
+        if (aEngulleB && bEngulleA) {
+            // Mismo patrón con otro nombre de parámetro: la segunda es inalcanzable.
+            paresSolape.push(`INALCANZABLE  ${par}   (mismo patrón, sólo cambia el nombre del parámetro)`);
+        } else if (aEngulleB) {
+            // La general va primero: se come a la específica.
+            paresSolape.push(`INALCANZABLE  ${par}   (la primera engulle a la segunda)`);
+        } else {
+            // La específica va primero: correcto. Este orden hay que conservarlo.
+            paresSolape.push(`ORDEN OK      ${par}   (la específica va antes que la general)`);
+        }
+    }
+}
+paresSolape.sort();
+
 // --- 6. Volcar ------------------------------------------------------------
 const lineas = filas.map((f, i) => {
     const n = String(i + 1).padStart(4, '0');
@@ -154,7 +201,17 @@ const cabecera = [
     '',
 ];
 
-const contenido = cabecera.concat(lineas).join('\n') + '\n';
+const bloqueSolapes = [
+    '',
+    '# ' + '='.repeat(76),
+    `# ${paresSolape.length} PARES CON SOLAPE DE PATRÓN — aquí el orden relativo ES comportamiento.`,
+    '# Si al reordenar el archivo un par cambia de sentido, la segunda ruta deja de',
+    '# existir sin dar ningún error. Esta lista tiene que quedar igual tras B3/B4.',
+    '# ' + '='.repeat(76),
+    '',
+].concat(paresSolape);
+
+const contenido = cabecera.concat(lineas).concat(bloqueSolapes).join('\n') + '\n';
 
 if (!verificar) {
     fs.writeFileSync(salida, contenido, 'utf8');
