@@ -5,6 +5,7 @@
 
 const jwt = require('jsonwebtoken');
 const db = require('../conexion');
+const usuariosService = require('../services/usuariosService');
 
 // Middleware de autenticación
 const authenticateToken = async (req, res, next) => {

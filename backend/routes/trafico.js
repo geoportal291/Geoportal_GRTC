@@ -13,7 +13,7 @@ const axios = require('axios');
 const tokml = require('tokml');
 
 const db = require('../conexion');
-const { deleteFileFromNAS } = require('../services/nasStorageService');
+const { uploadFileToNAS, deleteFileFromNAS } = require('../services/blobStorageService');
 const { upload } = require('../config/multer');
 const { authenticateToken, authorizeAdminOrCoordinator, authorizePermission } = require('../middleware/auth');
 

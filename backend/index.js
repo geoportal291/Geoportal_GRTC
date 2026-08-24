@@ -58,7 +58,7 @@ const amigoSecretoService = require('./services/amigoSecretoService');
 const wishlistService = require('./services/wishlistService');
 const modelos3DService = require('./services/modelos3DService');
 const geologiaCapasService = require('./services/geologiaCapasService');
-const { uploadFileToNAS, deleteFileFromNAS } = require('./services/nasStorageService');
+const { uploadFileToNAS, deleteFileFromNAS } = require('./services/blobStorageService');
 
 console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
