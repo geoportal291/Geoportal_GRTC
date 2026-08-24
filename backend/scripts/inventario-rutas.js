@@ -63,8 +63,12 @@ if (apps.length === 0) {
 const app = apps[0];
 
 // --- 4. Recorrer el árbol de capas ---------------------------------------
+// Se normaliza CRLF antes de hashear: con core.autocrlf el mismo código llega al
+// disco con unos saltos de línea u otros según el checkout, y sin esto el hash
+// mediría eso en vez de medir el código. Un `sed -i` que pase el archivo a LF
+// cambiaría los 308 hashes de golpe sin que nadie haya tocado una función.
 const hash = (fn) => crypto.createHash('sha1')
-    .update(typeof fn === 'function' ? fn.toString() : String(fn))
+    .update((typeof fn === 'function' ? fn.toString() : String(fn)).split('\r\n').join('\n'))
     .digest('hex').slice(0, 8);
 
 const nombre = (fn) => (fn && fn.name) ? fn.name.replace('bound ', '') : '<anon>';
