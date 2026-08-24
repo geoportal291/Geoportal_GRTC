@@ -9,7 +9,6 @@
 
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 const AdmZip = require('adm-zip');
 const { XMLParser } = require('fast-xml-parser');
 const axios = require('axios');
