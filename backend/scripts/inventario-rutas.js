@@ -87,6 +87,15 @@ function pathDeRegexp(regexp) {
     return s;
 }
 
+// Un router montado en /x con una ruta '/' produce '/x/'. Express lo trata igual
+// que '/x' (el routing estricto está desactivado por defecto, comprobado con
+// peticiones reales), así que se normaliza: extraer un dominio a un Router no
+// debe alterar el inventario por una barra final.
+function rutaCompleta(prefijo, p) {
+    const full = prefijo + p;
+    return full.length > 1 && full.endsWith('/') ? full.slice(0, -1) : full;
+}
+
 const filas = [];
 
 function recorrer(stack, prefijo) {
@@ -103,7 +112,7 @@ function recorrer(stack, prefijo) {
                 filas.push({
                     tipo: 'RUTA',
                     metodo,
-                    ruta: prefijo + capa.route.path,
+                    ruta: rutaCompleta(prefijo, capa.route.path),
                     cadena,
                 });
             }

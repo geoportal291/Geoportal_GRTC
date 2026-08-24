@@ -152,86 +152,86 @@
 0146  GET     /anuncios/activos                                    <anon>:5670bfa7
 0147  GET     /debug/anuncios                                      <anon>:97cb0468
 0148  GET     /api/progresivas/:id/imagenes                        authenticateToken:bca7c87d > <anon>:177cbfa5
-0149  POST    /api/progresiva-imagen/upload                        authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:8119081a
-0150  DELETE  /api/progresiva-imagen/:id                           authenticateToken:bca7c87d > <anon>:5e38a7eb
-0151  POST    /api/tramos/:tramoId/upload-docx-photos              authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:8b187d09
-0152  GET     /api/ruta-kml                                        <anon>:0e81665d
-0153  GET     /anuncios                                            <anon>:d9686bcb
-0154  DELETE  /anuncios/:id                                        <anon>:9c7ddc21
-0155  PUT     /anuncios/:id                                        authenticateToken:bca7c87d > <anon>:6381de6f
-0156  GET     /debug/tables                                        <anon>:4d03bebf
-0157  GET     /debug/tipo-ensayo-schema                            <anon>:908c61d5
-0158  GET     /debug/progresivas-schema                            authenticateToken:bca7c87d > <anon>:1b81e0f8
-0159  GET     /debug/elementos-trafico-schema                      authenticateToken:bca7c87d > <anon>:b34424e9
-0160  GET     /debug/usuariost                                     <anon>:337cffa7
-0161  GET     /api/proyectos/detallado                             authenticateToken:bca7c87d > <anon>:243e8b49
-0162  GET     /api/proyectos/assigned-detailed                     authenticateToken:bca7c87d > <anon>:d33f8e5f
-0163  GET     /api/proyectos                                       authenticateToken:bca7c87d > <anon>:e702df5e
-0164  GET     /api/proyectos/:id                                   authenticateToken:bca7c87d > <anon>:b806da76
-0165  POST    /api/proyectos/create-full                           authenticateToken:bca7c87d > <anon>:4fb104ec
-0166  GET     /api/proyectos/:id/estadisticas                      authenticateToken:bca7c87d > <anon>:8e401987
-0167  PUT     /api/proyectos/:id                                   authenticateToken:bca7c87d > <anon>:73106868
-0168  DELETE  /api/proyectos/:id                                   authenticateToken:bca7c87d > <anon>:f8e4f5b3
-0169  GET     /api/proyectos/:proyectoId/tramos                    authenticateToken:bca7c87d > <anon>:edb0b725
-0170  POST    /api/proyectos/:projectId/assignUser                 authenticateToken:bca7c87d > authorizeAdminOrCoordinator:1e585444 > <anon>:0f068e32
-0171  DELETE  /api/proyectos/:projectId/removeUser/:userId         authenticateToken:bca7c87d > authorizeAdminOrCoordinator:1e585444 > <anon>:5b0dd295
-0172  GET     /api/proyectos/:projectId/assignments                authenticateToken:bca7c87d > <anon>:f9c1b9dc
-0173  GET     /api/proyectos/:projectId/history                    authenticateToken:bca7c87d > authorizeAdminOrCoordinator:1e585444 > <anon>:64b38a75
-0174  POST    /api/proyectos/:proyectoId/upload-kml                authenticateToken:bca7c87d > <anon>:3ec5301d > multerMiddleware:207a095f > <anon>:51d84de0
-0175  GET     /api/proyectos/:id/kml                               authenticateToken:bca7c87d > <anon>:02d7c359
-0176  POST    /api/proyectos/:projectId/kml                        authenticateToken:bca7c87d > <anon>:3ec5301d > <anon>:dd60be80
-0177  GET     /api/proyectos/:id/map-data                          authenticateToken:bca7c87d > <anon>:26f32dcc
-0178  DELETE  /api/proyectos/:id/kml                               authenticateToken:bca7c87d > <anon>:10c21987
-0179  POST    /proyectos/import                                    authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:c93656e6
-0180  GET     /api/proyectos/export                                authenticateToken:bca7c87d > <anon>:b210e528
-0181  GET     /api/user-projects                                   authenticateToken:bca7c87d > <anon>:f240c3fa
-0182  GET     /api/proyectos/:id/calibracion                       authenticateToken:bca7c87d > <anon>:d5820bbf
-0183  POST    /api/proyectos/:id/calibracion                       authenticateToken:bca7c87d > <anon>:c372b4a2
-0184  DELETE  /api/proyectos/:id/calibracion                       authenticateToken:bca7c87d > <anon>:41e7ee8a
-0185  GET     /api/proyectos/:proyectoId/canteras                  authenticateToken:bca7c87d > <anon>:51b1c002
-0186  POST    /api/canteras/upload-image                           authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:7984ee74
-0187  POST    /api/canteras/:canteraId/upload-bulk                 authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:af9666b0
-0188  DELETE  /api/canteras/imagenes/:id                           authenticateToken:bca7c87d > <anon>:de61b0d5
-0189  POST    /api/canteras/imagenes/bulk-delete                   authenticateToken:bca7c87d > <anon>:ea30acc6
-0190  POST    /api/canteras                                        authenticateToken:bca7c87d > <anon>:b5928652
-0191  PUT     /api/canteras/:id                                    authenticateToken:bca7c87d > <anon>:884a6f0e
-0192  GET     /api/canteras/:canteraId/details                     authenticateToken:bca7c87d > <anon>:df767e0d
-0193  DELETE  /api/canteras/:id                                    authenticateToken:bca7c87d > <anon>:669eef21
-0194  POST    /api/canteras/:canteraId/estratos                    authenticateToken:bca7c87d > <anon>:da79375b
-0195  PUT     /api/canteras/estratos/:estratoId                    authenticateToken:bca7c87d > <anon>:83cce390
-0196  DELETE  /api/canteras/estratos/:estratoId                    authenticateToken:bca7c87d > <anon>:9b02b04a
-0197  GET     /api/tramos/:tramoId/canteras                        authenticateToken:bca7c87d > <anon>:bd16064f
-0198  POST    /api/canteras/:id/kml                                authenticateToken:bca7c87d > <anon>:d06f6fef
-0199  GET     /api/tramos/:tramoId/fuentes-agua                    authenticateToken:bca7c87d > <anon>:bde9f6fa
-0200  POST    /api/fuentes-agua                                    authenticateToken:bca7c87d > <anon>:a998a322
-0201  PUT     /api/fuentes-agua/:id                                authenticateToken:bca7c87d > <anon>:f7e0e91e
-0202  GET     /api/fuentes-agua/:fuenteId/details                  authenticateToken:bca7c87d > <anon>:f98e8c0b
-0203  DELETE  /api/fuentes-agua/:id                                authenticateToken:bca7c87d > <anon>:28ae4304
-0204  POST    /api/fuentes-agua/:fuenteId/upload-bulk              authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:68ed2d7f
-0205  DELETE  /api/fuentes-agua/imagenes/:id                       authenticateToken:bca7c87d > <anon>:436837c3
-0206  POST    /api/fuentes-agua/imagenes/bulk-delete               authenticateToken:bca7c87d > <anon>:b344a786
-0207  POST    /api/fuentes-agua/:fuenteId/estratos                 authenticateToken:bca7c87d > <anon>:6a4c9fee
-0208  PUT     /api/fuentes-agua/estratos/:estratoId                authenticateToken:bca7c87d > <anon>:cb206744
-0209  DELETE  /api/fuentes-agua/estratos/:estratoId                authenticateToken:bca7c87d > <anon>:d2f1bba0
-0210  GET     /api/tramos/:id                                      authenticateToken:bca7c87d > <anon>:bc20c0dc
-0211  GET     /api/kml-trazados/:id/content                        authenticateToken:bca7c87d > <anon>:6bdc3e52
-0212  POST    /api/progresivas/:id/upload-kml                      authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:154eeaf1
-0213  DELETE  /api/progresivas/:progresivaId/kml                   authenticateToken:bca7c87d > <anon>:77864619
-0214  GET     /api/progresivas                                     authenticateToken:bca7c87d > <anon>:386cbb72
-0215  POST    /api/progresivas                                     authenticateToken:bca7c87d > <anon>:d70ed998
-0216  POST    /api/progresivas/bulk-delete                         authenticateToken:bca7c87d > <anon>:3b43dfe4
-0217  POST    /api/progresivas/importar-con-ensayos                authenticateToken:bca7c87d > <anon>:e55679c8
-0218  PUT     /api/progresivas/importar-con-ensayos/:overwriteProgresivaId authenticateToken:bca7c87d > <anon>:f34e856d
-0219  GET     /api/progresivas/:id/children                        authenticateToken:bca7c87d > getSubProgresivas:5079a28c
-0220  GET     /api/progresivas/:id/children/all                    authenticateToken:bca7c87d > getAllSubProgresivas:cbba1c10
-0221  GET     /api/progresivas/:id                                 authenticateToken:bca7c87d > <anon>:700591bb
-0222  GET     /api/progresivas/:progresivaId/page                  authenticateToken:bca7c87d > <anon>:3d5cf4d6
-0223  GET     /api/progresivas/proyecto/:proyectoId                authenticateToken:bca7c87d > <anon>:72cf0653
-0224  GET     /api/user/tramos                                     authenticateToken:bca7c87d > <anon>:d7124998
-0225  DELETE  /api/progresivas/:id                                 authenticateToken:bca7c87d > <anon>:7be85700
-0226  POST    /progresivas/bulk-delete                             authenticateToken:bca7c87d > <anon>:3b43dfe4
-0227  PUT     /api/progresivas/:id                                 authenticateToken:bca7c87d > <anon>:24fac64e
-0228  PUT     /api/progresivas/child/:id                           authenticateToken:bca7c87d > <anon>:64cbe71b
+0149  POST    /api/progresivas/:id/upload-kml                      authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:154eeaf1
+0150  DELETE  /api/progresivas/:progresivaId/kml                   authenticateToken:bca7c87d > <anon>:77864619
+0151  GET     /api/progresivas                                     authenticateToken:bca7c87d > <anon>:386cbb72
+0152  POST    /api/progresivas                                     authenticateToken:bca7c87d > <anon>:d70ed998
+0153  POST    /api/progresivas/bulk-delete                         authenticateToken:bca7c87d > <anon>:3b43dfe4
+0154  POST    /api/progresivas/importar-con-ensayos                authenticateToken:bca7c87d > <anon>:e55679c8
+0155  PUT     /api/progresivas/importar-con-ensayos/:overwriteProgresivaId authenticateToken:bca7c87d > <anon>:f34e856d
+0156  GET     /api/progresivas/:id/children                        authenticateToken:bca7c87d > getSubProgresivas:5079a28c
+0157  GET     /api/progresivas/:id/children/all                    authenticateToken:bca7c87d > getAllSubProgresivas:cbba1c10
+0158  GET     /api/progresivas/:id                                 authenticateToken:bca7c87d > <anon>:700591bb
+0159  GET     /api/progresivas/:progresivaId/page                  authenticateToken:bca7c87d > <anon>:3d5cf4d6
+0160  GET     /api/progresivas/proyecto/:proyectoId                authenticateToken:bca7c87d > <anon>:72cf0653
+0161  DELETE  /api/progresivas/:id                                 authenticateToken:bca7c87d > <anon>:7be85700
+0162  PUT     /api/progresivas/:id                                 authenticateToken:bca7c87d > <anon>:24fac64e
+0163  PUT     /api/progresivas/child/:id                           authenticateToken:bca7c87d > <anon>:64cbe71b
+0164  POST    /api/progresiva-imagen/upload                        authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:8119081a
+0165  DELETE  /api/progresiva-imagen/:id                           authenticateToken:bca7c87d > <anon>:5e38a7eb
+0166  POST    /api/tramos/:tramoId/upload-docx-photos              authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:8b187d09
+0167  GET     /api/ruta-kml                                        <anon>:0e81665d
+0168  GET     /anuncios                                            <anon>:d9686bcb
+0169  DELETE  /anuncios/:id                                        <anon>:9c7ddc21
+0170  PUT     /anuncios/:id                                        authenticateToken:bca7c87d > <anon>:6381de6f
+0171  GET     /debug/tables                                        <anon>:4d03bebf
+0172  GET     /debug/tipo-ensayo-schema                            <anon>:908c61d5
+0173  GET     /debug/progresivas-schema                            authenticateToken:bca7c87d > <anon>:1b81e0f8
+0174  GET     /debug/elementos-trafico-schema                      authenticateToken:bca7c87d > <anon>:b34424e9
+0175  GET     /debug/usuariost                                     <anon>:337cffa7
+0176  GET     /api/proyectos/detallado                             authenticateToken:bca7c87d > <anon>:243e8b49
+0177  GET     /api/proyectos/assigned-detailed                     authenticateToken:bca7c87d > <anon>:d33f8e5f
+0178  GET     /api/proyectos                                       authenticateToken:bca7c87d > <anon>:e702df5e
+0179  GET     /api/proyectos/:id                                   authenticateToken:bca7c87d > <anon>:b806da76
+0180  POST    /api/proyectos/create-full                           authenticateToken:bca7c87d > <anon>:4fb104ec
+0181  GET     /api/proyectos/:id/estadisticas                      authenticateToken:bca7c87d > <anon>:8e401987
+0182  PUT     /api/proyectos/:id                                   authenticateToken:bca7c87d > <anon>:73106868
+0183  DELETE  /api/proyectos/:id                                   authenticateToken:bca7c87d > <anon>:f8e4f5b3
+0184  GET     /api/proyectos/:proyectoId/tramos                    authenticateToken:bca7c87d > <anon>:edb0b725
+0185  POST    /api/proyectos/:projectId/assignUser                 authenticateToken:bca7c87d > authorizeAdminOrCoordinator:1e585444 > <anon>:0f068e32
+0186  DELETE  /api/proyectos/:projectId/removeUser/:userId         authenticateToken:bca7c87d > authorizeAdminOrCoordinator:1e585444 > <anon>:5b0dd295
+0187  GET     /api/proyectos/:projectId/assignments                authenticateToken:bca7c87d > <anon>:f9c1b9dc
+0188  GET     /api/proyectos/:projectId/history                    authenticateToken:bca7c87d > authorizeAdminOrCoordinator:1e585444 > <anon>:64b38a75
+0189  POST    /api/proyectos/:proyectoId/upload-kml                authenticateToken:bca7c87d > <anon>:3ec5301d > multerMiddleware:207a095f > <anon>:51d84de0
+0190  GET     /api/proyectos/:id/kml                               authenticateToken:bca7c87d > <anon>:02d7c359
+0191  POST    /api/proyectos/:projectId/kml                        authenticateToken:bca7c87d > <anon>:3ec5301d > <anon>:dd60be80
+0192  GET     /api/proyectos/:id/map-data                          authenticateToken:bca7c87d > <anon>:26f32dcc
+0193  DELETE  /api/proyectos/:id/kml                               authenticateToken:bca7c87d > <anon>:10c21987
+0194  POST    /proyectos/import                                    authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:c93656e6
+0195  GET     /api/proyectos/export                                authenticateToken:bca7c87d > <anon>:b210e528
+0196  GET     /api/user-projects                                   authenticateToken:bca7c87d > <anon>:f240c3fa
+0197  GET     /api/proyectos/:id/calibracion                       authenticateToken:bca7c87d > <anon>:d5820bbf
+0198  POST    /api/proyectos/:id/calibracion                       authenticateToken:bca7c87d > <anon>:c372b4a2
+0199  DELETE  /api/proyectos/:id/calibracion                       authenticateToken:bca7c87d > <anon>:41e7ee8a
+0200  GET     /api/proyectos/:proyectoId/canteras                  authenticateToken:bca7c87d > <anon>:51b1c002
+0201  POST    /api/canteras/upload-image                           authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:7984ee74
+0202  POST    /api/canteras/:canteraId/upload-bulk                 authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:af9666b0
+0203  DELETE  /api/canteras/imagenes/:id                           authenticateToken:bca7c87d > <anon>:de61b0d5
+0204  POST    /api/canteras/imagenes/bulk-delete                   authenticateToken:bca7c87d > <anon>:ea30acc6
+0205  POST    /api/canteras                                        authenticateToken:bca7c87d > <anon>:b5928652
+0206  PUT     /api/canteras/:id                                    authenticateToken:bca7c87d > <anon>:884a6f0e
+0207  GET     /api/canteras/:canteraId/details                     authenticateToken:bca7c87d > <anon>:df767e0d
+0208  DELETE  /api/canteras/:id                                    authenticateToken:bca7c87d > <anon>:669eef21
+0209  POST    /api/canteras/:canteraId/estratos                    authenticateToken:bca7c87d > <anon>:da79375b
+0210  PUT     /api/canteras/estratos/:estratoId                    authenticateToken:bca7c87d > <anon>:83cce390
+0211  DELETE  /api/canteras/estratos/:estratoId                    authenticateToken:bca7c87d > <anon>:9b02b04a
+0212  GET     /api/tramos/:tramoId/canteras                        authenticateToken:bca7c87d > <anon>:bd16064f
+0213  POST    /api/canteras/:id/kml                                authenticateToken:bca7c87d > <anon>:d06f6fef
+0214  GET     /api/tramos/:tramoId/fuentes-agua                    authenticateToken:bca7c87d > <anon>:bde9f6fa
+0215  POST    /api/fuentes-agua                                    authenticateToken:bca7c87d > <anon>:a998a322
+0216  PUT     /api/fuentes-agua/:id                                authenticateToken:bca7c87d > <anon>:f7e0e91e
+0217  GET     /api/fuentes-agua/:fuenteId/details                  authenticateToken:bca7c87d > <anon>:f98e8c0b
+0218  DELETE  /api/fuentes-agua/:id                                authenticateToken:bca7c87d > <anon>:28ae4304
+0219  POST    /api/fuentes-agua/:fuenteId/upload-bulk              authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:68ed2d7f
+0220  DELETE  /api/fuentes-agua/imagenes/:id                       authenticateToken:bca7c87d > <anon>:436837c3
+0221  POST    /api/fuentes-agua/imagenes/bulk-delete               authenticateToken:bca7c87d > <anon>:b344a786
+0222  POST    /api/fuentes-agua/:fuenteId/estratos                 authenticateToken:bca7c87d > <anon>:6a4c9fee
+0223  PUT     /api/fuentes-agua/estratos/:estratoId                authenticateToken:bca7c87d > <anon>:cb206744
+0224  DELETE  /api/fuentes-agua/estratos/:estratoId                authenticateToken:bca7c87d > <anon>:d2f1bba0
+0225  GET     /api/tramos/:id                                      authenticateToken:bca7c87d > <anon>:bc20c0dc
+0226  GET     /api/kml-trazados/:id/content                        authenticateToken:bca7c87d > <anon>:6bdc3e52
+0227  GET     /api/user/tramos                                     authenticateToken:bca7c87d > <anon>:d7124998
+0228  POST    /progresivas/bulk-delete                             authenticateToken:bca7c87d > <anon>:3b43dfe4
 0229  GET     /api/entidades-solicitantes                          authenticateToken:bca7c87d > <anon>:a5db1476
 0230  GET     /api/otras-entidades                                 authenticateToken:bca7c87d > <anon>:3c0898bf
 0231  GET     /codigo_departamentos                                authenticateToken:bca7c87d > <anon>:c50448d5
