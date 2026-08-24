@@ -103,7 +103,7 @@
 0097  GET     /api/user/:userId/default-project-entity             authenticateToken:bca7c87d > <anon>:bd86570e
 0098  POST    /anuncios                                            authenticateToken:bca7c87d > multerMiddleware:207a095f > <anon>:cf2692b7
 0099  POST    /api/trafico/upload-image                            multerMiddleware:207a095f > <anon>:491bf781
-0100  POST    /api/trafico/estacion/upload-image                   authenticateToken:bca7c87d > <anon>:3ec5301d > multerMiddleware:207a095f > <anon>:791962c0
+0100  POST    /api/trafico/estacion/upload-image                   authenticateToken:bca7c87d > <anon>:3ec5301d > multerMiddleware:207a095f > <anon>:02530301
 0101  POST    /api/trafico/tramo/upload-image                      authenticateToken:bca7c87d > <anon>:3ec5301d > multerMiddleware:207a095f > <anon>:3c2c608f
 0102  POST    /api/trafico/conteovehicular/upload-file             authenticateToken:bca7c87d > <anon>:3ec5301d > multerMiddleware:207a095f > <anon>:b9e3eceb
 0103  POST    /api/trafico/conteovehicular/upload-excel            authenticateToken:bca7c87d > <anon>:3ec5301d > multerMiddleware:207a095f > <anon>:cd55b27a

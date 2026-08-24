@@ -357,7 +357,7 @@ const createBulkProgresivas = async (parentProgresiva, generatedChildren) => {
         const parentId = parentResult.rows[0].id;
 
         // Auto-fill coordinates
-        const kmlTrackData = await getKmlTrackData(kml_trazado_id || parentProgresiva.kml_trazado_id);
+        const kmlTrackData = await getKmlTrackData(parentProgresiva.kml_trazado_id);
         const startMeters = parseToMeters(progresiva_inicial_parent);
 
         for (const prog of generatedChildren) {

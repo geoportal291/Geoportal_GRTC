@@ -17,6 +17,7 @@ const fsp = require('fs').promises;
 const fs = require('fs');
 const AdmZip = require('adm-zip');
 const { XMLParser } = require('fast-xml-parser');
+const { parse } = require('node-html-parser');
 const axios = require('axios');
 const { put, del } = require('@vercel/blob');
 const { kml } = require('@tmcw/togeojson');
@@ -2114,21 +2115,6 @@ app.post('/api/alcantarillas/upload-excel', authenticateToken, authorizePermissi
         res.status(500).json({ status: 'error', message: error.message || 'Error al subir el archivo Excel de inventario vial.' });
     }
 });
-
-async function uploadTempFileToVercelBlob(fileBuffer, originalFilename, folder = 'temp') {
-    try {
-        const originalExtension = path.extname(originalFilename);
-        const filename = `${folder}/${uuidv4()}${originalExtension}`;
-        const blob = await put(filename, fileBuffer, {
-            access: 'public',
-            allowOverwrite: true,
-        });
-        return blob.url;
-    } catch (error) {
-        console.error(`Error al subir archivo temporal a Vercel Blob en la carpeta ${folder}:`, error);
-        throw new Error(`Error al subir archivo temporal a Vercel Blob en la carpeta ${folder}`);
-    }
-}
 
 // Nuevo endpoint para subir archivos Excel de gráficos de alcantarillas (AHORA ASÍNCRONO)
 app.post('/api/alcantarillas/upload-graphics-excel', authenticateToken, authorizePermission('alcantarillas', 'edicion'), upload.single('excelFile'), async (req, res) => {

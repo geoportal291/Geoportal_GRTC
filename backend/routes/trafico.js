@@ -108,7 +108,7 @@ router.post('/estacion/upload-image', authenticateToken, authorizePermission('tr
         console.error('Error al subir imagen de estación de control:', error);
         // Verificar si el error es de clave foránea
         if (error.code === '23503') { // Código de error de PostgreSQL para foreign key violation
-            return res.status(400).json({ status: 'error', message: `Error de referencia: la estación con id ${stationId} no existe.` });
+            return res.status(400).json({ status: 'error', message: `Error de referencia: la estación con id ${req.body.stationId} no existe.` });
         }
         res.status(500).json({ status: 'error', message: 'Error al subir la imagen de estación de control.' });
     }
