@@ -1,5 +1,5 @@
 const db = require('../conexion');
-const { uploadFileToNAS } = require('./nasStorageService');
+const { uploadFileToNAS, deleteFileFromNAS } = require('./blobStorageService');
 const fsp = require('fs').promises;
 const fs = require('fs');
 

@@ -21,7 +21,6 @@ const axios = require('axios');
 const { put, del } = require('@vercel/blob');
 const { kml } = require('@tmcw/togeojson');
 const { DOMParser } = require('xmldom');
-const tokml = require('tokml');
 const archiver = require('archiver');
 const FormData = require('form-data');
 const db = require('./conexion');
@@ -59,7 +58,7 @@ const amigoSecretoService = require('./services/amigoSecretoService');
 const wishlistService = require('./services/wishlistService');
 const modelos3DService = require('./services/modelos3DService');
 const geologiaCapasService = require('./services/geologiaCapasService');
-const { uploadFileToNAS, deleteFileFromNAS } = require('./services/nasStorageService');
+const { uploadFileToNAS, deleteFileFromNAS } = require('./services/blobStorageService');
 
 console.log('DEBUG: Servidor backend iniciando...');
 require('dotenv').config();
@@ -244,153 +243,20 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-const storage = multer.memoryStorage();
-
-const upload = multer({
-    storage: storage,
-    limits: {
-        fileSize: 1024 * 1024 * 500
-    }
-});
-
-// Disk Storage for Bulk Uploads
-const storageDisk = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const tempDir = '/tmp/multer_disk';
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-        }
-        cb(null, tempDir);
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + '-' + file.originalname);
-    }
-});
-
-const uploadDisk = multer({
-    storage: storageDisk,
-    limits: {
-        fileSize: 1024 * 1024 * 500 // 500MB per file
-    }
-});
+const { upload, uploadDisk } = require('./config/multer');
 
 app.use('/', express.static(path.join(__dirname, '..', 'frontend', 'build')));
 app.use('/formats', express.static(path.join(__dirname, '..', 'frontend', 'build')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Middleware de autenticación
-const authenticateToken = async (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    if (authHeader) {
-        const token = authHeader.split(' ')[1];
-        try {
-            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-            const userResult = await db.query(`
-                SELECT u.*, r.nombre AS rol_nombre
-                FROM usuariost u
-                LEFT JOIN roles r ON u.rol_id = r.id
-                WHERE u.id = $1
-            `, [decoded.id]);
-
-            if (userResult.rows.length === 0) {
-                return res.sendStatus(403);
-            }
-
-            const user = userResult.rows[0];
-            const permissions = await usuariosService.getUserPermissions(user.id, user.rol_id);
-
-            user.permissions = permissions;
-            req.user = user;
-
-            next();
-        } catch (err) {
-            console.error("Error en middleware de autenticación:", err);
-            return res.sendStatus(403);
-        }
-    } else {
-        res.sendStatus(401);
-    }
-};
-
-
-
-const authorizeGeologyManage = async (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: 'No autenticado' });
-
-    // Convertir a número por seguridad
-    const roleId = parseInt(req.user.rol_id, 10);
-    const specialtyId = parseInt(req.user.codigo_esp, 10);
-    const roleName = req.user.rol_nombre;
-
-    const isAdmin = roleName === 'ADMIN';
-    // Especialista en Geología (Código 2)
-    const isSpecialistGeology = specialtyId === 2;
-    // Evaluador (Rol 6) con especialidad en Geología (Código 2)
-    const isEvaluatorGeology = roleId === 6 && specialtyId === 2;
-
-    if (isAdmin || isSpecialistGeology || isEvaluatorGeology) {
-        return next();
-    }
-
-    return res.status(403).json({ error: 'Acceso denegado: No tiene permisos de gestión en el módulo de Geología' });
-};
-
-// Middleware de autorización para ADMIN y COORDINADOR PROYECTO
-const authorizeDisenoGeometricoManage = (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: 'No autenticado' });
-
-    const isAdmin = req.user.rol_nombre === 'ADMIN';
-    const isCoordinator = req.user.rol_nombre === 'COORDINADOR PROYECTO';
-
-    if (isAdmin || isCoordinator) {
-        return next();
-    }
-
-    return res.status(403).json({ error: 'Acceso denegado: No tiene permisos de gestion en Diseno Geometrico' });
-};
-
-const authorizeAdminOrCoordinator = (req, res, next) => {
-    if (!req.user || (req.user.rol_nombre !== 'ADMIN' && req.user.rol_nombre !== 'COORDINADOR PROYECTO')) {
-        return res.status(403).json({ error: 'Acceso denegado: Rol no autorizado' });
-    }
-    next();
-};
-
-// Middleware de autorización genérico para permisos específicos
-const authorizePermission = (permissionName, requiredAccessType) => {
-    return (req, res, next) => {
-        const { user } = req;
-
-        // Si el usuario es ADMIN, tiene acceso total a todo.
-        if (user && user.rol_nombre === 'ADMIN') {
-            return next();
-        }
-
-        const userPermissions = user ? user.permissions : {};
-        const userAccess = userPermissions ? userPermissions[permissionName] : undefined;
-
-        if (!userAccess) {
-            return res.status(403).json({ error: `Acceso denegado. No tienes permisos para el módulo '${permissionName}'.` });
-        }
-
-        const hasPermission = (required, userPerm) => {
-            if (required === 'lectura') {
-                return userPerm === 'lectura' || userPerm === 'edicion';
-            }
-            if (required === 'edicion') {
-                return userPerm === 'edicion';
-            }
-            return false;
-        };
-
-        if (hasPermission(requiredAccessType, userAccess)) {
-            next();
-        } else {
-            return res.status(403).json({ error: `Acceso denegado. Se requiere permiso de '${requiredAccessType}' para el módulo '${permissionName}'.` });
-        }
-    };
-};
+// Middlewares de auth y autorización: ./middleware/auth.js
+const {
+    authenticateToken,
+    authorizeGeologyManage,
+    authorizeDisenoGeometricoManage,
+    authorizeAdminOrCoordinator,
+    authorizePermission,
+} = require('./middleware/auth');
 
 app.get('/', (req, res) => {
     res.send('🚀 Backend del Geoportal en funcionamiento');
@@ -1386,66 +1252,6 @@ app.get('/api/amigo-secreto/wishlist/:userId', authenticateToken, async (req, re
     }
 });
 
-
-// --- Wishlist (Lista de Deseos) ---
-app.get('/api/amigo-secreto/wishlist', authenticateToken, async (req, res) => {
-    try {
-        const wishlist = await wishlistService.getWishlistByUserId(req.user.id);
-        res.json(wishlist);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/amigo-secreto/wishlist', authenticateToken, async (req, res) => {
-    try {
-        const newItem = await wishlistService.addWishlistItem(req.user.id, req.body);
-        res.status(201).json(newItem);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.delete('/api/amigo-secreto/wishlist/:itemId', authenticateToken, async (req, res) => {
-    try {
-        const { itemId } = req.params;
-        const rowCount = await wishlistService.deleteWishlistItem(itemId, req.user.id);
-        if (rowCount === 0) {
-            return res.status(404).json({ error: 'Deseo no encontrado o no tienes permiso para eliminarlo.' });
-        }
-        res.status(204).send(); // No Content
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.get('/api/amigo-secreto/wishlist/:userId', authenticateToken, async (req, res) => {
-    const { userId } = req.params;
-    const requesterId = req.user.id;
-
-    try {
-        // Lógica de autorización: solo puedes ver la lista de la persona que te tocó
-        const asignacionResult = await db.query(
-            `SELECT 1 FROM amigo_secreto_asignaciones
-             WHERE evento_id = 1 AND dador_usuario_id = $1 AND receptor_usuario_id = $2`,
-            [requesterId, userId]
-        );
-
-        const isAuthorized = asignacionResult.rows.length > 0;
-
-        if (!isAuthorized) {
-            return res.status(403).json({ error: 'No tienes permiso para ver esta lista de deseos.' });
-        }
-
-        const wishlist = await wishlistService.getWishlistByUserId(userId);
-        res.json(wishlist);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-
-
 // --------------------- ENSAYOS ---------------------
 // Get all assays for a specific tramo
 app.get('/api/tramos/:tramoId/ensayos', authenticateToken, async (req, res) => {
@@ -1828,6 +1634,17 @@ app.get('/api/usuarios/dni/:dni', authenticateToken, async (req, res) => {
     }
 });
 
+// Obtener usuarios agrupados por proyecto
+app.get('/api/usuarios/por-proyecto', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
+    try {
+        const usersByProject = await usuariosService.getUsersGroupedByProject();
+        res.json(usersByProject);
+    } catch (err) {
+        console.error('Error al obtener usuarios por proyecto:', err);
+        res.status(500).json({ status: 'error', mensaje: 'Error al obtener usuarios por proyecto' });
+    }
+});
+
 app.get('/api/usuarios/:id', authenticateToken, authorizePermission('usuarios', 'lectura'), async (req, res) => {
     const { id } = req.params;
     try {
@@ -1843,16 +1660,6 @@ app.get('/api/usuarios/:id', authenticateToken, authorizePermission('usuarios', 
     }
 });
 
-// Obtener usuarios agrupados por proyecto
-app.get('/api/usuarios/por-proyecto', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
-    try {
-        const usersByProject = await usuariosService.getUsersGroupedByProject();
-        res.json(usersByProject);
-    } catch (err) {
-        console.error('Error al obtener usuarios por proyecto:', err);
-        res.status(500).json({ status: 'error', mensaje: 'Error al obtener usuarios por proyecto' });
-    }
-});
 
 app.delete('/api/usuarios/:dni', authenticateToken, authorizePermission('usuarios', 'edicion'), async (req, res) => {
     const { dni } = req.params;
@@ -2139,42 +1946,6 @@ async function uploadFileToVercelBlob(file) {
     }
 }
 
-function sanitizeTrafficPathSegment(value, fallback = 'archivo') {
-    const sanitized = String(value || '')
-        .trim()
-        .replace(/[^a-zA-Z0-9-_]/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_+|_+$/g, '');
-
-    return sanitized || fallback;
-}
-
-async function uploadTrafficFileToNAS(file, category, description, index, options = {}) {
-    try {
-        const targetFolder = ['trafico', sanitizeTrafficPathSegment(category, 'general')];
-        const descriptionSegment = sanitizeTrafficPathSegment(description, options.defaultDescription || 'archivo');
-
-        if (options.useDescriptionFolder !== false) {
-            targetFolder.push(descriptionSegment);
-        }
-
-        const originalExtension = path.extname(file.originalname);
-        const explicitBaseName = options.fileBaseName
-            ? sanitizeTrafficPathSegment(options.fileBaseName, descriptionSegment)
-            : null;
-        const fallbackBaseName = sanitizeTrafficPathSegment(path.basename(file.originalname, originalExtension), descriptionSegment);
-        const fileBaseName = explicitBaseName || fallbackBaseName;
-        const fileSuffix = index !== undefined && index !== null && index !== ''
-            ? `_${sanitizeTrafficPathSegment(index, '0')}`
-            : `_${Date.now()}`;
-        const finalFilename = `${fileBaseName}${fileSuffix}${originalExtension}`;
-
-        return await uploadFileToNAS(file.buffer, targetFolder.join('/'), finalFilename);
-    } catch (error) {
-        console.error(`Error al subir archivo de tráfico (${category}) al NAS:`, error);
-        throw new Error(`Error al subir archivo de tráfico (${category}) al NAS`);
-    }
-}
 
 // Crear un nuevo anuncio con archivo y subirlo
 app.post('/anuncios', authenticateToken, upload.single('file'), async (req, res) => {
@@ -2198,247 +1969,9 @@ app.post('/anuncios', authenticateToken, upload.single('file'), async (req, res)
     }
 });
 
-// Nuevo endpoint para subir imágenes de tráfico
-app.post('/api/trafico/upload-image', upload.single('image'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
-        }
-        const { stationId, description, upload_date } = req.body;
-        if (!stationId) {
-            return res.status(400).json({ error: 'stationId es requerido.' });
-        }
-        const imageUrl = await uploadTrafficFileToNAS(req.file, 'general', description, null);
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date) VALUES ($1, $2, $3, $4) RETURNING *',
-            [stationId, imageUrl, description, upload_date]
-        );
-        res.status(201).json({ status: 'ok', message: 'Imagen subida y guardada correctamente', imageData: result.rows[0] });
-    } catch (error) {
-        console.error('Error al subir imagen de tráfico:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir la imagen de tráfico.' });
-    }
-});
+// Dominio de tráfico: ./routes/trafico.js
+app.use('/api/trafico', require('./routes/trafico'));
 
-// Nuevo endpoint para subir imágenes de estación de control
-app.post('/api/trafico/estacion/upload-image', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('image'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
-        }
-        const { stationId, description, upload_date, index } = req.body;
-        if (!stationId) {
-            return res.status(400).json({ error: 'stationId es requerido.' });
-        }
-
-        // Verificar si la estación existe
-        const stationExists = await db.query('SELECT id FROM elementos_trafico WHERE id = $1', [stationId]);
-        if (stationExists.rows.length === 0) {
-            return res.status(404).json({ error: `La estación con id ${stationId} no fue encontrada.` });
-        }
-
-        const imageUrl = await uploadTrafficFileToNAS(req.file, 'estacion', description, index);
-
-        //insertar la nueva imagen en la tabla trafico_imagenes
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [stationId, imageUrl, description, upload_date, 'estacion_control']
-        );
-
-        res.status(201).json({ status: 'ok', message: 'Imagen de estación subida y guardada correctamente', imageData: { ...result.rows[0], index } });
-    } catch (error) {
-        console.error('Error al subir imagen de estación de control:', error);
-        // Verificar si el error es de clave foránea
-        if (error.code === '23503') { // Código de error de PostgreSQL para foreign key violation
-            return res.status(400).json({ status: 'error', message: `Error de referencia: la estación con id ${stationId} no existe.` });
-        }
-        res.status(500).json({ status: 'error', message: 'Error al subir la imagen de estación de control.' });
-    }
-});
-
-//nuevo endpoint para subir imagenes de tramo
-app.post('/api/trafico/tramo/upload-image', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('image'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
-        }
-        const { tramoId, description, upload_date, index } = req.body;
-        if (!tramoId) {
-            return res.status(400).json({ error: 'tramoId es requerido.' });
-        }
-        const imageUrl = await uploadTrafficFileToNAS(req.file, 'tramo', description, index);
-
-        // Reutilizamos la tabla trafico_imagenes, guardando el tramoId en la columna station_id
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [tramoId, imageUrl, description, upload_date, 'tramo']
-        );
-
-        res.status(201).json({ status: 'ok', message: 'Imagen de tramo subida y guardada correctamente', imageData: { ...result.rows[0], index } });
-    } catch (error) {
-        console.error('Error al subir imagen de tramo:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir la imagen de tramo.' });
-    }
-});
-
-//endpoint para subir archivos e imagenes para conteovehicular
-app.post('/api/trafico/conteovehicular/upload-file', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
-        }
-        const { stationId, description, upload_date, index, source_type } = req.body;
-        if (!stationId) {
-            return res.status(400).json({ error: 'stationId es requerido.' });
-        }
-        const fileUrl = await uploadTrafficFileToNAS(req.file, 'conteovehicular', description, index);
-
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [stationId, fileUrl, description, upload_date, source_type]
-        );
-
-        res.status(201).json({ status: 'ok', message: 'Archivo de conteo vehicular subido y guardado correctamente', imageData: { ...result.rows[0], index } });
-    } catch (error) {
-        console.error('DEBUG_CONTEO_VEHICULAR_UPLOAD_ERROR:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir el archivo de conteo vehicular.' });
-    }
-});
-
-// Nuevo endpoint para subir archivos Excel de conteo vehicular
-app.post('/api/trafico/conteovehicular/upload-excel', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('excelFile'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
-        }
-        const { stationId, description } = req.body;
-        if (!stationId) {
-            return res.status(400).json({ error: 'stationId es requerido.' });
-        }
-        const excelUrl = await uploadTrafficFileToNAS(req.file, 'reportconteo', stationId, Date.now(), {
-            useDescriptionFolder: false,
-            fileBaseName: stationId
-        });
-        const { DateTime } = require('luxon'); // Asegúrate de tener luxon importado al inicio si no lo está
-        const upload_date = DateTime.utc().toISODate();
-
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [stationId, excelUrl, description || 'Excel Conteo Vehicular', upload_date, 'conteo_vehicular_excel']
-        );
-
-        if (req.body.extractedData) {
-            try {
-                const parsedData = JSON.parse(req.body.extractedData);
-                await db.query('UPDATE elementos_trafico SET datos_extraidos = $1 WHERE id = $2', [parsedData, stationId]);
-            } catch (jsonErr) {
-                console.error("Error guardando datos extraídos en DB:", jsonErr);
-            }
-        }
-
-        res.status(201).json({ status: 'ok', message: 'Archivo Excel subido correctamente', excelUrl, imageData: result.rows[0] });
-
-        // --- Audit Log: Subida de Archivo de Tráfico ---
-        await db.query(
-            'INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)',
-            [req.user.id, 'Subida de Archivo de Tráfico', `Archivo Excel "${description || 'Excel Conteo Vehicular'}" subido para estación ${stationId} por usuario ${req.user.id}. URL: ${excelUrl}`]
-        );
-        // --- End Audit Log ---
-    } catch (error) {
-        console.error('Error al subir archivo Excel de conteo vehicular:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir el archivo Excel de conteo vehicular.' });
-    }
-});
-
-// Nuevo endpoint para subir archivos Excel de Origen-Destino
-app.post('/api/trafico/encuestaorigendestino/upload-excel', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('excelFile'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
-        const { stationId, description } = req.body;
-        if (!stationId) return res.status(400).json({ error: 'stationId es requerido.' });
-        const excelUrl = await uploadTrafficFileToNAS(req.file, 'reportorigen', stationId, Date.now(), { useDescriptionFolder: false, fileBaseName: stationId });
-        const { DateTime } = require('luxon');
-        const upload_date = DateTime.utc().toISODate();
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [stationId, excelUrl, description || 'Excel Origen-Destino', upload_date, 'encuesta_origen_destino_excel']
-        );
-
-        if (req.body.extractedData) {
-            try {
-                const parsedData = JSON.parse(req.body.extractedData);
-                await db.query('UPDATE elementos_trafico SET datos_extraidos = $1 WHERE id = $2', [parsedData, stationId]);
-            } catch (jsonErr) {
-                console.error("Error guardando datos extraídos en DB:", jsonErr);
-            }
-        }
-        res.status(201).json({ status: 'ok', message: 'Archivo Excel OD subido correctamente', excelUrl, imageData: result.rows[0] });
-        await db.query('INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)', [req.user.id, 'Subida de Archivo de Tráfico', `Archivo Excel "${description || 'Excel O-D'}" subido para estación ${stationId} por usuario ${req.user.id}. URL: ${excelUrl}`]);
-    } catch (error) {
-        console.error('Error al subir archivo Excel OD:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir el archivo Excel OD.' });
-    }
-});
-
-// Nuevo endpoint para subir archivos Excel de Censo de Cargas
-app.post('/api/trafico/censodecargas/upload-excel', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('excelFile'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
-        const { stationId, description } = req.body;
-        if (!stationId) return res.status(400).json({ error: 'stationId es requerido.' });
-        const excelUrl = await uploadTrafficFileToNAS(req.file, 'reportcargas', stationId, Date.now(), { useDescriptionFolder: false, fileBaseName: stationId });
-        const { DateTime } = require('luxon');
-        const upload_date = DateTime.utc().toISODate();
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [stationId, excelUrl, description || 'Excel Censo de Cargas', upload_date, 'censo_de_cargas_excel']
-        );
-
-        if (req.body.extractedData) {
-            try {
-                const parsedData = JSON.parse(req.body.extractedData);
-                await db.query('UPDATE elementos_trafico SET datos_extraidos = $1 WHERE id = $2', [parsedData, stationId]);
-            } catch (jsonErr) {
-                console.error("Error guardando datos extraídos en DB:", jsonErr);
-            }
-        }
-        res.status(201).json({ status: 'ok', message: 'Archivo Excel Cargas subido correctamente', excelUrl, imageData: result.rows[0] });
-        await db.query('INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)', [req.user.id, 'Subida de Archivo de Tráfico', `Archivo Excel "${description || 'Excel Cargas'}" subido para estación ${stationId} por usuario ${req.user.id}. URL: ${excelUrl}`]);
-    } catch (error) {
-        console.error('Error al subir archivo Excel Cargas:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir el archivo Excel Cargas.' });
-    }
-});
-
-// Nuevo endpoint para subir archivos Excel de Encuesta de Velocidad
-app.post('/api/trafico/encuestavelocidad/upload-excel', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('excelFile'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
-        const { sectionId, description } = req.body;
-        if (!sectionId) return res.status(400).json({ error: 'sectionId es requerido.' });
-        const excelUrl = await uploadTrafficFileToNAS(req.file, 'reportvelocidad', sectionId, Date.now(), { useDescriptionFolder: false, fileBaseName: sectionId });
-        const { DateTime } = require('luxon');
-        const upload_date = DateTime.utc().toISODate();
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [sectionId, excelUrl, description || 'Excel Encuesta Velocidad', upload_date, 'encuesta_velocidad_excel']
-        );
-
-        if (req.body.extractedData) {
-            try {
-                const parsedData = JSON.parse(req.body.extractedData);
-                await db.query('UPDATE elementos_trafico SET datos_extraidos = $1 WHERE id = $2', [parsedData, sectionId]);
-            } catch (jsonErr) {
-                console.error("Error guardando datos extraídos en DB:", jsonErr);
-            }
-        }
-        res.status(201).json({ status: 'ok', message: 'Archivo Excel Velocidad subido correctamente', excelUrl, imageData: result.rows[0] });
-        await db.query('INSERT INTO auditoria (usuario_id, accion, detalles) VALUES ($1, $2, $3)', [req.user.id, 'Subida de Archivo de Tráfico', `Archivo Excel "${description || 'Excel Velocidad'}" subido para tramo ${sectionId} por usuario ${req.user.id}. URL: ${excelUrl}`]);
-    } catch (error) {
-        console.error('Error al subir archivo Excel Velocidad:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir el archivo Excel Velocidad.' });
-    }
-});
 
 function sanitizeKmlStorageSegment(value) {
     return String(value || '')
@@ -2494,19 +2027,6 @@ app.post('/api/kml/upload', authenticateToken, authorizePermission('proyectos', 
     }
 });
 
-app.get('/api/tipos-ensayo', authenticateToken, async (req, res) => {
-    try {
-        const result = await db.query('SELECT * FROM tipo_ensayo ORDER BY descripcion');
-        console.log('DEBUG: Backend /api/tipos-ensayo response rows:', result.rows.length);
-        res.json(result.rows);
-    } catch (err) {
-        console.error('❌ Error al obtener tipos de ensayo:', err);
-        res.status(500).json({
-            error: 'Error al obtener tipos de ensayo',
-            details: err.message
-        });
-    }
-});
 
 // Nueva función para subir archivos Excel de alcantarillas a Vercel Blob
 async function uploadAlcantarillasExcelToVercelBlob(fileBuffer, originalFilename, projectId) {
@@ -3038,155 +2558,6 @@ app.get('/api/alcantarillas/excel-info/:projectId/:entregableNum', authenticateT
     }
 });
 
-// Nuevo endpoint para obtener el último archivo Excel de conteo vehicular para una estación
-app.get('/api/trafico/conteovehicular/latest-excel/:stationId', async (req, res) => {
-    const { stationId } = req.params;
-    try {
-        const result = await db.query(
-            'SELECT image_url FROM trafico_imagenes WHERE station_id = $1 AND source_type = $2 ORDER BY upload_date DESC, id DESC LIMIT 1',
-            [stationId, 'conteo_vehicular_excel']
-        );
-        if (result.rows.length > 0) {
-            res.json({ status: 'ok', excelUrl: result.rows[0].image_url });
-        } else {
-            res.status(404).json({ status: 'error', message: 'No se encontró ningún archivo Excel para esta estación.' });
-        }
-    } catch (error) {
-        console.error('Error al obtener el último archivo Excel:', error);
-        res.status(500).json({ status: 'error', message: 'Error al obtener el último archivo Excel.' });
-    }
-});
-
-// Nuevo endpoint para subir archivos de encuesta origen destino
-app.post('/api/trafico/encuestaorigendestino/upload-file', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
-        }
-        const { stationId, description, upload_date, index, source_type } = req.body;
-        if (!stationId) {
-            return res.status(400).json({ error: 'stationId es requerido.' });
-        }
-        const fileUrl = await uploadTrafficFileToNAS(req.file, 'encuestaorigendestino', description, index);
-
-        // Insertar el nuevo archivo en la tabla trafico_imagenes
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *'
-            , [stationId, fileUrl, description, upload_date, source_type]
-        );
-        res.status(201).json({ status: 'ok', message: 'Archivo de encuesta origen destino subido y guardado correctamente', imageData: { ...result.rows[0], index } });
-    } catch (error) {
-        console.error('Error al subir archivo de encuesta origen destino:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir el archivo de encuesta origen destino.' });
-    }
-});
-
-// Nuevo endpoint para subir archivos de censo de cargas
-app.post('/api/trafico/censodecargas/upload-file', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
-        }
-        const { stationId, description, upload_date, index, source_type } = req.body;
-        if (!stationId) {
-            return res.status(400).json({ error: 'stationId es requerido.' });
-        }
-        const fileUrl = await uploadTrafficFileToNAS(req.file, 'censodecargas', description, index);
-
-        // Insertar el nuevo archivo en la tabla trafico_imagenes
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *'
-            , [stationId, fileUrl, description, upload_date, source_type]
-        );
-        res.status(201).json({ status: 'ok', message: 'Archivo de censo de cargas subido y guardado correctamente', imageData: { ...result.rows[0], index } });
-    } catch (error) {
-        console.error('Error al subir archivo de censo de cargas:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir el archivo de censo de cargas.' });
-    }
-});
-
-// Nuevo endpoint para subir archivos de encuesta de velocidad
-app.post('/api/trafico/encuestavelocidad/upload-file', authenticateToken, authorizePermission('trafico', 'edicion'), upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo.' });
-        }
-        const { sectionId, description, upload_date, index, source_type } = req.body;
-        if (!sectionId) {
-            return res.status(400).json({ error: 'sectionId es requerido.' });
-        }
-        const fileUrl = await uploadTrafficFileToNAS(req.file, 'encuestavelocidad', description, index);
-
-        // Insertar el nuevo archivo en la tabla trafico_imagenes
-        const result = await db.query(
-            'INSERT INTO trafico_imagenes (station_id, image_url, description, upload_date, source_type) VALUES ($1, $2, $3, $4, $5) RETURNING *'
-            , [sectionId, fileUrl, description, upload_date, source_type]
-        );
-        res.status(201).json({ status: 'ok', message: 'Archivo de encuesta de velocidad subido y guardado correctamente', imageData: { ...result.rows[0], index } });
-    } catch (error) {
-        console.error('Error al subir archivo de encuesta de velocidad:', error);
-        res.status(500).json({ status: 'error', message: 'Error al subir el archivo de encuesta de velocidad.' });
-    }
-});
-
-// Nuevo endpoint para eliminar un grupo de imágenes de tráfico
-app.delete('/api/trafico/delete-image-group', async (req, res) => {
-    const { stationId, description, uploadDate } = req.body;
-    try {
-        const imagesResult = await db.query(
-            'SELECT image_url FROM trafico_imagenes WHERE station_id = $1 AND description = $2 AND upload_date = $3',
-            [stationId, description, uploadDate]
-        );
-
-        for (const row of imagesResult.rows) {
-            try {
-                await deleteFileFromNAS(row.image_url);
-            } catch (nasError) {
-                console.warn(`No se pudo eliminar el archivo del NAS: ${row.image_url}.`, nasError.message);
-            }
-        }
-
-        const result = await db.query(
-            'DELETE FROM trafico_imagenes WHERE station_id = $1 AND description = $2 AND upload_date = $3',
-            [stationId, description, uploadDate]
-        );
-
-        if (result.rowCount > 0) {
-            res.status(200).json({ status: 'ok', message: 'Grupo de imágenes eliminado correctamente.' });
-        } else {
-            res.status(404).json({ status: 'error', message: 'No se encontró el grupo de imágenes para eliminar.' });
-        }
-    } catch (error) {
-        console.error('Error al eliminar el grupo de imágenes:', error);
-        res.status(500).json({ status: 'error', message: 'Error al eliminar el grupo de imágenes.' });
-    }
-});
-
-// Nuevo endpoint para eliminar una imagen individual de tráfico
-app.delete('/api/trafico/delete-image', async (req, res) => {
-    const { imageUrl } = req.body;
-    try {
-        try {
-            await deleteFileFromNAS(imageUrl);
-        } catch (nasError) {
-            console.warn(`No se pudo eliminar el archivo del NAS: ${imageUrl}.`, nasError.message);
-        }
-
-        // Eliminar de la base de datos
-        const result = await db.query(
-            'DELETE FROM trafico_imagenes WHERE image_url = $1',
-            [imageUrl]
-        );
-        if (result.rowCount > 0) {
-            res.status(200).json({ status: 'ok', message: 'Imagen eliminada correctamente.' });
-        } else {
-            res.status(404).json({ status: 'error', message: 'No se encontró la imagen para eliminar.' });
-        }
-    } catch (error) {
-        console.error('Error al eliminar la imagen:', error);
-        res.status(500).json({ status: 'error', message: 'Error al eliminar la imagen.' });
-    }
-});
 
 // ✅ Listar anuncios activos
 app.get('/anuncios/activos', async (req, res) => {
@@ -3536,7 +2907,6 @@ app.delete('/api/proyectos/:id', authenticateToken, async (req, res) => {
 });
 
 
-
 app.get('/api/proyectos/:proyectoId/tramos', authenticateToken, async (req, res) => {
     const { proyectoId } = req.params;
     try {
@@ -3724,26 +3094,6 @@ app.post('/api/proyectos/:projectId/kml', authenticateToken, authorizePermission
 });
 
 // NEW: Endpoint to upload KML file for a project
-app.post('/api/proyectos/:projectId/upload-kml', authenticateToken, authorizePermission('proyectos', 'edicion'), upload.single('kmlFile'), async (req, res) => {
-    const { projectId } = req.params;
-    const userId = req.user.id;
-
-    if (!req.file) {
-        return res.status(400).json({ error: 'No se proporcionó ningún archivo KML/KMZ.' });
-    }
-
-    try {
-        const result = await proyectosService.uploadKmlToProyecto(projectId, req.file, userId);
-        res.status(200).json(result);
-
-    } catch (error) {
-        console.error(`Error uploading KML for project ${projectId}:`, error);
-        if (error.isCustomError) {
-            return res.status(error.statusCode || 400).json({ error: error.message });
-        }
-        res.status(error.statusCode || 500).json({ error: error.message || 'Error interno al procesar KML.' });
-    }
-});
 
 // NEW: Endpoint to get consolidated Map Data for Dashboard
 app.get('/api/proyectos/:id/map-data', authenticateToken, async (req, res) => {
@@ -3757,15 +3107,6 @@ app.get('/api/proyectos/:id/map-data', authenticateToken, async (req, res) => {
 });
 
 // NEW: Endpoint to get Project Statistics (Ensuring it exists)
-app.get('/api/proyectos/:id/estadisticas', authenticateToken, async (req, res) => {
-    try {
-        const stats = await proyectosService.getProjectStatistics(req.params.id);
-        res.json(stats);
-    } catch (error) {
-        console.error('Error fetching project statistics:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
 
 // DELETE the KML for a project (section-aware)
 app.delete('/api/proyectos/:id/kml', authenticateToken, async (req, res) => {
@@ -3853,20 +3194,6 @@ app.get('/api/user-projects', authenticateToken, async (req, res) => {
 });
 
 // NEW: Ruta para obtener un proyecto por ID
-app.get('/api/proyectos/:id', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const project = await proyectosService.getProyectoById(id);
-        if (project) {
-            res.json(project);
-        } else {
-            res.status(404).json({ error: 'Proyecto no encontrado' });
-        }
-    } catch (err) {
-        console.error(`Error al obtener proyecto ${id}:`, err);
-        res.status(500).json({ error: 'Error al obtener el proyecto', details: err.message });
-    }
-});
 
 // --------------------- CANTERAS ---------------------
 // --- NEW: Endpoints for Calibration Data ---
@@ -3993,15 +3320,6 @@ app.post('/api/canteras', authenticateToken, async (req, res) => {
 });
 
 // NEW: CREATE Cantera
-app.post('/api/canteras', authenticateToken, async (req, res) => {
-    try {
-        const newCantera = await canterasService.createCantera(req.body);
-        res.status(201).json(newCantera);
-    } catch (error) {
-        console.error('Error al crear cantera:', error);
-        res.status(500).json({ error: 'Error al crear la cantera.', details: error.message });
-    }
-});
 
 // NEW: UPDATE Cantera
 app.put('/api/canteras/:id', authenticateToken, async (req, res) => {
@@ -4413,50 +3731,11 @@ app.put('/api/progresivas/importar-con-ensayos/:overwriteProgresivaId', authenti
 });
 
 
-
 // NEW: Endpoint to get KML content by kml_trazado_id
-app.get('/api/kml-trazados/:id/content', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const kmlContent = await kmlService.getKmlContentById(id);
-        if (kmlContent) {
-            res.json({ kmlContent });
-        } else {
-            res.status(404).json({ error: 'Contenido KML no encontrado' });
-        }
-    } catch (err) {
-        console.error(`Error al obtener contenido KML para el trazado ${id}:`, err);
-        const statusCode = err.isCustomError ? err.statusCode : 500;
-        res.status(statusCode).json({ error: 'Error al obtener el contenido KML', details: err.message });
-    }
-});
 
 // NEW: Endpoint to delete KML from a progresiva
-app.delete('/api/progresivas/:progresivaId/kml', authenticateToken, async (req, res) => {
-    const { progresivaId } = req.params;
-    try {
-        const result = await progresivasService.deleteKmlFromProgresiva(progresivaId);
-        res.status(200).json(result);
-    } catch (error) {
-        console.error(`Error al eliminar KML de la progresiva ${progresivaId}:`, error);
-        if (error.isCustomError) {
-            return res.status(error.statusCode || 400).json({ error: error.message });
-        }
-        res.status(500).json({ error: 'Error interno del servidor al eliminar KML de la progresiva.' });
-    }
-});
 
 // Obtener progresivas principales
-app.get('/api/progresivas', authenticateToken, async (req, res) => {
-    try {
-        const { selectedProjectId } = req.query; // Get selectedProjectId from query parameters
-        const progresivas = await progresivasService.getProgresivas(req.user, selectedProjectId);
-        res.json(progresivas);
-    } catch (err) {
-        console.error('Error al obtener progresivas:', err);
-        res.status(500).json({ error: 'Error al obtener progresivas', details: err.message });
-    }
-});
 
 app.get('/api/progresivas/:id/children', authenticateToken, progresivasService.getSubProgresivas);
 
@@ -4783,22 +4062,6 @@ app.put('/api/ensayos/limite-plastico/:ensayo_id', authenticateToken, async (req
 });
 
 // NEW: Ruta para obtener todos los ensayos de un tramo específico
-app.get('/api/tramos/:tramoId/ensayos', authenticateToken, async (req, res) => {
-    const { tramoId } = req.params;
-    try {
-        // También necesitamos obtener el nombre del tramo para mostrarlo en el frontend
-        const tramoResult = await db.query('SELECT nombre, codigo FROM progresivas WHERE id = $1', [tramoId]);
-        if (tramoResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Tramo no encontrado.' });
-        }
-        const tramo = tramoResult.rows[0];
-        const ensayos = await ensayosService.getEnsayosByTramoId(tramoId);
-        res.json({ tramo, ensayos });
-    } catch (err) {
-        console.error(`Error al obtener ensayos para el tramo ${tramoId}:`, err);
-        res.status(500).json({ error: 'Error al obtener ensayos por tramo', details: err.message });
-    }
-});
 
 // NEW: Export assays by tramo to Excel
 app.get('/api/tramos/:tramoId/ensayos/export-excel', authenticateToken, async (req, res) => {
@@ -5134,28 +4397,6 @@ app.post('/api/admin/changelog', authenticateToken, authorizeAdminOrCoordinator,
     }
 });
 
-// --------------------- ALCANTARILLAS (GENERAL) ---------------------
-app.post('/api/alcantarillas/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No se proporcionó ningún archivo Excel.' });
-        }
-        const { projectId, utmZone } = req.body;
-        if (!projectId) {
-            return res.status(400).json({ error: 'El ID del proyecto es requerido.' });
-        }
-
-        // Default UTM zone if not provided (though frontend sends it)
-        const zone = utmZone || '18L';
-
-        const result = await alcantarillasService.processExcelAndSaveAlcantarillas(req.file.buffer, projectId, zone);
-        res.status(200).json({ status: 'ok', message: result.message, count: result.count });
-    } catch (error) {
-        console.error('Error en /api/alcantarillas/upload-excel:', error);
-        res.status(500).json({ status: 'error', message: error.message || 'Error al procesar el archivo Excel.' });
-    }
-});
-
 // --------------------- ALCANTARILLAS E1 ---------------------
 
 app.post('/api/upload-alcantarillas-e1', authenticateToken, authorizeAdminOrCoordinator, upload.single('excelFile'), async (req, res) => {
@@ -5190,71 +4431,7 @@ app.get('/api/alcantarillas-e1', authenticateToken, async (req, res) => {
 
 // --------------------- ELEMENTOS DE TRÁFICO ---------------------
 
-app.post('/api/trafico/exportar-kml', authenticateToken, (req, res) => {
-    console.log('INFO: Se ha recibido una solicitud en /api/trafico/exportar-kml'); // Log de entrada
-    const geojsonData = req.body;
-    if (!geojsonData) {
-        console.error('ERROR: No se proporcionaron datos GeoJSON en la solicitud.');
-        return res.status(400).json({ error: 'No se proporcionaron datos GeoJSON.' });
-    }
 
-    try {
-        const kmlData = tokml(geojsonData, {
-            name: 'nombre', // Usa la propiedad 'nombre' de cada feature como el nombre del lugar
-            description: 'descripcion', // Usa la propiedad 'descripcion' para la descripción
-            documentName: 'Exportacion Geoportal',
-            documentDescription: 'Archivo KML exportado desde Geoportal',
-            simplestyle: true
-        });
-
-        res.setHeader('Content-Type', 'application/vnd.google-earth.kml+xml');
-        res.setHeader('Content-Disposition', 'attachment; filename="export.kml"');
-        res.send(kmlData);
-        console.log('INFO: Se ha exportado el archivo KML correctamente.');
-    } catch (error) {
-        console.error('ERROR: Fallo en la conversión a KML:', error.stack);
-        res.status(500).json({ error: 'Error interno al generar el archivo KML.' });
-    }
-});
-
-app.post('/api/trafico/exportar-shapefile', authenticateToken, async (req, res) => {
-    console.log('INFO: Solicitud recibida para exportar Shapefile (usando shp-write)');
-    const geojsonData = req.body;
-    if (!geojsonData || !geojsonData.features || geojsonData.features.length === 0) {
-        return res.status(400).json({ error: 'No se proporcionaron datos GeoJSON válidos o están vacíos.' });
-    }
-
-    try {
-        const uniqueExportId = Date.now();
-        const shpWrite = require('@mapbox/shp-write');
-
-        // zip() maneja múltiples tipos de geometrías y los separa en carpetas automáticamente
-        const zipBuffer = await shpWrite.zip({
-            type: 'FeatureCollection',
-            features: geojsonData.features
-        }, {
-            folder: 'geoportal_export',
-            outputType: 'nodebuffer',
-            types: {
-                point: 'mypoints',
-                polygon: 'mypolygons',
-                line: 'mylines'
-            }
-        });
-
-        // Configurar la respuesta para la descarga
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="geoportal_shapefiles_${uniqueExportId}.zip"`);
-
-        // Enviar el ZIP binario real para evitar archivos corruptos.
-        res.send(zipBuffer);
-        console.log('INFO: Archivo Shapefile (ZIP) generado y enviado correctamente.');
-
-    } catch (error) {
-        console.error('ERROR: Fallo en la exportación a Shapefile con shpWrite:', error.stack || error);
-        res.status(500).json({ error: `Error interno al generar el archivo Shapefile: ${error.message || error}` });
-    }
-});
 app.get('/api/elementos-trafico', authenticateToken, async (req, res) => {
     try {
         const user = req.user;
@@ -5301,370 +4478,6 @@ app.get('/api/elementos-trafico', authenticateToken, async (req, res) => {
     }
 });
 
-// Endpoint para obtener el trazado más reciente
-app.get('/api/trafico/obtener-trazado', authenticateToken, async (req, res) => {
-    try {
-        const result = await db.query(`
-            SELECT nombre, ST_AsGeoJSON(geom) AS geojson
-            FROM rutas
-            ORDER BY id DESC
-            LIMIT 1;
-        `);
-
-        if (result.rows.length > 0) {
-            res.json(result.rows[0]);
-        } else {
-            res.status(404).json({ message: 'No se encontró ningún trazado.' });
-        }
-    } catch (err) {
-        console.error('Error al obtener trazado:', err);
-        res.status(500).json({ status: 'error', message: 'Error al obtener el trazado del servidor', details: err.message });
-    }
-});
-
-// --------------------- TRAZADO DE MAPA ---------------------
-app.post('/api/trafico/guardar-trazado', authenticateToken, authorizeAdminOrCoordinator, async (req, res) => {
-    const { nombre, puntos } = req.body; // puntos será un array de {lat, lng}
-
-    if (!nombre || !puntos || !Array.isArray(puntos) || puntos.length < 2) {
-        return res.status(400).json({ error: 'Nombre y al menos dos puntos son requeridos para el trazado.' });
-    }
-
-    try {
-        // Construir la cadena de puntos para ST_MakeLine
-        // ST_MakePoint(longitude, latitude)
-        const pointStrings = puntos.map(p => `ST_MakePoint(${p.lng}, ${p.lat})`).join(', ');
-
-        const query = `
-            INSERT INTO rutas (nombre, geom)
-            VALUES ($1, ST_SetSRID(ST_MakeLine(ARRAY[${pointStrings}]), 4326))
-            RETURNING id;
-        `;
-
-        const result = await db.query(query, [nombre]);
-        res.status(201).json({ status: 'ok', message: 'Trazado guardado correctamente', id: result.rows[0].id });
-    } catch (err) {
-        console.error('Error al guardar trazado:', err);
-        res.status(500).json({ status: 'error', message: 'Error al guardar el trazado en el servidor', details: err.message });
-    }
-});
-
-app.delete('/api/trafico/delete-image', authenticateToken, async (req, res) => {
-    const { stationId, imageUrl } = req.body;
-    try {
-        try {
-            await deleteFileFromNAS(imageUrl);
-        } catch (nasError) {
-            console.warn(`No se pudo eliminar el archivo del NAS: ${imageUrl}.`, nasError.message);
-        }
-
-        const result = await db.query('DELETE FROM trafico_imagenes WHERE station_id = $1 AND image_url = $2', [stationId, imageUrl]);
-        if (result.rowCount > 0) {
-            res.json({ status: 'ok', message: 'Imagen eliminada correctamente' });
-        } else {
-            res.status(404).json({ status: 'error', message: 'Imagen no encontrada' });
-        }
-    } catch (error) {
-        console.error('Error al eliminar imagen:', error);
-        res.status(500).json({ status: 'error', message: 'Error al eliminar la imagen.' });
-    }
-});
-
-// Nueva ruta para eliminar un grupo de imágenes
-app.delete('/api/trafico/delete-image-group', authenticateToken, async (req, res) => {
-    const { stationId, description, uploadDate } = req.body;
-    try {
-        const imagesResult = await db.query(
-            'SELECT image_url FROM trafico_imagenes WHERE station_id = $1 AND description = $2 AND upload_date = $3',
-            [stationId, description, uploadDate]
-        );
-
-        for (const row of imagesResult.rows) {
-            try {
-                await deleteFileFromNAS(row.image_url);
-            } catch (nasError) {
-                console.warn(`No se pudo eliminar el archivo del NAS: ${row.image_url}.`, nasError.message);
-            }
-        }
-
-        const result = await db.query('DELETE FROM trafico_imagenes WHERE station_id = $1 AND description = $2 AND upload_date = $3', [stationId, description, uploadDate]);
-        if (result.rowCount > 0) {
-            res.json({ status: 'ok', message: `Se eliminaron ${result.rowCount} imágenes del grupo.` });
-        } else {
-            res.status(404).json({ status: 'error', message: 'No se encontraron imágenes para eliminar en este grupo.' });
-        }
-    } catch (error) {
-        console.error('Error al eliminar grupo de imágenes:', error);
-        res.status(500).json({ status: 'error', message: 'Error al eliminar el grupo de imágenes.' });
-    }
-});
-
-app.get('/api/trafico/download-excel', async (req, res) => {
-    try {
-        const { url } = req.query;
-        if (!url) {
-            return res.status(400).send('URL query parameter is required.');
-        }
-
-        // Use axios to fetch the file as a stream
-        const response = await axios({
-            method: 'get',
-            url: url,
-            responseType: 'stream'
-        });
-
-        // Set the content type from the original response
-        res.setHeader('Content-Type', response.headers['content-type']);
-        if (response.headers['content-length']) {
-            res.setHeader('Content-Length', response.headers['content-length']);
-        }
-        if (response.headers['content-disposition']) {
-            res.setHeader('Content-Disposition', response.headers['content-disposition']);
-        } else {
-            const pathname = new URL(url).pathname;
-            const fallbackFilename = decodeURIComponent(path.basename(pathname)) || 'archivo';
-            res.setHeader('Content-Disposition', `attachment; filename="${fallbackFilename}"`);
-        }
-        // Pipe the stream to the response
-        response.data.pipe(res);
-
-    } catch (error) {
-        console.error('Error proxying Excel download:', error);
-        res.status(500).send('Error downloading file.');
-    }
-});
-
-
-
-// Socket.IO CORS options should be defined before io initialization
-const ioCorsOptions = {
-    origin: function (origin, callback) {
-        if (!origin || whitelist.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    methods: ['GET', 'POST']
-};
-
-const io = new Server(server, {
-    cors: ioCorsOptions
-});
-
-// In-memory data for Amigo Secreto - only for tracking currently connected users
-let participantesSorteo = [];
-
-// ===== SOCKET.IO AUTHENTICATION MIDDLEWARE =====
-io.use(async (socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-        return next(new Error('Authentication error: Token not provided.'));
-    }
-    try {
-        const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-        const userResult = await db.query(`
-            SELECT u.id, u.nombre, u.ap_paterno, r.nombre as rol_nombre, u.rol_id
-            FROM usuariost u
-            JOIN roles r ON u.rol_id = r.id
-            WHERE u.id = $1
-        `, [decodedToken.id]);
-
-        if (userResult.rows.length === 0) {
-            return next(new Error('Authentication error: User not found.'));
-        }
-        socket.data.user = userResult.rows[0];
-        next();
-    } catch (err) {
-        console.error('Socket authentication error:', err.message);
-        return next(new Error('Authentication error: Invalid token.'));
-    }
-});
-
-// ===== SOCKET.IO CONNECTION LOGIC (DATABASE PERSISTENT) =====
-io.on('connection', async (socket) => {
-    console.log(`🔌 Usuario autenticado conectado: ${socket.data.user.nombre} (ID: ${socket.id})`);
-
-    const isOrganizer = ['ADMIN', 'COORDINADOR PROYECTO'].includes(socket.data.user.rol_nombre);
-
-    try {
-        // --- Autorización para participar ---
-        const participantCheck = await db.query('SELECT 1 FROM amigo_secreto_participantes WHERE usuario_id = $1', [socket.data.user.id]);
-        const isParticipant = participantCheck.rows.length > 0;
-
-        if (!isParticipant && !isOrganizer) {
-            console.log(`🚫 Usuario no autorizado ${socket.data.user.nombre} intentó conectarse.`);
-            socket.emit('error_event', { message: 'No estás en la lista de participantes para este evento.' });
-            return socket.disconnect();
-        }
-
-        // Add user to the in-memory list of connected participants if not already there
-        if (!participantesSorteo.some(p => p.id === socket.data.user.id)) {
-            participantesSorteo.push(socket.data.user);
-        }
-
-        // --- Fetch initial state from DB ---
-        const eventoResult = await db.query('SELECT es_sorteo_iniciado FROM amigo_secreto_eventos WHERE id = 1');
-        const esSorteoIniciado = eventoResult.rows[0]?.es_sorteo_iniciado || false;
-
-        let asignacion = null;
-        if (esSorteoIniciado) {
-            const asignacionResult = await db.query(
-                `SELECT u.nombre, asa.receptor_usuario_id AS receptor_id
-                 FROM amigo_secreto_asignaciones asa
-                 JOIN usuariost u ON asa.receptor_usuario_id = u.id
-                 WHERE asa.evento_id = 1 AND asa.dador_usuario_id = $1`,
-                [socket.data.user.id]
-            );
-            if (asignacionResult.rows.length > 0) {
-                const row = asignacionResult.rows[0];
-                asignacion = {
-                    nombre: row.nombre,
-                    receptorId: row.receptor_id
-                };
-            }
-        }
-
-        socket.emit('initial_state', {
-            participantes: participantesSorteo,
-            esSorteoIniciado,
-            isOrganizer,
-            asignacion: asignacion // Send existing assignment if any
-        });
-
-        // Broadcast updated participant list to everyone
-        io.emit('update_participants', participantesSorteo);
-
-    } catch (dbError) {
-        console.error("Error fetching initial state from DB:", dbError);
-        socket.emit('error_event', { message: 'Error de servidor al obtener estado del sorteo.' });
-    }
-
-    // --- Event Handlers ---
-
-    socket.on('start_draw', async () => {
-        const isOrganizer = ['ADMIN', 'COORDINADOR PROYECTO'].includes(socket.data.user.rol_nombre);
-        if (!isOrganizer) { // Re-check authorization
-            return socket.emit('error_event', { message: 'No tienes permiso para iniciar el sorteo.' });
-        }
-
-        const client = await db.connect();
-        try {
-            // Obtener participantes autorizados desde la base de datos
-            const { rows: authorizedParticipants } = await client.query(`
-                SELECT u.id, u.nombre, u.ap_paterno FROM usuariost u
-                JOIN amigo_secreto_participantes asp ON u.id = asp.usuario_id
-            `);
-
-            if (authorizedParticipants.length < 2) {
-                return io.emit('error_event', { message: 'No hay suficientes participantes seleccionados para el sorteo (mínimo 2).' });
-            }
-
-            console.log(`🎉 Sorteo iniciado por ${socket.data.user.nombre}! con ${authorizedParticipants.length} participantes.`);
-
-            let receptores = [...authorizedParticipants];
-            let asignacionesTemp = {};
-            let asignacionValida = false;
-            let attempts = 0;
-
-            // Lógica de Sorteo Robusta (Fisher-Yates shuffle con prevención de auto-asignación)
-            // Se hacen varios intentos por si el shuffle inicial produce auto-asignaciones
-            while (!asignacionValida && attempts < 100) { // Limitar intentos para evitar bucles infinitos
-                // 1. Barajar la lista de receptores
-                for (let i = receptores.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [receptores[i], receptores[j]] = [receptores[j], receptores[i]];
-                }
-
-                // 2. Verificar si hay auto-asignaciones
-                let hayConflictos = false;
-                for (let i = 0; i < authorizedParticipants.length; i++) {
-                    if (authorizedParticipants[i].id === receptores[i].id) {
-                        hayConflictos = true;
-                        // Intentar una corrección local simple para este conflicto
-                        if (receptores.length > 1) { // Asegurarse de que haya al menos dos elementos para intercambiar
-                            const swapIndex = (i + 1) % receptores.length; // Intercambiar con el siguiente (circularmente)
-                            [receptores[i], receptores[swapIndex]] = [receptores[swapIndex], receptores[i]];
-                            // Tras el swap, se podría haber creado un nuevo conflicto o no haber resuelto el original.
-                            // Por simplicidad, si hubo un conflicto y lo 'corregimos', asumimos que necesitamos verificar de nuevo o re-shuffulear.
-                            // Si se quiere una solución 100% garantizada en pocos pasos, se requiere un algoritmo más complejo (e.g., matching bipartito).
-                            // Para 'amigo secreto', re-shuffulear es aceptable si hay pocos conflictos.
-                        }
-                    }
-                }
-
-                // Después de intentar corregir conflictos, re-verificamos la validez de toda la asignación
-                hayConflictos = false;
-                for (let i = 0; i < authorizedParticipants.length; i++) {
-                    if (authorizedParticipants[i].id === receptores[i].id) {
-                        hayConflictos = true;
-                        break;
-                    }
-                }
-
-                if (!hayConflictos) {
-                    asignacionValida = true;
-                }
-                attempts++;
-            }
-
-            if (!asignacionValida) {
-                // Si después de varios intentos no se logra, emitir un error.
-                console.error('No se pudo realizar el sorteo sin conflictos después de múltiples intentos.');
-                return io.emit('error_event', { message: 'No se pudo realizar el sorteo sin conflictos. Inténtalo de nuevo.' });
-            }
-
-            // 3. Crear el mapa de asignaciones
-            authorizedParticipants.forEach((dador, index) => {
-                const receptor = receptores[index];
-                asignacionesTemp[dador.id] = { nombre: `${receptor.nombre} ${receptor.ap_paterno}`.trim(), id: receptor.id };
-            });
-
-            // 4. Guardar en la Base de Datos
-            await client.query('BEGIN');
-            await client.query('DELETE FROM amigo_secreto_asignaciones WHERE evento_id = 1'); // Limpiar asignaciones anteriores
-
-            const insertPromises = Object.entries(asignacionesTemp).map(([dadorId, receptorData]) => {
-                return client.query(
-                    'INSERT INTO amigo_secreto_asignaciones (evento_id, dador_usuario_id, receptor_usuario_id) VALUES (1, $1, $2)',
-                    [parseInt(dadorId, 10), receptorData.id]
-                );
-            });
-            await Promise.all(insertPromises);
-
-            await client.query('UPDATE amigo_secreto_eventos SET es_sorteo_iniciado = true WHERE id = 1');
-            await client.query('COMMIT');
-            console.log("Asignaciones guardadas en la DB.");
-
-            // 5. Notificar a los clientes
-            io.emit('draw_started'); // Notificar que el sorteo ha comenzado
-
-            setTimeout(async () => {
-                const allSockets = await io.fetchSockets();
-                allSockets.forEach(sock => {
-                    const miAsignacion = asignacionesTemp[sock.data.user.id];
-                    if (miAsignacion) {
-                        sock.emit('final_assignment', { nombre: `¡${miAsignacion.nombre}!`, receptorId: miAsignacion.id });
-                    }
-                });
-            }, 3000); // Delay para la animación
-
-        } catch (e) {
-            await client.query('ROLLBACK');
-            console.error('Fallo la transacción del sorteo:', e);
-            io.emit('error_event', { message: 'Error en el servidor al realizar el sorteo.' });
-            socket.emit('error_event', { message: 'Error en el servidor al reiniciar el sorteo.' });
-        } finally {
-            client.release();
-        }
-    });
-
-    socket.on('disconnect', () => {
-        console.log(`🔌 Usuario desconectado: ${socket.data.user.nombre}`);
-        participantesSorteo = participantesSorteo.filter(p => p.id !== socket.data.user.id);
-        io.emit('update_participants', participantesSorteo);
-    });
-});
 
 // --------------------- BADENES ---------------------
 
@@ -5684,37 +4497,6 @@ async function uploadBadenesExcelToVercelBlob(fileBuffer, originalFilename, proj
     }
 }
 
-app.get('/api/proyectos/:projectId/badenes', authenticateToken, async (req, res) => {
-    try {
-        const { projectId } = req.params;
-        const badenes = await badenesService.getBadenesByProjectId(projectId);
-        res.json(badenes);
-    } catch (error) {
-        console.error('Error al obtener badenes:', error);
-        res.status(500).json({ error: 'Error al obtener badenes.' });
-    }
-});
-
-app.post('/api/badenes', authenticateToken, async (req, res) => {
-    try {
-        const newBaden = await badenesService.createBaden(req.body);
-        res.status(201).json(newBaden);
-    } catch (error) {
-        console.error('Error al crear badén:', error);
-        res.status(500).json({ error: 'Error al crear badén.' });
-    }
-});
-
-app.put('/api/badenes/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const updatedBaden = await badenesService.updateBaden(id, req.body);
-        res.json(updatedBaden);
-    } catch (error) {
-        console.error('Error al actualizar badén:', error);
-        res.status(500).json({ error: 'Error al actualizar badén.' });
-    }
-});
 
 app.post('/api/badenes/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
     try {
@@ -5949,10 +4731,6 @@ app.delete('/api/muros/project/:projectId', authenticateToken, async (req, res) 
 });
 
 // --------------------- SENALES PREVENTIVAS ---------------------
-app.post('/api/senales-preventivas/upload-excel', upload.single('file'), senalesPreventivasService.uploadExcel);
-app.get('/api/senales-preventivas/:projectId', senalesPreventivasService.getAllSenales);
-app.post('/api/senales-preventivas', senalesPreventivasService.createSenal); // Optional manual create
-app.put('/api/senales-preventivas/:id', senalesPreventivasService.updateSenal);
 app.delete('/api/senales-preventivas/:id', senalesPreventivasService.deleteSenal);
 
 // --------------------- ZONAS CRITICAS ---------------------
@@ -5967,19 +4745,6 @@ app.get('/api/zonas-criticas/by-project/:projectId', authenticateToken, async (r
     }
 });
 
-app.post('/api/zonas-criticas/upload-excel', authenticateToken, upload.single('excelFile'), async (req, res) => {
-    const { projectId, utmZone } = req.body;
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-    }
-    try {
-        const result = await zonasCriticasService.processExcelAndSaveZonasCriticas(req.file.buffer, projectId, utmZone);
-        res.json(result);
-    } catch (err) {
-        console.error('Error uploading zonas criticas excel:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
 
 app.post('/api/zonas-criticas', authenticateToken, async (req, res) => {
     try {
@@ -5991,16 +4756,6 @@ app.post('/api/zonas-criticas', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/api/zonas-criticas/:id', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const updatedZona = await zonasCriticasService.updateZonaCritica(id, req.body);
-        res.json(updatedZona);
-    } catch (err) {
-        console.error('Error updating zona critica:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
 
 app.delete('/api/zonas-criticas/project/:projectId', authenticateToken, async (req, res) => {
     const { projectId } = req.params;
@@ -6129,9 +4884,6 @@ app.delete('/api/interferencias/project/:projectId', authenticateToken, async (r
     }
 });
 
-const PORT = process.env.PORT || 5000;
-
-
 
 // --------------------- DELETE ROUTES FOR INDIVIDUAL ELEMENTS ---------------------
 
@@ -6180,15 +4932,6 @@ app.delete('/api/muros/:id', authenticateToken, async (req, res) => {
 });
 
 // ZONAS CRITICAS
-app.delete('/api/zonas-criticas/:id', authenticateToken, async (req, res) => {
-    try {
-        await zonasCriticasService.deleteZonaCritica(req.params.id);
-        res.json({ message: 'Eliminado correctamente' });
-    } catch (err) {
-        console.error(`Error deleting zona critica ${req.params.id}:`, err);
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // ESTRUCTURAS EXISTENTES
 app.delete('/api/estructuras-existentes/:id', authenticateToken, async (req, res) => {
@@ -6197,35 +4940,6 @@ app.delete('/api/estructuras-existentes/:id', authenticateToken, async (req, res
         res.json({ message: 'Eliminado correctamente' });
     } catch (err) {
         console.error(`Error deleting estructura existente ${req.params.id}:`, err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// HITOS KILOMETRICOS
-app.post('/api/hitos-kilometricos', authenticateToken, hitosKilometricosService.createHito);
-app.put('/api/hitos-kilometricos/:id', authenticateToken, hitosKilometricosService.updateHito);
-app.delete('/api/hitos-kilometricos/:id', authenticateToken, hitosKilometricosService.deleteHito);
-
-// SENALES INFORMATIVAS
-app.post('/api/senales-informativas', authenticateToken, senalesInformativasService.createSenal);
-app.put('/api/senales-informativas/:id', authenticateToken, senalesInformativasService.updateSenal);
-app.delete('/api/senales-informativas/:id', authenticateToken, senalesInformativasService.deleteSenal);
-
-// --------------------------------------------------------------------------------
-
-// NUEVA RUTA: Obtener proyectos detallados asignados (usada por DashboardSuelos y otros)
-app.get('/api/proyectos/assigned-detailed', authenticateToken, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        if (req.user.rol_nombre === 'ADMIN') {
-            const allProjects = await proyectosService.getDetailedProyectos();
-            res.json(allProjects);
-        } else {
-            const userProjects = await proyectosService.getAssignedDetailedProyectos(userId);
-            res.json(userProjects);
-        }
-    } catch (err) {
-        console.error('Error getting assigned detailed projects:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -7233,35 +5947,8 @@ app.patch('/api/proyectos/:id/geologia-capas/:tabName/drive-link', authenticateT
 
 // EXPORTACIÓN DE ENSAYOS DE TRAMO (POR TRAMO SELECCIONADO)
 // Exportar un tipo específico de ensayo para un tramo
-app.get('/api/tramos/:tramoId/ensayos/export-excel/:tipoEnsayoId', authenticateToken, async (req, res) => {
-    const { tramoId, tipoEnsayoId } = req.params;
-    try {
-        const fileBuffer = await ensayosService.exportEnsayosToExcelByTipo(tramoId, tipoEnsayoId);
-        console.log(`[EXPORT ROUTE] Buffer generado para tipo ${tipoEnsayoId}: ${fileBuffer ? fileBuffer.length : 0} bytes`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="ensayos_tramo_${tramoId}_tipo_${tipoEnsayoId}.xlsx"`);
-        res.end(fileBuffer, 'binary');
-    } catch (err) {
-        console.error(`Error al exportar ensayos de tramo ${tramoId} por tipo ${tipoEnsayoId}:`, err);
-        res.status(500).json({ error: 'Error al exportar ensayos a Excel', details: err.message });
-    }
-});
 
 // Exportar todos los ensayos de un tramo
-app.get('/api/tramos/:tramoId/ensayos/export-excel', authenticateToken, async (req, res) => {
-    const { tramoId } = req.params;
-    console.log(`[DEBUG ROUTE] Recibida petición de exportación total para tramo: ${tramoId}`);
-    try {
-        const fileBuffer = await ensayosService.exportEnsayosToExcelByTramo(tramoId);
-        console.log(`[EXPORT ROUTE] Buffer generado para tramo ${tramoId}: ${fileBuffer ? fileBuffer.length : 0} bytes`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="todos_los_ensayos_tramo_${tramoId}.xlsx"`);
-        res.end(fileBuffer, 'binary');
-    } catch (err) {
-        console.error(`Error al exportar todos los ensayos del tramo ${tramoId}:`, err);
-        res.status(500).json({ error: 'Error al exportar ensayos a Excel', details: err.message });
-    }
-});
 
 // EXPORTACIÓN DE ENSAYOS DE CANTERAS (POR TIPO DE ENSAYO GLOBAL)
 app.get('/api/ensayos/canteras/exportar-tipo/:tipoEnsayoId', authenticateToken, async (req, res) => {
@@ -7629,6 +6316,238 @@ app.post('/api/clasificar-suelo-nlp-batch', authenticateToken, async (req, res) 
         res.status(500).json({ error: error.message || 'Error interno del servidor NLP.' });
     }
 });
+
+// Socket.IO CORS options should be defined before io initialization
+const ioCorsOptions = {
+    origin: function (origin, callback) {
+        if (!origin || whitelist.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST']
+};
+
+const io = new Server(server, {
+    cors: ioCorsOptions
+});
+
+// In-memory data for Amigo Secreto - only for tracking currently connected users
+let participantesSorteo = [];
+
+// ===== SOCKET.IO AUTHENTICATION MIDDLEWARE =====
+io.use(async (socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        return next(new Error('Authentication error: Token not provided.'));
+    }
+    try {
+        const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+        const userResult = await db.query(`
+            SELECT u.id, u.nombre, u.ap_paterno, r.nombre as rol_nombre, u.rol_id
+            FROM usuariost u
+            JOIN roles r ON u.rol_id = r.id
+            WHERE u.id = $1
+        `, [decodedToken.id]);
+
+        if (userResult.rows.length === 0) {
+            return next(new Error('Authentication error: User not found.'));
+        }
+        socket.data.user = userResult.rows[0];
+        next();
+    } catch (err) {
+        console.error('Socket authentication error:', err.message);
+        return next(new Error('Authentication error: Invalid token.'));
+    }
+});
+
+// ===== SOCKET.IO CONNECTION LOGIC (DATABASE PERSISTENT) =====
+io.on('connection', async (socket) => {
+    console.log(`🔌 Usuario autenticado conectado: ${socket.data.user.nombre} (ID: ${socket.id})`);
+
+    const isOrganizer = ['ADMIN', 'COORDINADOR PROYECTO'].includes(socket.data.user.rol_nombre);
+
+    try {
+        // --- Autorización para participar ---
+        const participantCheck = await db.query('SELECT 1 FROM amigo_secreto_participantes WHERE usuario_id = $1', [socket.data.user.id]);
+        const isParticipant = participantCheck.rows.length > 0;
+
+        if (!isParticipant && !isOrganizer) {
+            console.log(`🚫 Usuario no autorizado ${socket.data.user.nombre} intentó conectarse.`);
+            socket.emit('error_event', { message: 'No estás en la lista de participantes para este evento.' });
+            return socket.disconnect();
+        }
+
+        // Add user to the in-memory list of connected participants if not already there
+        if (!participantesSorteo.some(p => p.id === socket.data.user.id)) {
+            participantesSorteo.push(socket.data.user);
+        }
+
+        // --- Fetch initial state from DB ---
+        const eventoResult = await db.query('SELECT es_sorteo_iniciado FROM amigo_secreto_eventos WHERE id = 1');
+        const esSorteoIniciado = eventoResult.rows[0]?.es_sorteo_iniciado || false;
+
+        let asignacion = null;
+        if (esSorteoIniciado) {
+            const asignacionResult = await db.query(
+                `SELECT u.nombre, asa.receptor_usuario_id AS receptor_id
+                 FROM amigo_secreto_asignaciones asa
+                 JOIN usuariost u ON asa.receptor_usuario_id = u.id
+                 WHERE asa.evento_id = 1 AND asa.dador_usuario_id = $1`,
+                [socket.data.user.id]
+            );
+            if (asignacionResult.rows.length > 0) {
+                const row = asignacionResult.rows[0];
+                asignacion = {
+                    nombre: row.nombre,
+                    receptorId: row.receptor_id
+                };
+            }
+        }
+
+        socket.emit('initial_state', {
+            participantes: participantesSorteo,
+            esSorteoIniciado,
+            isOrganizer,
+            asignacion: asignacion // Send existing assignment if any
+        });
+
+        // Broadcast updated participant list to everyone
+        io.emit('update_participants', participantesSorteo);
+
+    } catch (dbError) {
+        console.error("Error fetching initial state from DB:", dbError);
+        socket.emit('error_event', { message: 'Error de servidor al obtener estado del sorteo.' });
+    }
+
+    // --- Event Handlers ---
+
+    socket.on('start_draw', async () => {
+        const isOrganizer = ['ADMIN', 'COORDINADOR PROYECTO'].includes(socket.data.user.rol_nombre);
+        if (!isOrganizer) { // Re-check authorization
+            return socket.emit('error_event', { message: 'No tienes permiso para iniciar el sorteo.' });
+        }
+
+        const client = await db.connect();
+        try {
+            // Obtener participantes autorizados desde la base de datos
+            const { rows: authorizedParticipants } = await client.query(`
+                SELECT u.id, u.nombre, u.ap_paterno FROM usuariost u
+                JOIN amigo_secreto_participantes asp ON u.id = asp.usuario_id
+            `);
+
+            if (authorizedParticipants.length < 2) {
+                return io.emit('error_event', { message: 'No hay suficientes participantes seleccionados para el sorteo (mínimo 2).' });
+            }
+
+            console.log(`🎉 Sorteo iniciado por ${socket.data.user.nombre}! con ${authorizedParticipants.length} participantes.`);
+
+            let receptores = [...authorizedParticipants];
+            let asignacionesTemp = {};
+            let asignacionValida = false;
+            let attempts = 0;
+
+            // Lógica de Sorteo Robusta (Fisher-Yates shuffle con prevención de auto-asignación)
+            // Se hacen varios intentos por si el shuffle inicial produce auto-asignaciones
+            while (!asignacionValida && attempts < 100) { // Limitar intentos para evitar bucles infinitos
+                // 1. Barajar la lista de receptores
+                for (let i = receptores.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [receptores[i], receptores[j]] = [receptores[j], receptores[i]];
+                }
+
+                // 2. Verificar si hay auto-asignaciones
+                let hayConflictos = false;
+                for (let i = 0; i < authorizedParticipants.length; i++) {
+                    if (authorizedParticipants[i].id === receptores[i].id) {
+                        hayConflictos = true;
+                        // Intentar una corrección local simple para este conflicto
+                        if (receptores.length > 1) { // Asegurarse de que haya al menos dos elementos para intercambiar
+                            const swapIndex = (i + 1) % receptores.length; // Intercambiar con el siguiente (circularmente)
+                            [receptores[i], receptores[swapIndex]] = [receptores[swapIndex], receptores[i]];
+                            // Tras el swap, se podría haber creado un nuevo conflicto o no haber resuelto el original.
+                            // Por simplicidad, si hubo un conflicto y lo 'corregimos', asumimos que necesitamos verificar de nuevo o re-shuffulear.
+                            // Si se quiere una solución 100% garantizada en pocos pasos, se requiere un algoritmo más complejo (e.g., matching bipartito).
+                            // Para 'amigo secreto', re-shuffulear es aceptable si hay pocos conflictos.
+                        }
+                    }
+                }
+
+                // Después de intentar corregir conflictos, re-verificamos la validez de toda la asignación
+                hayConflictos = false;
+                for (let i = 0; i < authorizedParticipants.length; i++) {
+                    if (authorizedParticipants[i].id === receptores[i].id) {
+                        hayConflictos = true;
+                        break;
+                    }
+                }
+
+                if (!hayConflictos) {
+                    asignacionValida = true;
+                }
+                attempts++;
+            }
+
+            if (!asignacionValida) {
+                // Si después de varios intentos no se logra, emitir un error.
+                console.error('No se pudo realizar el sorteo sin conflictos después de múltiples intentos.');
+                return io.emit('error_event', { message: 'No se pudo realizar el sorteo sin conflictos. Inténtalo de nuevo.' });
+            }
+
+            // 3. Crear el mapa de asignaciones
+            authorizedParticipants.forEach((dador, index) => {
+                const receptor = receptores[index];
+                asignacionesTemp[dador.id] = { nombre: `${receptor.nombre} ${receptor.ap_paterno}`.trim(), id: receptor.id };
+            });
+
+            // 4. Guardar en la Base de Datos
+            await client.query('BEGIN');
+            await client.query('DELETE FROM amigo_secreto_asignaciones WHERE evento_id = 1'); // Limpiar asignaciones anteriores
+
+            const insertPromises = Object.entries(asignacionesTemp).map(([dadorId, receptorData]) => {
+                return client.query(
+                    'INSERT INTO amigo_secreto_asignaciones (evento_id, dador_usuario_id, receptor_usuario_id) VALUES (1, $1, $2)',
+                    [parseInt(dadorId, 10), receptorData.id]
+                );
+            });
+            await Promise.all(insertPromises);
+
+            await client.query('UPDATE amigo_secreto_eventos SET es_sorteo_iniciado = true WHERE id = 1');
+            await client.query('COMMIT');
+            console.log("Asignaciones guardadas en la DB.");
+
+            // 5. Notificar a los clientes
+            io.emit('draw_started'); // Notificar que el sorteo ha comenzado
+
+            setTimeout(async () => {
+                const allSockets = await io.fetchSockets();
+                allSockets.forEach(sock => {
+                    const miAsignacion = asignacionesTemp[sock.data.user.id];
+                    if (miAsignacion) {
+                        sock.emit('final_assignment', { nombre: `¡${miAsignacion.nombre}!`, receptorId: miAsignacion.id });
+                    }
+                });
+            }, 3000); // Delay para la animación
+
+        } catch (e) {
+            await client.query('ROLLBACK');
+            console.error('Fallo la transacción del sorteo:', e);
+            io.emit('error_event', { message: 'Error en el servidor al realizar el sorteo.' });
+            socket.emit('error_event', { message: 'Error en el servidor al reiniciar el sorteo.' });
+        } finally {
+            client.release();
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log(`🔌 Usuario desconectado: ${socket.data.user.nombre}`);
+        participantesSorteo = participantesSorteo.filter(p => p.id !== socket.data.user.id);
+        io.emit('update_participants', participantesSorteo);
+    });
+});
+
+const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Listening on port ${PORT}`);
