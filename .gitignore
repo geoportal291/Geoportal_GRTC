@@ -37,3 +37,11 @@ geoportal-drive-b69b29c0bfa0.json
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Artefactos locales de prueba y sesión
+/scratch/
+.zcode/
+
+# Python
+__pycache__/
+*.pyc

@@ -1580,6 +1580,19 @@ app.get('/api/ensayos/details/:id', async (req, res) => {
     }
 });
 
+// Informe Excel (.xlsm con macros) del ensayo — replica el formato del reporte PDF
+app.get('/api/ensayos/:id/reporte-excel', async (req, res) => {
+    try {
+        const { generarInformeExcel } = require('./services/reporteExcelService');
+        await generarInformeExcel(req, res);
+    } catch (err) {
+        console.error(`Error al generar informe Excel del ensayo ${req.params.id}:`, err);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Error generando el informe Excel', details: err.message });
+        }
+    }
+});
+
 // Create or Update a full assay
 app.post('/api/ensayos/full-assay', authenticateToken, async (req, res) => {
     try {
