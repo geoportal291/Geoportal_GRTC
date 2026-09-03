@@ -218,7 +218,8 @@ const whitelist = [
     'http://localhost:3000',
     'https://geoportalbetav3.fly.dev',
     'https://geoportal-frontend-1.fly.dev',
-    'https://geoportal-frontend-julio.fly.dev'
+    'https://geoportal-frontend-julio.fly.dev',
+    'https://geoportal-frontend-setiembre-cied.fly.dev'
 ];
 
 const corsOptions = {
