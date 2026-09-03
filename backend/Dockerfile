@@ -40,6 +40,10 @@ COPY python_worker/requirements.txt ./python_worker/requirements.txt
 
 # OPTIMIZATION: Install CPU-only PyTorch first to avoid massive CUDA download
 # This reduces image size from >3GB to ~500MB
+# Actualizar pip primero: typing_extensions>=4.16 trae metadatos que el pip
+# viejo de Debian rechaza y hace fallar la instalación de torch
+RUN pip3 install --no-cache-dir --upgrade pip
+
 RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --break-system-packages
 
 RUN pip3 install --no-cache-dir -r python_worker/requirements.txt --break-system-packages
