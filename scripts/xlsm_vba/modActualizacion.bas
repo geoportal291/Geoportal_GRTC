@@ -247,7 +247,7 @@ Public Sub AsegurarBoton()
     On Error GoTo 0
     If shp Is Nothing Then
         Set shp = wsR.Shapes.AddFormControl(xlButtonControl, _
-            wsR.Cells(1, 6).Left + 8, wsR.Cells(1, 1).Top + 2, 150, 24)
+            wsR.Cells(1, 9).Left - 160, wsR.Cells(8, 1).Top + 1, 152, 20)
         shp.Name = "BTN_ACTUALIZAR"
         shp.TextFrame.Characters.Text = "ACTUALIZAR REPORTE"
         shp.TextFrame.Characters.Font.Size = 9

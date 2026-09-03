@@ -79,7 +79,7 @@ def construir():
     for c in range(2, 10):
         celda(ws, fila, c, fill=OSCURO)
     cod = ws.cell(row=fila, column=2)
-    cod.font = F_TAB_HEAD
+    cod.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
     cod.alignment = AL_CENTRO
     mapa.append(("meta.codigo_ensayo", f"B{fila}", "texto", None))
     ws.row_dimensions[fila].height = 20
@@ -130,6 +130,8 @@ def construir():
              ("meta.progresiva", f"E{fila}", "texto", None),
              ("meta.estrato", f"G{fila}", "texto", None),
              ("meta.lado", f"I{fila}", "texto", None)]
+    for _f in range(10, 15):            # ficha técnica compacta y pareja
+        ws.row_dimensions[_f].height = 20
     ws.row_dimensions[15].height = 6
 
     # ----------------------------------------------------- pesos y datos

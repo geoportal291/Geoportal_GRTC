@@ -146,7 +146,6 @@ def hoja_specs_graficos(wb, series, nombre_hoja="_GRAFICOS"):
 def cabecera_institucional(ws, ultima_col):
     """Encabezado GRTC con logos y lema (filas 1-6)."""
     col_letra_fin = get_column_letter(ultima_col)
-    col_medio = get_column_letter(max(3, (ultima_col - 1) // 2))
     lineas = [
         ("GOBIERNO REGIONAL CUSCO", F_TITULO),
         ("Gerencia Regional de Transportes y Comunicaciones Cusco", F_SUBTITULO),
@@ -155,11 +154,14 @@ def cabecera_institucional(ws, ultima_col):
         ("Laboratorio de Mecánica de Suelos, Materiales y Pavimentos", F_SUBTITULO),
         ("«Año de la recuperación y consolidación de la economía peruana»", F_LEMA),
     ]
+    alturas = [20, 15, 12, 12, 14, 12]
     for i, (texto, fuente) in enumerate(lineas, start=1):
-        ws.merge_cells(f"C{i}:{col_letra_fin if ultima_col <= 7 else 'F'}{i}")
+        # el texto central se combina C:G para que quepa en una sola línea
+        ws.merge_cells(f"C{i}:G{i}")
         cel = ws.cell(row=i, column=3, value=texto)
         cel.font = fuente
         cel.alignment = AL_CENTRO
+        ws.row_dimensions[i].height = alturas[i - 1]
     for fila_logo, ruta in ((1, LOGO_GRTC), (1, LOGO_CUSCO)):
         if os.path.exists(ruta):
             from openpyxl.drawing.image import Image as XImage
@@ -169,8 +171,6 @@ def cabecera_institucional(ws, ultima_col):
             img.width = int(img.width * escala)
             img.anchor = "A1" if ruta == LOGO_GRTC else f"{get_column_letter(ultima_col - 1)}1"
             ws.add_image(img)
-    for f in range(1, 7):
-        ws.row_dimensions[f].height = 15
 
 
 def preparar_hoja(ws, anchos, orient="portrait"):
