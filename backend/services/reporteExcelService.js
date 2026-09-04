@@ -207,6 +207,7 @@ async function generarInformeExcel(req, res) {
             const archivo = `Informe_${NOMBRE_TIPO[configKey]}_${(payload.meta.codigo_ensayo || ensayoId)
                 .toString().replace(/[^\w.-]+/g, "_")}.xlsm`;
             res.setHeader("Content-Type", "application/vnd.ms-excel.sheet.macroEnabled.12");
+            res.setHeader("Cache-Control", "no-store");
             res.setHeader(
                 "Content-Disposition",
                 `attachment; filename="${archivo}"; filename*=UTF-8''${encodeURIComponent(archivo)}`

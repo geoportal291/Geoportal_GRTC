@@ -462,7 +462,7 @@ export default function EnsayoReporteImprimible() {
       } catch (e) { /* solicitante opcional */ }
       const resp = await axios.get(
         `${API_URL}/api/ensayos/${ensayoId}/reporte-excel`,
-        { responseType: "blob", headers: getAuthHeaders(), params: { solicitante } }
+        { responseType: "blob", headers: getAuthHeaders(), params: { solicitante, _: Date.now() } }
       );
       const disp = resp.headers?.["content-disposition"] || "";
       let nombre = `Informe_Excel_${ensayoId}.xlsm`;

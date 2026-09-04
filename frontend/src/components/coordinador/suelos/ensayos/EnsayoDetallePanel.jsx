@@ -454,7 +454,7 @@ export default function EnsayoDetallePanel({
         {
           responseType: "blob",
           headers: getAuthHeaders(),
-          params: { solicitante },
+          params: { solicitante, _: Date.now() },
         }
       );
       const disp = resp.headers?.["content-disposition"] || "";
