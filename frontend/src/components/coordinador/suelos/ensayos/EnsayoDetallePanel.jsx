@@ -317,6 +317,7 @@ export default function EnsayoDetallePanel({
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [descargandoExcel, setDescargandoExcel] = useState(false);
   const [formConfig, setFormConfig] = useState(null);
   const [resultsConfig, setResultsConfig] = useState(null);
   const [tableConfig, setTableConfig] = useState(null);
@@ -435,6 +436,57 @@ export default function EnsayoDetallePanel({
       window.open(`/coordinador/suelos/ensayos/${ensayoId}/reporte`, "_blank");
     }
   }, [ensayoId]);
+
+  const handleExportarExcel = useCallback(async () => {
+    if (!ensayoId || descargandoExcel) return;
+    try {
+      setDescargandoExcel(true);
+      let solicitante = "";
+      try {
+        const user = JSON.parse(localStorage.getItem("user") || "null");
+        if (user) {
+          solicitante = [user.nombre, user.ap_paterno, user.ap_materno]
+            .filter(Boolean).join(" ");
+        }
+      } catch (e) { /* solicitante opcional */ }
+      const resp = await axios.get(
+        `${API_URL}/api/ensayos/${ensayoId}/reporte-excel`,
+        {
+          responseType: "blob",
+          headers: getAuthHeaders(),
+          params: { solicitante, _: Date.now() },
+        }
+      );
+      const disp = resp.headers?.["content-disposition"] || "";
+      let nombre = `Informe_Excel_${ensayoId}.xlsm`;
+      const mUtf8 = disp.match(/filename\*=UTF-8''([^;]+)/i);
+      const mSimple = disp.match(/filename="?([^";]+)"?/i);
+      if (mUtf8) nombre = decodeURIComponent(mUtf8[1]);
+      else if (mSimple) nombre = mSimple[1];
+      const url = URL.createObjectURL(
+        new Blob([resp.data], { type: resp.headers["content-type"] || "application/octet-stream" })
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Error al generar informe Excel:", e);
+      let msg = "No se pudo generar el informe Excel.";
+      if (e.response?.data instanceof Blob) {
+        try {
+          const j = JSON.parse(await e.response.data.text());
+          if (j.error) msg = `${j.error}${j.details ? `: ${j.details}` : ""}`;
+        } catch (_) { /* respuesta no JSON */ }
+      }
+      alertify.error(msg);
+    } finally {
+      setDescargandoExcel(false);
+    }
+  }, [ensayoId, descargandoExcel, API_URL, getAuthHeaders]);
 
   useEffect(() => {
     let ignore = false;
@@ -791,6 +843,15 @@ export default function EnsayoDetallePanel({
             <i className="fas fa-file-pdf"></i>
             <span className="btn-text">Exportar Informe</span>
           </button>
+          <button
+            onClick={handleExportarExcel}
+            className="btn-pdf-premium btn-excel-premium btn-expandable"
+            disabled={descargandoExcel}
+            title="Descargar informe en Excel con macros"
+          >
+            <i className={`fas ${descargandoExcel ? "fa-spinner fa-spin" : "fa-file-excel"}`}></i>
+            <span className="btn-text">Informe Excel</span>
+          </button>
           <h2 className="ensayo-title">
             Detalles del Ensayo: {ensayoDetails?.nombre_ensayo}
           </h2>
@@ -812,6 +873,14 @@ export default function EnsayoDetallePanel({
             className="btn-pdf-premium ms-auto me-2"
           >
             <i className="fas fa-file-pdf"></i> Informe PDF
+          </button>
+          <button
+            onClick={handleExportarExcel}
+            className="btn-pdf-premium btn-excel-premium me-2"
+            disabled={descargandoExcel}
+            title="Descargar informe en Excel con macros"
+          >
+            <i className={`fas ${descargandoExcel ? "fa-spinner fa-spin" : "fa-file-excel"}`}></i> Informe Excel
           </button>
         </div>
       )}

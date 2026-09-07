@@ -114,6 +114,7 @@ export default function EnsayoReporteImprimible() {
   // Barra lateral, miniaturas y buscador de hojas en caliente
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [activePageIndex, setActivePageIndex] = useState(0);
+  const [descargandoExcel, setDescargandoExcel] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
   const API_URL = process.env.REACT_APP_API_BASE ?? "";
@@ -445,6 +446,54 @@ export default function EnsayoReporteImprimible() {
       }
     };
   }, [loading, error, allPagesToRender.length]);
+
+
+  const handleExportarExcel = async () => {
+    if (descargandoExcel) return;
+    try {
+      setDescargandoExcel(true);
+      let solicitante = "";
+      try {
+        const user = JSON.parse(localStorage.getItem("user") || "null");
+        if (user) {
+          solicitante = [user.nombre, user.ap_paterno, user.ap_materno]
+            .filter(Boolean).join(" ");
+        }
+      } catch (e) { /* solicitante opcional */ }
+      const resp = await axios.get(
+        `${API_URL}/api/ensayos/${ensayoId}/reporte-excel`,
+        { responseType: "blob", headers: getAuthHeaders(), params: { solicitante, _: Date.now() } }
+      );
+      const disp = resp.headers?.["content-disposition"] || "";
+      let nombre = `Informe_Excel_${ensayoId}.xlsm`;
+      const mUtf8 = disp.match(/filename\*=UTF-8''([^;]+)/i);
+      const mSimple = disp.match(/filename="?([^";]+)"?/i);
+      if (mUtf8) nombre = decodeURIComponent(mUtf8[1]);
+      else if (mSimple) nombre = mSimple[1];
+      const url = URL.createObjectURL(
+        new Blob([resp.data], { type: resp.headers["content-type"] || "application/octet-stream" })
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Error al generar informe Excel:", e);
+      let msg = "No se pudo generar el informe Excel.";
+      if (e.response?.data instanceof Blob) {
+        try {
+          const j = JSON.parse(await e.response.data.text());
+          if (j.error) msg = `${j.error}${j.details ? `: ${j.details}` : ""}`;
+        } catch (_) { /* respuesta no JSON */ }
+      }
+      alertify.error(msg);
+    } finally {
+      setDescargandoExcel(false);
+    }
+  };
 
   const handlePrint = () => {
     setIsPrinting(true);
@@ -1428,6 +1477,11 @@ export default function EnsayoReporteImprimible() {
             <button onClick={handlePrint} className="btn-reporte-vertical btn-success-reporte" title="Imprimir / Guardar PDF">
               <i className="fas fa-print icon-vertical"></i>
               <span className="text-vertical">Imprimir</span>
+            </button>
+
+            <button onClick={handleExportarExcel} className="btn-reporte-vertical btn-excel-reporte" title="Descargar informe Excel con macros" disabled={descargandoExcel}>
+              <i className={`fas ${descargandoExcel ? "fa-spinner fa-spin" : "fa-file-excel"} icon-vertical`}></i>
+              <span className="text-vertical">Excel</span>
             </button>
           </div>
 

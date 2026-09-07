@@ -218,7 +218,8 @@ const whitelist = [
     'http://localhost:3000',
     'https://geoportalbetav3.fly.dev',
     'https://geoportal-frontend-1.fly.dev',
-    'https://geoportal-frontend-julio.fly.dev'
+    'https://geoportal-frontend-julio.fly.dev',
+    'https://geoportal-frontend-setiembre-cied.fly.dev'
 ];
 
 const corsOptions = {
@@ -1577,6 +1578,19 @@ app.get('/api/ensayos/details/:id', async (req, res) => {
     } catch (err) {
         console.error(`Error al obtener detalles para el ensayo ${id}:`, err);
         res.status(500).json({ error: 'Error al obtener detalles del ensayo', details: err.message });
+    }
+});
+
+// Informe Excel (.xlsm con macros) del ensayo — replica el formato del reporte PDF
+app.get('/api/ensayos/:id/reporte-excel', async (req, res) => {
+    try {
+        const { generarInformeExcel } = require('./services/reporteExcelService');
+        await generarInformeExcel(req, res);
+    } catch (err) {
+        console.error(`Error al generar informe Excel del ensayo ${req.params.id}:`, err);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Error generando el informe Excel', details: err.message });
+        }
     }
 });
 

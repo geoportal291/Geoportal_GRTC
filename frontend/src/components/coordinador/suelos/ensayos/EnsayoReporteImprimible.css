@@ -1411,3 +1411,21 @@
     object-fit: contain !important;
   }
 }
+/* Botón Excel (informe .xlsm con macros) de la barra lateral */
+.btn-excel-reporte {
+  background-color: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+.btn-excel-reporte:hover:not(:disabled) {
+  background-color: #10b981;
+  color: white;
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+}
+
+.btn-excel-reporte:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
