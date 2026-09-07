@@ -40,6 +40,10 @@ COPY python_worker/requirements.txt ./python_worker/requirements.txt
 
 # OPTIMIZATION: Install CPU-only PyTorch first to avoid massive CUDA download
 # This reduces image size from >3GB to ~500MB
+# typing_extensions se pre-instala desde PyPI: el índice de PyTorch publica
+# la 4.16 con metadatos rotos ("inconsistent Name") y rompe el build
+RUN pip3 install --no-cache-dir "typing_extensions==4.12.2" --break-system-packages
+
 RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --break-system-packages
 
 RUN pip3 install --no-cache-dir -r python_worker/requirements.txt --break-system-packages
