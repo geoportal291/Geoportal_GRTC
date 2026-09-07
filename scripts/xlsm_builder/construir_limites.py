@@ -158,7 +158,7 @@ def construir():
 
     # ------------------------------------ sección Límite Líquido (MTC E 110)
     fila = 16
-    banda(ws, fila, 1, 9, "DETERMINACIÓN DEL LÍMITE LÍQUIDO - MTC E 110")
+    banda(ws, fila, 1, 4, "DETERMINACIÓN DEL LÍMITE LÍQUIDO - MTC E 110")
     f_head = fila + 1
     params_ll = [
         ("Cod. Recipiente", "input", None),
@@ -191,8 +191,8 @@ def construir():
 
     f_ll_res = filas_ll[8] + 1
     par_ficha(ws, f_ll_res, 1, "LÍMITE LÍQUIDO (L.L.)", fill_val=RESULT_FILL)
-    ws.merge_cells(start_row=f_ll_res, start_column=2, end_row=f_ll_res, end_column=5)
-    for c in range(2, 6):
+    ws.merge_cells(start_row=f_ll_res, start_column=2, end_row=f_ll_res, end_column=4)
+    for c in range(2, 5):
         celda(ws, f_ll_res, c, fill=RESULT_FILL)
     cel = ws.cell(row=f_ll_res, column=2)
     cel.value = (f"=IF(COUNTIF(B{f_golpes}:D{f_golpes},25)>0,"
@@ -206,7 +206,7 @@ def construir():
 
     # ------------------------------------ sección Límite Plástico (MTC E 111)
     fila = f_ll_res + 2
-    banda(ws, fila, 1, 9, "DETERMINACIÓN DEL LÍMITE PLÁSTICO - MTC E 111")
+    banda(ws, fila, 1, 3, "DETERMINACIÓN DEL LÍMITE PLÁSTICO - MTC E 111")
     params_lp = [
         ("Cod. Recipiente", "input", None),
         ("Peso del recipiente (g)", "input", FMT_PESO),
@@ -235,8 +235,8 @@ def construir():
 
     f_lp_res = f_hum2 + 1
     par_ficha(ws, f_lp_res, 1, "LÍMITE PLÁSTICO (L.P.)", fill_val=RESULT_FILL)
-    ws.merge_cells(start_row=f_lp_res, start_column=2, end_row=f_lp_res, end_column=5)
-    for c in range(2, 6):
+    ws.merge_cells(start_row=f_lp_res, start_column=2, end_row=f_lp_res, end_column=3)
+    for c in range(2, 4):
         celda(ws, f_lp_res, c, fill=RESULT_FILL)
     cel = ws.cell(row=f_lp_res, column=2)
     cel.value = f"=IF(COUNT(B{f_hum2}:C{f_hum2})>0,AVERAGE(B{f_hum2}:C{f_hum2}),0)"
@@ -247,8 +247,8 @@ def construir():
 
     f_ip_res = f_lp_res + 1
     par_ficha(ws, f_ip_res, 1, "ÍNDICE DE PLASTICIDAD (I.P.)", fill_val=RESULT_FILL)
-    ws.merge_cells(start_row=f_ip_res, start_column=2, end_row=f_ip_res, end_column=5)
-    for c in range(2, 6):
+    ws.merge_cells(start_row=f_ip_res, start_column=2, end_row=f_ip_res, end_column=3)
+    for c in range(2, 4):
         celda(ws, f_ip_res, c, fill=RESULT_FILL)
     cel = ws.cell(row=f_ip_res, column=2)
     cel.value = f"=IF(AND(ISNUMBER({f_ll_res_celda}),ISNUMBER({f_lp_res_celda})),{f_ll_res_celda}-{f_lp_res_celda},\"\")"
@@ -279,7 +279,7 @@ def construir():
 
     # ------------------------------------ sección Humedad Natural (MTC E 108)
     fila = f_ip_tab + len(IP_DESCRIPCION) + 2
-    banda(ws, fila, 1, 9, "ENSAYO DE HUMEDAD NATURAL - MTC E 108")
+    banda(ws, fila, 1, 3, "ENSAYO DE HUMEDAD NATURAL - MTC E 108")
     params_hn = [
         ("Cod. Cápsula", "input", None),
         ("Peso de cápsula (g)", "input", FMT_PESO),
@@ -309,8 +309,8 @@ def construir():
 
     f_hn_res = f_hum3 + 1
     par_ficha(ws, f_hn_res, 1, "HUMEDAD NATURAL (w %)", fill_val=RESULT_FILL)
-    ws.merge_cells(start_row=f_hn_res, start_column=2, end_row=f_hn_res, end_column=5)
-    for c in range(2, 6):
+    ws.merge_cells(start_row=f_hn_res, start_column=2, end_row=f_hn_res, end_column=3)
+    for c in range(2, 4):
         celda(ws, f_hn_res, c, fill=RESULT_FILL)
     cel = ws.cell(row=f_hn_res, column=2)
     cel.value = f"=IF(COUNT(B{f_hum3}:C{f_hum3})>0,AVERAGE(B{f_hum3}:C{f_hum3}),0)"

@@ -136,20 +136,29 @@ def construir():
     ws.row_dimensions[19].height = 6
 
     # ----------------------------------------------- tabla datos de ensayo
+    # cada muestra ocupa un par de columnas para llegar al ancho A..I
+    PARES = [(2, 3), (4, 5), (6, 7), (8, 9)]   # B:C, D:E, F:G, H:I
+    LETRAS = ["B", "D", "F", "H"]               # celda ancla del valor
+
     def tabla_dos(ws, fila_h, titulo, params, calc_fill=True):
         banda(ws, fila_h - 1, 1, 9, titulo)
         celda(ws, fila_h, 1, "Parámetro", font=F_TAB_HEAD, fill=OSCURO)
-        for j, m in enumerate(MUESTRAS):
-            celda(ws, fila_h, 2 + j, m, font=F_TAB_HEAD, fill=OSCURO)
+        for j, (c1, c2) in enumerate(PARES):
+            ws.merge_cells(start_row=fila_h, start_column=c1, end_row=fila_h, end_column=c2)
+            celda(ws, fila_h, c1, MUESTRAS[j], font=F_TAB_HEAD, fill=OSCURO)
+            celda(ws, fila_h, c2, fill=OSCURO)
         ws.row_dimensions[fila_h].height = 16
         filas = {}
         for i, (etiqueta, es_calc, formato) in enumerate(params):
             f = fila_h + 1 + i
             celda(ws, f, 1, etiqueta)
-            for j in range(4):
-                cel = celda(ws, f, 2 + j)
+            for (c1, c2) in PARES:
+                ws.merge_cells(start_row=f, start_column=c1, end_row=f, end_column=c2)
+                cel = celda(ws, f, c1)
+                celda(ws, f, c2)
                 if es_calc and calc_fill:
                     cel.fill = PatternFill("solid", fgColor=CALC_FILL)
+                    ws.cell(row=f, column=c2).fill = PatternFill("solid", fgColor=CALC_FILL)
                     cel.font = F_TAB_CALC
                 if formato:
                     cel.number_format = formato
@@ -166,7 +175,7 @@ def construir():
     ])
     f_molde, f_molde_suelo, f_agua_inc = f_datos[0], f_datos[1], f_datos[2]
     f_suelo_hum, f_vol, f_dens_hum = f_datos[3], f_datos[4], f_datos[5]
-    for j, col in enumerate(("B", "C", "D", "E")):
+    for j, col in enumerate(LETRAS):
         n = j + 1
         mapa += [
             (f"datos.tables.datos_ensayo.m{n}.masa_molde", f"{col}{f_molde}", "numero", FMT_PESO),
@@ -194,7 +203,7 @@ def construir():
     f_caps, f_mcap = f_h[0], f_h[1]
     f_mcap_hum, f_mcap_sec = f_h[2], f_h[3]
     f_magua, f_msec, f_humedad, f_dens_sec = f_h[4], f_h[5], f_h[6], f_h[7]
-    for j, col in enumerate(("B", "C", "D", "E")):
+    for j, col in enumerate(LETRAS):
         n = j + 1
         mapa += [
             (f"datos.tables.calculo_humedad.m{n}.capsula_nro", f"{col}{f_caps}", "texto", None),
@@ -212,8 +221,8 @@ def construir():
     # ------------------------------------------------------- resultados MDS/OCH
     f_mds = f_dens_sec + 2
     par_ficha(ws, f_mds, 1, "MÁXIMA DENSIDAD SECA (g/cm³)", fill_val=RESULT_FILL)
-    ws.merge_cells(start_row=f_mds, start_column=2, end_row=f_mds, end_column=5)
-    for c in range(2, 6):
+    ws.merge_cells(start_row=f_mds, start_column=2, end_row=f_mds, end_column=9)
+    for c in range(2, 10):
         celda(ws, f_mds, c, fill=RESULT_FILL)
     cel = ws.cell(row=f_mds, column=2)
     cel.value = "=IF(ISNUMBER(_DATOS!$F$5),_DATOS!$F$5,\"\")"
@@ -223,8 +232,8 @@ def construir():
 
     f_och = f_mds + 1
     par_ficha(ws, f_och, 1, "HUMEDAD ÓPTIMA (%)", fill_val=RESULT_FILL)
-    ws.merge_cells(start_row=f_och, start_column=2, end_row=f_och, end_column=5)
-    for c in range(2, 6):
+    ws.merge_cells(start_row=f_och, start_column=2, end_row=f_och, end_column=9)
+    for c in range(2, 10):
         celda(ws, f_och, c, fill=RESULT_FILL)
     cel = ws.cell(row=f_och, column=2)
     cel.value = "=IF(ISNUMBER(_DATOS!$F$4),_DATOS!$F$4,\"\")"
@@ -242,7 +251,7 @@ def construir():
     hd = wb.create_sheet("_DATOS")
     hd.sheet_state = "hidden"
     # puntos de ensayo (x = humedad, y = densidad seca)
-    for j, col in enumerate(("B", "C", "D", "E")):
+    for j, col in enumerate(LETRAS):
         r = 3 + j
         hd[f"A{r}"] = (f"=IF(OR(NOT(ISNUMBER(Reporte!{col}{f_humedad})),"
                        f"NOT(ISNUMBER(Reporte!{col}{f_dens_sec})),Reporte!{col}{f_dens_sec}=0),"

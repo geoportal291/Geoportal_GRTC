@@ -206,7 +206,7 @@ def construir():
     # las fórmulas de pesos dependen de la tabla de tamices (siguiente sección)
     # fila de inicio de la tabla:
     f_tab_head = 24
-    banda(ws, 23, 1, 9, "TAMIZADO")
+    banda(ws, 23, 1, 6, "TAMIZADO")
 
     # ------------------------------------------------------- tabla de tamices
     cab_cols = ["Tamiz", "mm", "Masa (g)", "% Ret Parcial", "% Ret Acum.", "% que Pasa"]
