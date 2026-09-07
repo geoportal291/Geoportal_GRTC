@@ -132,6 +132,10 @@ def construir():
              ("meta.lado", f"I{fila}", "texto", None)]
     for _f in range(10, 15):            # ficha técnica compacta y pareja
         ws.row_dimensions[_f].height = 20
+    # valores de ubicación/coordenadas a 9pt: sin saltos de línea que
+    # descuadren la ficha ("La Convención", "0.00 - 0.20 m")
+    for _ref in ("C11", "E11", "G11", "I11", "C13", "F13", "I13"):
+        ws[_ref].font = Font(name="Calibri", size=9, bold=True)
     ws.row_dimensions[15].height = 6
 
     # ----------------------------------------------------- pesos y datos
