@@ -127,7 +127,7 @@ def construir():
     par_ficha(ws, fila, 1, "COMPACTACIÓN")
     par_ficha(ws, fila, 2, "Golpes/capa:")
     par_ficha(ws, fila, 4, "N° capas:")
-    par_ficha(ws, fila, 6, "Martillo (lb):")
+    par_ficha(ws, fila, 6, "Martillo (lb):", ancho_val=3)
     mapa += [
         ("datos.general_fields.golpes_por_capa", f"C{fila}", "numero", "0"),
         ("datos.general_fields.numero_capas", f"E{fila}", "numero", "0"),

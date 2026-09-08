@@ -86,11 +86,13 @@ def par_ficha(ws, fila, col, etiqueta, valor=None, ancho_val=1, formato=None,
               editable=False, fill_val=BLANCO):
     """Par etiqueta:valor en línea (ficha técnica). La etiqueta ocupa 1 col."""
     celda(ws, fila, col, etiqueta, font=F_LAB, fill=FICHA_FILL, align=AL_DER)
+    # los estilos se aplican ANTES de combinar: openpyxl no persiste
+    # bordes asignados a celdas ya combinadas (MergedCell)
+    for cc in range(col + 1, col + ancho_val + 1):
+        celda(ws, fila, cc, fill=fill_val)
     if ancho_val > 1:
         ws.merge_cells(start_row=fila, start_column=col + 1,
                        end_row=fila, end_column=col + ancho_val)
-        for cc in range(col + 1, col + ancho_val + 1):
-            celda(ws, fila, cc, fill=fill_val)
     cel = ws.cell(row=fila, column=col + 1)
     if valor is not None:
         cel.value = valor
