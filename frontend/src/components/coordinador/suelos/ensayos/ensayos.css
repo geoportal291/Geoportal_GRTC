@@ -802,3 +802,12 @@ button.select-estado-premium {
   cursor: wait !important;
   transform: none !important;
 }
+
+/* Centrar números y textos en inputs y outputs de las tablas del ensayo */
+.ensayo-dynamic-table input.form-control,
+.ensayo-dynamic-table .numeric-input,
+.ensayo-dynamic-table .numeric-output,
+.ensayo-dynamic-table td input,
+.ensayo-dynamic-table td output {
+  text-align: center !important;
+}
