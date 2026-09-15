@@ -10,6 +10,7 @@ import EstratoItem from '../estratos/EstratoItem'; // Import the new EstratoItem
 import PerfilEstratigraficoModal from '../estratos/PerfilEstratigraficoModal'; // Import the new PerfilEstratigraficoModal component
 import VisorGraficosProgresivaModal from '../estratos/VisorGraficosProgresivaModal'; // NEW: Import VisorGraficosProgresivaModal
 import ProgresivaImageGalleryModal from './ProgresivaImageGalleryModal'; // Importar Modal de Galería
+import PerfilEstratigraficoVista from './perfil_estratigrafico/PerfilEstratigraficoVista'; // Visor de perfil estratigráfico estilo Autodesk
 import '../estratos/PerfilEstratigrafico.css'; // Estilos premium para el modal de gestión de estratos
 
 // --- Pagination Component ---
@@ -322,9 +323,14 @@ export default function GestorDeTramosActual() {
                 setSubProgresivas(processedData);
                 setTotalProgresivas(responseData.total);
                 setCurrentPage(page);
+                // Retorna los datos para que el deep-link pueda verificar
+                // si la progresiva quedó realmente cargada en esta página.
+                // Backwards-compatible: los callers que ignoran el return no se afectan.
+                return { list: processedData, total: responseData.total };
             } else {
                 setSubProgresivas([]);
                 setTotalProgresivas(0);
+                return { list: [], total: 0 };
             }
         } catch (err) {
             if (err.message !== 'Token no proporcionado') {
@@ -332,6 +338,7 @@ export default function GestorDeTramosActual() {
                 setSubProgresivas([]);
                 setTotalProgresivas(0);
             }
+            return { list: [], total: 0 };
         } finally {
             setLoadingProgresivas(false);
         }
@@ -449,17 +456,34 @@ export default function GestorDeTramosActual() {
                         try {
                             const headers = getAuthHeaders();
                             const res = await axios.get(`${API_URL}/api/progresivas/${pId}/page`, { headers });
-                            const { page } = res.data;
+                            let { page } = res.data;
+                            if (!page || page < 1) page = 1;
 
-                            // Always fetch to ensure data is fresh and page is correct
-                            await fetchProgresivas(tramoToSelect.id, page);
+                            let result = await fetchProgresivas(tramoToSelect.id, page);
+                            let target = (result?.list || []).find(pr => Number(pr.id) === pId);
 
-                            // Expand and Select
-                            setExpandedProgresivas(prev => ({ ...prev, [pId]: true }));
-                            if (estratoId) setExpandedEstratos(prev => ({ ...prev, [estratoId]: true }));
-                            setSelectedProgresivaId(pId);
+                            // VERIFICACIÓN: si la progresiva no está en la página calculada, buscarla
+                            // en el resto de páginas (robusto ante páginas mal calculadas por el backend)
+                            if (!target && result?.total > 0) {
+                                const totalPagesCount = Math.ceil(result.total / itemsPerPage);
+                                for (let pg = 1; pg <= totalPagesCount && !target; pg++) {
+                                    if (pg === page) continue;
+                                    const retry = await fetchProgresivas(tramoToSelect.id, pg);
+                                    target = (retry?.list || []).find(pr => Number(pr.id) === pId);
+                                }
+                                if (target) console.log('[DeepLink] Progresiva encontrada en página alternativa (página calculada incorrecta).');
+                            }
 
-                            // Clean URL state
+                            if (target) {
+                                // Expand and Select (solo si la progresiva quedó realmente renderizada)
+                                setExpandedProgresivas(prev => ({ ...prev, [pId]: true }));
+                                if (estratoId) setExpandedEstratos(prev => ({ ...prev, [estratoId]: true }));
+                                setSelectedProgresivaId(pId);
+                            } else {
+                                console.warn('[DeepLink] No se encontró la progresiva', pId, 'en ninguna página del tramo', tramoToSelect.id);
+                            }
+
+                            // Clean URL state (una sola vez, al final)
                             navigate(location.pathname, { replace: true, state: {} });
                         } catch (err) {
                             console.error('Error handling deep link (new tramo):', err);
@@ -478,30 +502,58 @@ export default function GestorDeTramosActual() {
                         const headers = getAuthHeaders();
                         // Verify page just in case
                         const res = await axios.get(`${API_URL}/api/progresivas/${pId}/page`, { headers });
-                        const { page } = res.data;
+                        let { page } = res.data;
+                        if (!page || page < 1) page = 1;
 
-                        // Force fetch if page is different OR to ensure children are loaded
+                        let target = null;
+                        let total = 0;
+
                         if (page !== currentPage) {
-                            await fetchProgresivas(tramoSeleccionado.id, page);
+                            // Force fetch if page is different OR to ensure children are loaded
+                            const result = await fetchProgresivas(tramoSeleccionado.id, page);
+                            total = result?.total || 0;
+                            target = (result?.list || []).find(pr => Number(pr.id) === pId);
+                        } else {
+                            // Misma página: verificar contra el listado ya cargado (closure)
+                            total = totalProgresivas;
+                            target = (subProgresivas || []).find(pr => Number(pr.id) === pId);
                         }
 
-                        // Force expansion logic even if already expanded (to trigger scroll effects if needed)
-                        setExpandedProgresivas(prev => ({ ...prev, [pId]: true }));
-                        if (estratoId) setExpandedEstratos(prev => ({ ...prev, [estratoId]: true }));
-                        setSelectedProgresivaId(pId);
-
-                        // Trigger Scroll
-                        setTimeout(() => {
-                            const el = progresivaRefs.current[pId];
-
-                            if (el) {
-                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                // Add a temporary highlight class if desired
-                                el.classList.add('highlight-pulse');
-                                setTimeout(() => el.classList.remove('highlight-pulse'), 2000);
+                        // VERIFICACIÓN: si la progresiva no está, buscarla en el resto de páginas
+                        // (robusto ante páginas mal calculadas por el backend)
+                        if (!target && total > 0) {
+                            const totalPagesCount = Math.ceil(total / itemsPerPage);
+                            for (let pg = 1; pg <= totalPagesCount && !target; pg++) {
+                                if (pg === page) continue;
+                                const retry = await fetchProgresivas(tramoSeleccionado.id, pg);
+                                total = retry?.total || total;
+                                target = (retry?.list || []).find(pr => Number(pr.id) === pId);
                             }
-                        }, 800); // Increased delay slightly to be safe
+                            if (target) console.log('[DeepLink] Progresiva encontrada en página alternativa (tramo ya seleccionado).');
+                        }
 
+                        if (target) {
+                            // Force expansion logic even if already expanded (to trigger scroll effects if needed)
+                            setExpandedProgresivas(prev => ({ ...prev, [pId]: true }));
+                            if (estratoId) setExpandedEstratos(prev => ({ ...prev, [estratoId]: true }));
+                            setSelectedProgresivaId(pId);
+
+                            // Trigger Scroll (solo si la progresiva quedó realmente renderizada)
+                            setTimeout(() => {
+                                const el = progresivaRefs.current[pId];
+
+                                if (el) {
+                                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    // Add a temporary highlight class if desired
+                                    el.classList.add('highlight-pulse');
+                                    setTimeout(() => el.classList.remove('highlight-pulse'), 2000);
+                                }
+                            }, 800); // Increased delay slightly to be safe
+                        } else {
+                            console.warn('[DeepLink] No se encontró la progresiva', pId, 'en ninguna página del tramo', tramoSeleccionado.id);
+                        }
+
+                        // Clean URL state (una sola vez, al final)
                         navigate(location.pathname, { replace: true, state: {} });
                     } catch (e) { console.error('Error handling deep link (existing tramo):', e); }
                 };
@@ -888,6 +940,7 @@ export default function GestorDeTramosActual() {
                             </div>
                             <div className="tabs">
                                 <div className={`tab ${activeTab === 'progresivas' ? 'active' : ''}`} onClick={() => handleTabChange('progresivas')}>Progresivas</div>
+                                <div className={`tab ${activeTab === 'perfil' ? 'active' : ''}`} onClick={() => handleTabChange('perfil')}>Perfil Estratigráfico</div>
                                 <div className={`tab ${activeTab === 'listado' ? 'active' : ''}`} onClick={() => handleTabChange('listado')}>Listado General</div>
                             </div>
                             {activeTab === 'progresivas' && (
@@ -920,6 +973,11 @@ export default function GestorDeTramosActual() {
                                         totalPages={totalPages}
                                         onPageChange={handlePageChange}
                                     />
+                                </div>
+                            )}
+                            {activeTab === 'perfil' && (
+                                <div className="tab-content active">
+                                    <PerfilEstratigraficoVista tramo={tramoSeleccionado} />
                                 </div>
                             )}
                             {activeTab === 'listado' && (

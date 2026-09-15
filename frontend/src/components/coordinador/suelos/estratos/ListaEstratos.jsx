@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import alertify from 'alertifyjs';
-import './GestorProyectos.css';
-import ListaEnsayos from './ListaEnsayos';
+import '../ui/GestorProyectos.css';
+import ListaEnsayos from '../ensayos/ListaEnsayos';
 import FormularioEstrato from './FormularioEstrato'; // Importar el formulario de estrato
 
 const ListaEstratos = ({ parentEntity }) => {

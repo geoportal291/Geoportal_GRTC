@@ -62,6 +62,7 @@ function parseObjSync(objData, projectZone, processCoordinates, utmToWgs84) {
     const rawIndicesTriangulos = [];
     let minZ = Infinity;
     let maxZ = -Infinity;
+    let lastWgs = null;
 
     const lines = objData.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -72,7 +73,12 @@ function parseObjSync(objData, projectZone, processCoordinates, utmToWgs84) {
             const vy = parseFloat(parts[1]);
             const vz = parseFloat(parts[3]);
             const coords = processCoordinates(vx, vy, projectZone);
-            const { lon, lat } = utmToWgs84(coords.x, coords.y, projectZone);
+            // utmToWgs84 puede devolver null (coordenada inválida): se reutiliza la última
+            // conversión válida para NO romper el orden/indexado de vértices del OBJ.
+            const wgs = utmToWgs84(coords.x, coords.y, projectZone) || lastWgs;
+            if (wgs) lastWgs = wgs;
+            const lon = wgs ? wgs.lon : 0;
+            const lat = wgs ? wgs.lat : 0;
             rawVertices.push({ x: coords.x, y: coords.y, z: vz, lon, lat });
             if (vz < minZ) minZ = vz;
             if (vz > maxZ) maxZ = vz;
@@ -121,11 +127,35 @@ export default function useModelLoader({ userToken, processCoordinates, utmToWgs
             if (!objData) throw new Error('No se encontró el contenido OBJ en los metadatos de la DB.');
         } else {
             const proxyUrl = `${API_BASE}/api/modelos-3d/${modelo.id}/obj`;
-            const resp = await fetch(proxyUrl, {
-                headers: { Authorization: `Bearer ${userToken}` },
-                signal: controller.signal,
-            });
-            if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+            // Reintentos con backoff: cubren dos escenarios de Fly.io:
+            //   1) 502/530/5xx transitorios (reinicio o saturación de la máquina).
+            //   2) Arranque en frío (~10-15 s): el proxy responde sin cabeceras CORS y el
+            //      fetch lanza TypeError "Failed to fetch" — también se reintenta.
+            // Presupuesto total ~25 s (4 reintentos: 2s, 4s, 8s, 8s). Los 4xx no se reintentan.
+            const RETRY_DELAYS_MS = [2000, 4000, 8000, 8000];
+            let resp = null;
+            let ultimoError = null;
+            for (let intento = 0; intento <= RETRY_DELAYS_MS.length; intento++) {
+                try {
+                    resp = await fetch(proxyUrl, {
+                        headers: { Authorization: `Bearer ${userToken}` },
+                        signal: controller.signal,
+                    });
+                    if (resp.ok || resp.status < 500) break;
+                    ultimoError = new Error(`HTTP error! status: ${resp.status}`);
+                } catch (e) {
+                    if (e.name === 'AbortError') throw e;
+                    ultimoError = e;
+                    resp = null;
+                }
+                if (intento < RETRY_DELAYS_MS.length) {
+                    await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[intento]));
+                }
+            }
+            if (!resp || !resp.ok) {
+                if (!resp && ultimoError) throw ultimoError;
+                throw new Error(`HTTP error! status: ${resp ? resp.status : 'sin respuesta'}`);
+            }
             objData = await resp.text();
         }
 

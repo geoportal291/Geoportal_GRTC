@@ -75,12 +75,13 @@ export const applyDioramaCameraMode = ({ controller, mode, dioramaSize }) => {
     const config = isLocal ? CAMERA_CONFIG.local : CAMERA_CONFIG.global;
     const safeDioramaSize = safeNumber(dioramaSize, DEFAULT_DIORAMA_SIZE);
 
-    // Habilitar todos los inputs de una vez (más legible que seis líneas separadas)
+    // Habilitar todos los inputs globales de una vez; en modo LOCAL se desactivan pan y
+    // tilt-libre porque romperían el anclaje orbital de la cámara al ancla del diorama.
     Object.assign(controller, {
         enableInputs: true,
-        enableLook: true,
+        enableLook: !isLocal,
         enableTilt: true,
-        enableTranslate: true,
+        enableTranslate: !isLocal,
         enableRotate: true,
         enableZoom: true,
         inertiaSpin: config.inertia,

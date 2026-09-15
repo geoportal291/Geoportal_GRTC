@@ -1,68 +1,34 @@
 /* eslint-disable no-restricted-globals, no-undef */
 /**
  * objParser.worker.js
- * Web Worker para parsear archivos OBJ en un hilo separado.
+ * Web Worker para parsear archivos OBJ en un hilo separado con precisión geodésica exacta (proj4).
  * Elimina el freeze de 700ms+ en el hilo principal del visor 3D.
- *
- * NOTA: Este archivo usa `self` y globals de Web Worker.
- * El comentario eslint-disable al inicio es intencional y necesario.
- *
- * Mensajes recibidos:
- *   { type: 'PARSE', payload: { objData: string, projectZone: string } }
- *
- * Mensajes emitidos:
- *   { type: 'PROGRESS', payload: { percent: number } }
- *   { type: 'DONE',     payload: { rawVertices, rawIndicesTriangulos, rawMinZ, rawMaxZ } }
- *   { type: 'ERROR',    payload: { message: string } }
  */
+import proj4 from 'proj4';
 
-// ─── Conversión UTM → WGS84 (matemática directa, sin dependencias externas) ──
-// No usamos importScripts porque este worker se carga como módulo ES.
-// La aproximación tiene error < 1mm en la zona central de cada huso UTM.
+const UTM_17S = "+proj=utm +zone=17 +south +datum=WGS84 +units=m +no_defs";
+const UTM_18S = "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs";
+const UTM_19S = "+proj=utm +zone=19 +south +datum=WGS84 +units=m +no_defs";
+const WGS84 = "EPSG:4326";
 
-function utmToWgs84Worker(easting, northing, zoneStr) {
-    const zoneNumber = parseInt(zoneStr, 10) || 18;
-    // Hemisferio Sur: restar 10,000,000 m al northing
-    const N = northing - 10_000_000;
-    const E = easting - 500_000;
+function utmToWgs84Exact(easting, northing, zoneStr) {
+    const numX = parseFloat(easting);
+    const numY = parseFloat(northing);
 
-    const k0     = 0.9996;
-    const a      = 6_378_137.0;
-    const eccSq  = 0.00669438;
-    const e1Sq   = eccSq / (1 - eccSq);
+    if (!Number.isFinite(numX) || !Number.isFinite(numY) || (numX === 0 && numY === 0)) {
+        return { lon: 0, lat: 0 };
+    }
 
-    const M      = N / k0;
-    const mu     = M / (a * (1 - eccSq / 4 - 3 * eccSq ** 2 / 64 - 5 * eccSq ** 3 / 256));
+    let projection = UTM_18S;
+    if (zoneStr === '17S') projection = UTM_17S;
+    else if (zoneStr === '19S') projection = UTM_19S;
+    else if (zoneStr === '18S') projection = UTM_18S;
+    else {
+        projection = numX < 400000 ? UTM_19S : UTM_18S;
+    }
 
-    const phi1 = mu
-        + (3 * eccSq / 2 - 27 * eccSq ** 3 / 32) * Math.sin(2 * mu)
-        + (21 * eccSq ** 2 / 16 - 55 * eccSq ** 4 / 32) * Math.sin(4 * mu)
-        + (151 * eccSq ** 3 / 96) * Math.sin(6 * mu);
-
-    const N1  = a / Math.sqrt(1 - eccSq * Math.sin(phi1) ** 2);
-    const T1  = Math.tan(phi1) ** 2;
-    const C1  = e1Sq * Math.cos(phi1) ** 2;
-    const R1  = a * (1 - eccSq) / (1 - eccSq * Math.sin(phi1) ** 2) ** 1.5;
-    const D   = E / (N1 * k0);
-
-    const lat = phi1
-        - (N1 * Math.tan(phi1) / R1) * (
-            D ** 2 / 2
-            - (5 + 3 * T1 + 10 * C1 - 4 * C1 ** 2 - 9 * e1Sq) * D ** 4 / 24
-            + (61 + 90 * T1 + 298 * C1 + 45 * T1 ** 2 - 252 * e1Sq - 3 * C1 ** 2) * D ** 6 / 720
-        );
-
-    const lon0  = (zoneNumber - 1) * 6 - 180 + 3;
-    const lonRad = (
-        D
-        - (1 + 2 * T1 + C1) * D ** 3 / 6
-        + (5 - 2 * C1 + 28 * T1 - 3 * C1 ** 2 + 8 * e1Sq + 24 * T1 ** 2) * D ** 5 / 120
-    ) / Math.cos(phi1);
-
-    return {
-        lat: lat * 180 / Math.PI,
-        lon: lon0 + lonRad * 180 / Math.PI,
-    };
+    const [lon, lat] = proj4(projection, WGS84, [numX, numY]);
+    return { lon, lat };
 }
 
 function processCoordinatesWorker(x, y) {
@@ -73,7 +39,7 @@ function processCoordinatesWorker(x, y) {
 // ─── Parser Principal ─────────────────────────────────────────────────────────
 
 function parseObj(objData, projectZone) {
-    const rawVertices          = [];
+    const rawVertices = [];
     const rawIndicesTriangulos = [];
     let minZ = Infinity;
     let maxZ = -Infinity;
@@ -89,12 +55,12 @@ function parseObj(objData, projectZone) {
         if (ch0 === 118 && ch1 === 32) {
             // 'v ' — vértice
             const parts = lines[i].trim().split(/\s+/);
-            const vx    = parseFloat(parts[2]);
-            const vy    = parseFloat(parts[1]);
-            const vz    = parseFloat(parts[3]);
+            const vx = parseFloat(parts[2]);
+            const vy = parseFloat(parts[1]);
+            const vz = parseFloat(parts[3]);
 
             const { x, y } = processCoordinatesWorker(vx, vy);
-            const { lon, lat } = utmToWgs84Worker(x, y, projectZone);
+            const { lon, lat } = utmToWgs84Exact(x, y, projectZone);
 
             rawVertices.push({ x, y, z: vz, lon, lat });
             if (vz < minZ) minZ = vz;

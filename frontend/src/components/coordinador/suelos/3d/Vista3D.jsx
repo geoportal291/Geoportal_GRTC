@@ -7,16 +7,24 @@ import { applyDioramaCameraMode, clampDioramaCamera, getDioramaLocalMaxHeight } 
 import { useAuth } from '../../../../data/contexts/AuthContext';
 import useProgresivasData from '../../../../hooks/useProgresivasData';
 import useModelLoader from './useModelLoader';
+import useTerrainElevation from './hooks/useTerrainElevation';
+import { BoreholeBatchEngine } from './engines/BoreholeBatchEngine';
+import { MapEngineFactory } from './core/MapEngineFactory';
+import LayersControlPanel from './components/LayersControlPanel';
+import Progressivas3DSelector from './components/Progressivas3DSelector';
+import BoreholeDetailTooltip from './components/BoreholeDetailTooltip';
 import './Vista3D.css';
 
-const Cesium = window.Cesium;
+const getCesium = () => window.Cesium || {};
+const Cesium = getCesium();
 const API_BASE = process.env.REACT_APP_API_BASE || process.env.REACT_APP_API_URL || 'https://backendgeoportal.fly.dev';
 const ION_TOKEN = process.env.REACT_APP_CESIUM_TOKEN;
 
 export default function Vista3D() {
     const { selectedProjectId, user } = useAuth();
 
-    // DESESTRUCTURACIÓN SEGURA
+    // DESESTRUCTURACIÓN SEGURA DE CESIUM CON FALLBACK
+    const C = window.Cesium || {};
     const {
         Viewer, Ion, Terrain, Cartesian3, Cartographic, Geometry, GeometryAttribute,
         ComponentDatatype, PrimitiveType, BoundingSphere, GeometryPipeline, Primitive,
@@ -25,7 +33,7 @@ export default function Vista3D() {
         ArcGisMapServerImageryProvider, UrlTemplateImageryProvider,
         sampleTerrainMostDetailed, EllipsoidTerrainProvider, ClippingPolygon, ClippingPolygonCollection,
         KmlDataSource, LabelStyle, VerticalOrigin, Cartesian2
-    } = Cesium;
+    } = C;
 
     const [soilData, setSoilData] = useState(null); // NUEVO: Mover aquí para evitar TDZ
 
@@ -39,7 +47,7 @@ export default function Vista3D() {
     const [isGlobalLoading, setIsGlobalLoading] = useState(false);
     const [selectedModelo, setSelectedModelo] = useState(null);
     const [mapOpacity, setMapOpacity] = useState(1.0);
-    const [zExag, setZExag] = useState(15.0);
+    const [zExag, setZExag] = useState(1.0); // 1x = escala real (exageración unificada malla/calicatas/muro/globo)
     const [isViewerReady, setIsViewerReady] = useState(false); // NUEVO: Control de ciclo de vida del visor
     const [isRightOpen, setIsRightOpen] = useState(false);
     const [isLeftOpen, setIsLeftOpen] = useState(false);
@@ -53,6 +61,12 @@ export default function Vista3D() {
     const [dioramaSize, setDioramaSize] = useState(500);
     const [cameraMode, setCameraMode] = useState('orbit');
     const [modelMeshVersion, setModelMeshVersion] = useState(0);
+    const [selectedEstratoTooltip, setSelectedEstratoTooltip] = useState(null);
+    const [tooltipPosition, setTooltipPosition] = useState(null);
+    // Base vertical (MSL) alrededor de la cual se exagera TODO el escenario (malla, calicatas, muro y globo).
+    const [zBase, setZBase] = useState(0);
+    // Diorama del Tramo: recorta el planeta al bbox del trazado (+margen). Todo lo demás desaparece.
+    const [corridorClip, setCorridorClip] = useState(true);
 
     // --- DERIVADOS Y HELPERS PARA UI ---
     const statusMessage = isUploading
@@ -72,17 +86,19 @@ export default function Vista3D() {
     const estratosRefs = useRef([]);
     const containerRef = useRef(null);
     const viewerRef = useRef(null);
+    const engineRef = useRef(null);
     const isMounted = useRef(false);
-    const fileInputRef = useRef(null);
     const focusImageryLayerRef = useRef(null);
     const chunkRectangleRef = useRef(null);
-    const boreholesEntitiesRef = useRef([]);
-    const soilEntitiesRef = useRef([]); // Referencia para cilindros de estratos
+    const soilEntitiesRef = useRef([]); // Referencia para marcadores y calicatas vacías
     const kmlDataSourcesRef = useRef([]); // Referencia para líneas de trazado KML
     const fullTramoWallEntitiesRef = useRef([]);
+    const batchBoreholePrimitiveRef = useRef(null);
+    const fullTramoWallPrimitiveRef = useRef(null);
     const abortControllersRef = useRef(new Map());
     const dioramaBoxEntitiesRef = useRef([]);
     const dioramaConstraintRef = useRef(null);
+    const dioramaOrbitLockRef = useRef(false); // anclaje orbital activo (camera.lookAt)
     const isApplyingDioramaClampRef = useRef(false);
     const isDioramaTransitioningRef = useRef(false);
     const dioramaAnchorRef = useRef(null);
@@ -95,16 +111,45 @@ export default function Vista3D() {
     const localEstratosRef = useRef([]);
     const localMarkerEntityRef = useRef(null);
     const localOverlayEntitiesRef = useRef([]);
+    const zExagRef = useRef(1.0);
+    const zBaseRef = useRef(0);
+    const sampledTerrainCacheRef = useRef(new Map());
+    const wallBuildParamsRef = useRef(null);
+    const wallBuildGenRef = useRef(0);
+    const batchInputRef = useRef(null);
+    const batchBuildParamsRef = useRef(null);
+    const corridorClipRef = useRef(true);
+    const corridorPolygonRef = useRef(null);
 
     // --- MOTOR DE PROGRESIVAS ---
     useProgresivasData();
 
-    // --- CARGADOR DE MODELOS (Web Worker) ---
+    // --- CARGADOR DE MODELOS Y ELEVACIÓN UNIFICADA ---
     const { loadModel, cancelLoad } = useModelLoader({
         userToken: user?.token,
         processCoordinates,
         utmToWgs84,
     });
+    const { resolveSurfaceZ, exaggerateZ } = useTerrainElevation();
+
+    // ── EXAGERACIÓN VERTICAL UNIFICADA (única fuente de verdad) ──────────────
+    // Los datos SIEMPRE se guardan en MSL real; la exageración se aplica solo al render:
+    //   cota absoluta:  zRender = zBase + (z - zBase) * f
+    //   profundidad:    surfaceRender - prof * f
+    // zBase = midZ de la malla activa (o promedio de calicatas si no hay malla).
+    useEffect(() => { zExagRef.current = zExag; }, [zExag]);
+    useEffect(() => { zBaseRef.current = zBase; }, [zBase]);
+    useEffect(() => { corridorClipRef.current = corridorClip; }, [corridorClip]);
+
+    const currentZExag = useCallback(() => Math.max(1.0, parseFloat(zExagRef.current) || 1.0), []);
+    const surfRenderZ = useCallback((surfaceZ) => exaggerateZ(
+        surfaceZ,
+        Math.max(1.0, parseFloat(zExagRef.current) || 1.0),
+        { surfaceBase: Number.isFinite(zBaseRef.current) ? zBaseRef.current : 0 }
+    ), [exaggerateZ]);
+    const depthRenderZ = useCallback((surfaceZ, depth) => (
+        surfRenderZ(surfaceZ) - (Math.abs(depth) * Math.max(1.0, parseFloat(zExagRef.current) || 1.0))
+    ), [surfRenderZ]);
 
     // --- FUNCIONES CORE (Definidas antes que los efectos para evitar ReferenceError) ---
 
@@ -124,9 +169,11 @@ export default function Vista3D() {
         const surfaceAlpha = isDioramaActive ? 150 : 255;
 
         const midZ = minZ + (maxZ - minZ) / 2.0;
+        // La malla fija la base de exageración de todo el escenario (globo, calicatas y muro la siguen).
+        setZBase((prev) => (Number.isFinite(midZ) ? midZ : prev));
 
         const vertices = verticesInfo.map(vi => {
-            const exaggeratedZ = (vi.z - midZ) * (zExag / 15.0) + midZ;
+            const exaggeratedZ = exaggerateZ(vi.z, zExag, { surfaceBase: midZ });
             return Cartesian3.fromDegrees(vi.lon, vi.lat, exaggeratedZ + 2.5);
         });
 
@@ -238,7 +285,7 @@ export default function Vista3D() {
         estratosRefs.current = [];
         [solidPrimitiveHipso, solidPrimitiveMalla, wirePrimitiveMalla, wirePrimitiveBoundary].forEach(p => viewer.scene.primitives.add(p));
         viewer.scene.requestRender();
-    }, [zExag, mapStyle, mapOpacity, selectedProgressiva3D, showEstratosLayer]);
+    }, [zExag, mapStyle, mapOpacity, selectedProgressiva3D, showEstratosLayer, exaggerateZ]);
 
     const clearDioramaBox = useCallback(() => {
         const viewer = viewerRef.current;
@@ -257,12 +304,106 @@ export default function Vista3D() {
         localMarkerEntityRef.current = null;
     }, []);
 
+    // ── DIORAMA DEL TRAMO: recorte rectangular automático del planeta ────────
+    // En vez de renderizar el planeta completo, se descarta todo lo que queda fuera
+    // del bbox del trazado (+margen): Cesium deja de pedir/renderizar esas teselas.
+    // El bbox se adapta solo: tramo alargado → rectángulo alargado; tramo cuadrado → cuadrado.
+    const computeCorridorPolygon = useCallback(() => {
+        let minLon = Infinity;
+        let maxLon = -Infinity;
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+        let fuente = null;
+
+        // Fuente preferente: la malla LandXML cargada (cobertura exacta del modelo)
+        const vertices = currentModelDataRef.current?.rawVertices;
+        if (vertices?.length) {
+            for (const v of vertices) {
+                if (!Number.isFinite(v.lon) || !Number.isFinite(v.lat)) continue;
+                if (v.lon < minLon) minLon = v.lon;
+                if (v.lon > maxLon) maxLon = v.lon;
+                if (v.lat < minLat) minLat = v.lat;
+                if (v.lat > maxLat) maxLat = v.lat;
+            }
+            if (Number.isFinite(minLon)) fuente = 'malla';
+        }
+
+        // Fallback: el trazado KML de los tramos
+        if (!fuente && kmlDataSourcesRef.current.length) {
+            const sampleTime = Cesium.JulianDate.now();
+            kmlDataSourcesRef.current.forEach((ds) => {
+                ds?.entities?.values?.forEach((entity) => {
+                    if (!entity?.polyline?.positions) return;
+                    let positions = entity.polyline.positions;
+                    if (typeof positions.getValue === 'function') {
+                        positions = positions.getValue(sampleTime);
+                    }
+                    if (!Array.isArray(positions)) return;
+                    fuente = fuente || 'kml';
+                    positions.forEach((pos) => {
+                        const carto = Cartographic.fromCartesian(pos);
+                        const lon = Cesium.Math.toDegrees(carto.longitude);
+                        const lat = Cesium.Math.toDegrees(carto.latitude);
+                        if (lon < minLon) minLon = lon;
+                        if (lon > maxLon) maxLon = lon;
+                        if (lat < minLat) minLat = lat;
+                        if (lat > maxLat) maxLat = lat;
+                    });
+                });
+            });
+        }
+
+        if (!fuente || !Number.isFinite(minLon)) return null;
+
+        // Margen adaptativo: 8% del lado mayor del tramo, mínimo 300 m
+        const metersPerLon = (111_320 * Math.cos(Cesium.Math.toRadians((minLat + maxLat) / 2))) || 1;
+        const anchoM = Math.max(1, (maxLon - minLon) * metersPerLon);
+        const altoM = Math.max(1, (maxLat - minLat) * 110_540);
+        const margenM = Math.max(300, Math.max(anchoM, altoM) * 0.08);
+
+        return {
+            fuente,
+            corners: [
+                { lon: minLon - margenM / metersPerLon, lat: minLat - margenM / 110_540 },
+                { lon: maxLon + margenM / metersPerLon, lat: minLat - margenM / 110_540 },
+                { lon: maxLon + margenM / metersPerLon, lat: maxLat + margenM / 110_540 },
+                { lon: minLon - margenM / metersPerLon, lat: maxLat + margenM / 110_540 }
+            ]
+        };
+    }, []);
+
+    const applyCorridorClipToGlobe = useCallback((viewer) => {
+        if (!viewer || viewer.isDestroyed() || !viewer.scene?.globe) return false;
+        if (!ClippingPolygon || !ClippingPolygonCollection) return false;
+        if (!ClippingPolygonCollection.isSupported(viewer.scene)) return false;
+
+        const corridor = computeCorridorPolygon();
+        if (!corridor) return false;
+
+        const polygon = new ClippingPolygon({
+            positions: corridor.corners.map(({ lon, lat }) => Cartesian3.fromDegrees(lon, lat, 0))
+        });
+        viewer.scene.globe.clippingPolygons = new ClippingPolygonCollection({
+            polygons: [polygon],
+            inverse: true, // mantiene SOLO el interior: el resto del planeta se descarta
+            enabled: true,
+            quality: 1.0
+        });
+        corridorPolygonRef.current = polygon;
+        return true;
+    }, [ClippingPolygon, ClippingPolygonCollection, Cartesian3, computeCorridorPolygon]);
+
     const clearDioramaTerrainMask = useCallback(() => {
         const viewer = viewerRef.current;
         dioramaMaskPolygonRef.current = null;
         if (!viewer || viewer.isDestroyed() || !viewer.scene?.globe) return;
+        // Restaurar el planeta y el recorte del tramo (si está activo) al salir del diorama
+        viewer.scene.globe.show = true;
+        if (corridorClipRef.current && applyCorridorClipToGlobe(viewer)) {
+            return;
+        }
         viewer.scene.globe.clippingPolygons = undefined;
-    }, []);
+    }, [applyCorridorClipToGlobe]);
 
     const applyDioramaTerrainMask = useCallback((roundedRectLonLat) => {
         const viewer = viewerRef.current;
@@ -282,6 +423,10 @@ export default function Vista3D() {
             return;
         }
 
+        // HUECO DEL DIORAMA: se recorta el terreno DENTRO de la caja para que se vea el
+        // chunk de la malla LandXML y los estratos; el mapa (montañas, etc.) sigue visible
+        // por fuera. Esta máscara REEMPLAZA temporalmente al recorte del tramo (no pueden
+        // coexistir en una misma colección); clearDioramaTerrainMask lo restaura al salir.
         const positions = roundedRectLonLat.map(({ lon, lat }) => (
             Cartesian3.fromDegrees(lon, lat, 0)
         ));
@@ -289,7 +434,7 @@ export default function Vista3D() {
         const polygon = new ClippingPolygon({ positions });
         const clippingPolygons = new ClippingPolygonCollection({
             polygons: [polygon],
-            inverse: false,
+            inverse: false, // corta el interior de la caja → hueco que revela el chunk
             enabled: true,
             quality: 1.0
         });
@@ -300,9 +445,18 @@ export default function Vista3D() {
 
     const disableDioramaConstraints = useCallback(() => {
         dioramaConstraintRef.current = null;
+        dioramaOrbitLockRef.current = false;
         clearDioramaTerrainMask();
         const viewer = viewerRef.current;
         if (!viewer || viewer.isDestroyed()) return;
+        // Liberar el anclaje orbital (lookAt): sin esto la cámara global queda pegada al ancla
+        try {
+            const cam = viewer.scene?.camera;
+            const M4 = Cesium.Matrix4;
+            if (cam && typeof cam.lookAtTransform === 'function' && M4?.IDENTITY) {
+                cam.lookAtTransform(M4.IDENTITY);
+            }
+        } catch (e) { }
         const controller = viewer.scene?.screenSpaceCameraController;
         if (!controller) return;
         controller.maximumZoomDistance = Number.POSITIVE_INFINITY;
@@ -398,8 +552,10 @@ export default function Vista3D() {
         if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
             const progressivaCoords = processCoordinates(progressiva.coordenada_este, progressiva.coordenada_norte, projectZone);
             const wgs = utmToWgs84(progressivaCoords.x, progressivaCoords.y, projectZone);
-            lon = wgs.lon;
-            lat = wgs.lat;
+            if (wgs) {
+                lon = wgs.lon;
+                lat = wgs.lat;
+            }
         }
 
         return Number.isFinite(lon) && Number.isFinite(lat)
@@ -411,6 +567,9 @@ export default function Vista3D() {
         const viewer = viewerRef.current;
         const constraint = dioramaConstraintRef.current;
         if (!viewer || viewer.isDestroyed() || !constraint || isApplyingDioramaClampRef.current || isDioramaTransitioningRef.current || cameraMode === 'orbit') return;
+        // Con el anclaje orbital activo la cámara YA está limitada (órbita + distancia al ancla);
+        // este clamp por setView peleaba con los controles y producía los saltos erráticos.
+        if (dioramaOrbitLockRef.current) return;
 
         const camera = getSceneCamera(viewer);
         if (!camera || !camera._scene) return;
@@ -455,10 +614,10 @@ export default function Vista3D() {
         }
 
         if (kmlDataSourcesRef.current.length > 0) {
-            viewer.flyTo(kmlDataSourcesRef.current[0], {
-                duration: 2.0,
-                offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
-            });
+            // Sin offset custom: el encuadre por defecto de flyTo calcula una distancia segura.
+            // (Con offset HeadingPitchRange range=0 la cámara quedaba SOBRE el punto del trazado,
+            // incluso bajo el terreno → estrellas a través del globo y "planeta invisible".)
+            viewer.flyTo(kmlDataSourcesRef.current[0], { duration: 2.0 });
             return true;
         }
 
@@ -488,10 +647,7 @@ export default function Vista3D() {
         }
 
         if (soilEntitiesRef.current.length > 0) {
-            viewer.flyTo(soilEntitiesRef.current, {
-                duration: 2.0,
-                offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), 0)
-            });
+            viewer.flyTo(soilEntitiesRef.current, { duration: 2.0 }); // encuadre por defecto (distancia segura)
             return true;
         }
 
@@ -555,8 +711,15 @@ export default function Vista3D() {
             : (Number.isFinite(anchor.surfaceZ) && anchor.surfaceZ !== 0
                 ? anchor.surfaceZ
                 : (Number.isFinite(maxZ) ? maxZ : 0));
-        const baseZ = Math.min(Number.isFinite(minZ) ? minZ : surfaceReferenceZ - 6, surfaceReferenceZ - 6);
+        // La caja debe HUNDIRSE hasta el piso circundante: en zonas montañosas el terreno
+        // alrededor puede estar decenas de metros más abajo que la progresiva; un fondo
+        // plano a la cota de la progresiva deja las paredes flotando en el aire.
+        const baseZ = Math.min(Number.isFinite(minZ) ? minZ : surfaceReferenceZ, surfaceReferenceZ) - 150;
         const topZ = Math.max(Number.isFinite(maxZ) ? maxZ + 25 : surfaceReferenceZ + 2000, surfaceReferenceZ + 2000);
+        // Cotas de render en espacio exagerado (misma fórmula que la malla y el globo)
+        const surfaceRenderZ = surfRenderZ(surfaceReferenceZ);
+        const baseRenderZ = surfRenderZ(baseZ);
+        const topRenderZ = surfRenderZ(topZ);
         const halfWidth = Math.max(90, sizeMeters * 0.58);
         const halfDepth = Math.max(50, sizeMeters * 0.34);
         const clampHalfWidth = Math.max(halfWidth * 0.82, sizeMeters * 0.42);
@@ -589,8 +752,8 @@ export default function Vista3D() {
         const topPositions = [];
 
         roundedRectLonLat.forEach(({ lon, lat }) => {
-            bottomPositions.push(Cartesian3.fromDegrees(lon, lat, baseZ));
-            topPositions.push(Cartesian3.fromDegrees(lon, lat, topZ));
+            bottomPositions.push(Cartesian3.fromDegrees(lon, lat, baseRenderZ));
+            topPositions.push(Cartesian3.fromDegrees(lon, lat, topRenderZ));
         });
 
         const topLoop = viewer.entities.add({
@@ -612,8 +775,8 @@ export default function Vista3D() {
         const walls = viewer.entities.add({
             wall: {
                 positions: [...roundedRectLonLat, roundedRectLonLat[0]].map(({ lon, lat }) => Cartesian3.fromDegrees(lon, lat)),
-                minimumHeights: new Array(roundedRectLonLat.length + 1).fill(baseZ),
-                maximumHeights: new Array(roundedRectLonLat.length + 1).fill(topZ),
+                minimumHeights: new Array(roundedRectLonLat.length + 1).fill(baseRenderZ),
+                maximumHeights: new Array(roundedRectLonLat.length + 1).fill(topRenderZ),
                 material: Color.CYAN.withAlpha(0.02),
                 outline: true,
                 outlineColor: Color.CYAN.withAlpha(0.32)
@@ -624,22 +787,24 @@ export default function Vista3D() {
         const verticals = guideIndices.map((idx) => {
             const { lon, lat } = roundedRectLonLat[idx];
             return viewer.entities.add({
-                polyline: {
-                    positions: [
-                        Cartesian3.fromDegrees(lon, lat, baseZ),
-                        Cartesian3.fromDegrees(lon, lat, topZ)
-                    ],
-                    width: 1.5,
-                    material: Color.CYAN.withAlpha(0.5)
-                }
+                    polyline: {
+                        positions: [
+                            Cartesian3.fromDegrees(lon, lat, baseRenderZ),
+                            Cartesian3.fromDegrees(lon, lat, topRenderZ)
+                        ],
+                        width: 1.5,
+                        material: Color.CYAN.withAlpha(0.5)
+                    }
             });
         });
 
         dioramaBoxEntitiesRef.current = [topLoop, bottomLoop, walls, ...verticals];
+        // El ancla y las restricciones de cámara viven en COTAS DE RENDER (exageradas),
+        // igual que la cámara y el resto de entidades.
         dioramaAnchorRef.current = {
             lon: centerLon,
             lat: centerLat,
-            surfaceZ: surfaceReferenceZ
+            surfaceZ: surfaceRenderZ
         };
         dioramaConstraintRef.current = {
             centerLon,
@@ -648,10 +813,10 @@ export default function Vista3D() {
             halfDepthMeters: halfDepth,
             clampHalfWidthMeters: clampHalfWidth,
             clampHalfDepthMeters: clampHalfDepth,
-            minHeight: surfaceReferenceZ + 1.8,
-            maxHeight: surfaceReferenceZ + 2000,
-            localMaxHeight: getDioramaLocalMaxHeight({ surfaceReferenceZ, sizeMeters, maxZ }),
-            surfaceHeight: surfaceReferenceZ
+            minHeight: surfaceRenderZ + 1.8,
+            maxHeight: surfaceRenderZ + 2000,
+            localMaxHeight: getDioramaLocalMaxHeight({ surfaceReferenceZ: surfaceRenderZ, sizeMeters, maxZ: surfRenderZ(maxZ) }),
+            surfaceHeight: surfaceRenderZ
         };
         applyDioramaTerrainMask(roundedRectLonLat);
 
@@ -665,7 +830,7 @@ export default function Vista3D() {
             viewer.scene.globe.translucency.enabled = false;
             viewer.scene.globe.undergroundColor = Color.BLACK.withAlpha(0.0);
         }
-    }, [Cartesian3, Color, applyDioramaTerrainMask, clearDioramaBox, resolveProgressivaAnchor]);
+    }, [Cartesian3, Color, applyDioramaTerrainMask, clearDioramaBox, resolveProgressivaAnchor, surfRenderZ]);
 
     const buildLocalRoadPositions = useCallback((anchor) => {
         if (!anchor || !kmlDataSourcesRef.current.length) return [];
@@ -731,13 +896,14 @@ export default function Vista3D() {
 
         return bestPolylinePositions.slice(startIndex, endIndex + 1).map((position) => {
             const carto = Cartographic.fromCartesian(position);
+            const realZ = Math.max(anchor.surfaceZ - 2.5, carto.height || 0);
             return Cartesian3.fromDegrees(
                 Cesium.Math.toDegrees(carto.longitude),
                 Cesium.Math.toDegrees(carto.latitude),
-                Math.max(anchor.surfaceZ + 2.5, (carto.height || 0) + 1.5)
+                surfRenderZ(realZ) + 1.5
             );
         });
-    }, [Cartesian3, Cartographic, dioramaSize]);
+    }, [Cartesian3, Cartographic, dioramaSize, surfRenderZ]);
 
     const renderLocalOverlay = useCallback((progressiva) => {
         const viewer = viewerRef.current;
@@ -806,9 +972,9 @@ export default function Vista3D() {
                     id: `local-estrato-${progressiva.id}-${index}`,
                     name: `Estrato activo: ${estrato.nombre || 'Estrato'}`,
                     description: `Profundidad: ${estrato.cota_inicial}m - ${estrato.cota_final}m<br/>${estrato.descripcion || ''}`,
-                    position: Cartesian3.fromDegrees(anchor.lon, anchor.lat, anchor.surfaceZ - centerDepth),
+                    position: Cartesian3.fromDegrees(anchor.lon, anchor.lat, depthRenderZ(anchor.surfaceZ, centerDepth)),
                     cylinder: {
-                        length: thickness,
+                        length: thickness * currentZExag(),
                         topRadius: 2.6,
                         bottomRadius: 2.6,
                         material: Color.fromCssColorString(estrato.nlp_color_hex || '#60a5fa').withAlpha(0.96),
@@ -826,7 +992,7 @@ export default function Vista3D() {
         localOverlayEntitiesRef.current = overlayEntities;
 
         viewer.scene.requestRender();
-    }, [Cartesian2, Cartesian3, Color, LabelStyle, VerticalOrigin, buildLocalRoadPositions, clearLocalOverlays, resolveProgressivaAnchor]);
+    }, [Cartesian2, Cartesian3, Color, LabelStyle, VerticalOrigin, buildLocalRoadPositions, clearLocalOverlays, resolveProgressivaAnchor, depthRenderZ, currentZExag]);
 
     const renderModelChunk = useCallback((modelData, progressiva = null) => {
         if (!modelData?.rawVertices?.length || !modelData?.rawIndicesTriangulos?.length) {
@@ -841,21 +1007,15 @@ export default function Vista3D() {
             const progressivaCoords = processCoordinates(progressiva.coordenada_este, progressiva.coordenada_norte, projectZone);
             const centerX = parseFloat(progressivaCoords.x);
             const centerY = parseFloat(progressivaCoords.y);
-            const half = dioramaSize / 2;
-            const extendedHalf = half * 1.6;
+            // Mismas dimensiones que la caja guía del diorama (renderDioramaBox):
+            // así el chunk CUBRE el hueco recortado en el terreno (no se ve el vacío del
+            // globo por los bordes) y no se derrama fuera de la caja.
+            const halfW = Math.max(90, dioramaSize * 0.58);
+            const halfD = Math.max(50, dioramaSize * 0.34);
 
             const withinChunk = (vertex) => (
-                vertex.x >= centerX - half &&
-                vertex.x <= centerX + half &&
-                vertex.y >= centerY - half &&
-                vertex.y <= centerY + half
-            );
-
-            const withinExtendedChunk = (vertex) => (
-                vertex.x >= centerX - extendedHalf &&
-                vertex.x <= centerX + extendedHalf &&
-                vertex.y >= centerY - extendedHalf &&
-                vertex.y <= centerY + extendedHalf
+                Math.abs(vertex.x - centerX) <= halfW &&
+                Math.abs(vertex.y - centerY) <= halfD
             );
 
             const croppedTriangles = [];
@@ -873,17 +1033,13 @@ export default function Vista3D() {
                 const centroidX = (va.x + vb.x + vc.x) / 3;
                 const centroidY = (va.y + vb.y + vc.y) / 3;
                 const centroidInside = (
-                    centroidX >= centerX - half &&
-                    centroidX <= centerX + half &&
-                    centroidY >= centerY - half &&
-                    centroidY <= centerY + half
+                    Math.abs(centroidX - centerX) <= halfW &&
+                    Math.abs(centroidY - centerY) <= halfD
                 );
 
                 if (centroidInside) {
                     croppedTriangles.push(a, b, c);
                 } else if (withinChunk(va) || withinChunk(vb) || withinChunk(vc)) {
-                    fallbackTriangles.push(a, b, c);
-                } else if (withinExtendedChunk(va) || withinExtendedChunk(vb) || withinExtendedChunk(vc)) {
                     fallbackTriangles.push(a, b, c);
                 }
             }
@@ -967,36 +1123,6 @@ export default function Vista3D() {
         }
     }, [buildBoundaryIndices, buildEdgeIndices, clearDioramaBox, dioramaSize, disableDioramaConstraints, renderDioramaBox, renderFinalMesh]);
 
-    /**
-     * Renderiza cilindros 3D para sondajes.
-     */
-    const renderBoreholes = useCallback(async (boreholes) => {
-        if (!viewerRef.current || !boreholes) return;
-        const viewer = viewerRef.current;
-        boreholesEntitiesRef.current.forEach(ent => viewer.entities.remove(ent));
-        boreholesEntitiesRef.current = [];
-
-        const cartographics = boreholes.map(bh => {
-            const { lon, lat } = utmToWgs84(bh.coordenada_este, bh.coordenada_norte);
-            return Cartographic.fromDegrees(lon, lat);
-        });
-
-        try {
-            const tProvider = viewer.scene.terrainProvider || viewer.terrainProvider;
-            const sampled = await chunkedSampleTerrain(Cesium, tProvider, cartographics);
-            boreholes.forEach((bh, i) => {
-                const surfaceZ = (sampled[i]?.height || 0);
-                const { lon, lat } = utmToWgs84(bh.coordenada_este, bh.coordenada_norte);
-                const ent = viewer.entities.add({
-                    position: Cartesian3.fromDegrees(lon, lat, surfaceZ - 22.5),
-                    cylinder: { length: 45.0, topRadius: 1.0, bottomRadius: 1.0, material: Color.fromCssColorString('#10B981').withAlpha(0.8) }
-                });
-                boreholesEntitiesRef.current.push(ent);
-            });
-            viewer.scene.requestRender();
-        } catch (e) { }
-    }, []);
-
     const fetchModelos = useCallback(async () => {
         if (!selectedProjectId) return;
         try {
@@ -1041,19 +1167,42 @@ export default function Vista3D() {
 
         isDioramaTransitioningRef.current = true;
         try {
-            resetCameraTransform(camera);
-            camera.setView({
-                destination: Cartesian3.fromDegrees(
-                    anchor.lon,
-                    anchor.lat,
-                    Math.max(anchor.surfaceZ + Math.max(80, dioramaSize * 0.3), constraint.minHeight + 20)
-                ),
-                orientation: {
-                    heading: Cesium.Math.toRadians(22),
-                    pitch: Cesium.Math.toRadians(-35),  // Antes: -4° (muy rasante) → -35° (perspectiva cómoda)
-                    roll: 0
+            const HeadingPitchRange = Cesium.HeadingPitchRange;
+            if (typeof camera.lookAt === 'function' && HeadingPitchRange) {
+                // ANCLAJE ORBITAL: la cámara queda referida a la progresiva (como el doble-clic
+                // sobre un punto): arrastrar orbita alrededor del ancla, la rueda cambia la
+                // distancia, y el pan queda desactivado para que la cámara no escape del diorama.
+                const range = Math.max(80, dioramaSize * 0.9);
+                camera.lookAt(
+                    Cartesian3.fromDegrees(anchor.lon, anchor.lat, anchor.surfaceZ),
+                    new HeadingPitchRange(Cesium.Math.toRadians(22), Cesium.Math.toRadians(-35), range)
+                );
+                dioramaOrbitLockRef.current = true;
+
+                // La distancia de órbita es el nuevo "límite" de la cámara
+                const ctrl = viewer.scene?.screenSpaceCameraController;
+                if (ctrl) {
+                    ctrl.minimumZoomDistance = 5;
+                    ctrl.maximumZoomDistance = Math.max(420, dioramaSize * 1.8);
+                    ctrl.enableTranslate = false; // el pan rompería el anclaje
+                    ctrl.enableLook = false;      // el tilt libre rompería la órbita
                 }
-            });
+            } else {
+                // Fallback para Cesium sin lookAt: encuadre clásico
+                resetCameraTransform(camera);
+                camera.setView({
+                    destination: Cartesian3.fromDegrees(
+                        anchor.lon,
+                        anchor.lat,
+                        Math.max(anchor.surfaceZ + Math.max(80, dioramaSize * 0.3), constraint.minHeight + 20)
+                    ),
+                    orientation: {
+                        heading: Cesium.Math.toRadians(22),
+                        pitch: Cesium.Math.toRadians(-35),
+                        roll: 0
+                    }
+                });
+            }
         } finally {
             window.setTimeout(() => {
                 isDioramaTransitioningRef.current = false;
@@ -1090,8 +1239,57 @@ export default function Vista3D() {
                 || 500;
         }
 
-        dioramaAnchorRef.current = { lon, lat, surfaceZ };
-    }, [Cartographic, renderModelChunk, resolveProgressivaAnchor]);
+        // El ancla se guarda en COTA DE RENDER (exagerada) para que cámara y overlays coincidan.
+        dioramaAnchorRef.current = { lon, lat, surfaceZ: surfRenderZ(surfaceZ) };
+
+        // SIN MALLA CARGADA (p. ej. OBJ no disponible/caído): el diorama local funciona igual.
+        // Se construye la caja guía y el overlay (carretera + marcador + estratos) en la
+        // progresiva y se vuela hasta ella. Antes esto dependía del efecto de la malla y
+        // sin modelo la selección quedaba en una escena vacía y sin vuelo.
+        if (!hasRawMesh) {
+            renderDioramaBox(p, dioramaSize, null, null);
+            renderLocalOverlay(p);
+            pendingDioramaFocusRef.current = null;
+            setCameraMode('diorama');
+            focusOnSelectedProgressiva();
+        }
+    }, [Cartographic, renderModelChunk, resolveProgressivaAnchor, surfRenderZ, renderDioramaBox, renderLocalOverlay, focusOnSelectedProgressiva, dioramaSize]);
+
+    // ── MURO GEOLÓGICO CONTINUO: construir / destruir con invalidación ───────
+    // La construcción es asíncrona (Primitives), por lo que un cambio de zExag/zBase a mitad de
+    // camino invalida la construcción previa por generación para no dejar primitivos huérfanos.
+    const buildGeologyWall = useCallback((viewer) => {
+        if (!viewer || viewer.isDestroyed() || !(soilData?.progresivas?.length >= 2)) return;
+
+        const buildParams = `${currentZExag()}|${zBaseRef.current}|${projectZone}`;
+        if (wallBuildParamsRef.current === buildParams) return; // ya en construcción con estos parámetros
+        wallBuildParamsRef.current = buildParams;
+
+        const gen = ++wallBuildGenRef.current;
+        FullTramoEngine.renderWallStrata(viewer, soilData.progresivas, {
+            toLon: (e, n) => utmToWgs84(e, n, projectZone),
+            zExag: currentZExag(),
+            zBase: zBaseRef.current
+        }).then((prim) => {
+            // Descartar si mientras tanto se pidió otra versión (zExag/zBase cambió o se destruyó)
+            if (gen === wallBuildGenRef.current && prim && !viewer.isDestroyed()) {
+                fullTramoWallPrimitiveRef.current = prim;
+            }
+        }).catch((err) => {
+            console.warn('[Vista3D] Advertencia renderizando muro geológico continuo:', err);
+            if (gen === wallBuildGenRef.current) wallBuildParamsRef.current = null;
+        });
+    }, [soilData, projectZone, currentZExag]);
+
+    const destroyGeologyWall = useCallback((viewer) => {
+        wallBuildGenRef.current += 1; // invalida cualquier construcción en vuelo
+        wallBuildParamsRef.current = null;
+        if (!viewer || viewer.isDestroyed()) return;
+        if (fullTramoWallPrimitiveRef.current) {
+            try { viewer.scene.primitives.remove(fullTramoWallPrimitiveRef.current); } catch (e) { }
+            fullTramoWallPrimitiveRef.current = null;
+        }
+    }, []);
 
     // --- EFECTO: RENDERIZADO DE SUELOS Y TRAZADOS (INTELIGENTE: Auto-Zona y Elevación Real) ---
     useEffect(() => {
@@ -1163,9 +1361,10 @@ export default function Vista3D() {
 
                     entities.forEach(entity => {
                         if (entity.polyline) {
-                            // El trazado debe seguir visible incluso dentro del diorama local.
+                            // Con clampToGround el trazado se dibuja pegado al relieve y queda
+                            // correctamente OCULTO tras las montañas (sin depthFailMaterial,
+                            // que lo hacía visible a través del terreno).
                             entity.polyline.material = Color.DODGERBLUE.withAlpha(0.9);
-                            entity.polyline.depthFailMaterial = Color.CYAN.withAlpha(0.95);
                             entity.polyline.width = 8.0;
                             entity.polyline.clampToGround = true;
                             entity.polyline.arcType = Cesium.ArcType.GEODESIC;
@@ -1193,9 +1392,10 @@ export default function Vista3D() {
             const cartographicsToSample = calicatasConCoords
                 .filter(p => !p.elevacion)
                 .map(p => {
-                    const { lon, lat } = utmToWgs84(p.coordenada_este, p.coordenada_norte, projectZone);
-                    return Cartographic.fromDegrees(lon, lat);
-                });
+                    const wgs = utmToWgs84(p.coordenada_este, p.coordenada_norte, projectZone);
+                    return wgs ? Cartographic.fromDegrees(wgs.lon, wgs.lat) : null;
+                })
+                .filter(Boolean);
 
             let sampledMap = {};
             if (cartographicsToSample.length > 0) {
@@ -1208,10 +1408,27 @@ export default function Vista3D() {
                 await waitForTerrainReady(tProvider);
 
                 try {
-                    const sampled = await chunkedSampleTerrain(Cesium, tProvider, cartographicsToSample);
-                    cartographicsToSample.forEach((c, idx) => {
-                        sampledMap[`${c.longitude}_${c.latitude}`] = sampled[idx]?.height || 0;
+                    // 1) Usar primero la caché (evita re-muestrear al re-renderizar por zExag)
+                    const pendientes = [];
+                    cartographicsToSample.forEach((c) => {
+                        const key = `${c.longitude}_${c.latitude}`;
+                        if (sampledTerrainCacheRef.current.has(key)) {
+                            sampledMap[key] = sampledTerrainCacheRef.current.get(key);
+                        } else {
+                            pendientes.push(c);
+                        }
                     });
+
+                    // 2) Muestrear solo las faltantes y guardarlas en caché (cotas reales MSL)
+                    if (pendientes.length > 0) {
+                        const sampled = await chunkedSampleTerrain(Cesium, tProvider, pendientes);
+                        pendientes.forEach((c, idx) => {
+                            const key = `${c.longitude}_${c.latitude}`;
+                            const h = sampled[idx]?.height || 0;
+                            sampledTerrainCacheRef.current.set(key, h);
+                            sampledMap[key] = h;
+                        });
+                    }
                 } catch (sampleErr) {
                     console.error('[Vista3D] Error en muestreo de terreno:', sampleErr);
                 }
@@ -1219,11 +1436,16 @@ export default function Vista3D() {
 
             try {
                 if (!isViewerStable(viewer)) return;
+                const conSuperficie = []; // calicatas enriquecidas con su cota de superficie (real, MSL)
                 calicatasConCoords.forEach((p) => {
                     if (!isViewerStable(viewer)) return;
-                    const { lon, lat } = utmToWgs84(p.coordenada_este, p.coordenada_norte, projectZone);
+                    // Coordenadas inválidas → utmToWgs84 devuelve null: se omite esta calicata
+                    // (antes el destructuring de null abortaba TODO el render de calicatas).
+                    const wgs = utmToWgs84(p.coordenada_este, p.coordenada_norte, projectZone);
+                    if (!wgs) return;
+                    const { lon, lat } = wgs;
 
-                    // PRIORIDAD DE ELEVACIÓN: 1. DB (Topografía Real) | 2. Terreno Cesium
+                    // PRIORIDAD DE ELEVACIÓN: 1. DB (Topografía Real) | 2. Terreno Cesium (cotas reales MSL)
                     let surfaceZ = 0;
                     if (p.elevacion && parseFloat(p.elevacion) !== 0) {
                         surfaceZ = parseFloat(p.elevacion);
@@ -1232,7 +1454,13 @@ export default function Vista3D() {
                         surfaceZ = sampledMap[key] || 0;
                     }
 
-                    progressivaAnchorsRef.current.set(p.id, { lon, lat, surfaceZ });
+                    // Cota de RENDER (exagerada) coherente con la malla y el globo.
+                    const surfaceRenderZ = surfRenderZ(surfaceZ);
+                    const f = currentZExag();
+                    progressivaAnchorsRef.current.set(p.id, { lon, lat, surfaceZ, surfaceRenderZ });
+                    // El lote de cilindros lee p.elevacion: se inyecta la superficie resuelta
+                    // (DB o muestreo de terreno) para que el batch quede a la misma cota.
+                    conSuperficie.push({ ...p, elevacion: surfaceZ });
 
                     // --- NUEVO: MARCADOR Y ETIQUETA PREMIUM (Estilo Maqueta) ---
                     const markerId = `prog-marker-${p.id}`;
@@ -1240,13 +1468,15 @@ export default function Vista3D() {
                         const markerEntity = viewer.entities.add({
                             id: markerId,
                             name: `Progresiva: ${p.nombre}`,
-                            position: Cartesian3.fromDegrees(lon, lat, surfaceZ + 1.0), // 1 metro sobre el relieve
+                            // Depth test ACTIVO: la progresiva queda oculta tras las montañas
+                            // (disableDepthTestDistance=Infinity las dibujaba a través del terreno).
+                            // +2.5 m sobre el relieve para que no se entierre en laderas.
+                            position: Cartesian3.fromDegrees(lon, lat, surfaceRenderZ + 2.5),
                             point: {
                                 pixelSize: 10,
                                 color: Color.CYAN,
                                 outlineColor: Color.BLACK,
-                                outlineWidth: 2,
-                                disableDepthTestDistance: Number.POSITIVE_INFINITY
+                                outlineWidth: 2
                             },
                             label: {
                                 text: p.nombre,
@@ -1257,23 +1487,21 @@ export default function Vista3D() {
                                 style: Cesium.LabelStyle.FILL_AND_OUTLINE,
                                 verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
                                 pixelOffset: new Cesium.Cartesian2(0, -20),
-                                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3000),
-                                disableDepthTestDistance: Number.POSITIVE_INFINITY
+                                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3000)
                             }
                         });
                         soilEntitiesRef.current.push(markerEntity);
                     }
 
-                    let cumulativeDepth = 0;
                     if (!p.estratos || p.estratos.length === 0) {
                         const noEstratoId = `calicata-empty-${p.id}`;
                         if (!viewer.entities.getById(noEstratoId)) {
                             const entity = viewer.entities.add({
                                 id: noEstratoId,
                                 name: `Calicata: ${p.nombre} (Sin estratos)`,
-                                position: Cartesian3.fromDegrees(lon, lat, surfaceZ - 7.0), // Centro del cilindro a -7m
+                                position: Cartesian3.fromDegrees(lon, lat, depthRenderZ(surfaceRenderZ, 7.0)), // Centro del cilindro a -7 m (exagerado)
                                 cylinder: {
-                                    length: 14.0, topRadius: 1.2, bottomRadius: 1.2,
+                                    length: 14.0 * f, topRadius: 1.2, bottomRadius: 1.2,
                                     material: Color.GRAY.withAlpha(0.6),
                                     outline: true
                                 }
@@ -1281,30 +1509,26 @@ export default function Vista3D() {
                             soilEntitiesRef.current.push(entity);
                         }
                     } else {
-                        p.estratos.forEach((estrato, eIdx) => {
-                            const thickness = Math.abs(estrato.cota_final - estrato.cota_inicial) || 0.5;
-                            const centerDepth = cumulativeDepth + (thickness / 2);
-                            const color = estrato.nlp_color_hex || '#858585';
-                            const estratoId = `estrato-${p.id}-${eIdx}`;
-
-                            if (!viewer.entities.getById(estratoId)) {
-                                const entity = viewer.entities.add({
-                                    id: estratoId,
-                                    name: `P: ${p.nombre} | ${estrato.nombre || 'Estrato'}`,
-                                    description: `Profundidad: ${estrato.cota_inicial}m - ${estrato.cota_final}m<br/>${estrato.descripcion || ''}`,
-                                    position: Cartesian3.fromDegrees(lon, lat, surfaceZ - centerDepth), // Offset negativo desde el suelo
-                                    cylinder: {
-                                        length: thickness, topRadius: 1.5, bottomRadius: 1.5,
-                                        material: Color.fromCssColorString(color).withAlpha(0.95),
-                                        outline: true, outlineColor: Color.BLACK.withAlpha(0.6), outlineWidth: 1
-                                    }
-                                });
-                                soilEntitiesRef.current.push(entity);
-                            }
-                            cumulativeDepth += thickness;
-                        });
+                        // Los cilindros de estratos se dibujan en LOTE (BoreholeBatchEngine)
+                        // después del bucle: una sola primitiva para todas las calicatas.
                     }
                 });
+
+                // ── ESTRATOS POR LOTE: 1 primitiva para N calicatas (60 FPS) ──────
+                if (isViewerStable(viewer) && conSuperficie.length > 0) {
+                    if (batchBoreholePrimitiveRef.current) {
+                        try { viewer.scene.primitives.remove(batchBoreholePrimitiveRef.current); } catch (e) { }
+                        batchBoreholePrimitiveRef.current = null;
+                    }
+                    batchInputRef.current = conSuperficie;
+                    batchBuildParamsRef.current = `${currentZExag()}|${zBaseRef.current}|${projectZone}`;
+                    batchBoreholePrimitiveRef.current = BoreholeBatchEngine.renderBoreholeBatch(viewer, conSuperficie, {
+                        toLon: (e, n) => utmToWgs84(e, n, projectZone),
+                        zExag: currentZExag(),
+                        zBase: zBaseRef.current,
+                        radius: 1.5
+                    });
+                }
                 if (isViewerStable(viewer)) {
                     viewer.scene.requestRender();
                 }
@@ -1329,7 +1553,7 @@ export default function Vista3D() {
         };
 
         initialize3D();
-    }, [clearLocalOverlays, flyToGlobalContext, getSceneCamera, isViewerStable, renderLocalOverlay, soilData, isViewerReady, projectZone]);
+    }, [clearLocalOverlays, flyToGlobalContext, getSceneCamera, isViewerStable, renderLocalOverlay, soilData, isViewerReady, projectZone, surfRenderZ, depthRenderZ, currentZExag]);
 
     const fetchAllData = useCallback(async () => {
         setIsGlobalLoading(true);
@@ -1390,137 +1614,223 @@ export default function Vista3D() {
     }, [isFullscreen]);
 
     useEffect(() => {
+        let isCancelled = false;
         isMounted.current = true;
 
-        let viewer;
+        let activeEngine = null;
+        let activeViewer = null;
 
         const initializeViewer = async () => {
             try {
-                if (!containerRef.current || !isMounted.current) return;
+                if (!containerRef.current || isCancelled) return;
 
-                if (Ion) { Ion.defaultAccessToken = ION_TOKEN || ''; }
+                // Limpieza defensiva del contenedor DOM para evitar advertencias de WebGL/nodos huérfanos
+                if (containerRef.current) {
+                    containerRef.current.innerHTML = '';
+                }
 
-                // Inicialización de Terreno con Fallback robusto
-                let terrainProviderOption = {};
-                try {
-                    if (Terrain && typeof Terrain.fromWorldTerrain === 'function') {
-                        // API Moderna (Cesium 1.104+)
-                        terrainProviderOption = { terrain: Terrain.fromWorldTerrain({ requestVertexNormals: true }) };
-                    } else if (typeof Cesium.createWorldTerrainAsync === 'function') {
-                        // API Async (Cesium 1.100 - 1.103)
-                        terrainProviderOption = { terrainProvider: await Cesium.createWorldTerrainAsync({ requestVertexNormals: true }) };
-                    } else if (typeof Cesium.createWorldTerrain === 'function') {
-                        // API Antigua
-                        terrainProviderOption = { terrainProvider: Cesium.createWorldTerrain({ requestVertexNormals: true }) };
-                    }
-                } catch { }
-
-                viewer = new Viewer(containerRef.current, {
-                    ...terrainProviderOption,
-                    animation: false,
-                    baseLayerPicker: false,
-                    homeButton: false,
-                    geocoder: false,
-                    timeline: false,
-                    navigationHelpButton: false,
-                    sceneModePicker: false,
-                    selectionIndicator: false,
-                    infoBox: false
+                // Inicialización vía MapEngineFactory (CesiumEngine con fallback robusto)
+                const engine = await MapEngineFactory.createEngine(containerRef.current, {
+                    mapboxToken: process.env.REACT_APP_MAPBOX_TOKEN,
+                    ionToken: ION_TOKEN
                 });
 
-                if (!isMounted.current || viewer.isDestroyed()) {
-                    viewer.destroy();
+                if (isCancelled) {
+                    if (engine && typeof engine.destroy === 'function') {
+                        try { engine.destroy(); } catch (e) { }
+                    }
                     return;
                 }
 
-                // Optimizaciones de Escena
-                viewer.scene.globe.enableLighting = true;
-                viewer.scene.globe.depthTestAgainstTerrain = true;
-                viewer.scene.highDynamicRange = true;
-                viewer.scene.postProcessStages.fxaa.enabled = true;
-
-                // Limpieza de capas por defecto para control total
-                const imageryLayers = viewer.imageryLayers;
-                if (imageryLayers) {
-                    imageryLayers.removeAll();
+                if (engine) {
+                    activeEngine = engine;
+                    engineRef.current = engine;
                 }
 
-                // Capa Base Global (Sentinel-2 vía Ion con Fallback a ESRI)
-                try {
-                    const ionLayer = await IonImageryProvider.fromAssetId(2);
-                    if (isMounted.current && !viewer.isDestroyed()) {
-                        imageryLayers.addImageryProvider(ionLayer);
+                if (engine && engine.viewer) {
+                    activeViewer = engine.viewer;
+                    viewerRef.current = activeViewer;
+
+                    if (Ion && ION_TOKEN) { Ion.defaultAccessToken = ION_TOKEN; }
+
+                    // Optimizaciones de Escena para Cesium
+                    if (activeViewer.scene && activeViewer.scene.globe) {
+                        // enableLighting apagado: con iluminación solar real el hemisferio nocturno
+                        // se pinta negro y parece que "el planeta desapareció" (y su disco oscuro
+                        // tapa el sol). El globo se muestra siempre iluminado.
+                        activeViewer.scene.globe.enableLighting = false;
+                        activeViewer.scene.globe.depthTestAgainstTerrain = true;
+                        activeViewer.scene.highDynamicRange = false;
+                        if (activeViewer.scene.postProcessStages && activeViewer.scene.postProcessStages.fxaa) {
+                            activeViewer.scene.postProcessStages.fxaa.enabled = true;
+                        }
                     }
-                } catch (e) {
-                    if (isMounted.current && !viewer.isDestroyed()) {
-                        imageryLayers.addImageryProvider(new ArcGisMapServerImageryProvider({
-                            url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
-                            enablePickFeatures: false
-                        }));
+
+                    // Configuración de Capas de Mapa Base
+                    const imageryLayers = activeViewer.imageryLayers;
+                    if (imageryLayers) {
+                        imageryLayers.removeAll();
+                        try {
+                            imageryLayers.addImageryProvider(new UrlTemplateImageryProvider({
+                                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                                // Nivel 17: evita los mosaicos "Map data not yet available" de Esri
+                                // en zonas rurales donde no hay imágenes a niveles 18-19.
+                                maximumLevel: 17,
+                                credit: 'Esri World Imagery'
+                            }));
+                        } catch (e) {
+                            try {
+                                imageryLayers.addImageryProvider(new ArcGisMapServerImageryProvider({
+                                    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+                                    enablePickFeatures: false
+                                }));
+                            } catch (err) { }
+                        }
+
+                        // Capa Focal (Para el área del modelo LandXML)
+                        try {
+                            const focusLayer = imageryLayers.addImageryProvider(new UrlTemplateImageryProvider({
+                                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                                maximumLevel: 17
+                            }));
+                            focusLayer.alpha = 0.0;
+                            focusImageryLayerRef.current = focusLayer;
+                        } catch (e) { }
+                    }
+
+                    const controller = activeViewer.scene && activeViewer.scene.screenSpaceCameraController;
+                    if (controller) {
+                        // --- CONFIGURACIÓN GLOBAL DE MOVILIDAD MEJORADA ---
+                        controller.inertiaSpin = 0.06;          // Rotación muy directa
+                        controller.inertiaTranslate = 0.06;     // Pan directo sin "resbalar"
+                        controller.inertiaZoom = 0.06;          // Zoom que para donde quieres
+                        controller.enableLook = true;
+                        controller.enableTilt = true;
+                        controller.enableTranslate = true;
+                        controller.enableRotate = true;
+                        controller.enableZoom = true;
+                        if ('zoomFactor' in controller) {
+                            controller.zoomFactor = 10.0;
+                        }
+                        // Colisión con el terreno: la cámara NO atraviesa la tierra al bajar.
+                        // (Antes estaba en false y la cámara se hundía bajo el relieve.)
+                        controller.enableCollisionDetection = true;
+                    }
+
+                    if (activeViewer.scene && activeViewer.scene.preRender) {
+                        activeViewer.scene.preRender.addEventListener(enforceDioramaCameraBounds);
+                    }
+
+                    // Listener interactivo para inspección de calicatas y perfiles geológicos
+                    if (engine && typeof engine.onPick === 'function') {
+                        engine.onPick((picked, screenPosition) => {
+                            if (picked && picked.id) {
+                                if (typeof picked.id === 'object' && picked.id.type === 'BOREHOLE_STRATUM') {
+                                    setSelectedEstratoTooltip(picked.id);
+                                    setTooltipPosition({ x: screenPosition.x, y: screenPosition.y });
+                                } else if (typeof picked.id === 'object' && picked.id.type === 'GEOLOGY_WALL') {
+                                    setSelectedEstratoTooltip({
+                                        nombre_progresiva: `${picked.id.progresiva1} ➔ ${picked.id.progresiva2}`,
+                                        numero_estrato: 'Perfil Continuo',
+                                        profundidad_inicial: picked.id.estrato?.profundidad_inicial ?? '0.00',
+                                        profundidad_final: picked.id.estrato?.profundidad_final ?? '1.00',
+                                        clasificacion_sucs: picked.id.estrato?.clasificacion_sucs || 'SUCS',
+                                        descripcion: picked.id.estrato?.descripcion || 'Muro geológico continuo del tramo vial.',
+                                        nlp_color_hex: picked.id.estrato?.nlp_color_hex || '#3b82f6'
+                                    });
+                                    setTooltipPosition({ x: screenPosition.x, y: screenPosition.y });
+                                } else if (typeof picked.id === 'object' && picked.id.name) {
+                                    setSelectedEstratoTooltip({
+                                        nombre_progresiva: picked.id.name,
+                                        numero_estrato: 'Sondaje',
+                                        profundidad_inicial: '0.00',
+                                        profundidad_final: 'S/D',
+                                        clasificacion_sucs: 'N/A',
+                                        descripcion: typeof picked.id.description?.getValue === 'function' ? picked.id.description.getValue() : '',
+                                        nlp_color_hex: '#10b981'
+                                    });
+                                    setTooltipPosition({ x: screenPosition.x, y: screenPosition.y });
+                                }
+                            } else {
+                                setSelectedEstratoTooltip(null);
+                            }
+                        });
                     }
                 }
 
-                // Verificación de seguridad tras await
-                if (!isMounted.current || viewer.isDestroyed()) {
-                    if (!viewer.isDestroyed()) viewer.destroy();
-                    return;
-                }
-
-                // Capa Focal (Para el área del modelo LandXML)
-                const focusLayer = imageryLayers.addImageryProvider(new UrlTemplateImageryProvider({
-                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                    maximumLevel: 19
-                }));
-                focusLayer.alpha = 0.0;
-                focusImageryLayerRef.current = focusLayer;
-
-                const controller = viewer.scene.screenSpaceCameraController;
-                if (controller) {
-                    // --- CONFIGURACIÓN GLOBAL DE MOVILIDAD MEJORADA ---
-                    controller.inertiaSpin = 0.06;          // Rotación muy directa
-                    controller.inertiaTranslate = 0.06;     // Pan directo sin "resbalar"
-                    controller.inertiaZoom = 0.06;          // Zoom que para donde quieres
-                    controller.enableLook = true;
-                    controller.enableTilt = true;
-                    controller.enableTranslate = true;
-                    controller.enableRotate = true;
-                    controller.enableZoom = true;
-                    // Sensibilidad de rueda del mouse: mucho más alta para zoom cómodo
-                    if ('zoomFactor' in controller) {
-                        controller.zoomFactor = 10.0;
-                    }
-                    // Evita que la cámara se atasque dentro del terreno al inclinarse
-                    controller.enableCollisionDetection = false;
-                }
-
-                viewer.scene.preRender.addEventListener(enforceDioramaCameraBounds);
-                if (isMounted.current) {
-                    viewerRef.current = viewer;
-                    setIsViewerReady(true); // DIPARAR RENDERIZADO DE DATOS
+                if (!isCancelled && isMounted.current) {
+                    setIsViewerReady(true); // DISPARAR RENDERIZADO DE DATOS (Calicatas, Estratos, LandXML)
                 } else {
-                    viewer.destroy();
+                    if (activeViewer && typeof activeViewer.destroy === 'function') activeViewer.destroy();
+                    if (activeEngine && typeof activeEngine.destroy === 'function') activeEngine.destroy();
                 }
 
             } catch (e) {
-                console.error("Error crítico inicializando el motor Cesium:", e);
-                if (viewer && !viewer.isDestroyed()) viewer.destroy();
+                console.error("Error crítico inicializando el motor 3D:", e);
+                if (activeViewer && typeof activeViewer.isDestroyed === 'function' && !activeViewer.isDestroyed()) {
+                    activeViewer.destroy();
+                }
             }
         };
 
         initializeViewer();
 
         return () => {
+            isCancelled = true;
             isMounted.current = false;
+            setIsViewerReady(false);
             disableDioramaConstraints();
-            if (viewer && !viewer.isDestroyed()) {
+
+            if (fullTramoWallPrimitiveRef.current && activeViewer && !activeViewer.isDestroyed()) {
                 try {
-                    viewer.scene.preRender.removeEventListener(enforceDioramaCameraBounds);
+                    activeViewer.scene.primitives.remove(fullTramoWallPrimitiveRef.current);
                 } catch (e) { }
-                viewer.destroy();
+                fullTramoWallPrimitiveRef.current = null;
             }
+
+            if (batchBoreholePrimitiveRef.current && activeViewer && !activeViewer.isDestroyed()) {
+                try {
+                    activeViewer.scene.primitives.remove(batchBoreholePrimitiveRef.current);
+                } catch (e) { }
+                batchBoreholePrimitiveRef.current = null;
+            }
+
+            if (activeViewer && typeof activeViewer.isDestroyed === 'function' && !activeViewer.isDestroyed()) {
+                try {
+                    if (activeViewer.scene && activeViewer.scene.preRender) {
+                        activeViewer.scene.preRender.removeEventListener(enforceDioramaCameraBounds);
+                    }
+                } catch (e) { }
+            }
+
+            if (activeEngine && typeof activeEngine.destroy === 'function') {
+                try { activeEngine.destroy(); } catch (e) { }
+            } else if (engineRef.current && typeof engineRef.current.destroy === 'function') {
+                try { engineRef.current.destroy(); } catch (e) { }
+            }
+
+            engineRef.current = null;
             viewerRef.current = null;
         };
-    }, [disableDioramaConstraints, enforceDioramaCameraBounds]);
+    }, []); // ⭐ El viewer se monta ONCE de forma atómica y cancelable en React 18
+
+    // Sincronización en tiempo real de la opacidad de la capa satelital
+    useEffect(() => {
+        if (engineRef.current && typeof engineRef.current.setImageryOpacity === 'function') {
+            engineRef.current.setImageryOpacity(mapOpacity);
+        } else if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+            const layers = viewerRef.current.imageryLayers;
+            if (layers) {
+                for (let i = 0; i < layers.length; i++) {
+                    const layer = layers.get(i);
+                    if (layer && layer !== focusImageryLayerRef.current) {
+                        layer.alpha = mapOpacity;
+                    }
+                }
+                viewerRef.current.scene?.requestRender();
+            }
+        }
+    }, [mapOpacity]);
 
 
     // --- MANEJO DE ARCHIVOS ---
@@ -1727,7 +2037,7 @@ export default function Vista3D() {
                 const { x, y } = selectedModelo.metadata.centro_utm;
                 const wgs = utmToWgs84(x, y, projectZone);
                 const sceneCamera = getSceneCamera(viewer);
-                if (!sceneCamera) {
+                if (!sceneCamera || !wgs) {
                     setIsGlobalLoading(false);
                     return;
                 }
@@ -1795,12 +2105,12 @@ export default function Vista3D() {
                     const selectedProgressivaCoords = latestSelection
                         ? processCoordinates(latestSelection.coordenada_este, latestSelection.coordenada_norte, projectZone)
                         : null;
-                    const centerLon = latestSelection
-                        ? utmToWgs84(selectedProgressivaCoords.x, selectedProgressivaCoords.y, projectZone).lon
-                        : sumLon / rawVertices.length;
-                    const centerLat = latestSelection
-                        ? utmToWgs84(selectedProgressivaCoords.x, selectedProgressivaCoords.y, projectZone).lat
-                        : sumLat / rawVertices.length;
+                    const selectedWgs = latestSelection
+                        ? utmToWgs84(selectedProgressivaCoords.x, selectedProgressivaCoords.y, projectZone)
+                        : null;
+                    // Si la progresiva seleccionada no tiene coordenadas válidas, se cae al centroide de la malla
+                    const centerLon = selectedWgs ? selectedWgs.lon : sumLon / rawVertices.length;
+                    const centerLat = selectedWgs ? selectedWgs.lat : sumLat / rawVertices.length;
                     const sceneCamera = getSceneCamera(viewer);
                     if (!sceneCamera) return;
 
@@ -1855,13 +2165,21 @@ export default function Vista3D() {
 
     useEffect(() => {
         const viewer = viewerRef.current;
-        if (!viewer || viewer.isDestroyed() || !selectedModelo || modelMeshVersion === 0 || !currentModelDataRef.current?.rawVertices?.length) {
+        if (!viewer || viewer.isDestroyed()) return;
+
+        // Salida del modo local: restaurar planeta/recortes y limpiar overlay y caja guía
+        // (con o sin malla cargada).
+        if (!selectedProgressiva3D) {
+            pendingDioramaFocusRef.current = null;
+            disableDioramaConstraints();
+            clearDioramaBox();
+            clearLocalOverlays();
             return;
         }
 
-        if (!selectedProgressiva3D) {
-            pendingDioramaFocusRef.current = null;
-            clearLocalOverlays();
+        // Con malla cargada el enfoque lo completa la cadena renderModelChunk → caja → cámara.
+        if (!selectedModelo || modelMeshVersion === 0 || !currentModelDataRef.current?.rawVertices?.length) {
+            // Sin malla: flyToProgressive ya construyó caja+overlay y voló directamente.
             return;
         }
 
@@ -1874,7 +2192,7 @@ export default function Vista3D() {
         pendingDioramaFocusRef.current = null;
         setCameraMode('diorama');
         focusOnSelectedProgressiva();
-    }, [clearLocalOverlays, focusOnSelectedProgressiva, modelMeshVersion, renderLocalOverlay, selectedModelo, selectedProgressiva3D]);
+    }, [clearDioramaBox, clearLocalOverlays, focusOnSelectedProgressiva, modelMeshVersion, renderLocalOverlay, selectedModelo, selectedProgressiva3D]);
 
     useEffect(() => {
         const isLocalMode = selectedProgressiva3D?.id != null;
@@ -1896,6 +2214,44 @@ export default function Vista3D() {
             }
         });
 
+        // Visibilidad de estratos batch (+ reconstrucción si cambió zExag/zBase/zona:
+        // el lote hornea cotas exageradas, igual que el muro)
+        if (batchBoreholePrimitiveRef.current) {
+            const buildParams = `${currentZExag()}|${zBaseRef.current}|${projectZone}`;
+            if (batchBuildParamsRef.current !== buildParams) {
+                if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+                    try { viewerRef.current.scene.primitives.remove(batchBoreholePrimitiveRef.current); } catch (e) { }
+                }
+                batchBoreholePrimitiveRef.current = null;
+            } else {
+                batchBoreholePrimitiveRef.current.show = isLocalMode ? false : showGlobalEstratos;
+            }
+        }
+        if (!isLocalMode && showGlobalEstratos && !batchBoreholePrimitiveRef.current
+            && batchInputRef.current?.length && viewerRef.current && !viewerRef.current.isDestroyed()) {
+            batchBuildParamsRef.current = `${currentZExag()}|${zBaseRef.current}|${projectZone}`;
+            batchBoreholePrimitiveRef.current = BoreholeBatchEngine.renderBoreholeBatch(viewerRef.current, batchInputRef.current, {
+                toLon: (e, n) => utmToWgs84(e, n, projectZone),
+                zExag: currentZExag(),
+                zBase: zBaseRef.current,
+                radius: 1.5
+            });
+        }
+
+        // Gestión del Muro Geológico Continuo (FullTramoEngine) — la exageración la fija buildGeologyWall
+        const viewer = viewerRef.current;
+        if (viewer && !viewer.isDestroyed() && soilData?.progresivas?.length >= 2) {
+            if (showGlobalEstratos && !isLocalMode) {
+                if (!fullTramoWallPrimitiveRef.current) {
+                    buildGeologyWall(viewer);
+                } else {
+                    fullTramoWallPrimitiveRef.current.show = true;
+                }
+            } else if (fullTramoWallPrimitiveRef.current) {
+                fullTramoWallPrimitiveRef.current.show = false;
+            }
+        }
+
         kmlDataSourcesRef.current.forEach((ds) => {
             if (!ds?.entities?.values) return;
             ds.show = !isLocalMode;
@@ -1906,12 +2262,54 @@ export default function Vista3D() {
                 entity.polyline.material = isLocalMode
                     ? Color.CYAN.withAlpha(0.98)
                     : Color.DODGERBLUE.withAlpha(0.9);
-                entity.polyline.depthFailMaterial = Color.CYAN.withAlpha(0.95);
+                // El trazado solo atraviesa el terreno DENTRO del diorama local (guía intencional);
+                // en la vista global queda oculto tras las montañas.
+                entity.polyline.depthFailMaterial = isLocalMode ? Color.CYAN.withAlpha(0.95) : undefined;
                 entity.polyline.clampToGround = true;
                 entity.polyline.zIndex = isLocalMode ? 40 : 20;
             });
         });
-    }, [mapOpacity, selectedProgressiva3D, showEstratosLayer]);
+
+        if (viewer && !viewer.isDestroyed()) {
+            viewer.scene.requestRender();
+        }
+    }, [mapOpacity, projectZone, selectedProgressiva3D, showEstratosLayer, soilData, buildGeologyWall, currentZExag, zExag]);
+
+    // ── EXAGERACIÓN GLOBAL COHERENTE (globo + muro) ──────────────────────────
+    // El globo exagera alrededor de zBase (relativeHeight), la MISMA fórmula de la malla:
+    // superficie del terreno en render = zBase + (zReal - zBase) * zExag.
+    // El muro hornea cotas exageradas en su geometría, por eso se reconstruye aquí.
+    useEffect(() => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed() || !viewer.scene) return;
+
+        if ('verticalExaggeration' in viewer.scene) {
+            viewer.scene.verticalExaggeration = zExag;
+        }
+        if ('verticalExaggerationRelativeHeight' in viewer.scene) {
+            viewer.scene.verticalExaggerationRelativeHeight = zBase;
+        }
+
+        destroyGeologyWall(viewer);
+        const showGlobalEstratos = showEstratosLayer && mapOpacity < 0.1;
+        if (showGlobalEstratos && !selectedProgressiva3D) {
+            buildGeologyWall(viewer);
+        }
+        viewer.scene.requestRender();
+    }, [zExag, zBase, buildGeologyWall, destroyGeologyWall]);
+
+    // ── DIORAMA DEL TRAMO: aplicar/quitar el recorte según datos y toggle ────
+    useEffect(() => {
+        const viewer = viewerRef.current;
+        if (!isViewerStable(viewer) || !isViewerReady) return;
+        if (selectedProgressiva3D) return; // el diorama local gestiona su propia máscara
+        if (corridorClip) {
+            applyCorridorClipToGlobe(viewer);
+        } else if (!dioramaMaskPolygonRef.current) {
+            viewer.scene.globe.clippingPolygons = undefined;
+        }
+        viewer.scene.requestRender();
+    }, [corridorClip, soilData, modelMeshVersion, isViewerReady, selectedProgressiva3D, applyCorridorClipToGlobe, isViewerStable]);
 
     useEffect(() => {
         applyCameraMode(cameraMode);
@@ -1996,60 +2394,26 @@ export default function Vista3D() {
             {/* 2. BODY AREA (SIDEBARS + MAP) */}
             <div className="flex-1 flex w-full h-[calc(100%-3.5rem)] overflow-hidden relative">
 
-                {/* A. SIDEBAR IZQUIERDO */}
-                {isLeftOpen && (
-                    <aside className="absolute left-0 top-0 w-72 border-r border-white/5 bg-slate-950/40 backdrop-blur-3xl flex flex-col z-40 shrink-0 shadow-[20px_0_40px_rgba(0,0,0,0.5)] h-full animate-in slide-in-from-left-full duration-500 ease-out">
-                        <div className="p-4 border-b border-slate-800/50">
-                            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".xml,.zip,.ifc" />
-                            <button onClick={() => fileInputRef.current.click()} className="w-full bg-blue-600/10 hover:bg-blue-600 border border-blue-500/30 text-blue-400 hover:text-white py-4 rounded-xl transition-all flex flex-col items-center gap-1 group">
-                                <i className="fa-solid fa-cloud-arrow-up text-xl group-hover:scale-110 transition-transform"></i>
-                                <span className="text-[10px] font-bold uppercase tracking-wider">Importar LandXML</span>
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                            <div className="px-2 mb-2">
-                                <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Modelos Disponibles</h4>
-                            </div>
-                            {modelos.length === 0 ? (
-                                <div className="text-center py-10 px-4">
-                                    <i className="fa-solid fa-folder-open text-slate-700 text-3xl mb-3"></i>
-                                    <p className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Sin modelos cargados</p>
-                                </div>
-                            ) : (
-                                modelos.map(m => (
-                                    <div
-                                        key={m.id}
-                                        onClick={() => setSelectedModelo(m)}
-                                        className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedModelo?.id === m.id
-                                            ? 'bg-blue-600 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.2)]'
-                                            : 'bg-slate-800/40 border-slate-800 hover:border-slate-600'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <i className="fa-solid fa-cube text-blue-400 text-[10px]"></i>
-                                            <h4 className="text-[10px] font-bold text-white truncate flex-1 leading-tight">{m.nombre_archivo}</h4>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${selectedModelo?.id === m.id ? 'bg-blue-400 text-blue-950' : 'bg-slate-800 text-slate-500'
-                                                }`}>OBJ</span>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
-                                                className="text-slate-600 hover:text-red-400 p-1 transition-colors"
-                                            >
-                                                <i className="fa-solid fa-trash-can text-[10px]"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </aside>
-                )}
+                {/* A. SIDEBAR IZQUIERDO (componente extraído) */}
+                <Progressivas3DSelector
+                    isOpen={isLeftOpen}
+                    modelos={modelos}
+                    selectedModelo={selectedModelo}
+                    setSelectedModelo={setSelectedModelo}
+                    handleDeleteModel={handleDelete}
+                    handleFileChange={handleFileChange}
+                />
 
                 {/* B. ÁREA CENTRAL (MAPA) */}
                 <div className="flex-1 relative bg-black overflow-hidden h-full">
                     <div ref={containerRef} className="w-full h-full" />
+
+                    {/* Tooltip interactivo 3D para estratos */}
+                    <BoreholeDetailTooltip
+                        selectedEstrato={selectedEstratoTooltip}
+                        position={tooltipPosition}
+                        onClose={() => setSelectedEstratoTooltip(null)}
+                    />
 
                     {/* Botones de Estilo de Capa Flotantes */}
                     <div className={`absolute top-6 transition-all duration-300 flex flex-col gap-3 z-30 ${isRightOpen ? 'right-[344px]' : 'right-6'}`}>
@@ -2116,211 +2480,27 @@ export default function Vista3D() {
                     )}
                 </div>
 
-                {/* C. PANEL DERECHO (OPCIONES) */}
-                {isRightOpen && (
-                    <aside className="absolute right-0 top-0 w-80 border-l border-white/5 bg-slate-950/40 backdrop-blur-3xl flex flex-col z-40 shrink-0 h-full animate-in slide-in-from-right-full duration-500 ease-out shadow-[-20px_0_40px_rgba(0,0,0,0.5)]">
-                        <div className="p-6 border-b border-slate-800 bg-slate-950/20">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Opciones Visuales</h3>
-                        </div>
-                        <div className="p-6 space-y-8 overflow-y-auto custom-scrollbar">
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Terreno Natural</label>
-                                    <span className="text-blue-400 font-mono text-xs font-bold">{Math.round(mapOpacity * 100)}%</span>
-                                </div>
-                                <input type="range" min="0" max="1" step="0.01" value={mapOpacity} onChange={(e) => setMapOpacity(parseFloat(e.target.value))} className="w-full h-1 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" />
-                            </div>
-
-                            <div className="p-5 rounded-2xl border bg-cyan-500/5 border-cyan-400/20 shadow-inner shadow-cyan-500/5">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-300">
-                                            <i className="fa-solid fa-cube text-sm"></i>
-                                        </div>
-                                        <div>
-                                            <span className="block text-[10px] font-black text-white uppercase tracking-tighter">Modo Diorama</span>
-                                            <span className="block text-[8px] text-cyan-200/70 font-bold uppercase tracking-widest">
-                                                {selectedProgressiva3D ? selectedProgressiva3D.nombre : 'Selecciona una progresiva'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    {selectedProgressiva3D && (
-                                        <button
-                                            onClick={() => {
-                                                setSelectedProgressiva3D(null);
-                                                setCameraMode('orbit');
-                                            }}
-                                            className="text-[8px] px-2 py-1 rounded-md border border-cyan-400/20 text-cyan-200 hover:bg-cyan-400/10 transition-colors uppercase tracking-widest font-black"
-                                        >
-                                            Reset
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="space-y-4 pt-4 border-t border-cyan-400/10">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Modo de Cámara</label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {[
-                                                {
-                                                    id: 'orbit',
-                                                    label: 'Global',
-                                                    action: () => {
-                                                        setSelectedProgressiva3D(null);
-                                                        setCameraMode('orbit');
-                                                    }
-                                                },
-                                                {
-                                                    id: 'diorama',
-                                                    label: 'Diorama',
-                                                    action: () => {
-                                                        setCameraMode('diorama');
-                                                        focusOnSelectedProgressiva();
-                                                    }
-                                                }
-                                            ].map(({ id, label, action }) => {
-                                                const isActive = cameraMode === id;
-                                                const isDisabled = id === 'diorama' && !selectedProgressiva3D;
-                                                return (
-                                                    <button
-                                                        key={id}
-                                                        onClick={() => {
-                                                            if (isDisabled) return;
-                                                            action();
-                                                        }}
-                                                        className={`px-2 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all ${isDisabled
-                                                            ? 'bg-slate-900/40 border-slate-800 text-slate-600 cursor-not-allowed'
-                                                            : isActive
-                                                                ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-[0_0_16px_rgba(34,211,238,0.18)]'
-                                                                : 'bg-slate-900/70 border-slate-700 text-slate-300 hover:border-cyan-400/40 hover:text-white'
-                                                            }`}
-                                                    >
-                                                        {label}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Ventana Local</label>
-                                        <span className="bg-cyan-500 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full">{dioramaSize} m</span>
-                                    </div>
-                                    <input type="range" min="300" max="500" step="25" value={dioramaSize} onChange={(e) => setDioramaSize(parseInt(e.target.value, 10))} className="w-full h-1 bg-slate-900 rounded-full appearance-none accent-cyan-400 cursor-pointer" />
-                                    <p className="text-[9px] text-slate-500 italic leading-relaxed">
-                                        Al elegir una progresiva, el LandXML se recorta dentro de este chunk para enfocar estratos y superficie local.
-                                    </p>
-
-                                    {/* Guía de controles mejorada */}
-                                    <div className="mt-2 p-3 rounded-xl bg-slate-900/70 border border-slate-700/60">
-                                        <p className="text-[8px] font-black text-cyan-400/80 uppercase tracking-widest mb-2.5">
-                                            <i className="fas fa-keyboard mr-1.5"></i>Controles de Navegación
-                                        </p>
-                                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                                            {[
-                                                ['W / S', 'Avanzar / Retroceder'],
-                                                ['A / D', 'Izquierda / Derecha'],
-                                                ['Q / E', 'Bajar / Subir'],
-                                                ['Scroll ↕', 'Zoom rápido'],
-                                                ['Clic Der.', 'Rotar vista'],
-                                                ['Ctrl+Drag', 'Inclinar terreno'],
-                                            ].map(([key, action]) => (
-                                                <div key={key} className="flex items-center gap-1.5">
-                                                    <span className="text-[7px] font-black bg-slate-800 border border-slate-600 text-cyan-300 px-1.5 py-0.5 rounded shrink-0">{key}</span>
-                                                    <span className="text-[7px] text-slate-500">{action}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className={`p-5 rounded-2xl border transition-all duration-500 ${mapOpacity < 0.1 ? 'bg-blue-600/5 border-blue-500/20 shadow-inner' : 'bg-slate-800/10 border-slate-800 opacity-60'}`}>
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${mapOpacity < 0.1 ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-600'}`}>
-                                            <i className="fa-solid fa-microscope text-sm"></i>
-                                        </div>
-                                        <span className="text-[10px] font-black text-white uppercase tracking-tighter">Capas Geológicas</span>
-                                    </div>
-                                    <div className="relative inline-flex items-center cursor-pointer scale-90">
-                                        <input type="checkbox" checked={showEstratosLayer} onChange={(e) => setShowEstratosLayer(e.target.checked)} className="sr-only peer" disabled={mapOpacity > 0.1} />
-                                        <div className="w-10 h-5 bg-slate-700 peer-checked:bg-blue-600 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5 shadow-inner"></div>
-                                    </div>
-                                </div>
-                                {showEstratosLayer && mapOpacity < 0.1 ? (
-                                    <div className="space-y-6 pt-4 border-t border-blue-500/10 active:animate-in fade-in zoom-in-95 duration-300">
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center">
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Vertical Exaggeration</label>
-                                                <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">{zExag}x</span>
-                                            </div>
-                                            <input type="range" min="1" max="50" step="1" value={zExag} onChange={(e) => setZExag(parseFloat(e.target.value))} className="w-full h-1 bg-slate-900 rounded-full appearance-none accent-blue-400 cursor-pointer" />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-[9px] text-slate-600 italic font-medium leading-relaxed">Baja la opacidad al 0% para habilitar el visor de geología.</p>
-                                )}
-                            </div>
-
-                            {/* NUEVA SECCIÓN: LISTA DE CALICATAS */}
-                            <div className="space-y-4 pt-6 border-t border-slate-800">
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Exploración de Calicatas</h4>
-                                <div className="space-y-2 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                                    {((soilData?.progresivas || []).filter(p => p.estratos && p.estratos.length > 0)).length === 0 ? (
-                                        <div className="p-10 text-center opacity-40">
-                                            <i className="fa-solid fa-location-dot text-2xl mb-2"></i>
-                                            <p className="text-[9px] font-bold uppercase tracking-tighter leading-none">No hay puntos con estratos</p>
-                                        </div>
-                                    ) : (
-                                        soilData.progresivas
-                                            .filter(p => p.estratos && p.estratos.length > 0)
-                                            .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                                            .map(p => {
-                                                const hasCoords = p.coordenada_este && p.coordenada_norte;
-                                                const hasData = p.estratos && p.estratos.length > 0;
-                                                const isDisabled = !hasCoords || !hasData;
-
-                                                return (
-                                                    <div
-                                                        key={p.id}
-                                                        onClick={() => !isDisabled && flyToProgressive(p)}
-                                                        className={`group p-3 rounded-xl border transition-all flex items-center justify-between ${isDisabled
-                                                            ? 'bg-slate-900/40 border-slate-800/50 opacity-40 cursor-not-allowed'
-                                                            : selectedProgressiva3D?.id === p.id
-                                                                ? 'bg-cyan-500/10 border-cyan-400/40 shadow-[0_0_18px_rgba(34,211,238,0.12)] cursor-pointer'
-                                                                : 'bg-slate-800/30 border-slate-800 hover:border-blue-500/50 hover:bg-blue-600/5 cursor-pointer shadow-sm'
-                                                            }`}
-                                                        title={isDisabled ? "Este punto no tiene coordenadas o estratos registrados" : "Volar a esta ubicación"}
-                                                    >
-                                                        <div className="flex items-center gap-2 overflow-hidden">
-                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isDisabled ? 'bg-slate-600' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                                                                }`}></div>
-                                                            <div className="flex flex-col overflow-hidden">
-                                                                <span className={`text-[10px] font-bold transition-colors uppercase tracking-tight truncate ${isDisabled ? 'text-slate-500' : 'text-slate-300 group-hover:text-white'
-                                                                    }`}>{p.nombre}</span>
-                                                                {!isDisabled && selectedProgressiva3D?.id === p.id && (
-                                                                    <span className="text-[7px] font-black text-cyan-300 uppercase tracking-[0.2em] mt-0.5">
-                                                                        Diorama Activo
-                                                                    </span>
-                                                                )}
-                                                                {isDisabled && (
-                                                                    <span className="text-[7px] font-black text-rose-500 uppercase tracking-widest mt-0.5">
-                                                                        {!hasCoords ? 'Sin Coordenadas' : 'Sin Estratos'}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        {!isDisabled && (
-                                                            <i className="fa-solid fa-location-crosshairs text-[10px] text-slate-600 group-hover:text-blue-400 transition-colors"></i>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </aside>
-                )}
+                {/* C. PANEL DERECHO (componente extraído) */}
+                <LayersControlPanel
+                    isOpen={isRightOpen}
+                    mapOpacity={mapOpacity}
+                    setMapOpacity={setMapOpacity}
+                    zExag={zExag}
+                    setZExag={setZExag}
+                    showEstratosLayer={showEstratosLayer}
+                    setShowEstratosLayer={setShowEstratosLayer}
+                    cameraMode={cameraMode}
+                    setCameraMode={setCameraMode}
+                    dioramaSize={dioramaSize}
+                    setDioramaSize={setDioramaSize}
+                    selectedProgressiva3D={selectedProgressiva3D}
+                    setSelectedProgressiva3D={setSelectedProgressiva3D}
+                    focusOnSelectedProgressiva={focusOnSelectedProgressiva}
+                    soilData={soilData}
+                    flyToProgressive={flyToProgressive}
+                    corridorClip={corridorClip}
+                    setCorridorClip={setCorridorClip}
+                />
             </div>
         </div>
     );

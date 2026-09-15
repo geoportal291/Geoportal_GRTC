@@ -1274,10 +1274,9 @@ const getProgresivaPage = async (progresivaId, itemsPerPage = 10) => {
                 SELECT 
                     id, 
                     parent_id,
-                    ROW_NUMBER() OVER(PARTITION BY parent_id ORDER BY id) as rn
-                FROM progresivas 
-                WHERE parent_id = (SELECT parent_id FROM progresivas WHERE id = $1) 
-                    AND id <= $1 -- Only consider progresivas up to the current one
+                    ROW_NUMBER() OVER(PARTITION BY parent_id ORDER BY NULLIF(regexp_replace(p.codigo, '[^0-9]', '', 'g'), '')::numeric ASC, p.id ASC) as rn
+                FROM progresivas p
+                WHERE parent_id = (SELECT parent_id FROM progresivas WHERE id = $1)
             )
             SELECT rn FROM ranked_progresivas WHERE id = $1`,
             [progresivaId]

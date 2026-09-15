@@ -59,6 +59,8 @@ const amigoSecretoService = require('./services/amigoSecretoService');
 const wishlistService = require('./services/wishlistService');
 const modelos3DService = require('./services/modelos3DService');
 const geologiaCapasService = require('./services/geologiaCapasService');
+const perfilEstratigraficoService = require('./services/perfilEstratigraficoService');
+const perfilExcelService = require('./services/perfilExcelService');
 const { uploadFileToNAS, deleteFileFromNAS } = require('./services/nasStorageService');
 
 console.log('DEBUG: Servidor backend iniciando...');
@@ -866,20 +868,40 @@ app.get('/api/modelos-3d/:id/obj', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Este modelo no tiene una malla OBJ descargable.' });
         }
 
+        // STREAMING: el OBJ se transmite tal como llega del almacenamiento remoto, sin
+        // cargarlo completo en memoria. Con responseType:'text' se duplicaba la RAM
+        // (buffer + string) y con mallas grandes la máquina Fly (2 vCPU / 4 GB) llegaba a
+        // OOM/reinicio → HTTP 530 intermitente que veía el frontend.
         const remoteResponse = await axios.get(modelo.url_archivo, {
-            responseType: 'text',
+            responseType: 'stream',
             timeout: 120000,
             maxContentLength: Infinity,
             maxBodyLength: Infinity
         });
 
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        return res.send(remoteResponse.data);
+        // Cortar la descarga remota si el cliente se va; y si el stream remoto falla a
+        // mitad de transferencia, responder 502 SIN tumbar el proceso.
+        res.on('close', () => remoteResponse.data.destroy());
+        remoteResponse.data.on('error', (streamErr) => {
+            console.error('[DEBUG 3D] Stream remoto de OBJ interrumpido:', streamErr.message);
+            if (!res.headersSent) {
+                res.status(502).json({ error: 'La descarga de la malla OBJ se interrumpió.' });
+            } else {
+                res.destroy();
+            }
+        });
+        return remoteResponse.data.pipe(res);
     } catch (err) {
         console.error('[DEBUG 3D] Error sirviendo malla OBJ:', err.message);
-        return res.status(err.response?.status || 500).json({
+        // Con responseType:'stream', err.response.data es un Stream (estructura circular):
+        // serializarlo con res.json() lanza "Converting circular structure to JSON" como
+        // excepción no capturada y MATA el proceso Node (crash loop de la máquina en Fly
+        // cada vez que el almacenamiento remoto falla). Solo se reenvían strings.
+        const detalle = (typeof err.response?.data === 'string' ? err.response.data.slice(0, 300) : null) || err.message;
+        return res.status(err.response?.status || 502).json({
             error: 'No se pudo obtener la malla OBJ del modelo.',
-            detalle: err.response?.data || err.message
+            detalle
         });
     }
 });
@@ -4811,6 +4833,54 @@ app.get('/api/tramos/:tramoId/ensayos', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error(`Error al obtener ensayos para el tramo ${tramoId}:`, err);
         res.status(500).json({ error: 'Error al obtener ensayos por tramo', details: err.message });
+    }
+});
+
+// Perfil estratigrafico del tramo (visor estilo Autodesk): progresivas con
+// estratos (patron visual resuelto desde suelos_diccionario_nlp) y ensayos.
+// Query params: limit (default 20), offset (default 0),
+// soloConDatos (default true: solo progresivas con estratos definidos).
+app.get('/api/tramos/:tramoId/perfil-estratigrafico', authenticateToken, async (req, res) => {
+    const { tramoId } = req.params;
+    const { limit, offset, soloConDatos } = req.query;
+    const conDatos = soloConDatos !== 'false'; // default true
+    try {
+        const perfil = await perfilEstratigraficoService.getPerfilEstratigrafico(tramoId, {
+            limit, offset, soloConDatos: conDatos
+        });
+        res.json(perfil);
+    } catch (err) {
+        if (err.status === 400) {
+            return res.status(400).json({ error: 'tramoId inválido.' });
+        }
+        if (err.status === 404) {
+            return res.status(404).json({ error: 'Tramo no encontrado.' });
+        }
+        console.error(`Error al obtener el perfil estratigrafico del tramo ${tramoId}:`, err);
+        res.status(500).json({ error: 'Error al obtener el perfil estratigrafico', details: err.message });
+    }
+});
+
+// Exportación a Excel del perfil estratigrafico (lámina estilo web + detalle
+// de estratos + leyenda). El frontend envía el payload con los valores ya
+// calculados con su motor config-driven; el archivo lo genera openpyxl en el
+// worker Python (backend/python_worker/perfil_estratigrafico_excel.py).
+app.post('/api/tramos/:tramoId/perfil-estratigrafico/exportar-excel', authenticateToken, async (req, res) => {
+    const { tramoId } = req.params;
+    try {
+        const { buffer, filename } = await perfilExcelService.generarPerfilExcel({
+            ...(req.body || {}),
+            tramo: { ...(req.body?.tramo || {}), id: tramoId }
+        });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
+    } catch (err) {
+        if (err.status === 400) {
+            return res.status(400).json({ error: err.message });
+        }
+        console.error(`Error al exportar el perfil estratigrafico del tramo ${tramoId} a Excel:`, err);
+        res.status(500).json({ error: 'Error al generar el Excel del perfil estratigrafico', details: err.message });
     }
 });
 

@@ -54,6 +54,84 @@ const parseToMeters = (val) => {
   return isNaN(num) ? null : num;
 };
 
+// --- Helper de estilo visual unificado por estado de progresiva (PARTE 1) ---
+// Puro (sin hooks de React): lo reutilizan la Ruta BD (progresivasData) y la Ruta KML (pointToLayer).
+// Los puntos con datos son círculos RELLENOS y sólidos (no blancos con borde) para
+// distinguirse claramente al alejar el mapa.
+const getProgresivaVisual = (p) => {
+  // Normalización idéntica al sidebar de DashboardSuelos (minúsculas + sin acentos)
+  const estado = (p.estado || 'pendiente').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const hasData = Array.isArray(p.estratos_perfil) && p.estratos_perfil.length > 0;
+
+  // APROBADO / COMPLETADO: círculo verde sólido 18px + check blanco
+  if (estado.includes('aprobado') || estado.includes('completado')) {
+    const iconHtml = `<div class="suelos-prog-dot" style="width:18px;height:18px;background-color:#27ae60;border:2.5px solid #ffffff;box-shadow:0 1px 4px rgba(0,0,0,0.45);"><i class="fas fa-check" style="font-size:9px;"></i></div>`;
+    return {
+      icon: L.divIcon({ className: 'suelos-prog-dot-wrapper', html: iconHtml, iconSize: [18, 18], iconAnchor: [9, 9] }),
+      titleSuffix: 'Aprobado',
+      statusClass: 'status-ok',
+      statusLabel: 'Aprobado',
+      iconHtml,
+      hasData: true,
+      zIndexOffset: 800
+    };
+  }
+
+  // EN REVISIÓN: círculo amarillo sólido 18px + reloj blanco
+  if (estado.includes('revision')) {
+    const iconHtml = `<div class="suelos-prog-dot" style="width:18px;height:18px;background-color:#f1c40f;border:2.5px solid #ffffff;box-shadow:0 1px 4px rgba(0,0,0,0.45);"><i class="fas fa-clock" style="font-size:9px;"></i></div>`;
+    return {
+      icon: L.divIcon({ className: 'suelos-prog-dot-wrapper', html: iconHtml, iconSize: [18, 18], iconAnchor: [9, 9] }),
+      titleSuffix: 'En Revisión',
+      statusClass: 'status-warning',
+      statusLabel: 'En Revisión',
+      iconHtml,
+      hasData: true,
+      zIndexOffset: 800
+    };
+  }
+
+  // INACTIVO: punto gris 10px (discreto)
+  if (estado.includes('inactivo')) {
+    const iconHtml = `<div class="suelos-prog-dot" style="width:10px;height:10px;background-color:#95a5a6;opacity:0.7;border:1.5px solid #ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div>`;
+    return {
+      icon: L.divIcon({ className: 'suelos-prog-dot-wrapper', html: iconHtml, iconSize: [10, 10], iconAnchor: [5, 5] }),
+      titleSuffix: 'Inactivo',
+      statusClass: 'status-inactive',
+      statusLabel: 'Inactivo',
+      iconHtml,
+      hasData,
+      zIndexOffset: 0
+    };
+  }
+
+  // PENDIENTE CON DATOS: círculo azul sólido 16px + documento blanco
+  if (hasData) {
+    const iconHtml = `<div class="suelos-prog-dot" style="width:16px;height:16px;background-color:#3498db;border:2px solid #ffffff;box-shadow:0 1px 4px rgba(0,0,0,0.4);"><i class="fas fa-file-alt" style="font-size:8px;"></i></div>`;
+    return {
+      icon: L.divIcon({ className: 'suelos-prog-dot-wrapper', html: iconHtml, iconSize: [16, 16], iconAnchor: [8, 8] }),
+      titleSuffix: 'Pendiente (Con Datos)',
+      statusClass: 'status-pending',
+      statusLabel: 'Pendiente (Con Datos)',
+      iconHtml,
+      hasData: true,
+      zIndexOffset: 800
+    };
+  }
+
+  // SIN DATOS (visual/referencia): punto gris claro 8px (mínimo, no domina)
+  const iconHtml = `<div class="suelos-prog-dot" style="width:8px;height:8px;background-color:#b2babb;opacity:0.65;border:1px solid #ffffff;box-shadow:0 1px 2px rgba(0,0,0,0.3);"></div>`;
+  return {
+    icon: L.divIcon({ className: 'suelos-prog-dot-wrapper', html: iconHtml, iconSize: [8, 8], iconAnchor: [4, 4] }),
+    titleSuffix: 'Sin Datos',
+    statusClass: 'status-inactive',
+    statusLabel: 'Sin Datos',
+    iconHtml,
+    hasData: false,
+    zIndexOffset: 0
+  };
+};
+
 // --- Componente MapLogic (El "Corazón" de Geoite trasplantado) ---
 const MapLogic = ({
   kmlTrazadoIds,
@@ -382,8 +460,8 @@ const MapLogic = ({
         );
 
         marker.bindPopup(container, {
-          minWidth: 300,
-          maxWidth: 300,
+          minWidth: 225,
+          maxWidth: 225,
           closeButton: false, // We can hide default close button if we want our own, or styling overrides it
           className: 'suelos-premium-popup'
         });
@@ -471,8 +549,8 @@ const MapLogic = ({
         );
 
         marker.bindPopup(container, {
-          minWidth: 300,
-          maxWidth: 300,
+          minWidth: 225,
+          maxWidth: 225,
           closeButton: false,
           className: 'suelos-premium-popup'
         });
@@ -521,123 +599,14 @@ const MapLogic = ({
               return;
             }
 
-            // Determine styles based on state
-            const estado = (p.estado || 'pendiente').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const hasData = p.estratos_perfil && p.estratos_perfil.length > 0;
-            const isApproved = estado.includes('aprobado') || estado.includes('completado');
-            const isReview = estado.includes('revision');
-            const isInactive = estado.includes('inactivo');
+            // Estilo visual unificado por estado (helper compartido con la Ruta KML)
+            const visual = getProgresivaVisual(p);
 
-            let marker;
-            let statusIconHtml = '';
-            let statusClass = 'status-pending';
-            let statusLabel = 'Pendiente';
-
-            // VISUAL STYLING LOGIC
-            if (isApproved) {
-              // APROBADO: VERDE (Check)
-              const icon = L.divIcon({
-                className: 'suelos-verified-marker-icon',
-                html: `<div class="suelos-verified-pin-body" style="animation: none;"><i class="fas fa-check"></i></div>`,
-                iconSize: [30, 30],
-                iconAnchor: [15, 15]
-              });
-              marker = L.marker([latLon.latitude, latLon.longitude], {
-                icon: icon,
-                title: `${p.nombre || p.codigo} (Aprobado)`
-              });
-              statusIconHtml = `<i class="fas fa-check-circle"></i>`;
-              statusClass = 'status-ok';
-              statusLabel = 'Aprobado';
-
-            } else if (isReview) {
-              // EN REVISION: AMARILLO (Reloj/Ojo)
-              const icon = L.divIcon({
-                className: 'suelos-verified-marker-icon',
-                html: `<div class="suelos-verified-pin-body" style="background-color: #f1c40f; border-color: #fff; animation: none;"><i class="fas fa-clock" style="color: white;"></i></div>`,
-                iconSize: [30, 30],
-                iconAnchor: [15, 15]
-              });
-              marker = L.marker([latLon.latitude, latLon.longitude], {
-                icon: icon,
-                title: `${p.nombre || p.codigo} (En Revisión)`
-              });
-              statusIconHtml = `<i class="fas fa-clock"></i>`;
-              statusClass = 'status-warning'; // Need to define or use inline style
-              statusLabel = 'En Revisión';
-
-            } else if (isInactive) {
-              // INACTIVO: GRIS (Punto pequeño)
-              const icon = L.divIcon({
-                className: 'suelos-kml-ref-point',
-                html: `<div style="width:10px;height:10px;background-color:#95a5a6;border-radius:50%;border:1.5px solid white;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
-                iconSize: [10, 10],
-                iconAnchor: [5, 5]
-              });
-              marker = L.marker([latLon.latitude, latLon.longitude], {
-                icon: icon,
-                zIndexOffset: 0,
-                title: `${p.nombre || p.codigo} (Inactivo)`
-              });
-              statusIconHtml = `<i class="fas fa-ban"></i>`;
-              statusClass = 'status-inactive';
-              statusLabel = 'Inactivo';
-
-            } else {
-              // CASO PENDIENTE / VISUAL
-              if (hasData) {
-                // PENDIENTE CON DATOS: AZUL (Punto medio resaltado con punto blanco central)
-                const blueDotIcon = L.divIcon({
-                  className: '',
-                  html: `<div style="
-                          width: 14px;
-                          height: 14px;
-                          background-color: #3498db;
-                          border: 2px solid white;
-                          border-radius: 50%;
-                          box-shadow: 0 0 6px rgba(0,0,0,0.4);
-                          position: relative;
-                        ">
-                          <div style="width: 4px; height: 4px; background-color: white; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);"></div>
-                        </div>`,
-                  iconSize: [14, 14],
-                  iconAnchor: [7, 7]
-                });
-
-                marker = L.marker([latLon.latitude, latLon.longitude], {
-                  icon: blueDotIcon,
-                  zIndexOffset: 800,
-                  title: `${p.nombre || p.codigo} (Pendiente con datos)`
-                });
-                statusIconHtml = `<i class="fas fa-file-alt"></i>`;
-                statusClass = 'status-pending';
-                statusLabel = 'Pendiente (Con Datos)';
-              } else {
-                // SOLO VISUAL: PLOMA (Punto pequeño)
-                const grayDotIcon = L.divIcon({
-                  className: '',
-                  html: `<div style="
-                          width: 10px;
-                          height: 10px;
-                          background-color: #95a5a6;
-                          border: 1.5px solid white;
-                          border-radius: 50%;
-                          box-shadow: 0 0 3px rgba(0,0,0,0.3);
-                        "></div>`,
-                  iconSize: [10, 10],
-                  iconAnchor: [5, 5]
-                });
-
-                marker = L.marker([latLon.latitude, latLon.longitude], {
-                  icon: grayDotIcon,
-                  zIndexOffset: 0,
-                  title: `${p.nombre || p.codigo} (Visual solamente)`
-                });
-                statusIconHtml = `<i class="fas fa-eye"></i>`;
-                statusClass = 'status-inactive';
-                statusLabel = 'Visual (Sin datos)';
-              }
-            }
+            const marker = L.marker([latLon.latitude, latLon.longitude], {
+              icon: visual.icon,
+              zIndexOffset: visual.zIndexOffset,
+              title: `${p.nombre || p.codigo} (${visual.statusLabel})`
+            });
 
             // --- TOOLTIP PERMANENTE PROGRESIVAS ---
             marker.bindTooltip(`<b>${p.nombre || p.codigo}</b>`, {
@@ -657,10 +626,14 @@ const MapLogic = ({
                 progresiva={p}
                 token={authToken}
                 onNavigate={(prog) => {
-                  navigate('/coordinador/suelos/gestion-tramos', {
+                  // FIX: ruta correcta del gestor de tramos (misma lógica que el botón
+                  // "Ver Estudio y Estratos" de DashboardSuelos). La ruta anterior
+                  // '/coordinador/suelos/gestion-tramos' no existe en el enrutador.
+                  navigate('/coordinador/recoleccion-datos/gestor-tramos', {
                     state: {
-                      openTramoId: prog.parent_id,
-                      highlightProgresivaId: prog.id
+                      activeProgresivaId: prog.id,
+                      openTramoId: prog.parent_id || prog.progresiva_padre_id || prog.id,
+                      initialViewMode: 'estratos'
                     }
                   });
                 }}
@@ -668,8 +641,8 @@ const MapLogic = ({
             );
 
             marker.bindPopup(popupNode, {
-              minWidth: 300,
-              maxWidth: 300,
+              minWidth: 225,
+              maxWidth: 225,
               closeButton: false,
               className: 'suelos-premium-popup'
             });
@@ -770,10 +743,18 @@ const MapLogic = ({
       const completedMetersMap = new Map();
       if (progresivasData) {
         progresivasData.forEach(p => {
-          const meters = parseToMeters(p.nombre || p.codigo);
-          if (meters !== null && !isNaN(meters)) completedMetersMap.set(meters, p);
+          // Emparejar por nombre Y por código (ambos si existen), sin sobrescribir
+          // una entrada ya válida con null.
+          [parseToMeters(p.nombre), parseToMeters(p.codigo)].forEach(meters => {
+            if (meters !== null && !isNaN(meters) && !completedMetersMap.has(meters)) {
+              completedMetersMap.set(meters, p);
+            }
+          });
         });
       }
+
+      // PARTE 4: Acumulador para el resumen de archivos KML cargados
+      const kmlSummaries = [];
 
       for (const id of effectiveKmlIds) {
         if (!id) continue;
@@ -792,6 +773,42 @@ const MapLogic = ({
 
         if (kmlText) {
           const geojson = safeParseKmlToGeoJson(kmlText);
+
+          // --- PARTE 4: LOG DE IDENTIFICACIÓN DEL ARCHIVO KML ---
+          // Extrae el <name> del documento KML para saber qué archivo es
+          // (progresivas cada 100 m vs cada 500 m) y estima su intervalo.
+          const docNameMatch = kmlText.match(/<name>([^<]+)<\/name>/i);
+          const docName = docNameMatch ? docNameMatch[1].trim() : '(sin nombre)';
+          const typeCounts = {};
+          const metersList = [];
+          if (geojson && Array.isArray(geojson.features)) {
+            geojson.features.forEach(f => {
+              const t = f.geometry ? f.geometry.type : 'sin-geometria';
+              typeCounts[t] = (typeCounts[t] || 0) + 1;
+              if (t === 'Point') {
+                const m = parseToMeters(f.properties?.name);
+                if (m !== null && !isNaN(m)) metersList.push(m);
+              }
+            });
+          }
+          const uniqueSortedMeters = [...new Set(metersList)].sort((a, b) => a - b);
+          let intervalo = null;
+          if (uniqueSortedMeters.length > 1) {
+            const diffs = [];
+            for (let i = 1; i < uniqueSortedMeters.length; i++) diffs.push(uniqueSortedMeters[i] - uniqueSortedMeters[i - 1]);
+            diffs.sort((a, b) => a - b);
+            const mid = Math.floor(diffs.length / 2);
+            intervalo = diffs.length % 2 === 0 ? Math.round((diffs[mid - 1] + diffs[mid]) / 2) : diffs[mid];
+          }
+          console.log('[SuelosMap][KML] Cargado id=%s | archivo/documento="%s" | puntos=%d | líneas=%d | intervalo≈%sm', id, docName, typeCounts['Point'] || 0, (typeCounts['LineString'] || 0) + (typeCounts['MultiLineString'] || 0), intervalo !== null ? intervalo : 'n/d');
+          kmlSummaries.push({
+            id,
+            documento: docName,
+            tipos: typeCounts,
+            puntos: typeCounts['Point'] || 0,
+            lineas: (typeCounts['LineString'] || 0) + (typeCounts['MultiLineString'] || 0),
+            intervaloMetros: intervalo
+          });
 
           if (isGeoJsonValid(geojson)) {
             try {
@@ -826,22 +843,9 @@ const MapLogic = ({
                   let zIndex = -500;
 
                   if (matchedProgresiva) {
-                    const hasData = matchedProgresiva.estratos_perfil && matchedProgresiva.estratos_perfil.length > 0;
+                    // Icono unificado según el estado de la progresiva emparejada (helper compartido)
                     zIndex = 800;
-                    let icon;
-                    if (hasData) {
-                      icon = L.divIcon({
-                        className: 'suelos-verified-marker-icon',
-                        html: `<div class="suelos-verified-pin-body"><i class="fas fa-check"></i></div>`,
-                        iconSize: [30, 30], iconAnchor: [15, 15]
-                      });
-                    } else {
-                      icon = L.divIcon({
-                        className: '',
-                        html: `<div style="width:12px;height:12px;background-color:#3498db;border:2px solid white;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>`,
-                        iconSize: [12, 12], iconAnchor: [6, 6]
-                      });
-                    }
+                    const icon = getProgresivaVisual(matchedProgresiva).icon;
 
                     const kmlUtm = fromLatLon(latlng.lat, latlng.lng);
                     const progWithCoords = { ...matchedProgresiva, coordenada_este: kmlUtm.easting, coordenada_norte: kmlUtm.northing };
@@ -851,12 +855,22 @@ const MapLogic = ({
                     rootProgKml.render(
                       <ProgresivaMapPopup
                         progresiva={progWithCoords} token={authToken}
-                        onNavigate={(prog) => navigate('/coordinador/suelos/gestion-tramos', { state: { openTramoId: prog.parent_id, highlightProgresivaId: prog.id } })}
+                        onNavigate={(prog) => {
+                          // FIX: ruta correcta del gestor de tramos (misma lógica que el dashboard).
+                          // progWithCoords conserva id/parent_id/progresiva_padre_id tras el spread de coords KML.
+                          navigate('/coordinador/recoleccion-datos/gestor-tramos', {
+                            state: {
+                              activeProgresivaId: prog.id,
+                              openTramoId: prog.parent_id || prog.progresiva_padre_id || prog.id,
+                              initialViewMode: 'estratos'
+                            }
+                          });
+                        }}
                       />
                     );
 
                     marker = L.marker(latlng, { icon, zIndexOffset: zIndex });
-                    marker.bindPopup(popupNode, { minWidth: 300, maxWidth: 300, closeButton: false, className: 'suelos-premium-popup' });
+                    marker.bindPopup(popupNode, { minWidth: 225, maxWidth: 225, closeButton: false, className: 'suelos-premium-popup' });
 
                     // Lógica de "Hover Bridge" para abrir popup interactivo al hacer hover (KML)
                     marker.on('mouseover', function () {
@@ -899,16 +913,16 @@ const MapLogic = ({
                   } else {
                     if (isTrazadoStrick) return null;
 
-                    // EXTRAER COLOR NATIVO KMZ O FALLBACK GRIS (Consistent with Inactive/Visual)
+                    // EXTRAER COLOR NATIVO KMZ O FALLBACK GRIS
+                    // PARTE 1d: punto de referencia SUTIL (9px, translúcido, sin halo negro)
+                    // para que no domine el mapa frente a las progresivas con estado.
                     const mkColor = feature.properties['marker-color'] || feature.properties.fill || '#95a5a6';
                     zIndex = 0;
                     const icon = L.divIcon({
                       className: 'suelos-kml-ref-point',
-                      html: `<div style="width:14px;height:14px;background-color:${mkColor};border-radius:50%;border:2px solid white;box-shadow:0 0 0 1px black, 0 3px 6px rgba(0,0,0,0.6);position:relative;">
-                                <div style="width:4px;height:4px;background-color:black;border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"></div>
-                             </div>`,
-                      iconSize: [14, 14],
-                      iconAnchor: [7, 7]
+                      html: `<div style="width:9px;height:9px;background-color:${mkColor};opacity:0.75;border-radius:50%;border:1px solid #ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div>`,
+                      iconSize: [9, 9],
+                      iconAnchor: [4.5, 4.5]
                     });
 
                     const popupHtml = `<div style="font-family:sans-serif;font-size:13px;color:#333;padding:5px;"><b>${feature.properties?.name || 'Punto KML'}</b><br/><span style="color:#6c757d; font-weight:bold;">Referencia KMZ Original</span></div>`;
@@ -943,6 +957,9 @@ const MapLogic = ({
           }
         }
       }
+
+      // --- PARTE 4: Resumen final de todos los KML cargados (identificar cuál es 100 m y cuál 500 m) ---
+      console.log('[SuelosMap][KML] Resumen de archivos KML cargados:', kmlSummaries);
 
       if (hasBounds && !userInteractedRef.current && combinedBounds.isValid()) {
         if (!fittedBoundsRef.current.has(boundsKey)) {
@@ -1056,9 +1073,11 @@ const SuelosMap = (props) => {
       <MapContainer
         center={[-12.930, -72.630]} // Centro aprox Quillabamba
         zoom={13}
+        minZoom={10} // PARTE 2a: evitar alejar hasta vistas continentales de resolución pésima
         maxZoom={21}
         style={{ height: '100%', width: '100%' }}
         zoomControl={false} // Desactivar permanentemente el zoom nativo no-reactivo de Leaflet
+        attributionControl={false} // AJUSTE: sin franja blanca de atribución inferior (los TileLayers conservan su prop attribution)
         ref={mapRef}
       >
         {!props.isExternalView ? (
@@ -1067,36 +1086,56 @@ const SuelosMap = (props) => {
           <ZoomControl position="bottomright" />
         )}
         {!showLayersControl && (
-          <TileLayer 
-            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             maxNativeZoom={16}
             maxZoom={21}
+            attribution="Tiles &copy; Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
+          />
+        )}
+        {!showLayersControl && (
+          <TileLayer
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={21}
+            attribution="Tiles &copy; Esri — Source: Esri, DeLorme, USGS, NGA, EPA"
           />
         )}
 
         {showLayersControl && (
           <LayersControl position="topright">
             <LayersControl.BaseLayer name="Estándar">
-              <TileLayer 
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 maxNativeZoom={19}
                 maxZoom={21}
+                attribution="&copy; OpenStreetMap contributors"
               />
             </LayersControl.BaseLayer>
             <LayersControl.BaseLayer checked name="Satélite">
-              <TileLayer 
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                 maxNativeZoom={16}
                 maxZoom={21}
+                attribution="Tiles &copy; Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
               />
             </LayersControl.BaseLayer>
             <LayersControl.BaseLayer name="Topográfico">
-              <TileLayer 
-                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" 
+              <TileLayer
+                url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
                 maxNativeZoom={16}
                 maxZoom={21}
+                attribution="&copy; OpenStreetMap contributors, SRTM | style: &copy; OpenTopoMap (CC-BY-SA)"
               />
             </LayersControl.BaseLayer>
+
+            {/* PARTE 2c: capa de referencia con nombres de lugares (modo híbrido) */}
+            <LayersControl.Overlay checked name="Referencias (Híbrido)">
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                maxZoom={21}
+                attribution="Tiles &copy; Esri — Source: Esri, DeLorme, USGS, NGA, EPA"
+              />
+            </LayersControl.Overlay>
 
             <LayersControl.Overlay checked name="Progresivas">
               <FeatureGroupWithRef globalKey="suelosProgresivasLayerGroup" />
@@ -1136,6 +1175,18 @@ const SuelosMap = (props) => {
           />
         )}
       </MapContainer>
+
+      {/* PARTE 3: Leyenda de avance (solo dashboard; ocultable con hideLegend) */}
+      {showLayersControl && !props.hideLegend && (
+        <div className="suelos-map-legend">
+          <div className="suelos-map-legend-title">Avance de Ensayos</div>
+          <div className="suelos-map-legend-item"><span className="suelos-map-legend-dot" style={{ backgroundColor: '#27ae60' }}></span>Aprobado</div>
+          <div className="suelos-map-legend-item"><span className="suelos-map-legend-dot" style={{ backgroundColor: '#f1c40f' }}></span>En Revisión</div>
+          <div className="suelos-map-legend-item"><span className="suelos-map-legend-dot" style={{ backgroundColor: '#3498db' }}></span>Con Datos</div>
+          <div className="suelos-map-legend-item"><span className="suelos-map-legend-dot" style={{ backgroundColor: '#b2babb' }}></span>Sin Datos</div>
+          <div className="suelos-map-legend-item"><span className="suelos-map-legend-dot suelos-map-legend-dot-ref"></span>Referencia KML</div>
+        </div>
+      )}
     </div>
   );
 };

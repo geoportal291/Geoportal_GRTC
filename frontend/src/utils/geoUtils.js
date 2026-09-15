@@ -39,18 +39,27 @@ export const processCoordinates = (x, y, forcedZone) => {
  * @param {number} y 
  * @param {string} [zone] - '17S', '18S', '19S' 
  */
-export const utmToWgs84 = (x, y, zone) => {
+export const utmToWgs84 = (x, y, zone, options = {}) => {
     const numX = parseFloat(x);
     const numY = parseFloat(y);
     
-    if (!Number.isFinite(numX) || !Number.isFinite(numY)) {
-        return { lon: 0, lat: 0 };
+    if (!Number.isFinite(numX) || !Number.isFinite(numY) || (numX === 0 && numY === 0)) {
+        if (options?.strict) {
+            return null;
+        }
+        console.warn(`[geoUtils] Coordenadas inválidas recibidas (X=${x}, Y=${y}). Evitando salto a (0,0).`);
+        return null;
     }
 
     const { x: correctedX, y: correctedY, projection } = processCoordinates(numX, numY, zone);
     
     const resProj = proj4(projection, WGS84, [correctedX, correctedY]);
     const [lon, lat] = resProj;
+    
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+        return null;
+    }
+    
     return { lon, lat };
 };
 
@@ -90,6 +99,13 @@ export const waitForTerrainReady = (terrainProvider) => {
     return new Promise((resolve) => {
         if (!terrainProvider) { resolve(false); return; }
 
+        // El proveedor de elipsoide no tiene datos que cargar (alturas siempre 0):
+        // está "listo" de inmediato. Antes se agotaba el timeout de 15 s en vano.
+        if (terrainProvider.constructor?.name === 'EllipsoidTerrainProvider') {
+            resolve(true);
+            return;
+        }
+
         // API moderna de Cesium: terrainProvider es una Promise o tiene .ready
         if (terrainProvider.ready === true) { resolve(true); return; }
 
@@ -101,19 +117,19 @@ export const waitForTerrainReady = (terrainProvider) => {
             return;
         }
 
-        // Polling para providers que no exponen readyPromise
-        const maxWaitMs = 15_000;
-        const intervalMs = 100;
+        // Cesium ≥ 1.119 eliminó `ready`/readyPromise: los proveedores modernos
+        // (p. ej. ArcGISTiledElevationTerrainProvider) completan `availability`/`tilingScheme`
+        // de forma ASÍNCRONA después de construirse. Se espera (≤10 s) a que el metadato
+        // exista; si no llega, se resuelve igual y los samplers aplican sus guardas.
+        const maxWaitMs = 10_000;
+        const intervalMs = 200;
         let elapsed = 0;
         const timer = setInterval(() => {
-            elapsed += intervalMs;
-            if (terrainProvider.ready === true) {
+            if (terrainProvider.availability || elapsed >= maxWaitMs) {
                 clearInterval(timer);
                 resolve(true);
-            } else if (elapsed >= maxWaitMs) {
-                clearInterval(timer);
-                console.warn('[geoUtils] waitForTerrainReady: timeout esperando terrainProvider.');
-                resolve(false);
+            } else {
+                elapsed += intervalMs;
             }
         }, intervalMs);
     });
@@ -141,6 +157,12 @@ export const chunkedSampleTerrain = async (Cesium, terrainProvider, cartographic
         return zeroHeights(cartographics);
     }
 
+    // El proveedor de elipsoide no requiere espera ni red: alturas 0 directas.
+    // (Antes se esperaba el timeout de waitForTerrainReady y luego se devolvían ceros igualmente.)
+    if (terrainProvider instanceof Cesium.EllipsoidTerrainProvider) {
+        return zeroHeights(cartographics);
+    }
+
     // Esperar a que el terrainProvider esté listo
     const isReady = await waitForTerrainReady(terrainProvider);
     if (!isReady) {
@@ -149,34 +171,23 @@ export const chunkedSampleTerrain = async (Cesium, terrainProvider, cartographic
     }
 
     const results = [];
-    
-    // Verificamos si el proveedor es un Elipsoide puro (no tiene datos de elevación).
-    // ElipsoidTerrainProvider no tiene la propiedad 'availability' que sampleTerrainMostDetailed requiere.
-    const isEllipsoid = terrainProvider instanceof Cesium.EllipsoidTerrainProvider;
 
     for (let i = 0; i < cartographics.length; i += chunkSize) {
         const chunk = cartographics.slice(i, i + chunkSize);
         try {
             let sampledChunk;
-            
-            if (isEllipsoid) {
-                // Caso Elipsoide: Altura siempre es 0
-                sampledChunk = chunk.map(c => {
-                    const cloned = Cesium.Cartographic.clone(c);
-                    cloned.height = 0;
-                    return cloned;
-                });
+
+            // sampleTerrainMostDetailed EXIGE terrainProvider.availability, que puede ser
+            // undefined en proveedores modernos mientras cargan su metadato (p. ej.
+            // ArcGISTiledElevationTerrainProvider) → TypeError computeMaximumLevelAtPosition.
+            // Sin availability se usa sampleTerrain a nivel fijo, que soporta cualquier proveedor.
+            const sampleFn = Cesium.sampleTerrainMostDetailedAsync || Cesium.sampleTerrainMostDetailed;
+
+            if (typeof sampleFn === 'function' && terrainProvider.availability) {
+                sampledChunk = await sampleFn(terrainProvider, chunk);
             } else {
-                // Intentamos usar el método más detallado disponible
-                // Cesium prefiere modernamente sampleTerrainMostDetailed o sampleTerrainMostDetailedAsync
-                const sampleFn = Cesium.sampleTerrainMostDetailedAsync || Cesium.sampleTerrainMostDetailed;
-                
-                if (typeof sampleFn === 'function') {
-                    sampledChunk = await sampleFn(terrainProvider, chunk);
-                } else {
-                    // Fallback a nivel fijo si no existe el método detallado
-                    sampledChunk = await Cesium.sampleTerrain(terrainProvider, 11, chunk);
-                }
+                // Nivel 13 ≈ 20-40 m/px: sobrado para posicionar calicatas.
+                sampledChunk = await Cesium.sampleTerrain(terrainProvider, 13, chunk);
             }
             results.push(...sampledChunk);
         } catch (e) {

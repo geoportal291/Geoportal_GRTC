@@ -1481,6 +1481,9 @@ const Progresivas = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    // LOG DE DIAGNÓSTICO: identificar qué archivo KML/KMZ se seleccionó
+    console.log('[Progresivas][ImportKML] Archivo seleccionado:', file.name, `(${(file.size / 1024).toFixed(1)} KB)`);
+
     if (!file.name.match(/\.(kml|kmz)$/i)) {
       alertify.error('Solo se permiten archivos KML o KMZ.');
       e.target.value = '';
@@ -1533,6 +1536,30 @@ const Progresivas = () => {
         throw new Error('No se encontraron datos geográficos válidos.');
       }
       console.log(`[DEBUG Import KML] GeoJSON features found: ${geojson.features.length}`);
+
+      // --- LOG DE DIAGNÓSTICO: puntos detectados e intervalo estimado (mediana) ---
+      // Solo lectura del GeoJSON parseado; NO modifica la lógica de importación.
+      let importPointsDetected = 0;
+      const importMetersList = [];
+      geojson.features.forEach(f => {
+        if (f.geometry && f.geometry.type === 'Point') {
+          importPointsDetected++;
+          const importName = f.properties?.name || '';
+          const importClean = importName.trim().replace(/\s/g, '').replace(/km/i, '').replace(/m/i, '');
+          const importM = convertProgresivaToMeters(importClean);
+          if (importM !== null && !isNaN(importM)) importMetersList.push(importM);
+        }
+      });
+      const importUniqueSorted = [...new Set(importMetersList)].sort((a, b) => a - b);
+      let importIntervalo = null;
+      if (importUniqueSorted.length > 1) {
+        const importDiffs = [];
+        for (let i = 1; i < importUniqueSorted.length; i++) importDiffs.push(importUniqueSorted[i] - importUniqueSorted[i - 1]);
+        importDiffs.sort((a, b) => a - b);
+        const importMid = Math.floor(importDiffs.length / 2);
+        importIntervalo = importDiffs.length % 2 === 0 ? Math.round((importDiffs[importMid - 1] + importDiffs[importMid]) / 2) : importDiffs[importMid];
+      }
+      console.log(`[Progresivas][ImportKML] Puntos detectados: ${importPointsDetected} | con progresiva válida: ${importUniqueSorted.length} | intervalo≈${importIntervalo !== null ? importIntervalo + 'm' : 'n/d'}`);
 
       const updates = [];
       const newPoints = [];

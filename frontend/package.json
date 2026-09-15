@@ -52,6 +52,7 @@
     "leaflet.pattern": "^0.1.0",
     "lucide-react": "^0.542.0",
     "luxon": "^3.7.2",
+    "mapbox-gl": "^3.30.0",
     "maplibre-gl": "^5.24.0",
     "mathjs": "^15.1.0",
     "process": "^0.11.10",

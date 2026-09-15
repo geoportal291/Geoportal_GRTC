@@ -1,0 +1,503 @@
+/* ===========================================================================
+ * PerfilEstratigraficoVista.css — Visor de perfil estratigráfico estilo
+ * Autodesk (mecánica de suelos). Estética de lámina técnica: fondo blanco,
+ * grilla azul, cabeceras amarillo/verde para el panel de ensayos.
+ * ======================================================================== */
+
+.pe-root {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid #d5dce4;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    color: #22313f;
+    min-height: 300px;
+}
+
+/* --- Cabecera / controles ------------------------------------------------- */
+.pe-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #2c5f8a;
+    margin-bottom: 8px;
+}
+
+.pe-titulo {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.pe-titulo h3 {
+    margin: 0;
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: #1c3d5f;
+}
+
+.pe-tramo-badge {
+    font-size: 12px;
+    background: #eaf2fa;
+    border: 1px solid #b7cfe3;
+    border-radius: 10px;
+    padding: 2px 10px;
+    color: #23527c;
+}
+
+.pe-controles {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 12px;
+}
+
+.pe-controles label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}
+
+.pe-controles select {
+    border: 1px solid #b7cfe3;
+    border-radius: 4px;
+    padding: 3px 6px;
+    background: #ffffff;
+    color: #22313f;
+}
+
+.pe-bloques {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pe-bloques span {
+    min-width: 110px;
+    text-align: center;
+    color: #444;
+}
+
+.pe-bloques button {
+    border: 1px solid #b7cfe3;
+    background: #f4f8fc;
+    border-radius: 4px;
+    width: 26px;
+    height: 24px;
+    cursor: pointer;
+    color: #23527c;
+}
+
+.pe-bloques button:hover:not(:disabled) {
+    background: #e2eef9;
+}
+
+.pe-bloques button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.pe-total {
+    color: #66788a;
+}
+
+.pe-btn-exportar,
+.pe-btn-leyenda,
+.pe-btn-toggle {
+    border: 1px solid #b7cfe3;
+    background: #f4f8fc;
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    color: #23527c;
+    font-size: 12px;
+}
+
+.pe-btn-toggle-activo {
+    background: #2c5f8a;
+    border-color: #2c5f8a;
+    color: #ffffff;
+}
+
+.pe-btn-toggle:hover:not(:disabled):not(.pe-btn-toggle-activo),
+.pe-btn-exportar:hover:not(:disabled),
+.pe-btn-leyenda:hover {
+    background: #e2eef9;
+}
+
+.pe-btn-toggle-activo:hover:not(:disabled) {
+    background: #23527c;
+}
+
+.pe-btn-exportar:disabled,
+.pe-btn-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- Leyenda flotante vertical (lado derecho) ------------------------------ */
+.pe-leyenda-flotante {
+    position: absolute;
+    top: 56px;
+    right: 12px;
+    z-index: 45;
+    width: 300px;
+    max-height: calc(100% - 72px);
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border: 1px solid #b7cfe3;
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(20, 50, 80, 0.25);
+    overflow: hidden;
+}
+
+.pe-leyenda-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #2c5f8a;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.pe-leyenda-header i {
+    margin-right: 6px;
+}
+
+.pe-leyenda-cerrar {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.pe-leyenda-cerrar:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.pe-leyenda-buscar {
+    margin: 8px 10px 4px;
+    padding: 5px 8px;
+    border: 1px solid #b7cfe3;
+    border-radius: 4px;
+    font-size: 11.5px;
+    color: #22313f;
+    outline: none;
+}
+
+.pe-leyenda-buscar:focus {
+    border-color: #2c5f8a;
+}
+
+.pe-leyenda-lista {
+    overflow-y: auto;
+    padding: 6px 10px 10px;
+    flex: 1;
+}
+
+.pe-leyenda-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 2px;
+    border-bottom: 1px dashed #e4ebf2;
+}
+
+.pe-leyenda-item:last-child {
+    border-bottom: none;
+}
+
+.pe-leyenda-item svg {
+    flex-shrink: 0;
+    border-radius: 2px;
+}
+
+.pe-leyenda-textos {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.pe-leyenda-nombre {
+    font-size: 11.5px;
+    color: #22313f;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pe-leyenda-clasif {
+    font-size: 10px;
+    color: #7d8fa0;
+}
+
+.pe-leyenda-generico {
+    margin-top: 6px;
+    border-top: 1px solid #e4ebf2;
+    padding-top: 8px;
+}
+
+.pe-leyenda-vacia {
+    padding: 14px 4px;
+    font-size: 11.5px;
+    color: #8a9aab;
+    text-align: center;
+}
+
+.pe-leyenda-footer {
+    padding: 6px 10px;
+    border-top: 1px solid #e4ebf2;
+    background: #fbfcfe;
+    font-size: 10.5px;
+    color: #7d8fa0;
+}
+
+/* --- Lámina con scroll ------------------------------------------------------ */
+.pe-scroll {
+    overflow: auto;
+    max-height: calc(100vh - 320px);
+    min-height: 320px;
+    border: 1px solid #cfd8e1;
+    border-radius: 4px;
+    background: #ffffff;
+}
+
+.pe-sheet {
+    position: relative;
+}
+
+.pe-fila {
+    display: flex;
+    align-items: stretch;
+}
+
+/* Anclaje de la sincronía de anchos con el SVG: los anchos (LABEL_W/COL_W/
+   AXIS_W) deben incluir borde y padding, sin depender del box-sizing global */
+.pe-fila div {
+    box-sizing: border-box;
+}
+
+.pe-celda-label {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: #f5f7f9;
+    border-right: 1.4px solid #2c5f8a;
+    border-bottom: 1px solid #cfd8e1;
+    padding: 2px 6px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #1c3d5f;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.pe-celda-col {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid #b7cfe3;
+    border-bottom: 1px solid #dde6ee;
+    font-size: 10px;
+    color: #33475b;
+    overflow: hidden;
+    text-align: center;
+}
+
+.pe-celda-eje {
+    flex-shrink: 0;
+    border-bottom: 1px solid transparent;
+}
+
+/* Fila N° */
+.pe-fila-num {
+    background: #ffffff;
+}
+
+.pe-fila-num .pe-celda-col {
+    background: #ffffff;
+    font-weight: 700;
+    height: 18px;
+}
+
+/* Fila códigos rotados */
+.pe-fila-codigos .pe-celda-col {
+    height: 52px;
+    background: #fdfbea;
+    position: relative;
+}
+
+.pe-celda-rotada span {
+    transform: rotate(-58deg);
+    white-space: nowrap;
+    font-size: 9px;
+    color: #1c3d5f;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* SVG */
+.pe-svg {
+    display: block;
+}
+
+.pe-eje-texto {
+    font-size: 8px;
+    fill: #33475b;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+
+.pe-estrato-texto {
+    font-size: 7.5px;
+    fill: #22313f;
+    font-weight: 600;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    pointer-events: none;
+}
+
+/* Fila cota de terreno */
+.pe-fila-cota .pe-celda-label {
+    background: #dcead2;
+    color: #2f5233;
+}
+
+.pe-fila-cota .pe-celda-col {
+    background: #eef6e4;
+    height: 18px;
+    font-weight: 600;
+    font-size: 9px;
+}
+
+/* Panel de ensayos (zona amarilla) */
+.pe-ensayos {
+    background: #fffbe6;
+}
+
+.pe-fila-ensayo .pe-celda-label {
+    background: #cde6c2;
+    color: #2f5233;
+    font-size: 10px;
+    min-height: 20px;
+}
+
+.pe-fila-ensayo .pe-celda-col {
+    background: #fffde9;
+    height: 20px;
+    font-size: 9.5px;
+    border-right: 1px solid #b7cfe3;
+    border-bottom: 1px solid #e8dfb8;
+    padding: 0 2px;
+}
+
+.pe-fila-ensayo .pe-celda-nsayos {
+    background: #fdf3c4;
+    font-weight: 700;
+}
+
+/* Encabezado por TIPO de ensayo (descripcion de tipo_ensayo) */
+.pe-fila-grupo-tipo .pe-celda-label {
+    background: #2c5f8a;
+    color: #ffffff;
+    font-size: 10.5px;
+    letter-spacing: 0.6px;
+    min-height: 22px;
+}
+
+.pe-fila-grupo-tipo .pe-celda-col {
+    background: #eaf2fa;
+    height: 22px;
+}
+
+/* Encabezado por GRUPO de resultados (title del group en results_config) */
+.pe-fila-grupo .pe-celda-label {
+    background: #dbe9f5;
+    color: #1c3d5f;
+    font-size: 10px;
+    min-height: 19px;
+}
+
+.pe-fila-grupo .pe-celda-col {
+    background: #f4f8fc;
+    height: 19px;
+}
+
+/* --- Estados ---------------------------------------------------------------- */
+.pe-loading,
+.pe-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 60px 20px;
+    color: #66788a;
+    font-size: 13px;
+    text-align: center;
+}
+
+.pe-loading i {
+    font-size: 26px;
+    color: #2c5f8a;
+}
+
+.pe-empty i {
+    font-size: 30px;
+    color: #9fb2c4;
+}
+
+.pe-error {
+    color: #a33b3b;
+}
+
+.pe-error i {
+    color: #c0564f;
+}
+
+/* --- Tooltip ----------------------------------------------------------------- */
+.pe-tooltip {
+    position: absolute;
+    left: 12px;
+    top: 12px; /* posición inicial; luego la fija moverTooltip por ref */
+    z-index: 50;
+    background: #ffffff;
+    border: 1px solid #2c5f8a;
+    border-radius: 5px;
+    box-shadow: 0 4px 14px rgba(20, 50, 80, 0.22);
+    padding: 8px 10px;
+    max-width: 320px;
+    pointer-events: none;
+    font-size: 11px;
+}
+
+.pe-tooltip-titulo {
+    font-weight: 700;
+    color: #1c3d5f;
+    margin-bottom: 5px;
+    border-bottom: 1px solid #e2eaf2;
+    padding-bottom: 3px;
+}
+
+.pe-tooltip-fila {
+    margin: 2px 0;
+    color: #33475b;
+    word-break: break-word;
+}
+
+.pe-tooltip-k {
+    font-weight: 600;
+    color: #56718a;
+}

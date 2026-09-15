@@ -1322,3 +1322,323 @@ WHERE provider = 'cinehdplus'
 SELECT title, url, synopsis, provider
 FROM movies
 WHERE slug = '75754-posesion-infernal-en-llamas-ver-online-hd';
+
+
+-- =========================================================================
+-- GEOPORTAL GRTC - DATABASE AGENT
+-- =========================================================================
+-- Fecha: 2026-09-08
+-- Hora:  12:00
+-- Proposito: MIGRACION 047 - Agregar columna patron_svg a la tabla
+--            suelos_diccionario_nlp para el visor de "perfil estratigrafico"
+--            estilo Autodesk. Incluye clasificacion idempotente de las filas
+--            existentes segun clasificacion_sucs / nombre_original_excel y
+--            constraint CHECK de valores permitidos. Archivo migracion:
+--            db/migrations/047_add_patron_svg_suelos_diccionario_nlp.sql
+-- NOTA: Se intento ejecutar contra geoportal_local pero la autenticacion
+--       del usuario postgres fallo (ver reporte del agente); queda lista
+--       para ejecutar cuando se disponga la credencial correcta.
+-- =========================================================================
+
+-- 1. Nueva columna con DEFAULT 'generico' (idempotente)
+ALTER TABLE public.suelos_diccionario_nlp
+  ADD COLUMN IF NOT EXISTS patron_svg VARCHAR(50) NOT NULL DEFAULT 'generico';
+
+-- 2. Clasificacion de filas existentes (de lo mas especifico a lo mas general;
+--    cada UPDATE solo toca filas que siguen en 'generico' -> idempotente)
+
+-- 2.1 Roca fracturada ANTES que roca
+UPDATE public.suelos_diccionario_nlp
+SET patron_svg = 'roca_fracturada'
+WHERE patron_svg = 'generico'
+  AND nombre_original_excel ILIKE '%fracturada%';
+
+-- 2.2 Roca: SUCS 'R' o nombre contiene 'roca'
+UPDATE public.suelos_diccionario_nlp
+SET patron_svg = 'roca'
+WHERE patron_svg = 'generico'
+  AND (clasificacion_sucs = 'R' OR nombre_original_excel ILIKE '%roca%');
+
+-- 2.3 Afirmado
+UPDATE public.suelos_diccionario_nlp
+SET patron_svg = 'afirmado'
+WHERE patron_svg = 'generico'
+  AND nombre_original_excel ILIKE '%afirmado%';
+
+-- 2.4 Relleno / material suelto (antes de la regla general de 'grava')
+UPDATE public.suelos_diccionario_nlp
+SET patron_svg = 'relleno'
+WHERE patron_svg = 'generico'
+  AND nombre_original_excel ILIKE ANY (ARRAY['%material suelto%', '%materia suelto%', '%relleno%']);
+
+-- 2.5 Grava: boloneria (con/sin tilde), nombre con 'grava', SUCS GW/GP
+UPDATE public.suelos_diccionario_nlp
+SET patron_svg = 'grava'
+WHERE patron_svg = 'generico'
+  AND (
+        nombre_original_excel ILIKE ANY (ARRAY['%boloneria%', '%bolonería%', '%grava%'])
+     OR clasificacion_sucs LIKE 'GW%'
+     OR clasificacion_sucs LIKE 'GP%'
+      );
+
+-- 2.6 Arena: SUCS SW/SP/SM o nombre contiene 'arena'
+UPDATE public.suelos_diccionario_nlp
+SET patron_svg = 'arena'
+WHERE patron_svg = 'generico'
+  AND (
+        clasificacion_sucs LIKE ANY (ARRAY['SW%', 'SP%', 'SM%'])
+     OR nombre_original_excel ILIKE '%arena%'
+      );
+
+-- 2.7 Limo: SUCS ML/MH o nombre contiene 'limo'
+UPDATE public.suelos_diccionario_nlp
+SET patron_svg = 'limo'
+WHERE patron_svg = 'generico'
+  AND (
+        clasificacion_sucs LIKE ANY (ARRAY['ML%', 'MH%'])
+     OR nombre_original_excel ILIKE '%limo%'
+      );
+
+-- 2.8 Arcilla: SUCS CL/CH o nombre contiene 'arcilla' o 'tierra'
+--     (despues de limo: 'Limo arcilloso' ML-CL -> limo; 'Arcilla limosa' CL-ML -> arcilla)
+UPDATE public.suelos_diccionario_nlp
+SET patron_svg = 'arcilla'
+WHERE patron_svg = 'generico'
+  AND (
+        clasificacion_sucs LIKE ANY (ARRAY['CL%', 'CH%'])
+     OR nombre_original_excel ILIKE ANY (ARRAY['%arcilla%', '%tierra%'])
+      );
+
+-- 3. Constraint CHECK de valores permitidos (idempotente via DO block;
+--    la tabla no tenia ningun CHECK previo, solo PK y UNIQUE)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chk_suelos_nlp_patron_svg'
+      AND conrelid = 'public.suelos_diccionario_nlp'::regclass
+  ) THEN
+    ALTER TABLE public.suelos_diccionario_nlp
+      ADD CONSTRAINT chk_suelos_nlp_patron_svg
+      CHECK (patron_svg IN (
+        'grava', 'grava_arena', 'arena', 'limo', 'arcilla',
+        'roca', 'roca_fracturada', 'relleno', 'afirmado', 'generico'
+      ));
+  END IF;
+END $$;
+
+-- 4. Verificacion: conteo de filas por patron_svg
+SELECT patron_svg, count(*) AS total
+FROM public.suelos_diccionario_nlp
+GROUP BY patron_svg
+ORDER BY total DESC, patron_svg;
+
+-- =========================================================================
+-- SECCION: ENDPOINT PERFIL ESTRATIGRAFICO (visor estilo Autodesk)
+-- Fecha: 2026-09-08 14:35
+-- Proposito: Consultas del nuevo endpoint
+--   GET /api/tramos/:tramoId/perfil-estratigrafico?limit=20&offset=0
+--   (backend/services/perfilEstratigraficoService.js). El patron visual de
+--   cada estrato se resuelve contra suelos_diccionario_nlp (col. patron_svg,
+--   migracion 047) via backend/services/patronesEstratoService.js.
+-- -------------------------------------------------------------------------
+
+-- 1. Validacion del tramo (progresiva raiz sin padre)
+SELECT id, codigo, nombre
+FROM progresivas
+WHERE id = $1 AND parent_id IS NULL;
+
+-- 2. Total de sub-progresivas del tramo (paginacion por bloques)
+SELECT COUNT(*) AS total
+FROM progresivas
+WHERE parent_id = $1;
+
+-- 3. Sub-progresivas ordenadas por estacion con paginado
+--    (limit sanitizado en [1,200]; offset >= 0)
+SELECT
+    p.id, p.parent_id, p.proyecto_id, p.codigo, COALESCE(p.nombre, '') AS nombre,
+    p.progresiva_inicial, p.progresiva_final,
+    p.coordenada_este, p.coordenada_norte,
+    p.elevacion, p.linea, p.lado
+FROM progresivas p
+WHERE p.parent_id = $1
+ORDER BY NULLIF(regexp_replace(p.codigo, '[^0-9]', '', 'g'), '')::numeric ASC, p.id ASC
+LIMIT $2 OFFSET $3;
+
+-- 4. Estratos de las progresivas de la pagina
+SELECT
+    e.id, e.parent_id AS progresiva_id, e.nombre, e.descripcion,
+    e.cota_inicial AS profundidad_inicial, e.cota_final AS profundidad_final,
+    e.orden, e.nlp_clasificacion_sucs, e.nlp_clasificacion_aashto, e.nlp_color_hex
+FROM estratos e
+WHERE e.parent_type = 'progresiva' AND e.parent_id = ANY($1::int[])
+ORDER BY e.parent_id, e.cota_inicial ASC, e.orden ASC;
+
+-- 5. Ensayos anidados por estrato (config para recalculo en cliente)
+SELECT
+    ens.id, ens.nombre_ensayo, ens.codigo_ensayo, ens.fecha,
+    ens.resultado, ens.estado, ens.tipo_ensayo, ens.estrato_id,
+    ens.datos_formulario,
+    te.descripcion AS tipo_ensayo_descripcion,
+    te.config_key, te.results_config, te.config_tabla,
+    te.config_calculos, te.config_graficos
+FROM ensayos ens
+LEFT JOIN tipo_ensayo te ON ens.tipo_ensayo = te.id
+WHERE ens.estrato_id = ANY($1::int[])
+ORDER BY ens.fecha DESC;
+
+-- 6. Catalogo de patrones para matching y leyenda del frontend
+SELECT id, nombre_original_excel, clasificacion_sucs, clasificacion_aashto,
+       color_hex_sugerido, patron_svg
+FROM suelos_diccionario_nlp
+ORDER BY LENGTH(nombre_original_excel) DESC;
+
+-- =========================================================================
+-- SECCION: SEED COMPLEMENTARIO MIGRACION 047 (perfil estratigrafico)
+-- Fecha: 2026-09-08 15:10
+-- Proposito: Insertar en suelos_diccionario_nlp los nombres de material
+--   TAL CUAL aparecen en estratos.nombre (texto libre de campo) y que no
+--   existian en el diccionario, para que el matching del perfil
+--   estratigrafico los resuelva con patron propio y no caigan al generico.
+--   Idempotente: ON CONFLICT (nombre_original_excel) DO NOTHING.
+--   Ajustes futuros de color/patron: UPDATE directo sobre esta tabla.
+-- -------------------------------------------------------------------------
+
+INSERT INTO public.suelos_diccionario_nlp
+    (nombre_original_excel, clasificacion_sucs, clasificacion_aashto, color_hex_sugerido, patron_svg, es_verificado_por_humano, fuente_origen_datos)
+VALUES
+    ('Roca',                        'R',     'N/A',   '#C0392B', 'roca',     true, 'seed_perfil_estratigrafico'),
+    ('Afirmado',                    NULL,    'N/A',   '#8B7355', 'afirmado', true, 'seed_perfil_estratigrafico'),
+    ('Material suelto',             NULL,    'N/A',   '#909497', 'relleno',  true, 'seed_perfil_estratigrafico'),
+    ('Materia suelto grava / CBR',  NULL,    'N/A',   '#85929E', 'relleno',  true, 'seed_perfil_estratigrafico'),
+    ('Suelo granular / CBR',        NULL,    'N/A',   '#99A3A4', 'relleno',  true, 'seed_perfil_estratigrafico'),
+    ('GP-GM',                       'GP-GM', 'A-1-b', '#E67E22', 'grava',    true, 'seed_perfil_estratigrafico'),
+    ('GP-GC',                       'GP-GC', 'A-1-b', '#D35400', 'grava',    true, 'seed_perfil_estratigrafico'),
+    ('GC',                          'GC',    'A-2-4', '#5C4033', 'grava',    true, 'seed_perfil_estratigrafico'),
+    ('SM',                          'SM',    'A-2-4', '#D4A373', 'arena',    true, 'seed_perfil_estratigrafico'),
+    ('SC',                          'SC',    'A-2-6', '#BC6C25', 'arena',    true, 'seed_perfil_estratigrafico'),
+    ('Afloramiento rocoso',         'R',     'N/A',   '#A93226', 'roca',     true, 'seed_perfil_estratigrafico')
+ON CONFLICT (nombre_original_excel) DO NOTHING;
+
+-- Verificacion: distribucion de filas por patron_svg
+SELECT patron_svg, count(*) AS total
+FROM public.suelos_diccionario_nlp
+GROUP BY patron_svg
+ORDER BY total DESC, patron_svg;
+
+-- =========================================================================
+-- SECCION: MIGRACION 048 - Indice ensayos(estrato_id) para perfil estratigrafico
+-- Fecha: 2026-09-08 15:40
+-- Proposito: Cubrir la consulta WHERE ens.estrato_id = ANY($1::int[]) del
+--   endpoint GET /api/tramos/:tramoId/perfil-estratigrafico (hasta 200
+--   progresivas por request evita seq scan sobre ensayos).
+-- -------------------------------------------------------------------------
+
+CREATE INDEX IF NOT EXISTS idx_ensayos_estrato
+    ON public.ensayos (estrato_id);
+
+-- =========================================================================
+-- SECCION: PERFIL ESTRATIGRAFICO - Filtro soloConDatos
+-- Fecha: 2026-09-09 10:20
+-- Proposito: El endpoint GET /api/tramos/:tramoId/perfil-estratigrafico
+--   ahora recibe ?soloConDatos=true|false (default true). Cuando es true,
+--   tanto el COUNT como el listado paginado excluyen las progresivas sin
+--   estratos definidos, para que el perfil muestre por defecto solo
+--   columnas con datos estratigraficos.
+-- -------------------------------------------------------------------------
+
+-- Total segun el modo (con filtroConDatos = EXISTS sobre estratos)
+SELECT COUNT(*) AS total
+FROM progresivas p
+WHERE p.parent_id = $1
+  AND EXISTS (
+      SELECT 1 FROM estratos e
+      WHERE e.parent_type = 'progresiva' AND e.parent_id = p.id
+  );
+
+-- Listado paginado segun el modo (mismo filtro aplicado)
+SELECT
+    p.id, p.parent_id, p.proyecto_id, p.codigo, COALESCE(p.nombre, '') AS nombre,
+    p.progresiva_inicial, p.progresiva_final,
+    p.coordenada_este, p.coordenada_norte,
+    p.elevacion, p.linea, p.lado
+FROM progresivas p
+WHERE p.parent_id = $1
+  AND EXISTS (
+      SELECT 1 FROM estratos e
+      WHERE e.parent_type = 'progresiva' AND e.parent_id = p.id
+  )
+ORDER BY NULLIF(regexp_replace(p.codigo, '[^0-9]', '', 'g'), '')::numeric ASC, p.id ASC
+LIMIT $2 OFFSET $3;
+
+-- =========================================================================
+-- SECCION: PERFIL ESTRATIGRAFICO - Ajuste del filtro soloConDatos
+-- Fecha: 2026-09-09 11:05
+-- Proposito: Redefinicion de "con datos": una progresiva cuenta como con
+--   datos solo si tiene AL MENOS UN estrato CON ensayos asociados. Reemplaza
+--   al filtro anterior (solo existencia de estratos).
+-- -------------------------------------------------------------------------
+
+-- Total segun el modo (soloConDatos = true)
+SELECT COUNT(*) AS total
+FROM progresivas p
+WHERE p.parent_id = $1
+  AND EXISTS (
+      SELECT 1 FROM estratos e
+      WHERE e.parent_type = 'progresiva' AND e.parent_id = p.id
+        AND EXISTS (SELECT 1 FROM ensayos ens WHERE ens.estrato_id = e.id)
+  );
+
+-- Listado paginado segun el modo (soloConDatos = true)
+SELECT
+    p.id, p.parent_id, p.proyecto_id, p.codigo, COALESCE(p.nombre, '') AS nombre,
+    p.progresiva_inicial, p.progresiva_final,
+    p.coordenada_este, p.coordenada_norte,
+    p.elevacion, p.linea, p.lado
+FROM progresivas p
+WHERE p.parent_id = $1
+  AND EXISTS (
+      SELECT 1 FROM estratos e
+      WHERE e.parent_type = 'progresiva' AND e.parent_id = p.id
+        AND EXISTS (SELECT 1 FROM ensayos ens WHERE ens.estrato_id = e.id)
+  )
+ORDER BY NULLIF(regexp_replace(p.codigo, '[^0-9]', '', 'g'), '')::numeric ASC, p.id ASC
+LIMIT $2 OFFSET $3;
+
+-- =============================================================
+-- 2026-09-14 10:30 | BACKEND AGENT
+-- Proposito: Alinear orden de getProgresivaPage (rank de paginacion) con getSubProgresivas para deep-link de progresivas
+-- Nota: El listado paginado (getSubProgresivas) ordena por codigo numerico
+--       (NULLIF(regexp_replace(p.codigo,'[^0-9]','','g'),'')::numeric ASC, p.id ASC),
+--       pero el rank del deep-link usaba ROW_NUMBER() OVER (... ORDER BY id), lo que calculaba
+--       una pagina incorrecta cuando el orden por id no coincide con el orden por codigo
+--       (imports KML/Excel con codigos fuera de secuencia): la progresiva no aparecia en la
+--       pagina cargada y no se podia expandir.
+-- Correccion: mismo ORDER BY en el ROW_NUMBER y se elimina el filtro "AND id <= $1"
+--             (solo era valido cuando el orden coincidia con id ASC; ahora contaminaria el rank).
+-- Ubicacion: backend/services/progresivasService.js -> getProgresivaPage
+-- Ruta que lo consume: GET /api/progresivas/:progresivaId/page (backend/index.js)
+WITH ranked_progresivas AS (
+    SELECT
+        id,
+        parent_id,
+        ROW_NUMBER() OVER(PARTITION BY parent_id ORDER BY NULLIF(regexp_replace(p.codigo, '[^0-9]', '', 'g'), '')::numeric ASC, p.id ASC) as rn
+    FROM progresivas p
+    WHERE parent_id = (SELECT parent_id FROM progresivas WHERE id = $1)
+)
+SELECT rn FROM ranked_progresivas WHERE id = $1;
+-- =============================================================
+
+-- =========================================================================
+-- SECCION: EXPORTACION A EXCEL DEL PERFIL ESTRATIGRAFICO
+-- Fecha: 2026-09-14 11:50
+-- Proposito: Nota de trazabilidad. El nuevo endpoint
+--   POST /api/tramos/:tramoId/perfil-estratigrafico/exportar-excel
+--   NO agrega consultas SQL nuevas: reutiliza las mismas consultas del
+--   endpoint GET del perfil (secciones anteriores de este archivo) para
+--   descargar todas las progresivas por bloques, y recibe del frontend el
+--   payload con los valores de ensayos calculados con su motor
+--   config-driven (tipo_ensayo.results_config). El archivo .xlsx lo genera
+--   openpyxl en backend/python_worker/perfil_estratigrafico_excel.py
+--   (regla del proyecto: no generar Excel pesado desde Node).
+-- -------------------------------------------------------------------------
