@@ -17,12 +17,14 @@ const PLANTILLAS = {
     limites: "informe_limites.xlsm",
     proctor: "informe_proctor.xlsm",
     granulometria: "informe_granulometria.xlsm",
+    cbr: "informe_cbr.xlsm",
 };
 
 const NOMBRE_TIPO = {
     limites: "Limites_Consistencia",
     proctor: "Proctor",
     granulometria: "Analisis_Granulometrico",
+    cbr: "CBR",
 };
 
 const SCRIPT_PY = path.join(__dirname, "..", "python_worker", "excel_reporte.py");
