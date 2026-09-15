@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for geoportal-frontend-julio on 2026-07-01T18:46:15-05:00
+# App real en Fly: geoportal-frontend-setiembre-cied (renombrado desde julio; el tomo viejo apuntaba a una app eliminada)
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'geoportal-frontend-julio'
+app = 'geoportal-frontend-setiembre-cied'
 primary_region = 'gru'
 
 [build]
