@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import alertify from "alertifyjs";
@@ -518,7 +518,10 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const [recalculoProgreso, setRecalculoProgreso] = useState({
     done: 0,
     total: 0,
+    errores: 0,
   });
+  const cancelarRecalculoRef = useRef(false);
+  const recalcInicioRef = useRef(0);
 
   const fetchTramosList = useCallback(async () => {
     try {
@@ -616,16 +619,23 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   // No modifica datos_formulario: solo refresca ensayos.resultado.
   const ejecutarRecalculo = async () => {
     setRecalculando(true);
-    setRecalculoProgreso({ done: 0, total: 0 });
+    setRecalculoProgreso({ done: 0, total: 0, errores: 0 });
+    cancelarRecalculoRef.current = false;
+    recalcInicioRef.current = Date.now();
     const headers = getAuthHeaders();
     let done = 0;
     let total = 0;
     let errores = 0;
     let omitidos = 0;
+    let cancelado = false;
     try {
       for (const grupo of Object.values(ensayosAgrupados)) {
         if (!grupo.calculationConfig) continue;
         for (const ensayo of grupo.ensayos || []) {
+          if (cancelarRecalculoRef.current) {
+            cancelado = true;
+            break;
+          }
           if (
             !ensayo?.datos_formulario ||
             Object.keys(ensayo.datos_formulario).length === 0
@@ -656,10 +666,16 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
           } catch (err) {
             errores++;
           }
-          setRecalculoProgreso({ done, total });
+          setRecalculoProgreso({ done, total, errores });
         }
+        if (cancelado) break;
       }
-      if (done === 0 && omitidos > 0) {
+      if (cancelado) {
+        alertify.warning(
+          `Recálculo cancelado: ${done} de ${total} ensayo(s) actualizado(s).` +
+            " Vuelve a ejecutarlo cuando quieras para continuar con el resto.",
+        );
+      } else if (done === 0 && omitidos > 0) {
         alertify.warning(`No hay ensayos con datos capturados para recalcular (${omitidos} omitidos).`);
       } else {
         alertify.success(
@@ -675,6 +691,10 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     } finally {
       setRecalculando(false);
     }
+  };
+
+  const handleCancelarRecalculo = () => {
+    cancelarRecalculoRef.current = true;
   };
 
   // Diálogo de confirmación (alertify) antes del recálculo en lote.
@@ -1311,6 +1331,69 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
           ensayo={selectedAssayForResults}
         />
       )}
+      {recalculando && (() => {
+        const { done, total, errores } = recalculoProgreso;
+        const porcentaje = total > 0 ? Math.round((done / total) * 100) : 0;
+        const transcurrido = recalcInicioRef.current
+          ? (Date.now() - recalcInicioRef.current) / 1000
+          : 0;
+        const porEnsayo = done > 0 ? transcurrido / done : 0;
+        const restanteSeg = Math.max(
+          0,
+          Math.round((total - done) * porEnsayo),
+        );
+        const restanteTxt =
+          done > 0
+            ? `${Math.floor(restanteSeg / 60)}m ${String(restanteSeg % 60).padStart(2, "0")}s`
+            : "calculando…";
+        return (
+          <div className="recalculo-overlay">
+            <div className="recalculo-modal">
+              <div className="recalculo-header">
+                <i className="fas fa-sync-alt fa-spin"></i>
+                <h3>Recalculando resultados con métodos MTC</h3>
+              </div>
+              <div className="recalculo-barra">
+                <div
+                  className="recalculo-barra-fill"
+                  style={{ width: `${porcentaje}%` }}
+                ></div>
+              </div>
+              <div className="recalculo-datos">
+                <span>
+                  <strong>{done}</strong> de <strong>{total}</strong> ensayos
+                  ({porcentaje}%)
+                </span>
+                <span>
+                  <i className="far fa-clock"></i> Restante aprox.:{" "}
+                  <strong>{restanteTxt}</strong>
+                </span>
+              </div>
+              <div className="recalculo-datos">
+                <span>Actualizados: {done}</span>
+                <span>
+                  Errores:{" "}
+                  <span style={{ color: errores > 0 ? "#dc2626" : "#64748b" }}>
+                    {errores}
+                  </span>
+                </span>
+              </div>
+              <p className="recalculo-nota">
+                <i className="fas fa-exclamation-triangle"></i> No cierres ni
+                recargues esta pestaña hasta que termine. Los datos capturados
+                no se modifican.
+              </p>
+              <button
+                type="button"
+                className="btn-recalculo-cancelar"
+                onClick={handleCancelarRecalculo}
+              >
+                Cancelar recálculo
+              </button>
+            </div>
+          </div>
+        );
+      })()}
       <EnsayoDetalleModal
         isOpen={!!selectedAssayForDetail}
         ensayos={selectedAssayForDetail ? [selectedAssayForDetail] : []}
