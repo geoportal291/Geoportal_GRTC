@@ -614,13 +614,7 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   // Recalcula en lote los resultados guardados de todos los ensayos del
   // tramo con la configuración vigente (tipo_ensayo.config_calculos).
   // No modifica datos_formulario: solo refresca ensayos.resultado.
-  const handleRecalcularResultados = async () => {
-    if (
-      !window.confirm(
-        "¿Recalcular los resultados de todos los ensayos de este tramo con la configuración vigente? Los datos capturados no se modifican.",
-      )
-    )
-      return;
+  const ejecutarRecalculo = async () => {
     setRecalculando(true);
     setRecalculoProgreso({ done: 0, total: 0 });
     const headers = getAuthHeaders();
@@ -681,6 +675,36 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
     } finally {
       setRecalculando(false);
     }
+  };
+
+  // Diálogo de confirmación (alertify) antes del recálculo en lote.
+  const handleRecalcularResultados = () => {
+    alertify
+      .confirm(
+        "Recalcular resultados",
+        "<div style='text-align:left'>" +
+          "Se volverán a calcular los resultados de <b>todos los ensayos de este tramo</b> " +
+          "con la configuración MTC vigente:<br>" +
+          "<ul style='margin:8px 0 8px 18px; padding:0'>" +
+          "<li>Granulometría: <b>Cu, Cc, D10–D60 y TMN</b></li>" +
+          "<li>Límites: <b>L.L. por regresión a 25 golpes × 0.996</b></li>" +
+          "<li>Proctor: <b>curva cúbica MTC (M.D.S. / O.C.H.)</b></li>" +
+          "</ul>" +
+          "Los datos capturados <b>no se modifican</b>.<br><br>" +
+          "¿Deseas continuar?",
+        async () => {
+          alertify.success("Recálculo iniciado…");
+          await ejecutarRecalculo();
+        },
+        () => {},
+      )
+      .set({
+        labels: { ok: "Sí, recalcular", cancel: "Cancelar" },
+        theme: "modern",
+        movable: false,
+        closable: true,
+        padding: false,
+      });
   };
 
   const handleImportFile = async (file) => {
