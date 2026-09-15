@@ -59,6 +59,36 @@ const EstratoItem = React.memo(React.forwardRef(({
     const [selectedEnsayoId, setSelectedEnsayoId] = useState(null);
     const { API_URL, getAuthHeaders } = useAuth();
     const [clasificando, setClasificando] = useState(false);
+    const [descargandoFicha, setDescargandoFicha] = useState(false);
+
+    // Descarga la ficha de calicata en Excel (consolidado de resultados).
+    const handleFichaExcel = async () => {
+        if (!estrato?.id || descargandoFicha) return;
+        setDescargandoFicha(true);
+        try {
+            const res = await axios.get(
+                `${API_URL}/estratos/${estrato.id}/ficha-excel`,
+                { headers: getAuthHeaders(), responseType: "blob" },
+            );
+            const dispo = res.headers?.["content-disposition"] || "";
+            const coincidencia = dispo.match(/filename="?([^";]+)"?/);
+            const nombre = coincidencia
+                ? coincidencia[1]
+                : `Ficha_Calicata_${estrato.id}.xlsx`;
+            const url = URL.createObjectURL(res.data);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = nombre;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            alertify.error("Error al descargar la ficha de calicata.");
+        } finally {
+            setDescargandoFicha(false);
+        }
+    };
 
     // Clasifica el estrato cruzando sus ensayos de granulometría y límites
     // (POST /estratos/:id/clasificar). Con persistir=true guarda el símbolo
@@ -214,6 +244,14 @@ const EstratoItem = React.memo(React.forwardRef(({
                                 onClick={() => handleClasificar(true)}
                             >
                                 <i className="fas fa-check-double"></i>
+                            </button>
+                            <button
+                                className="action-btn view"
+                                title="Descargar ficha de calicata en Excel"
+                                disabled={descargandoFicha}
+                                onClick={handleFichaExcel}
+                            >
+                                <i className={descargandoFicha ? 'fas fa-spinner fa-spin' : 'fas fa-file-excel'}></i>
                             </button>
                         </>
                     )}

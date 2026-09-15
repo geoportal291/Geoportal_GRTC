@@ -62,6 +62,7 @@ const geologiaCapasService = require('./services/geologiaCapasService');
 const perfilEstratigraficoService = require('./services/perfilEstratigraficoService');
 const perfilExcelService = require('./services/perfilExcelService');
 const clasificacionSueloService = require('./services/clasificacionSueloService');
+const fichaCalicataService = require('./services/fichaCalicataService');
 const { uploadFileToNAS, deleteFileFromNAS } = require('./services/nasStorageService');
 
 console.log('DEBUG: Servidor backend iniciando...');
@@ -4697,6 +4698,24 @@ app.put('/estratos/:id', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error('Error al actualizar estrato:', err);
         res.status(500).json({ status: 'error', mensaje: 'Error al actualizar el estrato' });
+    }
+});
+
+// Ficha de calicata en Excel (consolidado "Res" del estrato): la genera
+// el worker Python con openpyxl a partir de los resultados ya persistidos.
+app.get('/estratos/:id/ficha-excel', authenticateToken, async (req, res) => {
+    try {
+        const { buffer, filename } = await fichaCalicataService.generarFichaExcel(req.params.id);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
+    } catch (err) {
+        if (err.status === 404) {
+            return res.status(404).json({ mensaje: err.message });
+        }
+        console.error('Error al generar ficha de calicata:', err);
+        res.status(500).json({ error: 'Error al generar la ficha de calicata', details: err.message });
     }
 });
 
