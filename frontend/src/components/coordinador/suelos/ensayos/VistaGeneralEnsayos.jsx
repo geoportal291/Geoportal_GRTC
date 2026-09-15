@@ -7,6 +7,7 @@ import { useAuth } from "../../../../data/contexts/AuthContext";
 import ResultadosBrevesModal from "./ResultadosBrevesModal";
 import EnsayoDetalleModal from "./EnsayoDetalleModal";
 import { getEnsayoCompletionStatus } from "./ensayos.estado.js";
+import { calcularResultados } from "./ensayos.calculos";
 import VisorGraficos from "./secciones/VisorGraficos.jsx";
 import "./VistaGeneralEnsayos.css";
 import "./ResultadosBrevesModal.css";
@@ -513,6 +514,11 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   const [selectedAssayForDetail, setSelectedAssayForDetail] = useState(null);
   const [tramosList, setTramosList] = useState([]);
   const [activeObjectiveIndex, setActiveObjectiveIndex] = useState(0);
+  const [recalculando, setRecalculando] = useState(false);
+  const [recalculoProgreso, setRecalculoProgreso] = useState({
+    done: 0,
+    total: 0,
+  });
 
   const fetchTramosList = useCallback(async () => {
     try {
@@ -604,6 +610,78 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
   useEffect(() => {
     tramoId ? fetchEnsayos() : fetchTramosList();
   }, [tramoId, fetchEnsayos, fetchTramosList]);
+
+  // Recalcula en lote los resultados guardados de todos los ensayos del
+  // tramo con la configuración vigente (tipo_ensayo.config_calculos).
+  // No modifica datos_formulario: solo refresca ensayos.resultado.
+  const handleRecalcularResultados = async () => {
+    if (
+      !window.confirm(
+        "¿Recalcular los resultados de todos los ensayos de este tramo con la configuración vigente? Los datos capturados no se modifican.",
+      )
+    )
+      return;
+    setRecalculando(true);
+    setRecalculoProgreso({ done: 0, total: 0 });
+    const headers = getAuthHeaders();
+    let done = 0;
+    let total = 0;
+    let errores = 0;
+    let omitidos = 0;
+    try {
+      for (const grupo of Object.values(ensayosAgrupados)) {
+        if (!grupo.calculationConfig) continue;
+        for (const ensayo of grupo.ensayos || []) {
+          if (
+            !ensayo?.datos_formulario ||
+            Object.keys(ensayo.datos_formulario).length === 0
+          ) {
+            omitidos++;
+            continue;
+          }
+          total++;
+          try {
+            const resultados = calcularResultados(
+              grupo.calculationConfig,
+              ensayo.datos_formulario,
+              grupo.tableConfig,
+            );
+            await axios.put(
+              `${API_URL}/api/ensayos/full-assay/${ensayo.id}`,
+              {
+                datos_ensayo: ensayo.datos_formulario,
+                resultado: resultados,
+                estrato_id: ensayo.estrato_id,
+                nombre_ensayo: ensayo.nombre_ensayo,
+                tipo_ensayo_id: ensayo.tipo_ensayo,
+                estado: ensayo.estado,
+              },
+              { headers },
+            );
+            done++;
+          } catch (err) {
+            errores++;
+          }
+          setRecalculoProgreso({ done, total });
+        }
+      }
+      if (done === 0 && omitidos > 0) {
+        alertify.warning(`No hay ensayos con datos capturados para recalcular (${omitidos} omitidos).`);
+      } else {
+        alertify.success(
+          `Recálculo terminado: ${done} actualizado(s)` +
+            (errores ? `, ${errores} con error` : "") +
+            (omitidos ? `, ${omitidos} sin datos` : "") +
+            ".",
+        );
+      }
+      await fetchEnsayos();
+    } catch (err) {
+      alertify.error("Ocurrió un error durante el recálculo.");
+    } finally {
+      setRecalculando(false);
+    }
+  };
 
   const handleImportFile = async (file) => {
     setImporting(true);
@@ -822,6 +900,19 @@ const VistaGeneralEnsayos = ({ setLastTramoId }) => {
           >
             <i className="fas fa-file-excel"></i>
             <span className="btn-text">Exportar Todo</span>
+          </button>
+          <button
+            className="btn-main-action recalc btn-expandable-premium"
+            onClick={handleRecalcularResultados}
+            disabled={recalculando}
+            title="Recalcular los resultados guardados con la configuración vigente (no modifica los datos capturados)"
+          >
+            <i className={`fas ${recalculando ? "fa-sync fa-spin" : "fa-sync-alt"}`}></i>
+            <span className="btn-text">
+              {recalculando
+                ? `Recalculando ${recalculoProgreso.done}/${recalculoProgreso.total}`
+                : "Recalcular"}
+            </span>
           </button>
           <button
             className="btn-main-action back btn-expandable-premium"

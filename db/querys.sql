@@ -1642,3 +1642,74 @@ SELECT rn FROM ranked_progresivas WHERE id = $1;
 --   openpyxl en backend/python_worker/perfil_estratigrafico_excel.py
 --   (regla del proyecto: no generar Excel pesado desde Node).
 -- -------------------------------------------------------------------------
+
+-- =========================================================================
+-- SECCION: MODULO MTC - AUDITORIA DE DATOS Y PARAMETROS DE CALCULO
+-- Fecha: 2026-09-15 12:10
+-- Proposito: (1) Consultas de auditoria sobre los datos ya capturados en
+--   la web antes de construir el calculo MTC e informes Excel (claves
+--   reales de datos_formulario/resultado por tipo de ensayo). Ejecutar
+--   contra produccion cuando haya conexion. (2) Trazabilidad de la
+--   migracion 049 (Cu/Cc/Dx/TMN en granulometria y LL por regresion
+--   MTC x0.996 en limites), que actualiza tipo_ensayo.config_calculos.
+-- -------------------------------------------------------------------------
+
+-- 1. Conteo de ensayos por tipo y estado de datos
+-- Fecha: 2026-09-15 12:10 | Proposito: dimensionar el historico a recalcular
+SELECT te.id, te.config_key, te.descripcion,
+       COUNT(e.id) AS total_ensayos,
+       COUNT(e.id) FILTER (WHERE e.estrato_id IS NULL) AS sin_estrato,
+       COUNT(e.id) FILTER (WHERE e.resultado IS NULL OR e.resultado = 'null'::jsonb OR e.resultado = '{}'::jsonb) AS sin_resultado,
+       COUNT(e.id) FILTER (WHERE e.datos_formulario IS NULL OR e.datos_formulario = '{}'::jsonb) AS sin_datos_crudos
+FROM ensayos e
+LEFT JOIN tipo_ensayo te ON te.id = e.tipo_ensayo
+GROUP BY te.id, te.config_key, te.descripcion
+ORDER BY te.id;
+
+-- 2. Claves reales presentes en datos_formulario por tipo (profundidad 3)
+-- Fecha: 2026-09-15 12:10 | Proposito: mapa clave almacenada -> calculo/informe
+SELECT te.config_key,
+       jsonb_object_keys(e.datos_formulario) AS clave_nivel1
+FROM ensayos e
+JOIN tipo_ensayo te ON te.id = e.tipo_ensayo
+WHERE e.datos_formulario IS NOT NULL
+GROUP BY te.config_key, 2
+ORDER BY te.config_key, 2;
+
+-- 3. Claves calculadas existentes en resultado por tipo
+-- Fecha: 2026-09-15 12:10 | Proposito: conocer que ya queda persistido
+SELECT te.config_key,
+       jsonb_object_keys(e.resultado) AS clave_nivel1
+FROM ensayos e
+JOIN tipo_ensayo te ON te.id = e.tipo_ensayo
+WHERE e.resultado IS NOT NULL
+GROUP BY te.config_key, 2
+ORDER BY te.config_key, 2;
+
+-- 4. Estratos con y sin clasificacion registrada
+-- Fecha: 2026-09-15 12:10 | Proposito: impacto del clasificador SUCS/AASHTO
+SELECT e.parent_type,
+       COUNT(*) AS total_estratos,
+       COUNT(*) FILTER (WHERE e.nlp_clasificacion_sucs IS NOT NULL) AS con_sucs,
+       COUNT(*) FILTER (WHERE e.nlp_clasificacion_aashto IS NOT NULL) AS con_aashto,
+       COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM ensayos en WHERE en.estrato_id = e.id)) AS con_ensayos
+FROM estratos e
+GROUP BY e.parent_type;
+
+-- 5. Migracion 049 aplicada (ver db/migrations/049_cu_cc_dx_tmn_factor0996.sql)
+-- Fecha: 2026-09-15 12:10 | Proposito: trazabilidad; la migracion ejecuta:
+--   UPDATE tipo_ensayo SET config_calculos = config_calculos || '{claves
+--   calculated_values.gradacion.d10/d30/d50/d60/cu/cc/tmn}'::jsonb
+--   WHERE config_key='granulometria';
+--   UPDATE tipo_ensayo SET config_calculos = jsonb_set(config_calculos,
+--   '{calculated_values,finales,limite_liquido}', '"= (ll_count >= 2 ?
+--   regresion_ll.ll_25 * 0.996 : fallback)"'::jsonb)
+--   WHERE config_key='limites';
+-- Verificacion posterior:
+SELECT config_key,
+       config_calculos ? 'calculated_values.gradacion.cu' AS tiene_cu_cc,
+       config_calculos #>> '{calculated_values,finales,limite_liquido}' AS ll_final
+FROM tipo_ensayo
+WHERE config_key IN ('granulometria', 'limites')
+ORDER BY id;
+-- =============================================================

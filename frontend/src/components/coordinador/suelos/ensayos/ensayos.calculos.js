@@ -246,11 +246,28 @@ function topologicalSort(formulas) {
         const formulaString = formula.substring(1); // Ignorar el "=" inicial
         const dependencies = getDependencies(formulaString);
         for (const dep of dependencies) {
-            const matchedNode = allNodes.find(n => dep === n || dep.startsWith(n + '.'));
-
-            if (matchedNode) {
+            const exacto = allNodes.find(n => dep === n);
+            if (exacto) {
                 graph.get(node).in++;
-                graph.get(matchedNode).out.push(node);
+                graph.get(exacto).out.push(node);
+                continue;
+            }
+            // La dependencia vive dentro de un nodo calculado (p. ej. un campo
+            // del objeto que produce regresion_log)
+            const padre = allNodes.find(n => dep.startsWith(n + '.'));
+            if (padre) {
+                graph.get(node).in++;
+                graph.get(padre).out.push(node);
+                continue;
+            }
+            // La dependencia es un subarbol de nodos calculados (p. ej.
+            // "tables.granulometria" cuando las formulas escriben en
+            // "tables.granulometria.malla_XX.pasa"): esperar a todo el
+            // subarbol para que el objeto ya traiga los valores calculados.
+            const hijos = allNodes.filter(n => n.startsWith(dep + '.'));
+            if (hijos.length > 0) {
+                graph.get(node).in += hijos.length;
+                hijos.forEach(hijo => graph.get(hijo).out.push(node));
             }
         }
     }

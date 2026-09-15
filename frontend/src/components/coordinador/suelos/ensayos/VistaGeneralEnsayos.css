@@ -96,9 +96,20 @@
   color: #007bff;
 }
 
+.btn-main-action.recalc {
+  color: #fd7e14;
+}
+
+.btn-main-action.recalc:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
 /* Override hovers to match user's unified style */
 .btn-main-action.import:hover,
 .btn-main-action.export:hover,
+.btn-main-action.recalc:hover:not(:disabled),
 .btn-main-action.back:hover {
   background-color: #a4d2eb60;
   color: #ffffff;
