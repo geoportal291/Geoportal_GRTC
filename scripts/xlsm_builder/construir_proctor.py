@@ -257,20 +257,35 @@ def construir():
                        f"NOT(ISNUMBER(Reporte!{col}{f_dens_sec})),Reporte!{col}{f_dens_sec}=0),"
                        f"NA(),Reporte!{col}{f_humedad})")
         hd[f"B{r}"] = (f"=IF(ISNA(A{r}),NA(),Reporte!{col}{f_dens_sec})")
-    # ajuste cuadrático y = a x² + b x + c (vértice = MDS/OCH)
-    hd["F1"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2}),1,1),"")'
-    hd["F2"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2}),1,2),"")'
-    hd["F3"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2}),1,3),"")'
-    hd["F4"] = '=IF(AND(ISNUMBER(F1),N(F1)<>0),-F2/(2*F1),"")'
-    hd["F5"] = '=IF(ISNUMBER(F4),F1*F4^2+F2*F4+F3,"")'
-    for i in range(20):  # puntos de la parábola alrededor del óptimo
+    # curva de compactación por método MTC (E 115): polinomio cúbico
+    # evaluado sobre una grilla de humedades (como el formato oficial).
+    # Con 4 puntos, LINEST es interpolación exacta (equivalente al sistema
+    # 4x4 del Excel del lab). Con <4 puntos se muestra el vértice de la
+    # parábola (respaldo) y la grilla queda sin datos.
+    hd["F1"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2,3}),1,1),"")'  # a3
+    hd["F2"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2,3}),1,2),"")'  # a2
+    hd["F3"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2,3}),1,3),"")'  # a1
+    hd["G1"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2,3}),1,4),"")'  # a0
+    # grilla: 20 humedades del 5% antes del mínimo al 5% después del máximo
+    hd["G2"] = '=IF(COUNT(A3:A6)<4,NA(),MIN(A3:A6)-0.05*(MAX(A3:A6)-MIN(A3:A6)))'
+    hd["G3"] = '=IF(NOT(ISNUMBER(G2)),NA(),((MAX(A3:A6)+0.05*(MAX(A3:A6)-MIN(A3:A6)))-G2)/200)'
+    for i in range(201):
         r = 3 + i
-        hd[f"H{r}"] = f'=IF(OR(NOT(ISNUMBER($F$1)),NOT(ISNUMBER($F$4))),NA(),$F$4+(ROW()-13)*0.5)'
-        hd[f"I{r}"] = f'=IF(ISNA(H{r}),NA(),$F$1*H{r}^2+$F$2*H{r}+$F$3)'
+        hd[f"H{r}"] = '=IF(OR(COUNT($A$3:$A$6)<4,NOT(ISNUMBER($G$2))),"",$G$2+(ROW()-3)*$G$3)'
+        hd[f"I{r}"] = f'=IF(H{r}="","",$F$1*H{r}^3+$F$2*H{r}^2+$F$3*H{r}+$G$1)'
+    # respaldo cuadrático (vértice) para ensayos con menos de 4 puntos
+    hd["F8"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2}),1,1),"")'
+    hd["F9"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2}),1,2),"")'
+    hd["F10"] = '=IFERROR(INDEX(LINEST(B3:B6,A3:A6^{1,2}),1,3),"")'
+    hd["F11"] = '=IF(AND(ISNUMBER(F8),N(F8)<>0),-F9/(2*F8),"")'
+    hd["F12"] = '=IF(ISNUMBER(F11),F8*F11^2+F9*F11+F10,"")'
+    # OCH (F4) y MDS (F5): cúbica sobre grilla; si no hay 4 puntos, vértice
+    hd["F4"] = '=IF(COUNT($A$3:$A$6)>=4,IFERROR(INDEX($H$3:$H$203,MATCH(MAX($I$3:$I$203),$I$3:$I$203,0)),""),IF(ISNUMBER($F$11),$F$11,""))'
+    hd["F5"] = '=IF(COUNT($A$3:$A$6)>=4,IFERROR(MAX($I$3:$I$203),""),IF(ISNUMBER($F$12),$F$12,""))'
     hd["K3"] = "=IF(ISNUMBER($F$4),$F$4,NA())"
     hd["L3"] = "=IF(ISNUMBER($F$5),$F$5,NA())"
     for nombre, ref in {"CurvaX": "$A$3:$A$6", "CurvaY": "$B$3:$B$6",
-                        "AjusteX": "$H$3:$H$22", "AjusteY": "$I$3:$I$22",
+                        "AjusteX": "$H$3:$H$203", "AjusteY": "$I$3:$I$203",
                         "MDSX": "$K$3", "MDSY": "$L$3"}.items():
         definir_nombre(wb, nombre, "_DATOS", ref)
 
@@ -304,7 +319,7 @@ def construir():
         s.smooth = bool(suave)
         chart.series.append(s)
 
-    serie(ch, "$H$3:$H$22", "$I$3:$I$22", "Ajuste Cuadrático", "DC2626", suave=True)
+    serie(ch, "$H$3:$H$203", "$I$3:$I$203", "Ajuste MTC (Cúbico)", "DC2626", suave=True)
     serie(ch, "$A$3:$A$6", "$B$3:$B$6", "Puntos de Ensayo", "1E40AF", marker=True, size=8)
     serie(ch, "$K$3:$K$3", "$L$3:$L$3", "Máxima Densidad Seca", "059669", marker=True, size=10)
     ws.add_chart(ch, f"A{f_graf + 1}")
@@ -314,7 +329,7 @@ def construir():
         ("curva_compactacion", "Curva de Compactación Proctor Modificado",
          "xy", f"A{f_graf + 1}", 620, 480, "NO", "", "", "", "",
          "Contenido de Humedad (%)", "Densidad Seca (g/cm³)",
-         "Ajuste Cuadrático", "linea_suave", f"{RG}$H$3:$H$22", f"{RG}$I$3:$I$22", "DC2626", 1),
+         "Ajuste MTC (Cúbico)", "linea_suave", f"{RG}$H$3:$H$203", f"{RG}$I$3:$I$203", "DC2626", 1),
         ("curva_compactacion", "", "", "", "", "", "", "", "", "", "", "", "",
          "Puntos de Ensayo", "marcador", f"{RG}$A$3:$A$6", f"{RG}$B$3:$B$6", "1E40AF", 2),
         ("curva_compactacion", "", "", "", "", "", "", "", "", "", "", "", "",

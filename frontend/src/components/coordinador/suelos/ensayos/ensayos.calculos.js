@@ -231,6 +231,90 @@ function calcularRegresionLinealLog(xInput, yInput) {
     }
 }
 
+/**
+ * Curva de compactación Proctor por método MTC (como el formato oficial):
+ * ajuste cúbico y = a0 + a1*w + a2*w² + a3*w³ evaluado sobre una grilla
+ * fina de humedades; MDS = máximo de la grilla y OCH = humedad del máximo.
+ * Con menos de 4 puntos válidos cae al ajuste cuadrático (compatibilidad).
+ * Devuelve { x (OCH), y (MDS), a0..a3, puntos[] } — x/y compatibles con
+ * regresion_cuadratica para results.curva.
+ */
+function proctorMtc(xInput, yInput) {
+    const xArr = xInput && typeof xInput.toArray === 'function' ? xInput.toArray() : xInput;
+    const yArr = yInput && typeof yInput.toArray === 'function' ? yInput.toArray() : yInput;
+
+    if (!Array.isArray(xArr) || !Array.isArray(yArr)) {
+        return { x: 0, y: 0, error: "Inputs must be arrays" };
+    }
+
+    const x = [];
+    const y = [];
+    for (let i = 0; i < Math.min(xArr.length, yArr.length); i++) {
+        const vx = Number(xArr[i]);
+        const vy = Number(yArr[i]);
+        if (Number.isFinite(vx) && Number.isFinite(vy) && vy !== 0) {
+            x.push(vx);
+            y.push(vy);
+        }
+    }
+
+    if (x.length < 4) {
+        return calcularMaximoCuadratico(xInput, yInput);
+    }
+
+    try {
+        // Mínimos cuadrados cúbico: con 4 puntos es interpolación exacta
+        // (equivalente al sistema 4x4 del formato MTC E 115).
+        const X_matrix = math.matrix(x.map(w => [1, w, w * w, w * w * w]));
+        const Y_matrix = math.matrix(y);
+        const Xt = math.transpose(X_matrix);
+        let Beta;
+        try {
+            const XtX_inv = math.inv(math.multiply(Xt, X_matrix));
+            Beta = math.multiply(XtX_inv, math.multiply(Xt, Y_matrix));
+        } catch (singular) {
+            return calcularMaximoCuadratico(xInput, yInput);
+        }
+
+        const coeffs = (Beta.toArray().flat ? Beta.toArray().flat() : Beta.toArray()).map(Number);
+        const [a0, a1, a2, a3] = coeffs;
+        const evalua = (w) => a0 + a1 * w + a2 * w * w + a3 * w * w * w;
+
+        const rango = Math.max(...x) - Math.min(...x);
+        const wMin = Math.min(...x) - 0.05 * rango;
+        const wMax = Math.max(...x) + 0.05 * rango;
+        const N = 200;
+
+        let mejorW = x[0];
+        let mejorY = -Infinity;
+        for (let i = 0; i <= N; i++) {
+            const w = wMin + ((wMax - wMin) * i) / N;
+            const d = evalua(w);
+            if (Number.isFinite(d) && d > mejorY) {
+                mejorY = d;
+                mejorW = w;
+            }
+        }
+
+        // Curva reducida para graficar (21 puntos de la grilla)
+        const puntos = [];
+        for (let i = 0; i <= 20; i++) {
+            const w = wMin + ((wMax - wMin) * i) / 20;
+            puntos.push({ x: Math.round(w * 100) / 100, y: Math.round(evalua(w) * 10000) / 10000 });
+        }
+
+        return {
+            x: Math.round(mejorW * 10000) / 10000,
+            y: Math.round(mejorY * 10000) / 10000,
+            a0, a1, a2, a3,
+            puntos,
+            metodo: 'cubica_mtc',
+        };
+    } catch (err) {
+        return { x: 0, y: 0, error: err.message };
+    }
+}
+
 function topologicalSort(formulas) {
     const graph = new Map();
     // Ignorar funciones dinámicas para el ordenamiento topológico
@@ -686,6 +770,7 @@ math.import({
     firstPositive,
     regresion_cuadratica: calcularMaximoCuadratico,
     regresion_log: calcularRegresionLinealLog,
+    proctor_mtc: proctorMtc,
     obtener_tmn: calcularTmnGenerico,
     calcular_dx: calcularDxGenerico,
     clasificar_sucs: clasificarSucs,

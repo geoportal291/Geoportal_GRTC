@@ -1713,3 +1713,14 @@ FROM tipo_ensayo
 WHERE config_key IN ('granulometria', 'limites')
 ORDER BY id;
 -- =============================================================
+
+-- Fecha: 2026-09-15 13:20 | Proposito: trazabilidad de la migracion 050
+--   (db/migrations/050_proctor_curva_cubica_mtc.sql): results.curva del
+--   proctor pasa de regresion_cuadratica a proctor_mtc (cúbica sobre
+--   grilla, formato oficial MTC E 115), conservando curva.x=OCH y
+--   curva.y=MDS. Verificacion posterior:
+SELECT config_key,
+       config_calculos #>> '{results,curva}' AS formula_curva
+FROM tipo_ensayo
+WHERE config_key = 'proctor';
+-- =============================================================
