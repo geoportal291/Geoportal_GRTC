@@ -1724,3 +1724,21 @@ SELECT config_key,
 FROM tipo_ensayo
 WHERE config_key = 'proctor';
 -- =============================================================
+
+-- Fecha: 2026-09-15 15:40 | Proposito: CORRECCION de las migraciones 049/050
+--   detectada en ejecucion con pgAdmin: el config_calculos de limites/proctor
+--   usa CLAVES PLANAS con puntos, por lo que jsonb_set con ruta anidada
+--   ('{calculated_values,finales,limite_liquido}' / '{results,curva}') creaba
+--   un subarbol que el motor no lee. Se reemplaza por concatenacion sobre la
+--   clave plana (+ limpieza de artefacto anidado con '- clave'). Ver
+--   db/migrations/049 y 050 actualizadas. Diagnostico previo:
+SELECT config_key,
+       config_calculos ? 'calculated_values.gradacion.cu' AS cu_ok,
+       config_calculos ? 'calculated_values.finales.limite_liquido' AS ll_plano,
+       config_calculos ? 'results.curva' AS curva_plana,
+       config_calculos -> 'calculated_values' AS artefacto_anidado_cv,
+       config_calculos -> 'results' AS artefacto_anidado_res
+FROM tipo_ensayo
+WHERE config_key IN ('granulometria', 'limites', 'proctor')
+ORDER BY id;
+-- =============================================================

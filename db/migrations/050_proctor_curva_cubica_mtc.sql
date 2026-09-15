@@ -9,11 +9,10 @@
 -- Idempotente: jsonb_set deja el mismo resultado al re-ejecutar.
 -- ============================================================
 
+-- OJO: clave plana "results.curva" -> se actualiza por concatenación.
+-- El '- 'results'' limpia un artefacto anidado si existiera.
 UPDATE tipo_ensayo
-SET config_calculos = jsonb_set(
-    config_calculos,
-    '{results,curva}',
-    '"= proctor_mtc([tables.calculo_humedad.m1.humedad, tables.calculo_humedad.m2.humedad, tables.calculo_humedad.m3.humedad, tables.calculo_humedad.m4.humedad], [tables.calculo_humedad.m1.densidad_seca, tables.calculo_humedad.m2.densidad_seca, tables.calculo_humedad.m3.densidad_seca, tables.calculo_humedad.m4.densidad_seca])"'::jsonb,
-    true
-)
+SET config_calculos = (config_calculos - 'results') || '{
+  "results.curva": "= proctor_mtc([tables.calculo_humedad.m1.humedad, tables.calculo_humedad.m2.humedad, tables.calculo_humedad.m3.humedad, tables.calculo_humedad.m4.humedad], [tables.calculo_humedad.m1.densidad_seca, tables.calculo_humedad.m2.densidad_seca, tables.calculo_humedad.m3.densidad_seca, tables.calculo_humedad.m4.densidad_seca])"
+}'::jsonb
 WHERE config_key = 'proctor';

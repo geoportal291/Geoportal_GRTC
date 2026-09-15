@@ -30,11 +30,13 @@ SET config_calculos = config_calculos || '{
 WHERE config_key = 'granulometria';
 
 -- 2) Límites: LL final por regresión MTC multi-punto (× 0.996)
+--    OJO: el config es de CLAVES PLANAS con puntos (p. ej. la clave literal
+--    "calculated_values.finales.limite_liquido"); por eso se actualiza por
+--    concatenación (que reemplaza la clave plana) y NO con jsonb_set de
+--    ruta anidada, que crearía un subárbol que el motor no lee.
+--    El '- 'calculated_values'' limpia un artefacto anidado si existiera.
 UPDATE tipo_ensayo
-SET config_calculos = jsonb_set(
-    config_calculos,
-    '{calculated_values,finales,limite_liquido}',
-    '"= (_intermediate.ll_count >= 2 ? (resultados.regresion_ll.ll_25 * 0.996) : (_intermediate.ll_row_25 > 0 ? _intermediate.ll_row_25 : (_intermediate.ll_count > 0 ? _intermediate.ll_sum / _intermediate.ll_count : 0)))"'::jsonb,
-    true
-)
+SET config_calculos = (config_calculos - 'calculated_values') || '{
+  "calculated_values.finales.limite_liquido": "= (_intermediate.ll_count >= 2 ? (resultados.regresion_ll.ll_25 * 0.996) : (_intermediate.ll_row_25 > 0 ? _intermediate.ll_row_25 : (_intermediate.ll_count > 0 ? _intermediate.ll_sum / _intermediate.ll_count : 0)))"
+}'::jsonb
 WHERE config_key = 'limites';
