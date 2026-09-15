@@ -1,5 +1,20 @@
 const db = require('../conexion');
 const XLSX = require('xlsx');
+const clasificacionSueloService = require('./clasificacionSueloService');
+
+// IDs semilla en tipo_ensayo: 1=granulometria, 2=limites. Al guardar uno de
+// estos ensayos, el estrato se reclasifica (SUCS/AASHTO) en segundo plano.
+const TIPOS_QUE_RECLASIFICAN = new Set([1, 2]);
+
+function reclasificarEstratoEnSegundoPlano(ensayo) {
+    if (!ensayo || !ensayo.estrato_id) return;
+    if (!TIPOS_QUE_RECLASIFICAN.has(Number(ensayo.tipo_ensayo))) return;
+    clasificacionSueloService
+        .clasificarEstrato(ensayo.estrato_id, { persistir: true })
+        .catch((err) => console.error(
+            `[WARN] Reclasificación automática del estrato ${ensayo.estrato_id} falló:`, err.message,
+        ));
+}
 
 // --- UTILIDADES ---
 
@@ -1862,6 +1877,7 @@ const createOrUpdateFullAssay = async (id, data) => {
                 derived?.codigo_generado ?? current.codigo_generado,
                 id
             ]);
+            reclasificarEstratoEnSegundoPlano(result.rows[0]);
             return result.rows[0];
         } else {
             const result = await db.query(`
@@ -1891,6 +1907,7 @@ const createOrUpdateFullAssay = async (id, data) => {
                 derived?.correlativo_tipo_ensayo ?? null,
                 derived?.codigo_generado ?? null
             ]);
+            reclasificarEstratoEnSegundoPlano(result.rows[0]);
             return result.rows[0];
         }
     } catch (error) {

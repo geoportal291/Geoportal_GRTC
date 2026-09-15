@@ -546,6 +546,107 @@ function calcularDxGenerico(rows, data, porcentaje, valueKey = 'pasa') {
     return 0;
 }
 
+// --- CLASIFICACION DE SUELOS (puerto del VBA de los formatos MTC) ---
+
+/**
+ * Clasificacion SUCS (ASTM D2487) a partir de la granulometria y los
+ * limites: finos = % pasa N°200, grava = 100 - % pasa N°4,
+ * arena = % pasa N°4 - % pasa N°200, Cu/Cc y carta de plasticidad
+ * (linea A = 0.73*(LL-20)). Devuelve el simbolo de grupo (GW, GP-GM,
+ * SC, CL, CH, ...) o '' cuando faltan datos.
+ */
+function clasificarSucs(gravaInput, arenaInput, finosInput, cuInput, ccInput, llInput, ipInput) {
+    const num = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+    };
+    const finos = num(finosInput);
+    const grava = num(gravaInput);
+    const arena = num(arenaInput);
+    const cu = num(cuInput) || 0;
+    const cc = num(ccInput) || 0;
+    const ll = num(llInput);
+    const ip = num(ipInput);
+
+    if (finos === null || grava === null || arena === null) return '';
+    if (grava <= 0 && arena <= 0) return '';
+
+    const lineaA = 0.73 * ((ll || 0) - 20);
+
+    // ---- Suelos finos (>= 50% pasa N°200) ----
+    if (finos >= 50) {
+        if (ll === null || ll <= 0) return '';
+        if (ip === null) return '';
+        if (ll < 50) return ip >= lineaA ? 'CL' : 'ML';
+        return ip >= lineaA ? 'CH' : 'MH';
+    }
+
+    const esGrava = grava > arena;
+    const bienGradada = esGrava
+        ? (cu >= 4 && cc >= 1 && cc <= 3)
+        : (cu >= 6 && cc >= 1 && cc <= 3);
+    const prefijo = esGrava ? 'G' : 'S';
+    const ipArcillosa = ip !== null && ip >= 7 && ip >= lineaA;
+
+    if (finos < 5) {
+        return bienGradada ? `${prefijo}W` : `${prefijo}P`;
+    }
+    if (finos <= 12) {
+        if (bienGradada) return ipArcillosa ? `${prefijo}W-${prefijo}C` : `${prefijo}W-${prefijo}M`;
+        return ipArcillosa ? `${prefijo}P-${prefijo}C` : `${prefijo}P-${prefijo}M`;
+    }
+    return ipArcillosa ? `${prefijo}C` : `${prefijo}M`;
+}
+
+/**
+ * Clasificacion AASHTO M-145 con indice de grupo:
+ * GI = (F-35)*(0.2+0.005*(LL-40)) + 0.01*(F-15)*(IP-10), terminos
+ * negativos a cero y redondeado. Devuelve "A-2-6 (3)" o '' si faltan
+ * datos.
+ */
+function clasificarAashto(p10Input, p40Input, p200Input, llInput, ipInput) {
+    const num = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+    };
+    const p10 = num(p10Input);
+    const p40 = num(p40Input);
+    const p200 = num(p200Input);
+    const ll = num(llInput) || 0;
+    const ip = num(ipInput) || 0;
+
+    if (p40 === null || p200 === null) return '';
+
+    let grupo = '';
+    if (p200 <= 35) {
+        if (p10 !== null && p10 <= 50 && p40 <= 30 && p200 <= 15 && ip <= 6) {
+            grupo = 'A-1-a';
+        } else if (p10 !== null && p10 > 50 && p40 <= 50 && p200 <= 25 && ip <= 6) {
+            grupo = 'A-1-b';
+        } else if (p40 > 50 && p200 <= 10 && ip <= 6) {
+            grupo = 'A-3';
+        } else if (ll <= 40) {
+            grupo = ip <= 10 ? 'A-2-4' : 'A-2-6';
+        } else {
+            grupo = ip <= 10 ? 'A-2-5' : 'A-2-7';
+        }
+    } else {
+        if (ll <= 0) return '';
+        if (ll <= 40) {
+            grupo = ip <= 10 ? 'A-4' : 'A-6';
+        } else {
+            grupo = ip <= 10 ? 'A-5' : (ip <= ll - 30 ? 'A-7-5' : 'A-7-6');
+        }
+    }
+
+    let t1 = (p200 - 35) * (0.2 + 0.005 * (ll - 40));
+    let t2 = 0.01 * (p200 - 15) * (ip - 10);
+    if (t1 < 0) t1 = 0;
+    if (t2 < 0) t2 = 0;
+    const gi = Math.round(t1 + t2);
+    return `${grupo} (${gi})`;
+}
+
 // --- FUNCIÓN EXPORTADA PRINCIPAL (ADAPTADOR) ---
 export function calcularResultados(calculationConfig, inputData, tableConfig = null) {
     if (!calculationConfig || Object.keys(calculationConfig).length === 0) {
@@ -586,7 +687,9 @@ math.import({
     regresion_cuadratica: calcularMaximoCuadratico,
     regresion_log: calcularRegresionLinealLog,
     obtener_tmn: calcularTmnGenerico,
-    calcular_dx: calcularDxGenerico
+    calcular_dx: calcularDxGenerico,
+    clasificar_sucs: clasificarSucs,
+    clasificar_aashto: clasificarAashto
 }, {
     override: true
 });

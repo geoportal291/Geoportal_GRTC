@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import './EstratoItem.css';
 import alertify from 'alertifyjs';
+import axios from 'axios';
+import { useAuth } from '../../../../data/contexts/AuthContext';
 
 const EstratoItem = React.memo(React.forwardRef(({
     estrato,
@@ -55,6 +57,40 @@ const EstratoItem = React.memo(React.forwardRef(({
     };
 
     const [selectedEnsayoId, setSelectedEnsayoId] = useState(null);
+    const { API_URL, getAuthHeaders } = useAuth();
+    const [clasificando, setClasificando] = useState(false);
+
+    // Clasifica el estrato cruzando sus ensayos de granulometría y límites
+    // (POST /estratos/:id/clasificar). Con persistir=true guarda el símbolo
+    // en el estrato y avisa al padre vía onClasificar.
+    const handleClasificar = async (persistir) => {
+        if (!estrato?.id || clasificando) return;
+        setClasificando(true);
+        try {
+            const res = await axios.post(
+                `${API_URL}/estratos/${estrato.id}/clasificar${persistir ? '?persistir=1' : ''}`,
+                {},
+                { headers: getAuthHeaders() },
+            );
+            const { sucs, aashto, advertencias } = res.data || {};
+            if (!sucs && !aashto) {
+                alertify.warning(
+                    `No se pudo clasificar: ${advertencias?.[0] || 'el estrato no tiene ensayos con resultados'}`,
+                );
+                return;
+            }
+            alertify.success(
+                `SUCS: ${sucs || '—'} | AASHTO: ${aashto || '—'}${persistir ? ' · guardado en el estrato' : ''}`,
+            );
+            if (persistir && typeof onClasificar === 'function') {
+                onClasificar(estrato, res.data);
+            }
+        } catch (err) {
+            alertify.error('Error al clasificar el estrato.');
+        } finally {
+            setClasificando(false);
+        }
+    };
     const handleSelectEnsayo = (ensayoId) => {
         setSelectedEnsayoId(prevId => prevId === ensayoId ? null : ensayoId);
     };
@@ -161,7 +197,26 @@ const EstratoItem = React.memo(React.forwardRef(({
                 </div>
 
                 <div className="estrato-actions" onClick={(e) => e.stopPropagation()}>
-                    {/* Botón de acción principal (si es necesario en el futuro) */}
+                    {estrato?.id && (
+                        <>
+                            <button
+                                className="action-btn view"
+                                title="Clasificar con ensayos (SUCS / AASHTO, vista previa)"
+                                disabled={clasificando}
+                                onClick={() => handleClasificar(false)}
+                            >
+                                <i className={clasificando ? 'fas fa-spinner fa-spin' : 'fas fa-microscope'}></i>
+                            </button>
+                            <button
+                                className="action-btn edit"
+                                title="Clasificar con ensayos y guardar en el estrato"
+                                disabled={clasificando}
+                                onClick={() => handleClasificar(true)}
+                            >
+                                <i className="fas fa-check-double"></i>
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 

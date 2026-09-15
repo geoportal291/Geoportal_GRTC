@@ -61,6 +61,7 @@ const modelos3DService = require('./services/modelos3DService');
 const geologiaCapasService = require('./services/geologiaCapasService');
 const perfilEstratigraficoService = require('./services/perfilEstratigraficoService');
 const perfilExcelService = require('./services/perfilExcelService');
+const clasificacionSueloService = require('./services/clasificacionSueloService');
 const { uploadFileToNAS, deleteFileFromNAS } = require('./services/nasStorageService');
 
 console.log('DEBUG: Servidor backend iniciando...');
@@ -4696,6 +4697,24 @@ app.put('/estratos/:id', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error('Error al actualizar estrato:', err);
         res.status(500).json({ status: 'error', mensaje: 'Error al actualizar el estrato' });
+    }
+});
+
+// Clasifica un estrato (SUCS/AASHTO + descripción geotécnica) cruzando sus
+// ensayos de granulometría y límites. Con ?persistir=1 guarda el símbolo en
+// estratos.nlp_clasificacion_sucs / nlp_clasificacion_aashto.
+app.post('/estratos/:id/clasificar', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const persistir = req.query.persistir === '1' || req.query.persistir === 'true';
+    try {
+        const resultado = await clasificacionSueloService.clasificarEstrato(id, { persistir });
+        res.json(resultado);
+    } catch (err) {
+        if (err.status === 404) {
+            return res.status(404).json({ mensaje: err.message });
+        }
+        console.error('Error al clasificar estrato:', err);
+        res.status(500).json({ error: 'Error al clasificar el estrato', details: err.message });
     }
 });
 
