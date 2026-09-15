@@ -62,6 +62,7 @@ export default function PerfilEstratigraficoVista({ tramo }) {
     const [soloConDatos, setSoloConDatos] = useState(true); // default: solo progresivas con estratos
     const [exportando, setExportando] = useState(false);
     const [exportandoExcel, setExportandoExcel] = useState(false);
+    const [exportandoDxf, setExportandoDxf] = useState(false);
     const [leyendaAbierta, setLeyendaAbierta] = useState(false);
     const [filtroLeyenda, setFiltroLeyenda] = useState('');
     const [hover, setHover] = useState(null); // { x, y, titulo, filas: [...] }
@@ -293,77 +294,8 @@ export default function PerfilEstratigraficoVista({ tramo }) {
         setExportandoExcel(true);
         try {
             const headers = getAuthHeaders();
-
-            // 1. Descargar todas las progresivas del tramo (bloques de 200)
-            const todas = [];
-            let total = 0;
-            let off = 0;
-            do {
-                const res = await axios.get(
-                    `${API_URL}/api/tramos/${tramo.id}/perfil-estratigrafico?limit=200&offset=${off}&soloConDatos=${soloConDatos}`,
-                    { headers }
-                );
-                total = res.data?.total ?? 0;
-                todas.push(...(res.data?.progresivas || []));
-                off += 200;
-            } while (off < total && todas.length < total);
-
-            if (todas.length === 0) {
-                alertify.warning('No hay progresivas para exportar.');
-                return;
-            }
-
-            // 2. Panel de ensayos sobre el total (mismo motor que la web)
-            resetCacheEnsayos();
-            const panel = construirPanelEnsayos(todas);
-            const valores = {};
-            const nEnsayos = {};
-            panel.valoresPorProgresiva.forEach((info, pid) => {
-                valores[String(pid)] = panel.filas.map((f) => info.valores.get(f.key) ?? '');
-                nEnsayos[String(pid)] = info.nEnsayos;
-            });
-
-            const payload = {
-                tramo: { codigo: tramo.codigo, nombre: tramo.nombre },
-                soloConDatos,
-                totalProgresivas: total,
-                fecha: new Date().toISOString().slice(0, 16).replace('T', ' '),
-                patrones: (data?.patrones || []).map((p) => ({
-                    nombre_original_excel: p.nombre_original_excel,
-                    clasificacion_sucs: p.clasificacion_sucs,
-                    clasificacion_aashto: p.clasificacion_aashto,
-                    color_hex_sugerido: p.color_hex_sugerido,
-                    patron_svg: p.patron_svg
-                })),
-                progresivas: todas.map((p) => ({
-                    id: p.id,
-                    codigo: p.codigo,
-                    nombre: p.nombre,
-                    elevacion: p.elevacion,
-                    estratos: (p.estratos || []).map((e) => ({
-                        id: e.id,
-                        nombre: e.nombre,
-                        descripcion: e.descripcion,
-                        profundidad_inicial: e.profundidad_inicial,
-                        profundidad_final: e.profundidad_final,
-                        nlp_clasificacion_sucs: e.nlp_clasificacion_sucs,
-                        nlp_clasificacion_aashto: e.nlp_clasificacion_aashto,
-                        n_ensayos: (e.ensayos || []).length,
-                        patron: e.patron
-                    }))
-                })),
-                panel: {
-                    filas: panel.filas.map((f) => ({
-                        tipoDescripcion: f.tipoDescripcion,
-                        groupTitle: f.groupTitle,
-                        label: f.label,
-                        mostrarTipo: f.mostrarTipo,
-                        mostrarGrupo: f.mostrarGrupo
-                    })),
-                    valores,
-                    nEnsayos
-                }
-            };
+            const payload = await armarPayloadPerfil(headers);
+            if (!payload) return;
 
             // 3. Generar y descargar
             const resp = await axios.post(
@@ -383,6 +315,107 @@ export default function PerfilEstratigraficoVista({ tramo }) {
             alertify.error('No se pudo exportar el Excel del perfil.');
         } finally {
             setExportandoExcel(false);
+        }
+    };
+
+    // Descarga todas las progresivas del tramo y arma el payload común del
+    // perfil (mismo para el Excel y el DXF de AutoCAD). Devuelve null si
+    // no hay progresivas.
+    const armarPayloadPerfil = async (headers) => {
+        const todas = [];
+        let total = 0;
+        let off = 0;
+        do {
+            const res = await axios.get(
+                `${API_URL}/api/tramos/${tramo.id}/perfil-estratigrafico?limit=200&offset=${off}&soloConDatos=${soloConDatos}`,
+                { headers }
+            );
+            total = res.data?.total ?? 0;
+            todas.push(...(res.data?.progresivas || []));
+            off += 200;
+        } while (off < total && todas.length < total);
+
+        if (todas.length === 0) {
+            alertify.warning('No hay progresivas para exportar.');
+            return null;
+        }
+
+        resetCacheEnsayos();
+        const panel = construirPanelEnsayos(todas);
+        const valores = {};
+        const nEnsayos = {};
+        panel.valoresPorProgresiva.forEach((info, pid) => {
+            valores[String(pid)] = panel.filas.map((f) => info.valores.get(f.key) ?? '');
+            nEnsayos[String(pid)] = info.nEnsayos;
+        });
+
+        return {
+            tramo: { codigo: tramo.codigo, nombre: tramo.nombre },
+            soloConDatos,
+            totalProgresivas: total,
+            fecha: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            patrones: (data?.patrones || []).map((p) => ({
+                nombre_original_excel: p.nombre_original_excel,
+                clasificacion_sucs: p.clasificacion_sucs,
+                clasificacion_aashto: p.clasificacion_aashto,
+                color_hex_sugerido: p.color_hex_sugerido,
+                patron_svg: p.patron_svg
+            })),
+            progresivas: todas.map((p) => ({
+                id: p.id,
+                codigo: p.codigo,
+                nombre: p.nombre,
+                elevacion: p.elevacion,
+                estratos: (p.estratos || []).map((e) => ({
+                    id: e.id,
+                    nombre: e.nombre,
+                    descripcion: e.descripcion,
+                    profundidad_inicial: e.profundidad_inicial,
+                    profundidad_final: e.profundidad_final,
+                    nlp_clasificacion_sucs: e.nlp_clasificacion_sucs,
+                    nlp_clasificacion_aashto: e.nlp_clasificacion_aashto,
+                    n_ensayos: (e.ensayos || []).length,
+                    patron: e.patron
+                }))
+            })),
+            panel: {
+                filas: panel.filas.map((f) => ({
+                    tipoDescripcion: f.tipoDescripcion,
+                    groupTitle: f.groupTitle,
+                    label: f.label,
+                    mostrarTipo: f.mostrarTipo,
+                    mostrarGrupo: f.mostrarGrupo
+                })),
+                valores,
+                nEnsayos
+            }
+        };
+    };
+
+    const exportarDxf = async () => {
+        if (!tramo?.id || exportandoDxf) return;
+        setExportandoDxf(true);
+        try {
+            const headers = getAuthHeaders();
+            const payload = await armarPayloadPerfil(headers);
+            if (!payload) return;
+            const resp = await axios.post(
+                `${API_URL}/api/tramos/${tramo.id}/perfil-estratigrafico/exportar-dxf`,
+                payload,
+                { headers, responseType: 'blob' }
+            );
+            const url = URL.createObjectURL(resp.data);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `perfil_estratigrafico_${tramo.codigo || 'tramo'}.dxf`;
+            link.click();
+            URL.revokeObjectURL(url);
+            alertify.success('DXF del perfil estratigráfico exportado (ábrela en AutoCAD).');
+        } catch (err) {
+            console.error('Error al exportar el perfil a DXF:', err);
+            alertify.error('No se pudo exportar el DXF del perfil.');
+        } finally {
+            setExportandoDxf(false);
         }
     };
 
@@ -455,6 +488,10 @@ export default function PerfilEstratigraficoVista({ tramo }) {
                     </button>
                     <button type="button" className="pe-btn-exportar" onClick={exportarExcel} disabled={exportandoExcel || loading}>
                         <i className="fas fa-file-excel"></i> {exportandoExcel ? 'Generando…' : 'Exportar Excel'}
+                    </button>
+                    <button type="button" className="pe-btn-exportar" onClick={exportarDxf} disabled={exportandoDxf || loading}
+                        title="Descarga el perfil en DXF para abrir en AutoCAD (escala 1 m = 100 unidades)">
+                        <i className="fas fa-drafting-compass"></i> {exportandoDxf ? 'Generando…' : 'Exportar DXF'}
                     </button>
                     <button type="button" className="pe-btn-leyenda" onClick={() => setLeyendaAbierta((v) => !v)}>
                         <i className="fas fa-map"></i> Leyenda

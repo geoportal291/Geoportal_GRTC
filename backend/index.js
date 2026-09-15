@@ -61,6 +61,7 @@ const modelos3DService = require('./services/modelos3DService');
 const geologiaCapasService = require('./services/geologiaCapasService');
 const perfilEstratigraficoService = require('./services/perfilEstratigraficoService');
 const perfilExcelService = require('./services/perfilExcelService');
+const perfilDxfService = require('./services/perfilDxfService');
 const clasificacionSueloService = require('./services/clasificacionSueloService');
 const fichaCalicataService = require('./services/fichaCalicataService');
 const { uploadFileToNAS, deleteFileFromNAS } = require('./services/nasStorageService');
@@ -4919,6 +4920,27 @@ app.post('/api/tramos/:tramoId/perfil-estratigrafico/exportar-excel', authentica
         }
         console.error(`Error al exportar el perfil estratigrafico del tramo ${tramoId} a Excel:`, err);
         res.status(500).json({ error: 'Error al generar el Excel del perfil estratigrafico', details: err.message });
+    }
+});
+
+// Exporta el perfil estratigráfico a DXF (AutoCAD): misma lámina del
+// formato oficial a escala 1 m = 100 unidades, hatches por patrón SUCS.
+app.post('/api/tramos/:tramoId/perfil-estratigrafico/exportar-dxf', authenticateToken, async (req, res) => {
+    const { tramoId } = req.params;
+    try {
+        const { buffer, filename } = await perfilDxfService.generarPerfilDxf({
+            ...(req.body || {}),
+            tramo: { ...(req.body?.tramo || {}), id: tramoId }
+        });
+        res.setHeader('Content-Type', 'image/vnd.dxf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
+    } catch (err) {
+        if (err.status === 400) {
+            return res.status(400).json({ error: err.message });
+        }
+        console.error(`Error al exportar el perfil estratigrafico del tramo ${tramoId} a DXF:`, err);
+        res.status(500).json({ error: 'Error al generar el DXF del perfil estratigrafico', details: err.message });
     }
 });
 
