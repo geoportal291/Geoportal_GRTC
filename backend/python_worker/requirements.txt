@@ -10,3 +10,4 @@ python-multipart
 pyshp
 rarfile
 pyproj
+ezdxf
