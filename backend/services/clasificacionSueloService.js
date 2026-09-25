@@ -80,8 +80,7 @@ function clasificarAashto(p10, p40, p200, ll, ip) {
 }
 
 // Nombres típicos SUCS (GetSingleSUCS del formato)
-const NOMBRES_SUCS = {
-    GW: 'Grava bien gradada con excelente drenaje y alta resistencia.',
+const NOMBRES_SUCS = {    GW: 'Grava bien gradada con excelente drenaje y alta resistencia.',
     GP: 'Grava mal gradada, uniforme y muy permeable.',
     GM: 'Grava limosa con reducción de permeabilidad.',
     GC: 'Grava arcillosa con cohesión moderada.',
@@ -97,6 +96,44 @@ const NOMBRES_SUCS = {
     OH: 'Suelo orgánico de alta plasticidad.',
     PT: 'Turba altamente orgánica.',
 };
+
+// Equipo ideal de compactación por grupo (hoja SUCS del formato MTC;
+// para los finos, descripciones equivalentes de la tabla AASHTO M-145
+// del mismo libro).
+const EQUIPO_COMPACTACION = {
+    'GW': 'tractor tipo oruga, rodillo de neumáticos y rodillo con ruedas de acero.',
+    'GP': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'GM': 'tractor tipo oruga, rodillo de neumáticos, rodillo con ruedas de acero y rodillo de pata de cabra.',
+    'GC': 'tractor tipo oruga, rodillo de neumáticos y rodillo de pata de cabra.',
+    'GW-GM': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'GW-GC': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'GP-GM': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'GP-GC': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'SW': 'tractor tipo oruga, rodillo de neumáticos y rodillo con ruedas de acero.',
+    'SP': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'SM': 'tractor tipo oruga, rodillo de neumáticos, rodillo con ruedas de acero y rodillo de pata de cabra.',
+    'SC': 'tractor tipo oruga, rodillo de neumáticos y rodillo de pata de cabra.',
+    'SW-SM': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'SW-SC': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'SP-SM': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'SP-SC': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'ML': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'CL': 'rodillo de neumáticos y rodillo de pata de cabra.',
+    'MH': 'rodillo de pata de cabra.',
+    'CH': 'rodillo de pata de cabra.',
+    'OL': 'rodillo de pata de cabra.',
+    'OH': 'rodillo de pata de cabra.',
+    'PT': 'no se practica la compactación.',
+};
+
+function getEquipoCompactacion(codigo) {
+    const limpio = String(codigo || '').toUpperCase().trim();
+    if (!limpio) return null;
+    if (EQUIPO_COMPACTACION[limpio]) return EQUIPO_COMPACTACION[limpio];
+    // símbolo doble no tabulado: usar el del primer grupo
+    const primera = limpio.split('-')[0].trim();
+    return EQUIPO_COMPACTACION[primera] || null;
+}
 
 function getDescripcionSucs(codigo) {
     const limpio = String(codigo || '').toUpperCase().trim();
@@ -118,6 +155,37 @@ function esRoca(texto) {
         .replace(/\s+/g, ' ')
         .trim();
     return ['ROCA SANA', 'ROCA', 'FRAC', 'ENROCADO', 'ROCA FRACTURADA'].includes(t);
+}
+
+/*
+ * Correlaciones MTC de la hoja "Comprob.CBR" del formato:
+ *   IG   = |(F-35)*(0.2+0.005*(LL-40)) + 0.01*(F-15)*(IP-10)|
+ *   CBR' = (22 - IG) * (D/145) / (1 + IP/750),  D = M.D.S. en lb/pie³
+ *   CBR''= 4250 / (LL - IP)
+ * Devuelve nulls parciales cuando falta un insumo.
+ */
+function correlacionesCbr({ finos, ll, ip, mds } = {}) {
+    const n = (v) => {
+        const x = Number(v);
+        return Number.isFinite(x) ? x : null;
+    };
+    const F = n(finos);
+    const LL = n(ll);
+    const IP = n(ip);
+    const MDS = n(mds);
+    const out = { ig: null, cbr_estimado_densidad: null, cbr_estimado_sucos: null };
+
+    if (F !== null && LL !== null && IP !== null) {
+        out.ig = Math.abs((F - 35) * (0.2 + 0.005 * (LL - 40)) + 0.01 * (F - 15) * (IP - 10));
+        if (MDS !== null && MDS > 0) {
+            const dPcf = MDS * 62.428; // g/cm3 -> lb/pie3
+            out.cbr_estimado_densidad = ((22 - out.ig) * (dPcf / 145)) / (1 + IP / 750);
+        }
+    }
+    if (LL !== null && IP !== null && LL - IP > 0) {
+        out.cbr_estimado_sucos = 4250 / (LL - IP);
+    }
+    return out;
 }
 
 function formatNumero(v, decimales = 2) {
@@ -246,6 +314,7 @@ async function clasificarEstrato(estratoId, { persistir = false } = {}) {
         estrato_id: estratoId,
         sucs,
         aashto,
+        equipo_compactacion: getEquipoCompactacion(sucs),
         descripcion,
         insumos,
         advertencias,
@@ -263,5 +332,7 @@ module.exports = {
     clasificarAashto,
     construirDescripcionGeotecnica,
     getDescripcionSucs,
+    getEquipoCompactacion,
+    correlacionesCbr,
     esRoca,
 };

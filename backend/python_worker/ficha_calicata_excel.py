@@ -176,6 +176,11 @@ def construir(payload, ws):
     linea_res("CBR de Diseño (%)", fmt(cbr.get("cbr_diseno")), destacado=True)
     linea_res("CBR: M.D.S. de los moldes (g/cm³)", fmt(cbr.get("mds_moldes"), 3), formato="0.000")
     linea_res("Expansión a 96 h (%)", fmt(cbr.get("expansion")))
+    linea_res("Equipo ideal de compactación", r.get("equipo_compactacion"))
+    correl = r.get("correlaciones_cbr") or {}
+    linea_res("Correlación: I.G. (Comprob.CBR)", fmt(correl.get("ig")))
+    linea_res("Correlación: CBR' estimado por D (%)", fmt(correl.get("cbr_estimado_densidad")))
+    linea_res("Correlación: CBR'' estimado por sucos (%)", fmt(correl.get("cbr_estimado_sucos")))
     ws.row_dimensions[fila].height = 6
 
     # ------------------------------------------------ descripción geotécnica

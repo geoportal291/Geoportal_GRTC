@@ -44,6 +44,30 @@ PATRONES_ACAD = {
 }
 
 
+def patron_por_sucs(sucs):
+    """Patrón ACAD por símbolo completo (franjas de símbolos dobles),
+    siguiendo el catálogo CAD del formato oficial: GW->PER-GW, GP->PER-GP,
+    GM/GC->PER-GMGC, SW/SP->PER-S*, SM/SC->PER-SMSC, CL/ML->PER-MLCL."""
+    s = (sucs or "").strip().upper()
+    return {
+        "GW": PATRONES_ACAD["grava"],
+        "GP": PATRONES_ACAD["roca"],          # GRAVEL mal gradada, escala mayor
+        "GM": PATRONES_ACAD["limo"],
+        "GC": PATRONES_ACAD["arcilla"],
+        "SW": PATRONES_ACAD["arena"],
+        "SP": ("AR-SAND", 0.7),
+        "SM": PATRONES_ACAD["limo"],
+        "SC": PATRONES_ACAD["arcilla"],
+        "ML": PATRONES_ACAD["limo"],
+        "CL": PATRONES_ACAD["arcilla"],
+        "MH": PATRONES_ACAD["roca_fracturada"],
+        "CH": PATRONES_ACAD["arcilla"],
+        "OL": PATRONES_ACAD["limo"],
+        "OH": PATRONES_ACAD["roca_fracturada"],
+        "PT": PATRONES_ACAD["generico"],
+    }.get(s, PATRONES_ACAD["generico"])
+
+
 def patron_de(estrato):
     patron = estrato.get("patron") or {}
     clave = (patron.get("patron_svg")
@@ -150,12 +174,26 @@ def dibujar_bloque(doc, msp, px, py, progresivas, tramo_codigo):
                 [(x0, y1), (x1, y1), (x1, y2), (x0, y2)],
                 dxfattribs={"layer": nombre_capa, "true_color": true_color},
             ).close()
-            # hatch por patrón SUCS
-            nombre_patron, escala = patron_de(estrato)
-            hatch = msp.add_hatch(dxfattribs={"layer": nombre_capa, "true_color": true_color})
-            hatch.set_pattern_fill(nombre_patron, scale=escala, color=true_color)
-            hatch.paths.add_polyline_path(
-                [(x0, y1), (x1, y1), (x1, y2), (x0, y2)], is_closed=True)
+            # hatch: con símbolo doble (p. ej. GW-GM) se divide en franjas
+            # verticales iguales, una por símbolo — igual que el VBA oficial
+            sucs_txt = (estrato.get("nlp_clasificacion_sucs") or "").strip().upper()
+            partes = [p.strip() for p in sucs_txt.split("-")] if "-" in sucs_txt else None
+            if partes and 1 < len(partes) <= 3:
+                ancho_franja = (x1 - x0) / len(partes)
+                for i, parte in enumerate(partes):
+                    fx0 = x0 + i * ancho_franja
+                    fx1 = fx0 + ancho_franja
+                    nombre_patron, escala = patron_por_sucs(parte)
+                    hatch = msp.add_hatch(dxfattribs={"layer": nombre_capa, "true_color": true_color})
+                    hatch.set_pattern_fill(nombre_patron, scale=escala, color=true_color)
+                    hatch.paths.add_polyline_path(
+                        [(fx0, y1), (fx1, y1), (fx1, y2), (fx0, y2)], is_closed=True)
+            else:
+                nombre_patron, escala = patron_de(estrato)
+                hatch = msp.add_hatch(dxfattribs={"layer": nombre_capa, "true_color": true_color})
+                hatch.set_pattern_fill(nombre_patron, scale=escala, color=true_color)
+                hatch.paths.add_polyline_path(
+                    [(x0, y1), (x1, y1), (x1, y2), (x0, y2)], is_closed=True)
             # textos de clasificación (SUCS arriba, AASHTO abajo del centro)
             yc = (y1 + y2) / 2
             texto(msp, estrato.get("nlp_clasificacion_sucs"), xc, yc + 2.5,

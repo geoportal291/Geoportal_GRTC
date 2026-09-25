@@ -101,6 +101,16 @@ async function getFicha(estratoId) {
     }
 
     const insumos = clas.insumos || {};
+
+    // Correlaciones CBR (hoja Comprob.CBR del formato): usan finos/LL/IP de
+    // la clasificación y la M.D.S. del Proctor del mismo estrato.
+    const correlaciones = clasificacionSueloService.correlacionesCbr({
+        finos: insumos.finos,
+        ll: insumos.ll,
+        ip: insumos.ip,
+        mds: proctor ? proctor.mds : null,
+    });
+
     return {
         meta: {
             codigo: e.progresiva_codigo
@@ -134,6 +144,8 @@ async function getFicha(estratoId) {
             cc: num(insumos.cc),
             proctor,
             cbr,
+            equipo_compactacion: clas.equipo_compactacion || null,
+            correlaciones_cbr: correlaciones,
             descripcion_geotecnica: clas.descripcion || '',
         },
         advertencias: clas.advertencias || [],

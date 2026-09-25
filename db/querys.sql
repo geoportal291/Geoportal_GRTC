@@ -1742,3 +1742,14 @@ FROM tipo_ensayo
 WHERE config_key IN ('granulometria', 'limites', 'proctor')
 ORDER BY id;
 -- =============================================================
+
+-- Fecha: 2026-09-15 19:10 | Proposito: trazabilidad de la migracion 051
+--   (db/migrations/051_carta_plasticidad_web.sql): agrega al
+--   config_graficos de 'limites' el grafico 'carta_plasticidad' con la
+--   linea A, la linea U y el punto de muestra (VisorGraficos). No
+--   duplica si ya existe. Verificacion posterior:
+SELECT config_key,
+       EXISTS (SELECT 1 FROM jsonb_array_elements(config_graficos->'charts') c WHERE c->>'id'='carta_plasticidad') AS carta_ok,
+       jsonb_array_length(config_graficos->'charts') AS total_charts
+FROM tipo_ensayo WHERE config_key='limites';
+-- =============================================================
